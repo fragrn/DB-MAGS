@@ -28,3 +28,23 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 
   python Case_make/Case_make_multi.py -d 150 -t 60 -x 55 -i 'lock--->slow+lock+slow' -k 'record_lock+missing_index' -s 0.044 -c 7 -e 7 -n 10
 
+
+(3) **Rule-Based Agent Orchestration (v1)**
+
+- entrypoint
+
+  python agent_run.py --agents cpu_contention,missing_index --fault-inject-time 60 --fault-duration 60
+
+- behavior
+
+  - `GlobalAgent` reads database metadata from `information_schema`
+  - `CpuContentionAgent` uses ChaosBlade to inject host CPU contention
+  - `MissingIndexAgent` generates a query injection task against a large unindexed column
+  - task execution is isolated; one task failure does not stop the others
+
+- outputs
+
+  - `database_profile.json`
+  - `plan.json`
+  - `results.json`
+  - one log file per task under the selected output directory
