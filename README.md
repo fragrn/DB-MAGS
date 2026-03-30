@@ -22,6 +22,8 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 
 - optional environment variables
 
+  You can either export them in your shell or copy `.env.example` to `.env` and fill in the values.
+
   `OPENAI_API_KEY=<key>`
 
   `OPENAI_MODEL=gpt-5`
