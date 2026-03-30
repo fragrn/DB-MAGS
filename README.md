@@ -18,7 +18,33 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 
   http://127.0.0.1:8050/
 
-(2) **Reproducing Database Performance Anomalies via Python Command**
+(2) **Conversational Multi-Agent CLI (V1)**
+
+- optional environment variables
+
+  `OPENAI_API_KEY=<key>`
+
+  `OPENAI_MODEL=gpt-5`
+
+- start the CLI planner
+
+  `python3 agent_cli.py "Plan a missing-index and cpu contention experiment" --db tpcc10_test --anomalies missing_index,cpu`
+
+- interactive commands inside the CLI
+
+  `show plan`
+
+  `revise reduce the risk and keep only missing_index`
+
+  `confirm`
+
+  `cancel`
+
+- Chinese architecture and usage guide
+
+  `docs/agent_runtime_cn.md`
+
+(3) **Reproducing Database Performance Anomalies via Python Command**
 
 - single anomaly
 
