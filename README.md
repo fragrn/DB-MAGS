@@ -28,6 +28,8 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 
   `OPENAI_MODEL=gpt-5`
 
+  Database connection variables are documented in `.env.example` with the `DBMAGS_*` prefix.
+
 - start the CLI planner
 
   `python3 agent_cli.py "Plan a missing-index and cpu contention experiment" --db tpcc10_test --anomalies missing_index,cpu`
@@ -41,6 +43,18 @@ Existing database performance anomaly datasets have the problems of comprehensiv
   `confirm`
 
   `cancel`
+
+- create and use the conda runtime
+
+  `conda activate dbmags-hierarchy-agent`
+
+- local DB connectivity check
+
+  `conda run -n dbmags-hierarchy-agent python scripts/check_local_db.py`
+
+- agent validation experiments
+
+  `conda run -n dbmags-hierarchy-agent python scripts/run_agent_validation.py --db tpcc10_test`
 
 - Chinese architecture and usage guide
 

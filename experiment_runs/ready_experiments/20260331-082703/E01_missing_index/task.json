@@ -1,0 +1,48 @@
+{
+  "tasks": [
+    {
+      "task_id": "sql-missing-index-1",
+      "agent_type": "sql",
+      "anomaly_type": "missing_index",
+      "title": "SQL anomaly: missing_index",
+      "inputs": {
+        "sql": "select count(*) from orders where o_c_id > 2638;",
+        "database": "dbmags_agent_lab"
+      },
+      "prechecks": [
+        {
+          "name": "validate_sql",
+          "result": {
+            "valid": true,
+            "errors": [],
+            "sql": "select count(*) from orders where o_c_id > 2638;"
+          }
+        }
+      ],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "select count(*) from orders where o_c_id > 2638;",
+          "database": "dbmags_agent_lab",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "select count(*) from orders where o_c_id > 2638;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=72228 rows=1)\n    -> Filter: (orders.o_c_id > 2638)  (cost=37863 rows=149145)\n        -> Covering index skip scan on orders using idx_orders_customer over 2638 < o_c_id  (cost=37863 rows=149145)\n"
+              ]
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Execute candidate SQL for missing_index after validation and EXPLAIN verification."
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "tasks": [
+    {
+      "task_id": "sql-record-lock-1",
+      "agent_type": "sql",
+      "anomaly_type": "record_lock",
+      "title": "SQL anomaly: record_lock",
+      "inputs": {
+        "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;",
+        "database": "dbmags_agent_lab_copy"
+      },
+      "prechecks": [
+        {
+          "name": "validate_sql",
+          "result": {
+            "valid": true,
+            "errors": [],
+            "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;"
+          }
+        }
+      ],
+      "execution_steps": [
+        {
+          "kind": "hold_sql",
+          "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;",
+          "database": "dbmags_agent_lab_copy",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;",
+          "result": {
+            "validated": true,
+            "skipped": true
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Execute candidate SQL for record_lock after validation and EXPLAIN verification."
+    }
+  ]
+}

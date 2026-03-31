@@ -38,7 +38,7 @@ class ResourceAgent(BaseTaskAgent):
                 agent_type=self.agent_type,
                 anomaly_type=resource_type,
                 title=f"Resource bottleneck: {resource_type}",
-                inputs={"resource_type": resource_type},
+                inputs={"resource_type": resource_type, "duration_seconds": min(max(request.execution_window_seconds, 1), 15)},
                 prechecks=[],
                 execution_steps=[{"kind": "shell", "command": command["command"]}],
                 validation_steps=[],

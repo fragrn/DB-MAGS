@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import unittest
 from unittest.mock import patch
 
@@ -124,6 +126,26 @@ class RuntimeSmokeTests(unittest.TestCase):
         runtime = build_runtime()
         self.assertIsNotNone(runtime)
 
+
+
+
+class ExperimentValidationTests(unittest.TestCase):
+    def test_validation_runner_writes_structured_results_without_openai(self):
+        import tempfile
+        from agent_runtime.experiment_validation import AgentValidationRunner
+        from agent_runtime.runtime import build_components
+        from agent_runtime.config import RuntimeConfig
+
+        config = RuntimeConfig.from_env()
+        config.openai_api_key = ""
+        config.planner_enabled = False
+        runner = AgentValidationRunner(build_components(config))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            suite = runner.run(output_root=Path(tmpdir), database="tpcc10_test")
+            self.assertEqual(len(suite["experiments"]), 5)
+            sql_result = [item for item in suite["experiments"] if item["agent"] == "SQLAnomalyAgent"][0]
+            self.assertEqual(sql_result["status"], "fail")
+            self.assertIn("OpenAI", sql_result["failure_reason"])
 
 if __name__ == "__main__":
     unittest.main()

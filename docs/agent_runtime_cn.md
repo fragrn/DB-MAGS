@@ -381,6 +381,83 @@ V1 已经能作为一个完整的 agent runtime 骨架使用，但仍有几个�
 - 在现有 Dash 页面上增加聊天式前端
 - 让 Web 和 CLI 共享同一套 planner / scheduler / skills
 
+## 10.1 Conda 环境与本地数据库验证
+
+推荐使用独立环境：
+
+```bash
+conda activate dbmags-hierarchy-agent
+```
+
+如果环境尚未创建，可使用：
+
+```bash
+conda create -n dbmags-hierarchy-agent python=3.11
+conda run -n dbmags-hierarchy-agent python -m pip install pymysql sshtunnel openai
+```
+
+项目根目录下的 `.env` 用于本地数据库验证。默认已按本地 MySQL 模板生成，你需要至少检查这些字段：
+
+- `DBMAGS_MYSQL_HOST`
+- `DBMAGS_MYSQL_PORT`
+- `DBMAGS_MYSQL_USER`
+- `DBMAGS_MYSQL_PASSWORD`
+- `DBMAGS_MYSQL_DB`
+
+本地数据库连通性检查脚本：
+
+```bash
+conda run -n dbmags-hierarchy-agent python scripts/check_local_db.py
+```
+
+该脚本会：
+
+- 读取 `.env`
+- 调用 `Database().connection2()` 直连本地数据库
+- 执行 `SELECT 1`
+- 查询当前数据库名
+- 输出 `SHOW TABLES` 的表数量
+- 在失败时给出错误分类，例如认证失败、数据库不存在、主机不可达
+
+## 10.2 Agent 实验验证
+
+新增了一个结构化实验运行器，用来验证：
+
+- `GlobalPlannerAgent`
+- `SQLAnomalyAgent`
+- `ResourceAgent`
+- `TrafficAgent`
+- 以及一个端到端的联合规划链路
+
+运行方式：
+
+```bash
+conda run -n dbmags-hierarchy-agent python scripts/run_agent_validation.py --db tpcc10_test
+```
+
+输出目录默认是：
+
+```text
+experiment_runs/agent_validation/<timestamp>/
+```
+
+其中会包含：
+
+- `E1_global/`
+- `E2_sql/`
+- `E3_resource/`
+- `E4_traffic/`
+- `E5_end_to_end/`
+
+每个实验目录中统一包含：
+
+- `request.json` 或 `task.json`
+- `plan.json`（适用于 planner 类实验）
+- `result.json`
+- `notes.md`
+
+当前设计只覆盖 OpenAI 路径的实验定义；若没有提供 OpenAI API，SQL 实验会输出结构化失败结果，并明确提示需要配置 `OPENAI_API_KEY` 后再重跑。
+
 ## 10. 测试
 
 当前测试文件：`tests/test_agent_runtime.py`

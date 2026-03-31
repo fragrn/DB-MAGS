@@ -1,0 +1,52 @@
+{
+  "experiment_id": "E06_metadata_lock",
+  "agent": "sql",
+  "anomaly_type": "metadata_lock",
+  "database": "dbmags_agent_lab_copy",
+  "status": "completed",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "sql-metadata-lock-1",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [
+            {
+              "name": "validate_sql",
+              "result": {
+                "valid": true,
+                "errors": [],
+                "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);"
+              }
+            }
+          ],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);",
+              "result": {
+                "validated": true,
+                "skipped": true
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);",
+              "database": "dbmags_agent_lab_copy"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=sql-metadata-lock-1",
+          "anomaly=metadata_lock",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": []
+}

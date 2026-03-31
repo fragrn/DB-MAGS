@@ -30,6 +30,8 @@ class TrafficAgent(BaseTaskAgent):
             baseline_sleep=float(request.user_constraints.get("baseline_sleep", 0.044)),
             baseline_threads=int(request.user_constraints.get("baseline_threads", 300)),
         )
+        tuning["database"] = context.database
+        tuning["duration_seconds"] = min(max(request.execution_window_seconds, 1), 15)
         task_id = f"traffic-{slugify(mode)}"
         return [
             TaskSpec(

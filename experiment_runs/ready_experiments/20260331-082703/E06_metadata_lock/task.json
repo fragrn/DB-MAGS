@@ -1,0 +1,44 @@
+{
+  "tasks": [
+    {
+      "task_id": "sql-metadata-lock-1",
+      "agent_type": "sql",
+      "anomaly_type": "metadata_lock",
+      "title": "SQL anomaly: metadata_lock",
+      "inputs": {
+        "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);",
+        "database": "dbmags_agent_lab_copy"
+      },
+      "prechecks": [
+        {
+          "name": "validate_sql",
+          "result": {
+            "valid": true,
+            "errors": [],
+            "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);"
+          }
+        }
+      ],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);",
+          "database": "dbmags_agent_lab_copy",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);",
+          "result": {
+            "validated": true,
+            "skipped": true
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Execute candidate SQL for metadata_lock after validation and EXPLAIN verification."
+    }
+  ]
+}

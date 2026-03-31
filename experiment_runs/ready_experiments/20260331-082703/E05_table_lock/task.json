@@ -1,0 +1,44 @@
+{
+  "tasks": [
+    {
+      "task_id": "sql-table-lock-1",
+      "agent_type": "sql",
+      "anomaly_type": "table_lock",
+      "title": "SQL anomaly: table_lock",
+      "inputs": {
+        "sql": "Lock TABLES new_orders WRITE;",
+        "database": "dbmags_agent_lab_copy"
+      },
+      "prechecks": [
+        {
+          "name": "validate_sql",
+          "result": {
+            "valid": true,
+            "errors": [],
+            "sql": "Lock TABLES new_orders WRITE;"
+          }
+        }
+      ],
+      "execution_steps": [
+        {
+          "kind": "hold_sql",
+          "sql": "Lock TABLES new_orders WRITE;",
+          "database": "dbmags_agent_lab_copy",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "Lock TABLES new_orders WRITE;",
+          "result": {
+            "validated": true,
+            "skipped": true
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Execute candidate SQL for table_lock after validation and EXPLAIN verification."
+    }
+  ]
+}

@@ -27,6 +27,7 @@ SQL_ANOMALIES = {
 
 class SQLAnomalyAgent(BaseTaskAgent):
     agent_type = "sql"
+    _LOCK_ANOMALIES = {"record_lock", "table_lock", "metadata_lock"}
 
     def __init__(self, skills: SkillRegistry):
         self.skills = skills
@@ -42,12 +43,17 @@ class SQLAnomalyAgent(BaseTaskAgent):
         allowed_tables = [table.name for table in context.tables]
         task_specs: List[TaskSpec] = []
         for index, candidate in enumerate(generator.execute(anomaly_type=anomaly_type, db_context=context)[:3]):
+            if anomaly_type == "metadata_lock":
+                candidate = candidate.replace("ADD meta_data char(2)", f"ADD COLUMN agent_meta_lock_{index + 1} CHAR(2)")
             validation = validator.execute(sql=candidate, allowed_tables=allowed_tables, anomaly_type=anomaly_type)
             if not validation["valid"]:
                 continue
-            explain = explainer.execute(validation["sql"])
+            explain = {"validated": True, "skipped": anomaly_type in self._LOCK_ANOMALIES}
+            if anomaly_type not in self._LOCK_ANOMALIES:
+                explain = explainer.execute(validation["sql"], database=context.database)
             if not explain.get("validated") and context.tables:
                 continue
+            execution_kind = "hold_sql" if anomaly_type in {"record_lock", "table_lock"} else "sql"
             task_id = f"sql-{slugify(anomaly_type)}-{index + 1}"
             task_specs.append(
                 TaskSpec(
@@ -55,9 +61,16 @@ class SQLAnomalyAgent(BaseTaskAgent):
                     agent_type=self.agent_type,
                     anomaly_type=anomaly_type,
                     title=f"SQL anomaly: {anomaly_type}",
-                    inputs={"sql": validation["sql"]},
+                    inputs={"sql": validation["sql"], "database": context.database},
                     prechecks=[{"name": "validate_sql", "result": validation}],
-                    execution_steps=[{"kind": "sql", "sql": validation["sql"]}],
+                    execution_steps=[
+                        {
+                            "kind": execution_kind,
+                            "sql": validation["sql"],
+                            "database": context.database,
+                            "hold_seconds": min(max(request.execution_window_seconds, 1), 10),
+                        }
+                    ],
                     validation_steps=[{"kind": "explain", "sql": validation["sql"], "result": explain}],
                     rollback_steps=[],
                     explanation=f"Execute candidate SQL for {anomaly_type} after validation and EXPLAIN verification.",

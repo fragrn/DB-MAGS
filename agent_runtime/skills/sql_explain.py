@@ -9,9 +9,9 @@ from agent_runtime.skills.base import Skill
 class ExplainSQLSkill(Skill):
     name = "explain_sql_skill"
 
-    def execute(self, sql: str) -> Dict[str, object]:
+    def execute(self, sql: str, database: str | None = None) -> Dict[str, object]:
         try:
-            with db_cursor() as (_conn, cur):
+            with db_cursor(database=database) as (_conn, cur):
                 cur.execute(f"EXPLAIN {sql}")
                 rows = cur.fetchall()
                 return {"validated": True, "rows": rows[:10]}

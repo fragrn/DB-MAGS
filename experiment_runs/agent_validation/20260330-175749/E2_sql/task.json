@@ -1,0 +1,41 @@
+{
+  "tasks": [
+    {
+      "task_id": "sql-missing-index-1",
+      "agent_type": "sql",
+      "anomaly_type": "missing_index",
+      "title": "SQL anomaly: missing_index",
+      "inputs": {
+        "sql": "select count(*) from orders where o_c_id > 1462;"
+      },
+      "prechecks": [
+        {
+          "name": "validate_sql",
+          "result": {
+            "valid": true,
+            "errors": [],
+            "sql": "select count(*) from orders where o_c_id > 1462;"
+          }
+        }
+      ],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "select count(*) from orders where o_c_id > 1462;"
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "select count(*) from orders where o_c_id > 1462;",
+          "result": {
+            "validated": false,
+            "error": "(2003, \"Can't connect to MySQL server on '127.0.0.1' ([Errno 1] Operation not permitted)\")"
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Execute candidate SQL for missing_index after validation and EXPLAIN verification."
+    }
+  ]
+}

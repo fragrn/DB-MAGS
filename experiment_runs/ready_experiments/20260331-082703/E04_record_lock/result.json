@@ -1,0 +1,53 @@
+{
+  "experiment_id": "E04_record_lock",
+  "agent": "sql",
+  "anomaly_type": "record_lock",
+  "database": "dbmags_agent_lab_copy",
+  "status": "completed",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "sql-record-lock-1",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [
+            {
+              "name": "validate_sql",
+              "result": {
+                "valid": true,
+                "errors": [],
+                "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;"
+              }
+            }
+          ],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;",
+              "result": {
+                "validated": true,
+                "skipped": true
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;",
+              "database": "dbmags_agent_lab_copy",
+              "hold_seconds": 5.0
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=sql-record-lock-1",
+          "anomaly=record_lock",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": []
+}

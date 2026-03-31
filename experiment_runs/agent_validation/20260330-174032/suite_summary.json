@@ -1,0 +1,104 @@
+{
+  "generated_at": "2026-03-30T09:40:32.795389+00:00",
+  "database": "tpcc10_test",
+  "model": "gpt-5",
+  "openai_available": false,
+  "experiments": [
+    {
+      "status": "fail",
+      "agent": "GlobalPlannerAgent",
+      "input_summary": {
+        "database": "tpcc10_test",
+        "allowed_anomalies": [
+          "missing_index",
+          "cpu",
+          "overall_workload"
+        ],
+        "openai_available": false
+      },
+      "artifacts": {
+        "request": "experiment_runs/agent_validation/20260330-174032/E1_global/request.json",
+        "plan": "experiment_runs/agent_validation/20260330-174032/E1_global/plan.json"
+      },
+      "observations": [
+        "follow_up_count=3",
+        "initial_task_count=0",
+        "revised_task_count=0"
+      ],
+      "failure_reason": "planner did not produce expected follow-up and revised plans",
+      "next_action": "Provide OpenAI credentials before executing live OpenAI-path validation."
+    },
+    {
+      "status": "fail",
+      "agent": "SQLAnomalyAgent",
+      "input_summary": {
+        "database": "tpcc10_test",
+        "anomaly": "missing_index",
+        "openai_available": false
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260330-174032/E2_sql/task.json"
+      },
+      "observations": [
+        "task_count=1"
+      ],
+      "failure_reason": "OpenAI API configuration required for the SQL agent experiment.",
+      "next_action": "Provide OPENAI_API_KEY and rerun this experiment."
+    },
+    {
+      "status": "pass",
+      "agent": "ResourceAgent",
+      "input_summary": {
+        "database": "tpcc10_test",
+        "anomaly": "cpu"
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260330-174032/E3_resource/task.json"
+      },
+      "observations": [
+        "command=.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload"
+      ],
+      "failure_reason": null,
+      "next_action": "Resource command is ready for manual execution validation."
+    },
+    {
+      "status": "pass",
+      "agent": "TrafficAgent",
+      "input_summary": {
+        "database": "tpcc10_test",
+        "anomaly": "overall_workload",
+        "baseline_sleep": 0.044,
+        "baseline_threads": 300
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260330-174032/E4_traffic/task.json"
+      },
+      "observations": [
+        "{\"mode\": \"overall_workload\", \"sleep_time\": 0.005, \"thread_count\": 500, \"description\": \"Increase overall workload by reducing sleep time and raising concurrency.\"}"
+      ],
+      "failure_reason": null,
+      "next_action": "Traffic profile is ready for workload integration."
+    },
+    {
+      "status": "fail",
+      "agent": "GlobalPlannerAgent+TaskAgents",
+      "input_summary": {
+        "database": "tpcc10_test",
+        "allowed_anomalies": [
+          "missing_index",
+          "cpu",
+          "overall_workload"
+        ]
+      },
+      "artifacts": {
+        "plan": "experiment_runs/agent_validation/20260330-174032/E5_end_to_end/plan.json"
+      },
+      "observations": [
+        "initial_agents=[]",
+        "revised_agents=[]"
+      ],
+      "failure_reason": "end-to-end planning did not fan out to the expected task agent mix",
+      "next_action": "Inspect planner fan-out or revise behavior."
+    }
+  ]
+}

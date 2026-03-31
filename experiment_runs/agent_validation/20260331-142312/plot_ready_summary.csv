@@ -1,0 +1,6 @@
+experiment_id,agent,status,database,openai_available,failure_reason,observations,next_action
+E1,GlobalPlannerAgent,fail,tpcc10_test,True,planner did not produce expected follow-up and revised plans,follow_up_count=3 | initial_task_count=0 | revised_task_count=0,Ready for live OpenAI-path execution.
+E2,SQLAnomalyAgent,pass,tpcc10_test,True,,task_count=1,SQL agent produced at least one validated task.
+E3,ResourceAgent,pass,tpcc10_test,True,,command=.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload,Resource command is ready for manual execution validation.
+E4,TrafficAgent,pass,tpcc10_test,True,,"{""mode"": ""overall_workload"", ""sleep_time"": 0.005, ""thread_count"": 500, ""description"": ""Increase overall workload by reducing sleep time and raising concurrency.""}",Traffic profile is ready for workload integration.
+E5,GlobalPlannerAgent+TaskAgents,fail,tpcc10_test,True,end-to-end planning did not fan out to the expected task agent mix,initial_agents=[] | revised_agents=[],Inspect planner fan-out or revise behavior.

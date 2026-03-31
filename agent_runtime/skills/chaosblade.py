@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+from pathlib import Path
 from typing import Dict
 
 from agent_runtime.skills.base import Skill
@@ -10,10 +12,12 @@ from tpcc_operation_set import cpu_bottle, disk_bottle, io_bottle, mem_bottle, n
 
 class ChaosBladeInjectionSkill(Skill):
     name = "chaosblade_injection_skill"
+    _DEFAULT_LEGACY_PATH = "/root/ChaosBlade/chaosblade-0.3.0/blade"
+    _DEFAULT_REPO_PATH = ".tools/chaosblade-1.8.0-darwin_arm64/blade"
 
     def execute(self, resource_type: str, execute: bool = False) -> Dict[str, object]:
         command = self._select_command(resource_type)
-        result = {"command": command, "executed": False, "uid": ""}
+        result = {"command": command, "executed": False, "uid": "", "blade_path": self._resolve_blade_path()}
         if not execute:
             return result
         proc = subprocess.run(command, shell=True, capture_output=True, text=True)
@@ -25,13 +29,13 @@ class ChaosBladeInjectionSkill(Skill):
             result["uid"] = uid
         return result
 
-    @staticmethod
-    def cleanup(uid: str) -> Dict[str, object]:
+    @classmethod
+    def cleanup(cls, uid: str) -> Dict[str, object]:
         if not uid:
             return {"cleaned": False, "error": "missing chaosblade uid"}
-        command = f"/root/ChaosBlade/chaosblade-0.3.0/blade destroy {uid}"
+        command = f"{cls._resolve_blade_path()} destroy {uid}"
         proc = subprocess.run(command, shell=True, capture_output=True, text=True)
-        return {"cleaned": proc.returncode == 0, "stdout": (proc.stdout or proc.stderr).strip()}
+        return {"cleaned": proc.returncode == 0, "stdout": (proc.stdout or proc.stderr).strip(), "command": command}
 
     @staticmethod
     def _extract_uid(stdout: str) -> str:
@@ -45,8 +49,21 @@ class ChaosBladeInjectionSkill(Skill):
                 return token.split("=", 1)[1]
         return ""
 
-    @staticmethod
-    def _select_command(resource_type: str) -> str:
+    @classmethod
+    def _resolve_blade_path(cls) -> str:
+        candidates = []
+        env_path = os.getenv("DBMAGS_CHAOSBLADE_PATH", "").strip()
+        if env_path:
+            candidates.append(Path(env_path))
+        candidates.append(Path.cwd() / cls._DEFAULT_REPO_PATH)
+        candidates.append(Path(cls._DEFAULT_LEGACY_PATH))
+        for candidate in candidates:
+            if candidate.exists() and os.access(candidate, os.X_OK):
+                return str(candidate)
+        return env_path or str(Path.cwd() / cls._DEFAULT_REPO_PATH)
+
+    @classmethod
+    def _select_command(cls, resource_type: str) -> str:
         mapping = {
             "cpu": cpu_bottle,
             "io": io_bottle,
@@ -55,4 +72,5 @@ class ChaosBladeInjectionSkill(Skill):
             "network": net_bottle,
         }
         generator = mapping.get(resource_type, cpu_bottle)
-        return generator()[0]
+        command = generator()[0]
+        return command.replace(cls._DEFAULT_LEGACY_PATH, cls._resolve_blade_path())

@@ -5,10 +5,10 @@ from typing import Iterator, Tuple
 
 
 @contextmanager
-def db_cursor(connection_method: str = "connection2") -> Iterator[Tuple[object, object]]:
+def db_cursor(connection_method: str = "connection2", database: str | None = None) -> Iterator[Tuple[object, object]]:
     from Connection.Connection import Database
 
-    db = Database()
+    db = Database(mysql_db=database) if database else Database()
     conn_factory = getattr(db, connection_method)
     conn, cur = conn_factory()
     try:
