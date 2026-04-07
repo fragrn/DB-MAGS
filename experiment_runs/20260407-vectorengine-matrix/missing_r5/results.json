@@ -1,0 +1,52 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal:**  \nDemonstrate a *missing-index* performance anomaly by running a query injection against a large table column that **does not have an index**, so the database is forced into slow scanning behavior.\n\n**Selected anomaly:**  \n- **Missing index / unindexed search on a large column** (task: `missing-index-878a9b7d` via the `missing_index` agent)\n\n**Expected signals to watch for:**  \n- **Higher query latency** (slower response times) compared to the same query with proper indexing  \n- **Increased full table scans / high row scans** (query plans showing no usable index)  \n- **Higher CPU and I/O load** during the injected query execution  \n- **More time spent in scans/filtering** in the query execution plan (e.g., large estimate vs. actual rows)  \n- **Possible lock/contention or resource pressure** if the workload is heavy enough to impact concurrent queries",
+  "plan": [
+    {
+      "task_id": "missing-index-878a9b7d",
+      "task_type": "missing_index_query",
+      "agent_name": "missing_index",
+      "start_after_seconds": 0,
+      "duration_seconds": 1,
+      "payload": {
+        "mode": "sql",
+        "sql": "SELECT COUNT(*) FROM `order_line` WHERE `ol_i_id` >= 50000.5;",
+        "repeat": 5,
+        "sleep_seconds": 0.0
+      },
+      "cleanup_payload": {},
+      "metadata": {
+        "table": "order_line",
+        "column": "ol_i_id",
+        "description": "Query injection against a large table column without an index.",
+        "schema": "dbmags_agent_lab"
+      }
+    }
+  ],
+  "results": [
+    {
+      "task_id": "missing-index-878a9b7d",
+      "task_type": "missing_index_query",
+      "agent_name": "missing_index",
+      "status": "success",
+      "started_at": "2026-04-07T09:25:14.256296",
+      "finished_at": "2026-04-07T09:25:16.346008",
+      "error": null,
+      "artifacts": {
+        "log": "/Users/neo/.codex/worktrees/933e/DB-MAGS/experiment_runs/20260407-vectorengine-matrix/missing_r5/missing-index-878a9b7d.log",
+        "sql": "SELECT COUNT(*) FROM `order_line` WHERE `ol_i_id` >= 50000.5;"
+      },
+      "metadata": {
+        "table": "order_line",
+        "column": "ol_i_id",
+        "description": "Query injection against a large table column without an index.",
+        "schema": "dbmags_agent_lab"
+      }
+    }
+  ],
+  "output_dir": "/Users/neo/.codex/worktrees/933e/DB-MAGS/experiment_runs/20260407-vectorengine-matrix/missing_r5"
+}

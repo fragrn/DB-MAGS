@@ -1,0 +1,8 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal:**  \nTest how host-level CPU contention affects the database workload and detect anomalies in query performance, error rates, and system behavior.\n\n**Selected anomaly experiment:**  \n- **CPU contention (ChaosBlade)**: Inject CPU load/pressure on the database host(s).\n\n**Expected signals to watch (in/around the database):**  \n- **Latency spikes**: higher response times for queries/transactions (e.g., reads/writes touching tables like `orders`, `order_line`, `stock`, `history`).  \n- **Throughput drop**: fewer completed transactions per unit time.  \n- **Timeouts / transient failures**: increased occurrence of query timeouts, connection drops, or application errors.  \n- **Locking/blocking effects (secondary symptom)**: more time spent waiting on locks, showing up as longer transaction durations in `history`/activity patterns.  \n- **Write/backlog indicators**: delayed updates reflected in tables that change frequently (e.g., `stock`, `orders`, `new_orders`).  \n- **Resource telemetry alignment**: correlate DB slowdown periods with elevated CPU usage from the ChaosBlade injection."
+}

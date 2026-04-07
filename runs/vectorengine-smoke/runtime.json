@@ -1,0 +1,8 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal:**  \nTrigger and observe the database impact of a **missing index** by running a query crafted to be slow/inefficient against a **large table column** in `dbmags_agent_lab`.\n\n**Selected anomaly (what we\u2019ll introduce):**  \n- **Missing index** on a high-impact column (simulated via a \u201cmissing-index query\u201d / query injection behavior) targeting **a large table column without supporting indexes**.\n\n**Expected signals to watch for:**  \n- **Performance degradation:** increased query latency and slower execution plans.  \n- **Inefficient plan shape:** the optimizer chooses scans (e.g., **sequential scan** / large index-less reads) instead of index seeks.  \n- **Higher resource usage:** increased **CPU**, **I/O**, and possibly elevated **temporary/spill to disk** operations.  \n- **Operational symptoms (if monitored):** more lock contention or timeouts under load, depending on concurrency."
+}

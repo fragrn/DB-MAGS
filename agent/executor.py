@@ -5,16 +5,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from agent.models import RunReport, TaskResult, TaskSpec
 
 
 class TaskExecutor:
-    def __init__(self, output_dir: str, database=None, max_workers: Optional[int] = None):
+    def __init__(self, output_dir: str, database=None, max_workers: Optional[int] = None, runtime_metadata: Optional[Dict] = None):
         self.output_dir = Path(output_dir)
         self.database = database or self._default_database()
         self.max_workers = max_workers or 4
+        self.runtime_metadata = runtime_metadata or {}
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def execute_plan(self, plan: List[TaskSpec]) -> RunReport:
@@ -24,9 +25,9 @@ class TaskExecutor:
             for future in as_completed(futures):
                 results.append(future.result())
         results.sort(key=lambda item: item.task_id)
-        report = RunReport(plan=plan, results=results, output_dir=str(self.output_dir))
+        report = RunReport(plan=plan, results=results, output_dir=str(self.output_dir), runtime=self.runtime_metadata)
         self._write_json("plan.json", [asdict(task) for task in plan])
-        self._write_json("results.json", [asdict(result) for result in results])
+        self._write_json("results.json", report.to_dict())
         return report
 
     def _run_task(self, task: TaskSpec) -> TaskResult:

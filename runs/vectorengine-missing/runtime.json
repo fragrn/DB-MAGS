@@ -1,0 +1,8 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal:**  \nTest whether a **missing index** on a large table column makes the database vulnerable to **slow/inefficient queries** (via an \u201cinjected\u201d query pattern), and confirm the impact through observable performance and error signals.\n\n**Selected anomaly (what to induce):**  \n- **Missing index** anomaly: run a **missing-index query** against a **large table** column in **`dbmags_agent_lab`** (schema-level database `dbmags_agent_lab`).  \n- Target pattern described in the plan as: **\u201cquery injection against a large table column without an index.\u201d**  \n- Likely relevant tables from the schema list (since they\u2019re typical \u201clarge\u201d operational tables): **`order_line`**, **`history`**, **`orders`**, **`new_orders`**, **`stock`**.\n\n**Expected signals to watch for:**  \n- **Query latency increases** (noticeably slower response times vs. baseline).  \n- **High CPU usage / high I/O** on the database server during the injected query.  \n- **Locking or blocking / longer transaction times** (if the query holds resources).  \n- **Execution plan indications** of no/ineffective indexing (e.g., full table scans, large row estimates).  \n- **Potential timeouts or elevated query error rates** (depending on how aggressive the injection pattern is)."
+}

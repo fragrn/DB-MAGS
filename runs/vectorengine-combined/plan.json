@@ -1,0 +1,43 @@
+[
+  {
+    "task_id": "cpu-a2aecb20",
+    "task_type": "cpu_contention",
+    "agent_name": "cpu_contention",
+    "start_after_seconds": 0,
+    "duration_seconds": 2,
+    "payload": {
+      "mode": "command",
+      "blade_path": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+      "create_command": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload --cpu-count 1 --cpu-percent 95",
+      "precheck_command": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade version"
+    },
+    "cleanup_payload": {
+      "mode": "chaosblade_destroy",
+      "blade_path": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade"
+    },
+    "metadata": {
+      "description": "Inject host-level CPU contention with ChaosBlade.",
+      "schema": "dbmags_agent_lab"
+    }
+  },
+  {
+    "task_id": "missing-index-59401fd8",
+    "task_type": "missing_index_query",
+    "agent_name": "missing_index",
+    "start_after_seconds": 0,
+    "duration_seconds": 2,
+    "payload": {
+      "mode": "sql",
+      "sql": "SELECT COUNT(*) FROM `order_line` WHERE `ol_i_id` >= 50000.5;",
+      "repeat": 1,
+      "sleep_seconds": 0.0
+    },
+    "cleanup_payload": {},
+    "metadata": {
+      "table": "order_line",
+      "column": "ol_i_id",
+      "description": "Query injection against a large table column without an index.",
+      "schema": "dbmags_agent_lab"
+    }
+  }
+]

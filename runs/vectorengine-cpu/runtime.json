@@ -1,0 +1,8 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal**: Stress the database host by injecting **CPU contention** (ChaosBlade) to observe how database workloads behave under compute pressure.\n\n**Selected anomaly**:\n- **cpu_contention (task_id: cpu-92593fc5)**: Introduce host-level CPU contention to slow down processing and increase variability in query/transaction execution.\n\n**Expected signals to watch** (during and after the injection):\n- **Higher query/transaction latency** (slower response times for reads/writes)\n- **Increased request queueing / throughput degradation** (fewer completed operations per unit time)\n- **Rising error rates or timeouts** (if the system can\u2019t keep up)\n- **CPU saturation indicators** on the host (higher CPU utilization and context switching)\n- **Database-level symptoms**: longer-running queries, more blocked/locked operations, and potentially increased lock waits or replication lag (depending on setup)\n\nIf you want, I can tailor the exact metrics/log queries to the tables you have (e.g., `orders`, `order_line`, `stock`, `history`) based on how your workload is generated."
+}

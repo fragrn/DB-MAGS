@@ -1,0 +1,90 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal:** Validate how the system behaves under two stressors\u2014(1) heavy CPU contention on the host and (2) intentionally slow \u201cmissing index\u201d query patterns\u2014by observing measurable performance and error signals.\n\n**Selected anomalies**\n1. **Host-level CPU contention (ChaosBlade)**  \n   - Affects overall query execution time and scheduling on the database server/host.\n\n2. **Missing-index query injection**  \n   - Runs a query pattern against a **large table** using a **specific column without an index**, forcing slower scans/joins.\n\n**Expected signals to watch**\n- **Latency & throughput:** increases in query response times and reduced transactions/requests per second.\n- **CPU saturation:** sustained high CPU utilization and rising load averages during the contention window.\n- **Database resource pressure:** spikes in wait time for CPU/CPU-related waits; possible increases in query execution times and queueing.\n- **Plan degradation indicators:** for the missing-index injection, expect **slower execution**, more/longer-running scans, and higher estimated vs. actual row processing (if explain/metrics are available).\n- **Error/timeout behavior:** elevated timeouts, aborted queries, or application-visible failures during both anomalies.",
+  "plan": [
+    {
+      "task_id": "cpu-36354b1c",
+      "task_type": "cpu_contention",
+      "agent_name": "cpu_contention",
+      "start_after_seconds": 0,
+      "duration_seconds": 1,
+      "payload": {
+        "mode": "command",
+        "blade_path": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+        "create_command": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload --cpu-count 1 --cpu-percent 95",
+        "precheck_command": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade version"
+      },
+      "cleanup_payload": {
+        "mode": "chaosblade_destroy",
+        "blade_path": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade"
+      },
+      "metadata": {
+        "description": "Inject host-level CPU contention with ChaosBlade.",
+        "schema": "dbmags_agent_lab"
+      }
+    },
+    {
+      "task_id": "missing-index-a5bd7b65",
+      "task_type": "missing_index_query",
+      "agent_name": "missing_index",
+      "start_after_seconds": 0,
+      "duration_seconds": 1,
+      "payload": {
+        "mode": "sql",
+        "sql": "SELECT COUNT(*) FROM `order_line` WHERE `ol_i_id` >= 50000.5;",
+        "repeat": 20,
+        "sleep_seconds": 0.0
+      },
+      "cleanup_payload": {},
+      "metadata": {
+        "table": "order_line",
+        "column": "ol_i_id",
+        "description": "Query injection against a large table column without an index.",
+        "schema": "dbmags_agent_lab"
+      }
+    }
+  ],
+  "results": [
+    {
+      "task_id": "cpu-36354b1c",
+      "task_type": "cpu_contention",
+      "agent_name": "cpu_contention",
+      "status": "success",
+      "started_at": "2026-04-07T09:27:34.892411",
+      "finished_at": "2026-04-07T09:27:39.745633",
+      "error": null,
+      "artifacts": {
+        "log": "/Users/neo/.codex/worktrees/933e/DB-MAGS/experiment_runs/20260407-vectorengine-matrix/combined_l95_r20/cpu-36354b1c.log",
+        "chaosblade_uid": "22462e0790fa8587"
+      },
+      "metadata": {
+        "description": "Inject host-level CPU contention with ChaosBlade.",
+        "schema": "dbmags_agent_lab"
+      }
+    },
+    {
+      "task_id": "missing-index-a5bd7b65",
+      "task_type": "missing_index_query",
+      "agent_name": "missing_index",
+      "status": "success",
+      "started_at": "2026-04-07T09:27:34.892595",
+      "finished_at": "2026-04-07T09:27:43.370880",
+      "error": null,
+      "artifacts": {
+        "log": "/Users/neo/.codex/worktrees/933e/DB-MAGS/experiment_runs/20260407-vectorengine-matrix/combined_l95_r20/missing-index-a5bd7b65.log",
+        "sql": "SELECT COUNT(*) FROM `order_line` WHERE `ol_i_id` >= 50000.5;"
+      },
+      "metadata": {
+        "table": "order_line",
+        "column": "ol_i_id",
+        "description": "Query injection against a large table column without an index.",
+        "schema": "dbmags_agent_lab"
+      }
+    }
+  ],
+  "output_dir": "/Users/neo/.codex/worktrees/933e/DB-MAGS/experiment_runs/20260407-vectorengine-matrix/combined_l95_r20"
+}

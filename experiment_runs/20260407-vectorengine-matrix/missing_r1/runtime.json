@@ -1,0 +1,8 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal:**  \nTest how the system behaves when an agent runs a *query-injection-style* request against a **large table column that lacks a supporting index**\u2014to see whether performance degradation and/or query irregularities expose the anomaly.\n\n**Selected anomaly being exercised:**  \n- **Missing index** on a large table column (the plan\u2019s task: `missing-index-154301f5`)  \n- Using an **injection-like query pattern** targeted at that unindexed column to increase scan/workload.\n\n**Expected signals to watch:**  \n- **Query latency spikes** (significant slowdowns vs. baseline/normal queries) due to full scans or expensive operations.  \n- **Higher CPU/IO usage** on the DB during the injected query execution.  \n- **Abnormal row scan / execution statistics** (e.g., very high examined rows, long-running execution plans).  \n- **Stability impact**: timeouts, lock contention, or increased error rates for that query class.  \n- **Plan difference**: the injected query causes the optimizer to choose a **non-indexed** path (e.g., table/large-range scan instead of index seek)."
+}

@@ -1,0 +1,8 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal:** Stress the database under two controlled fault conditions\u2014**CPU contention on the host** and a **missing-index query workload**\u2014to observe how performance and query behavior degrade and recover.\n\n**Selected anomalies:**\n1. **Host-level CPU contention (ChaosBlade)** \u2014 `cpu_contention`  \n   - Applies pressure to the DB host CPU to slow query execution and increase latency.\n2. **Missing-index query injection** \u2014 `missing_index_query`  \n   - Runs a query against a **large table column without an index**, forcing slower execution paths (e.g., full scans).\n\n**Expected signals to watch:**\n- **Increased query latency** (especially for the injected missing-index query)\n- **Higher CPU utilization / contention symptoms** on the DB host (from the CPU anomaly)\n- **Rising throughput degradation** (fewer completed queries per unit time)\n- **More expensive execution behavior** for the missing-index query (e.g., longer runtimes, higher I/O, more scans)\n- **Potential timeouts / increased error rates** under combined stress\n- **Recovery after faults stop**: latency and error rate should fall back toward baseline if the system stabilizes normally"
+}

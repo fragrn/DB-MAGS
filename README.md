@@ -48,3 +48,7 @@ Existing database performance anomaly datasets have the problems of comprehensiv
   - `plan.json`
   - `results.json`
   - one log file per task under the selected output directory
+
+- LLM config
+
+  - `OPENAI_*` now means an OpenAI-compatible endpoint configuration and can point to VectorEngine.

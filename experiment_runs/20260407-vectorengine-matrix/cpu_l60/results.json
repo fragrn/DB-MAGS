@@ -1,0 +1,51 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal:**  \nStress the database host by injecting **host-level CPU contention** (via ChaosBlade) to see how the database workload behaves under CPU pressure.\n\n**Selected anomaly:**  \n- **CPU contention (host-level):** increased competition for CPU resources so DB queries and background tasks contend for CPU time.\n\n**Expected signals to watch:**  \n- **Query latency increases:** slower response times for reads/writes against key tables like `orders`, `order_line`, and `history`.  \n- **Throughput drops:** fewer transactions completed per unit time (e.g., fewer rows inserted/updated in `new_orders`, `history`).  \n- **Resource saturation indicators:** higher CPU utilization and increased scheduling delay on the DB host.  \n- **Backlogs/lock symptoms:** more time waiting for locks or internal latching, potentially causing delays in updates across operational tables (`orders`, `customer`, `stock`).  \n- **Error/timeout rate rises (if applicable):** query timeouts or transient failures under sustained contention.",
+  "plan": [
+    {
+      "task_id": "cpu-28f18bb0",
+      "task_type": "cpu_contention",
+      "agent_name": "cpu_contention",
+      "start_after_seconds": 0,
+      "duration_seconds": 1,
+      "payload": {
+        "mode": "command",
+        "blade_path": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+        "create_command": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload --cpu-count 1 --cpu-percent 60",
+        "precheck_command": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade version"
+      },
+      "cleanup_payload": {
+        "mode": "chaosblade_destroy",
+        "blade_path": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade"
+      },
+      "metadata": {
+        "description": "Inject host-level CPU contention with ChaosBlade.",
+        "schema": "dbmags_agent_lab"
+      }
+    }
+  ],
+  "results": [
+    {
+      "task_id": "cpu-28f18bb0",
+      "task_type": "cpu_contention",
+      "agent_name": "cpu_contention",
+      "status": "success",
+      "started_at": "2026-04-07T09:26:35.244745",
+      "finished_at": "2026-04-07T09:26:40.289940",
+      "error": null,
+      "artifacts": {
+        "log": "/Users/neo/.codex/worktrees/933e/DB-MAGS/experiment_runs/20260407-vectorengine-matrix/cpu_l60/cpu-28f18bb0.log",
+        "chaosblade_uid": "730a51470cffed74"
+      },
+      "metadata": {
+        "description": "Inject host-level CPU contention with ChaosBlade.",
+        "schema": "dbmags_agent_lab"
+      }
+    }
+  ],
+  "output_dir": "/Users/neo/.codex/worktrees/933e/DB-MAGS/experiment_runs/20260407-vectorengine-matrix/cpu_l60"
+}

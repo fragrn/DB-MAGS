@@ -1,0 +1,90 @@
+{
+  "openai_available": true,
+  "openai_model": "gpt-5.4-nano-2026-03-17",
+  "openai_connected": true,
+  "openai_error": null,
+  "openai_endpoint": "/v1/responses",
+  "planner_summary": "**Main goal:** Stress the database under two controlled fault conditions\u2014**CPU contention on the host** and a **missing-index query workload**\u2014to observe how performance and query behavior degrade and recover.\n\n**Selected anomalies:**\n1. **Host-level CPU contention (ChaosBlade)** \u2014 `cpu_contention`  \n   - Applies pressure to the DB host CPU to slow query execution and increase latency.\n2. **Missing-index query injection** \u2014 `missing_index_query`  \n   - Runs a query against a **large table column without an index**, forcing slower execution paths (e.g., full scans).\n\n**Expected signals to watch:**\n- **Increased query latency** (especially for the injected missing-index query)\n- **Higher CPU utilization / contention symptoms** on the DB host (from the CPU anomaly)\n- **Rising throughput degradation** (fewer completed queries per unit time)\n- **More expensive execution behavior** for the missing-index query (e.g., longer runtimes, higher I/O, more scans)\n- **Potential timeouts / increased error rates** under combined stress\n- **Recovery after faults stop**: latency and error rate should fall back toward baseline if the system stabilizes normally",
+  "plan": [
+    {
+      "task_id": "cpu-a2aecb20",
+      "task_type": "cpu_contention",
+      "agent_name": "cpu_contention",
+      "start_after_seconds": 0,
+      "duration_seconds": 2,
+      "payload": {
+        "mode": "command",
+        "blade_path": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+        "create_command": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload --cpu-count 1 --cpu-percent 95",
+        "precheck_command": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade version"
+      },
+      "cleanup_payload": {
+        "mode": "chaosblade_destroy",
+        "blade_path": "/Users/neo/.codex/worktrees/933e/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade"
+      },
+      "metadata": {
+        "description": "Inject host-level CPU contention with ChaosBlade.",
+        "schema": "dbmags_agent_lab"
+      }
+    },
+    {
+      "task_id": "missing-index-59401fd8",
+      "task_type": "missing_index_query",
+      "agent_name": "missing_index",
+      "start_after_seconds": 0,
+      "duration_seconds": 2,
+      "payload": {
+        "mode": "sql",
+        "sql": "SELECT COUNT(*) FROM `order_line` WHERE `ol_i_id` >= 50000.5;",
+        "repeat": 1,
+        "sleep_seconds": 0.0
+      },
+      "cleanup_payload": {},
+      "metadata": {
+        "table": "order_line",
+        "column": "ol_i_id",
+        "description": "Query injection against a large table column without an index.",
+        "schema": "dbmags_agent_lab"
+      }
+    }
+  ],
+  "results": [
+    {
+      "task_id": "cpu-a2aecb20",
+      "task_type": "cpu_contention",
+      "agent_name": "cpu_contention",
+      "status": "success",
+      "started_at": "2026-04-07T09:21:27.016109",
+      "finished_at": "2026-04-07T09:21:32.803871",
+      "error": null,
+      "artifacts": {
+        "log": "runs/vectorengine-combined/cpu-a2aecb20.log",
+        "chaosblade_uid": "7689562343a99f4e"
+      },
+      "metadata": {
+        "description": "Inject host-level CPU contention with ChaosBlade.",
+        "schema": "dbmags_agent_lab"
+      }
+    },
+    {
+      "task_id": "missing-index-59401fd8",
+      "task_type": "missing_index_query",
+      "agent_name": "missing_index",
+      "status": "success",
+      "started_at": "2026-04-07T09:21:27.016272",
+      "finished_at": "2026-04-07T09:21:27.486739",
+      "error": null,
+      "artifacts": {
+        "log": "runs/vectorengine-combined/missing-index-59401fd8.log",
+        "sql": "SELECT COUNT(*) FROM `order_line` WHERE `ol_i_id` >= 50000.5;"
+      },
+      "metadata": {
+        "table": "order_line",
+        "column": "ol_i_id",
+        "description": "Query injection against a large table column without an index.",
+        "schema": "dbmags_agent_lab"
+      }
+    }
+  ],
+  "output_dir": "runs/vectorengine-combined"
+}

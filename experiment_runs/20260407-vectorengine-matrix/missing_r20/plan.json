@@ -1,0 +1,22 @@
+[
+  {
+    "task_id": "missing-index-ca751289",
+    "task_type": "missing_index_query",
+    "agent_name": "missing_index",
+    "start_after_seconds": 0,
+    "duration_seconds": 1,
+    "payload": {
+      "mode": "sql",
+      "sql": "SELECT COUNT(*) FROM `order_line` WHERE `ol_i_id` >= 50000.5;",
+      "repeat": 20,
+      "sleep_seconds": 0.0
+    },
+    "cleanup_payload": {},
+    "metadata": {
+      "table": "order_line",
+      "column": "ol_i_id",
+      "description": "Query injection against a large table column without an index.",
+      "schema": "dbmags_agent_lab"
+    }
+  }
+]

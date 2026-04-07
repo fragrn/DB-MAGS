@@ -60,9 +60,16 @@ class RunReport:
     plan: List[TaskSpec]
     results: List[TaskResult]
     output_dir: str
+    runtime: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
+            "openai_available": bool(self.runtime.get("openai_available")),
+            "openai_model": self.runtime.get("openai_model"),
+            "openai_connected": bool(self.runtime.get("openai_connected")),
+            "openai_error": self.runtime.get("openai_error"),
+            "openai_endpoint": self.runtime.get("openai_endpoint"),
+            "planner_summary": self.runtime.get("planner_summary"),
             "plan": [asdict(item) for item in self.plan],
             "results": [asdict(item) for item in self.results],
             "output_dir": self.output_dir,

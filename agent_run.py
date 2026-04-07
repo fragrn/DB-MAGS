@@ -4,8 +4,10 @@ from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
 
+from agent.config import RuntimeConfig
 from agent.executor import TaskExecutor
 from agent.global_agent import GlobalAgent
+from agent.llm import ResponsesAPIClient
 
 
 def parse_args():
@@ -45,7 +47,9 @@ def main():
         "duration": args.duration,
     }
 
-    global_agent = GlobalAgent()
+    config = RuntimeConfig.from_env(base_dir=Path(__file__).resolve().parent)
+    llm_client = ResponsesAPIClient(config)
+    global_agent = GlobalAgent(llm_client=llm_client)
     profile = global_agent.collect_profile(schema_name=args.schema)
     plan = global_agent.plan(profile, runtime_context)
 
@@ -53,8 +57,10 @@ def main():
     output_path.mkdir(parents=True, exist_ok=True)
     with (output_path / "database_profile.json").open("w", encoding="utf-8") as handle:
         json.dump(asdict(profile), handle, indent=2, default=str)
+    with (output_path / "runtime.json").open("w", encoding="utf-8") as handle:
+        json.dump(global_agent.runtime_metadata(), handle, indent=2, default=str)
 
-    executor = TaskExecutor(output_dir=output_dir)
+    executor = TaskExecutor(output_dir=output_dir, runtime_metadata=global_agent.runtime_metadata())
     report = executor.execute_plan(plan)
     print(json.dumps(report.to_dict(), indent=2, default=str))
 
