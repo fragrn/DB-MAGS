@@ -1,0 +1,35 @@
+{
+  "tasks": [
+    {
+      "task_id": "lock-metadata-lock",
+      "agent_type": "lock_conflict",
+      "anomaly_type": "metadata_lock",
+      "title": "Trigger a metadata lock via ALTER TABLE.",
+      "inputs": {
+        "database": "dbmags_tpcc_copy",
+        "anomaly_subtype": "metadata_lock",
+        "source_agent": "lock_conflict",
+        "column_name": "agent_meta_lock_97d7e512",
+        "duration_seconds": 5
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_97d7e512 CHAR(2)",
+          "database": "dbmags_tpcc_copy",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [
+        {
+          "kind": "sql",
+          "sql": "ALTER TABLE new_orders DROP COLUMN agent_meta_lock_97d7e512",
+          "database": "dbmags_tpcc_copy"
+        }
+      ],
+      "explanation": "Fallback planner selected metadata_lock from request constraints."
+    }
+  ]
+}

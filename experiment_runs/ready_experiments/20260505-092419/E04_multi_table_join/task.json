@@ -1,0 +1,42 @@
+{
+  "tasks": [
+    {
+      "task_id": "slow-sql-multi-table-join",
+      "agent_type": "slow_sql",
+      "anomaly_type": "multi_table_join",
+      "title": "Slow SQL: multi_table_join",
+      "inputs": {
+        "database": "dbmags_tpcc_base",
+        "anomaly_subtype": "multi_table_join",
+        "source_agent": "slow_sql",
+        "sql": "SELECT COUNT(*) FROM orders o JOIN order_line ol ON o.o_w_id = ol.ol_w_id AND o.o_d_id = ol.ol_d_id AND o.o_id = ol.ol_o_id JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id WHERE o.o_carrier_id IS NOT NULL;",
+        "duration_seconds": 5
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "SELECT COUNT(*) FROM orders o JOIN order_line ol ON o.o_w_id = ol.ol_w_id AND o.o_d_id = ol.ol_d_id AND o.o_id = ol.ol_o_id JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id WHERE o.o_carrier_id IS NOT NULL;",
+          "database": "dbmags_tpcc_base",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT COUNT(*) FROM orders o JOIN order_line ol ON o.o_w_id = ol.ol_w_id AND o.o_d_id = ol.ol_d_id AND o.o_id = ol.ol_o_id JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id WHERE o.o_carrier_id IS NOT NULL;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=2.25e+6 rows=1)\n    -> Nested loop inner join  (cost=1.31e+6 rows=4.1e+6)\n        -> Nested loop inner join  (cost=485985 rows=404483)\n            -> Filter: (o.o_carrier_id is not null)  (cost=45981 rows=404483)\n                -> Table scan on o  (cost=45981 rows=449426)\n            -> Single-row covering index lookup on c using PRIMARY (c_w_id = o.o_w_id, c_d_id = o.o_d_id, c_id = o.o_c_id)  (cost=0.988 rows=1)\n        -> Covering index lookup on ol using PRIMARY (ol_w_id = o.o_w_id, ol_d_id = o.o_d_id, ol_o_id = o.o_id)  (cost=1.01 rows=10.1)\n"
+              ]
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected multi_table_join from request constraints."
+    }
+  ]
+}

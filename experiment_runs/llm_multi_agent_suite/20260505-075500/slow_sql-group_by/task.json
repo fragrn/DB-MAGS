@@ -1,0 +1,52 @@
+{
+  "tasks": [
+    {
+      "task_id": "slow-sql-group-by",
+      "agent_type": "slow_sql",
+      "anomaly_type": "group_by",
+      "title": "Slow SQL: group_by",
+      "inputs": {
+        "database": "dbmags_tpcc_base",
+        "anomaly_subtype": "group_by",
+        "source_agent": "slow_sql",
+        "sql": "SELECT ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_i_id ORDER BY SUM(ol_amount) DESC;",
+        "duration_seconds": 8
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "SELECT ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_i_id ORDER BY SUM(ol_amount) DESC;",
+          "database": "dbmags_tpcc_base",
+          "hold_seconds": 8
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_i_id ORDER BY SUM(ol_amount) DESC;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Sort: SUM(ol_amount) DESC\n    -> Table scan on <temporary>\n        -> Aggregate using temporary table\n            -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "support_tables",
+          "result": {
+            "created_tables": [
+              "agent_order_by_support",
+              "agent_group_by_support",
+              "agent_large_scan_support"
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected group_by from request constraints."
+    }
+  ]
+}

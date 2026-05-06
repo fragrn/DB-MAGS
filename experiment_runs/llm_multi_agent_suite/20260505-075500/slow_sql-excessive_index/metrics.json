@@ -1,0 +1,69 @@
+{
+  "signals": [
+    "task=slow-sql-excessive-index",
+    "anomaly=excessive_index"
+  ],
+  "task_results": [
+    {
+      "task_id": "slow-sql-excessive-index",
+      "status": "failed",
+      "artifacts": {
+        "prechecks": [],
+        "validation": [
+          {
+            "kind": "explain",
+            "sql": "UPDATE agent_excessive_index SET o_ol_cnt = o_ol_cnt + 1 WHERE o_c_id > 1000;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> <not executable by iterator executor>\n"
+                ]
+              ]
+            }
+          }
+        ],
+        "execution": [
+          {
+            "executed": true,
+            "sql": "CREATE TABLE IF NOT EXISTS agent_excessive_index AS SELECT o_id, o_c_id, o_carrier_id, o_ol_cnt FROM orders LIMIT 50000",
+            "database": "dbmags_tpcc_base"
+          },
+          {
+            "executed": false,
+            "sql": "CREATE INDEX idx_agent_excessive_index_c1 ON agent_excessive_index(o_c_id)",
+            "database": "dbmags_tpcc_base",
+            "error": "(1061, \"Duplicate key name 'idx_agent_excessive_index_c1'\")"
+          },
+          {
+            "executed": false,
+            "sql": "CREATE INDEX idx_agent_excessive_index_c2 ON agent_excessive_index(o_c_id, o_carrier_id)",
+            "database": "dbmags_tpcc_base",
+            "error": "(1061, \"Duplicate key name 'idx_agent_excessive_index_c2'\")"
+          },
+          {
+            "executed": false,
+            "sql": "CREATE INDEX idx_agent_excessive_index_c3 ON agent_excessive_index(o_carrier_id, o_ol_cnt)",
+            "database": "dbmags_tpcc_base",
+            "error": "(1061, \"Duplicate key name 'idx_agent_excessive_index_c3'\")"
+          },
+          {
+            "executed": true,
+            "sql": "UPDATE agent_excessive_index SET o_ol_cnt = o_ol_cnt + 1 WHERE o_c_id > 1000;",
+            "database": "dbmags_tpcc_base"
+          }
+        ]
+      },
+      "observed_signals": [
+        "task=slow-sql-excessive-index",
+        "anomaly=excessive_index"
+      ],
+      "errors": [
+        "(1061, \"Duplicate key name 'idx_agent_excessive_index_c1'\")",
+        "(1061, \"Duplicate key name 'idx_agent_excessive_index_c2'\")",
+        "(1061, \"Duplicate key name 'idx_agent_excessive_index_c3'\")"
+      ],
+      "cleanup_status": "completed"
+    }
+  ]
+}

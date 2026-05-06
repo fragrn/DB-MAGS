@@ -1,0 +1,48 @@
+{
+  "experiment_id": "E04_multi_table_join",
+  "category": "slow_sql",
+  "subtype": "multi_table_join",
+  "database": "dbmags_tpcc_base",
+  "status": "completed",
+  "agent": "slow_sql",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "slow-sql-multi-table-join",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "SELECT COUNT(*) FROM orders o JOIN order_line ol ON o.o_w_id = ol.ol_w_id AND o.o_d_id = ol.ol_d_id AND o.o_id = ol.ol_o_id JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id WHERE o.o_carrier_id IS NOT NULL;",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: count(0)  (cost=2.25e+6 rows=1)\n    -> Nested loop inner join  (cost=1.31e+6 rows=4.1e+6)\n        -> Nested loop inner join  (cost=485985 rows=404483)\n            -> Filter: (o.o_carrier_id is not null)  (cost=45981 rows=404483)\n                -> Table scan on o  (cost=45981 rows=449426)\n            -> Single-row covering index lookup on c using PRIMARY (c_w_id = o.o_w_id, c_d_id = o.o_d_id, c_id = o.o_c_id)  (cost=0.988 rows=1)\n        -> Covering index lookup on ol using PRIMARY (ol_w_id = o.o_w_id, ol_d_id = o.o_d_id, ol_o_id = o.o_id)  (cost=1.01 rows=10.1)\n"
+                  ]
+                ]
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "SELECT COUNT(*) FROM orders o JOIN order_line ol ON o.o_w_id = ol.ol_w_id AND o.o_d_id = ol.ol_d_id AND o.o_id = ol.ol_o_id JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id WHERE o.o_carrier_id IS NOT NULL;",
+              "database": "dbmags_tpcc_base"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=slow-sql-multi-table-join",
+          "anomaly=multi_table_join",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": []
+}

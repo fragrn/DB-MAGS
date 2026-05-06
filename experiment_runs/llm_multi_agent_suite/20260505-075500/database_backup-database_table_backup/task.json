@@ -1,0 +1,39 @@
+{
+  "tasks": [
+    {
+      "task_id": "backup-orders",
+      "agent_type": "database_backup",
+      "anomaly_type": "database_table_backup",
+      "title": "Backup table orders into orders_backup_agent.",
+      "inputs": {
+        "database": "dbmags_tpcc_copy_copy",
+        "anomaly_subtype": "database_table_backup",
+        "source_agent": "database_backup",
+        "duration_seconds": 8,
+        "source_table": "orders"
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_copy_copy"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+          "database": "dbmags_tpcc_copy_copy"
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_copy_copy"
+        }
+      ],
+      "explanation": "Fallback planner selected database_table_backup from request constraints."
+    }
+  ]
+}

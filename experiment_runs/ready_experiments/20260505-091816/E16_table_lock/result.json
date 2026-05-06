@@ -1,0 +1,40 @@
+{
+  "experiment_id": "E16_table_lock",
+  "category": "lock_conflict",
+  "subtype": "table_lock",
+  "database": "dbmags_tpcc_copy",
+  "status": "partial_failure",
+  "agent": "lock_conflict",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "lock-table-lock",
+        "status": "failed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": false,
+              "sql": "LOCK TABLES new_orders WRITE",
+              "database": "dbmags_tpcc_copy_copy",
+              "hold_seconds": 5.0,
+              "error": "(1049, \"Unknown database 'dbmags_tpcc_copy_copy'\")"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=lock-table-lock",
+          "anomaly=table_lock"
+        ],
+        "errors": [
+          "(1049, \"Unknown database 'dbmags_tpcc_copy_copy'\")"
+        ],
+        "cleanup_status": "skipped"
+      }
+    ]
+  },
+  "errors": [
+    "(1049, \"Unknown database 'dbmags_tpcc_copy_copy'\")"
+  ]
+}

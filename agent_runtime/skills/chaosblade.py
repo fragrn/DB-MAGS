@@ -64,6 +64,11 @@ class ChaosBladeInjectionSkill(Skill):
 
     @classmethod
     def _select_command(cls, resource_type: str) -> str:
+        blade = cls._resolve_blade_path()
+        if resource_type == "network":
+            return f"{blade} create network drop --destination-port 3306 --network-traffic out"
+        if resource_type == "disk":
+            return f"{blade} create disk fill --path /tmp --size 64"
         mapping = {
             "cpu": cpu_bottle,
             "io": io_bottle,
@@ -73,4 +78,4 @@ class ChaosBladeInjectionSkill(Skill):
         }
         generator = mapping.get(resource_type, cpu_bottle)
         command = generator()[0]
-        return command.replace(cls._DEFAULT_LEGACY_PATH, cls._resolve_blade_path())
+        return command.replace(cls._DEFAULT_LEGACY_PATH, blade)

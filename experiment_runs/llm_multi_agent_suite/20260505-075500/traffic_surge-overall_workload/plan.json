@@ -1,0 +1,153 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for overall_workload against dbmags_tpcc_base with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4329070, indexes=1); stock(rows=1430123, indexes=1); agent_large_scan_support(rows=449469, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "traffic-overall-workload",
+        "agent_type": "traffic_surge",
+        "anomaly_type": "overall_workload",
+        "title": "Traffic surge: overall_workload",
+        "inputs": {
+          "database": "dbmags_tpcc_base",
+          "anomaly_subtype": "overall_workload",
+          "source_agent": "traffic_surge",
+          "mode": "overall_workload",
+          "sleep_time": 0.005,
+          "thread_count": 500,
+          "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+          "duration_seconds": 8
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "overall_workload",
+            "sleep_time": 0.005,
+            "thread_count": 500,
+            "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+            "database": "dbmags_tpcc_base",
+            "duration_seconds": 8
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected overall_workload from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "overall_workload"
+      ],
+      "task_assignments": {
+        "overall_workload": "traffic_surge"
+      },
+      "database_mapping": {
+        "overall_workload": "dbmags_tpcc_base"
+      },
+      "task_parameters": {
+        "overall_workload": {
+          "duration_seconds": 8,
+          "baseline_sleep": 0.044,
+          "baseline_threads": 80
+        }
+      },
+      "expected_signals": [
+        "latency increase",
+        "qps increase"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "overall_workload",
+          "category": "traffic_surge",
+          "source_agent": "traffic_surge",
+          "database": "dbmags_tpcc_base",
+          "parameters": {
+            "duration_seconds": 8,
+            "baseline_sleep": 0.044,
+            "baseline_threads": 80
+          },
+          "rationale": "Fallback planner selected overall_workload from request constraints.",
+          "expected_signals": [
+            "qps increase",
+            "latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "latency increase",
+      "qps increase"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "overall_workload"
+    ],
+    "task_assignments": {
+      "overall_workload": "traffic_surge"
+    },
+    "database_mapping": {
+      "overall_workload": "dbmags_tpcc_base"
+    },
+    "task_parameters": {
+      "overall_workload": {
+        "duration_seconds": 8,
+        "baseline_sleep": 0.044,
+        "baseline_threads": 80
+      }
+    },
+    "expected_signals": [
+      "latency increase",
+      "qps increase"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "overall_workload",
+        "category": "traffic_surge",
+        "source_agent": "traffic_surge",
+        "database": "dbmags_tpcc_base",
+        "parameters": {
+          "duration_seconds": 8,
+          "baseline_sleep": 0.044,
+          "baseline_threads": 80
+        },
+        "rationale": "Fallback planner selected overall_workload from request constraints.",
+        "expected_signals": [
+          "qps increase",
+          "latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

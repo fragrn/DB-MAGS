@@ -1,0 +1,173 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for excessive_index against dbmags_tpcc_base with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4329070, indexes=1); stock(rows=1430123, indexes=1); agent_large_scan_support(rows=449469, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "slow-sql-excessive-index",
+        "agent_type": "slow_sql",
+        "anomaly_type": "excessive_index",
+        "title": "Slow SQL: excessive_index",
+        "inputs": {
+          "database": "dbmags_tpcc_base",
+          "anomaly_subtype": "excessive_index",
+          "source_agent": "slow_sql",
+          "sql": "UPDATE agent_excessive_index SET o_ol_cnt = o_ol_cnt + 1 WHERE o_c_id > 1000;",
+          "duration_seconds": 8
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "sql",
+            "sql": "CREATE TABLE IF NOT EXISTS agent_excessive_index AS SELECT o_id, o_c_id, o_carrier_id, o_ol_cnt FROM orders LIMIT 50000",
+            "database": "dbmags_tpcc_base"
+          },
+          {
+            "kind": "sql",
+            "sql": "CREATE INDEX idx_agent_excessive_index_c1 ON agent_excessive_index(o_c_id)",
+            "database": "dbmags_tpcc_base"
+          },
+          {
+            "kind": "sql",
+            "sql": "CREATE INDEX idx_agent_excessive_index_c2 ON agent_excessive_index(o_c_id, o_carrier_id)",
+            "database": "dbmags_tpcc_base"
+          },
+          {
+            "kind": "sql",
+            "sql": "CREATE INDEX idx_agent_excessive_index_c3 ON agent_excessive_index(o_carrier_id, o_ol_cnt)",
+            "database": "dbmags_tpcc_base"
+          },
+          {
+            "kind": "sql",
+            "sql": "UPDATE agent_excessive_index SET o_ol_cnt = o_ol_cnt + 1 WHERE o_c_id > 1000;",
+            "database": "dbmags_tpcc_base",
+            "hold_seconds": 8
+          }
+        ],
+        "validation_steps": [
+          {
+            "kind": "explain",
+            "sql": "UPDATE agent_excessive_index SET o_ol_cnt = o_ol_cnt + 1 WHERE o_c_id > 1000;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> <not executable by iterator executor>\n"
+                ]
+              ]
+            }
+          }
+        ],
+        "rollback_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS agent_excessive_index",
+            "database": "dbmags_tpcc_base"
+          }
+        ],
+        "explanation": "Fallback planner selected excessive_index from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "excessive_index"
+      ],
+      "task_assignments": {
+        "excessive_index": "slow_sql"
+      },
+      "database_mapping": {
+        "excessive_index": "dbmags_tpcc_base"
+      },
+      "task_parameters": {
+        "excessive_index": {
+          "duration_seconds": 8
+        }
+      },
+      "expected_signals": [
+        "write amplification"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "excessive_index",
+          "category": "slow_sql",
+          "source_agent": "slow_sql",
+          "database": "dbmags_tpcc_base",
+          "parameters": {
+            "duration_seconds": 8
+          },
+          "rationale": "Fallback planner selected excessive_index from request constraints.",
+          "expected_signals": [
+            "write amplification"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "write amplification"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "excessive_index"
+    ],
+    "task_assignments": {
+      "excessive_index": "slow_sql"
+    },
+    "database_mapping": {
+      "excessive_index": "dbmags_tpcc_base"
+    },
+    "task_parameters": {
+      "excessive_index": {
+        "duration_seconds": 8
+      }
+    },
+    "expected_signals": [
+      "write amplification"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "excessive_index",
+        "category": "slow_sql",
+        "source_agent": "slow_sql",
+        "database": "dbmags_tpcc_base",
+        "parameters": {
+          "duration_seconds": 8
+        },
+        "rationale": "Fallback planner selected excessive_index from request constraints.",
+        "expected_signals": [
+          "write amplification"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

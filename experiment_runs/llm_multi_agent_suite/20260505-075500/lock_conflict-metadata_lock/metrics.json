@@ -1,0 +1,32 @@
+{
+  "signals": [
+    "task=lock-metadata-lock",
+    "anomaly=metadata_lock"
+  ],
+  "task_results": [
+    {
+      "task_id": "lock-metadata-lock",
+      "status": "failed",
+      "artifacts": {
+        "prechecks": [],
+        "validation": [],
+        "execution": [
+          {
+            "executed": false,
+            "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_run CHAR(2)",
+            "database": "dbmags_tpcc_copy_copy",
+            "error": "(1049, \"Unknown database 'dbmags_tpcc_copy_copy'\")"
+          }
+        ]
+      },
+      "observed_signals": [
+        "task=lock-metadata-lock",
+        "anomaly=metadata_lock"
+      ],
+      "errors": [
+        "(1049, \"Unknown database 'dbmags_tpcc_copy_copy'\")"
+      ],
+      "cleanup_status": "skipped"
+    }
+  ]
+}

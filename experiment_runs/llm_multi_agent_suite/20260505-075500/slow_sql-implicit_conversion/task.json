@@ -1,0 +1,50 @@
+{
+  "tasks": [
+    {
+      "task_id": "slow-sql-implicit-conversion",
+      "agent_type": "slow_sql",
+      "anomaly_type": "implicit_conversion",
+      "title": "Slow SQL: implicit_conversion",
+      "inputs": {
+        "database": "dbmags_tpcc_base",
+        "anomaly_subtype": "implicit_conversion",
+        "source_agent": "slow_sql",
+        "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+        "duration_seconds": 8
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+          "database": "dbmags_tpcc_base",
+          "hold_seconds": 8
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=6193 rows=1)\n    -> Filter: (agent_implicit_conversion_support.customer_id_varchar = 12345)  (cost=5063 rows=4903)\n        -> Covering index scan on agent_implicit_conversion_support using idx_customer_id_varchar  (cost=5063 rows=49032)\n"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "support_tables",
+          "result": {
+            "created_tables": [
+              "agent_implicit_conversion_support"
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected implicit_conversion from request constraints."
+    }
+  ]
+}

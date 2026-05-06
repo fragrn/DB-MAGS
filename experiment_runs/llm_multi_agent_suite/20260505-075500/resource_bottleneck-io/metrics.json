@@ -1,0 +1,41 @@
+{
+  "signals": [
+    "task=resource-io",
+    "anomaly=io",
+    "executed=true"
+  ],
+  "task_results": [
+    {
+      "task_id": "resource-io",
+      "status": "completed",
+      "artifacts": {
+        "prechecks": [],
+        "validation": [],
+        "execution": [
+          {
+            "executed": true,
+            "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade create disk burn --read --path /home",
+            "stdout": "{\"code\":200,\"success\":true,\"result\":\"0f09c685025bc486\"}",
+            "stderr": "",
+            "returncode": 0,
+            "uid": "0f09c685025bc486"
+          }
+        ],
+        "dynamic_cleanup": [
+          {
+            "cleaned": true,
+            "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"disk\",\"action\":\"burn\",\"flags\":{\"path\":\"/home\",\"read\":\"true\"},\"ActionProcessHang\":false}}",
+            "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade destroy 0f09c685025bc486"
+          }
+        ]
+      },
+      "observed_signals": [
+        "task=resource-io",
+        "anomaly=io",
+        "executed=true"
+      ],
+      "errors": [],
+      "cleanup_status": "completed"
+    }
+  ]
+}

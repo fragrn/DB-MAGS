@@ -1,0 +1,35 @@
+{
+  "tasks": [
+    {
+      "task_id": "traffic-overall-workload",
+      "agent_type": "traffic_surge",
+      "anomaly_type": "overall_workload",
+      "title": "Traffic surge: overall_workload",
+      "inputs": {
+        "database": "dbmags_tpcc_base",
+        "anomaly_subtype": "overall_workload",
+        "source_agent": "traffic_surge",
+        "mode": "overall_workload",
+        "sleep_time": 0.005,
+        "thread_count": 500,
+        "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+        "duration_seconds": 8
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "overall_workload",
+          "sleep_time": 0.005,
+          "thread_count": 500,
+          "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+          "database": "dbmags_tpcc_base",
+          "duration_seconds": 8
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected overall_workload from request constraints."
+    }
+  ]
+}

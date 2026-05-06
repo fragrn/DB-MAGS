@@ -1,0 +1,104 @@
+{
+  "generated_at": "2026-04-23T06:24:27.588079+00:00",
+  "database": "dbmags_agent_lab",
+  "model": "gpt-5",
+  "openai_available": true,
+  "experiments": [
+    {
+      "status": "pass",
+      "agent": "GlobalPlannerAgent",
+      "input_summary": {
+        "database": "dbmags_agent_lab",
+        "allowed_anomalies": [
+          "missing_index",
+          "cpu",
+          "overall_workload"
+        ],
+        "openai_available": true
+      },
+      "artifacts": {
+        "request": "experiment_runs/agent_validation/20260423-142427/E1_global/request.json",
+        "plan": "experiment_runs/agent_validation/20260423-142427/E1_global/plan.json"
+      },
+      "observations": [
+        "follow_up_count=2",
+        "initial_task_count=3",
+        "revised_task_count=3"
+      ],
+      "failure_reason": null,
+      "next_action": "Ready for live OpenAI-path execution."
+    },
+    {
+      "status": "pass",
+      "agent": "SQLAnomalyAgent",
+      "input_summary": {
+        "database": "dbmags_agent_lab",
+        "anomaly": "missing_index",
+        "openai_available": true
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260423-142427/E2_sql/task.json"
+      },
+      "observations": [
+        "task_count=1"
+      ],
+      "failure_reason": null,
+      "next_action": "SQL agent produced at least one validated task."
+    },
+    {
+      "status": "pass",
+      "agent": "ResourceAgent",
+      "input_summary": {
+        "database": "dbmags_agent_lab",
+        "anomaly": "cpu"
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260423-142427/E3_resource/task.json"
+      },
+      "observations": [
+        "command=/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload"
+      ],
+      "failure_reason": null,
+      "next_action": "Resource command is ready for manual execution validation."
+    },
+    {
+      "status": "pass",
+      "agent": "TrafficAgent",
+      "input_summary": {
+        "database": "dbmags_agent_lab",
+        "anomaly": "overall_workload",
+        "baseline_sleep": 0.044,
+        "baseline_threads": 300
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260423-142427/E4_traffic/task.json"
+      },
+      "observations": [
+        "{\"mode\": \"overall_workload\", \"sleep_time\": 0.005, \"thread_count\": 500, \"description\": \"Increase overall workload by reducing sleep time and raising concurrency.\", \"database\": \"dbmags_agent_lab\", \"duration_seconds\": 15}"
+      ],
+      "failure_reason": null,
+      "next_action": "Traffic profile is ready for workload integration."
+    },
+    {
+      "status": "pass",
+      "agent": "GlobalPlannerAgent+TaskAgents",
+      "input_summary": {
+        "database": "dbmags_agent_lab",
+        "allowed_anomalies": [
+          "missing_index",
+          "cpu",
+          "overall_workload"
+        ]
+      },
+      "artifacts": {
+        "plan": "experiment_runs/agent_validation/20260423-142427/E5_end_to_end/plan.json"
+      },
+      "observations": [
+        "initial_agents=['resource', 'sql', 'traffic']",
+        "revised_agents=['resource', 'sql', 'traffic']"
+      ],
+      "failure_reason": null,
+      "next_action": "Ready for manual confirm-path testing in the CLI."
+    }
+  ]
+}

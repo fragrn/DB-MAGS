@@ -13,6 +13,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from agent_runtime.env_loader import load_dotenv_files
+from agent_runtime.tpcc_support import prepare_support_assets
 
 
 TABLE_SPECS = [
@@ -281,12 +282,13 @@ TABLE_SPECS = [
 def parse_args():
     parser = argparse.ArgumentParser(description="Import TPCC CSV files into MySQL and clone to a copy database.")
     parser.add_argument("--csv-dir", default=".tools/tpcc-generator/my_tpcc_input")
-    parser.add_argument("--target-db", default="dbmags_agent_lab")
-    parser.add_argument("--copy-db", default="dbmags_agent_lab_copy")
+    parser.add_argument("--target-db", default="dbmags_tpcc_base")
+    parser.add_argument("--copy-db", default="dbmags_tpcc_copy")
     parser.add_argument("--mysql-host", default=None)
     parser.add_argument("--mysql-port", type=int, default=None)
     parser.add_argument("--mysql-user", default=None)
     parser.add_argument("--mysql-password", default=None)
+    parser.add_argument("--drop-if-exists", action="store_true")
     return parser.parse_args()
 
 
@@ -341,9 +343,13 @@ def ensure_local_infile_enabled(cursor):
         cursor.execute("SET GLOBAL local_infile = 1")
 
 
-def recreate_target_schema(cursor, database: str):
+def recreate_target_schema(cursor, database: str, drop_if_exists: bool = False):
     ensure_database(cursor, database)
     cursor.execute(f"USE `{database}`")
+    if drop_if_exists:
+        cursor.execute("SHOW TABLES")
+        for (table_name,) in cursor.fetchall():
+            cursor.execute(f"DROP TABLE IF EXISTS `{table_name}`")
     for spec in reversed(TABLE_SPECS):
         cursor.execute(f"DROP TABLE IF EXISTS `{spec['table']}`")
     for spec in TABLE_SPECS:
@@ -373,13 +379,14 @@ def import_tables(cursor, database: str, csv_dir: Path):
 def clone_database(cursor, source: str, target: str):
     ensure_database(cursor, target)
     cursor.execute(f"USE `{target}`")
-    for spec in reversed(TABLE_SPECS):
-        cursor.execute(f"DROP TABLE IF EXISTS `{spec['table']}`")
+    cursor.execute("SHOW TABLES")
+    for (table_name,) in cursor.fetchall():
+        cursor.execute(f"DROP TABLE IF EXISTS `{table_name}`")
 
     results = []
-    for spec in TABLE_SPECS:
+    cursor.execute(f"SHOW TABLES FROM `{source}`")
+    for (table,) in cursor.fetchall():
         start = time.time()
-        table = spec["table"]
         cursor.execute(f"CREATE TABLE `{target}`.`{table}` LIKE `{source}`.`{table}`")
         cursor.execute(f"INSERT INTO `{target}`.`{table}` SELECT * FROM `{source}`.`{table}`")
         cursor.execute(f"SELECT COUNT(*) FROM `{target}`.`{table}`")
@@ -431,8 +438,9 @@ def main():
 
     with connect() as conn:
         with conn.cursor() as cursor:
-            recreate_target_schema(cursor, args.target_db)
+            recreate_target_schema(cursor, args.target_db, drop_if_exists=args.drop_if_exists)
             imported = import_tables(cursor, args.target_db, csv_dir)
+            support_assets = prepare_support_assets(cursor, args.target_db)
             copied = clone_database(cursor, args.target_db, args.copy_db)
             compatibility = compatibility_checks(cursor, args.target_db)
 
@@ -444,6 +452,7 @@ def main():
                 "copy_db": args.copy_db,
                 "files": summaries,
                 "imported": imported,
+                "support_assets": support_assets,
                 "copied": copied,
                 "compatibility_checks": compatibility,
                 "time_conversions": {

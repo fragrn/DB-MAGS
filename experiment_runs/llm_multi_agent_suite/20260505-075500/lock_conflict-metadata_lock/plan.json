@@ -1,0 +1,139 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for metadata_lock against dbmags_tpcc_copy with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4355925, indexes=1); stock(rows=1434243, indexes=1); agent_large_scan_support(rows=448977, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "lock-metadata-lock",
+        "agent_type": "lock_conflict",
+        "anomaly_type": "metadata_lock",
+        "title": "Trigger a metadata lock via ALTER TABLE.",
+        "inputs": {
+          "database": "dbmags_tpcc_copy_copy",
+          "anomaly_subtype": "metadata_lock",
+          "source_agent": "lock_conflict",
+          "duration_seconds": 8
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "sql",
+            "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_run CHAR(2)",
+            "database": "dbmags_tpcc_copy_copy",
+            "hold_seconds": 8
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [
+          {
+            "kind": "sql",
+            "sql": "ALTER TABLE new_orders DROP COLUMN agent_meta_lock_run",
+            "database": "dbmags_tpcc_copy_copy"
+          }
+        ],
+        "explanation": "Fallback planner selected metadata_lock from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "metadata_lock"
+      ],
+      "task_assignments": {
+        "metadata_lock": "lock_conflict"
+      },
+      "database_mapping": {
+        "metadata_lock": "dbmags_tpcc_copy_copy"
+      },
+      "task_parameters": {
+        "metadata_lock": {
+          "duration_seconds": 8
+        }
+      },
+      "expected_signals": [
+        "metadata lock wait"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "metadata_lock",
+          "category": "lock_conflict",
+          "source_agent": "lock_conflict",
+          "database": "dbmags_tpcc_copy_copy",
+          "parameters": {
+            "duration_seconds": 8
+          },
+          "rationale": "Fallback planner selected metadata_lock from request constraints.",
+          "expected_signals": [
+            "metadata lock wait"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "metadata lock wait"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "metadata_lock"
+    ],
+    "task_assignments": {
+      "metadata_lock": "lock_conflict"
+    },
+    "database_mapping": {
+      "metadata_lock": "dbmags_tpcc_copy_copy"
+    },
+    "task_parameters": {
+      "metadata_lock": {
+        "duration_seconds": 8
+      }
+    },
+    "expected_signals": [
+      "metadata lock wait"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "metadata_lock",
+        "category": "lock_conflict",
+        "source_agent": "lock_conflict",
+        "database": "dbmags_tpcc_copy_copy",
+        "parameters": {
+          "duration_seconds": 8
+        },
+        "rationale": "Fallback planner selected metadata_lock from request constraints.",
+        "expected_signals": [
+          "metadata lock wait"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

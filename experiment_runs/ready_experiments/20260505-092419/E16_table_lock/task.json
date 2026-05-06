@@ -1,0 +1,35 @@
+{
+  "tasks": [
+    {
+      "task_id": "lock-table-lock",
+      "agent_type": "lock_conflict",
+      "anomaly_type": "table_lock",
+      "title": "Acquire a WRITE lock on new_orders.",
+      "inputs": {
+        "database": "dbmags_tpcc_copy",
+        "anomaly_subtype": "table_lock",
+        "source_agent": "lock_conflict",
+        "column_name": "agent_meta_lock_47d3901c",
+        "duration_seconds": 5
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "hold_sql",
+          "sql": "LOCK TABLES new_orders WRITE",
+          "database": "dbmags_tpcc_copy",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [
+        {
+          "kind": "sql",
+          "sql": "UNLOCK TABLES",
+          "database": "dbmags_tpcc_copy"
+        }
+      ],
+      "explanation": "Fallback planner selected table_lock from request constraints."
+    }
+  ]
+}

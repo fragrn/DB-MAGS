@@ -1,0 +1,132 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for memory against dbmags_tpcc_base with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4331453, indexes=1); stock(rows=1430123, indexes=1); agent_large_scan_support(rows=449469, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "resource-memory",
+        "agent_type": "resource_bottleneck",
+        "anomaly_type": "memory",
+        "title": "Resource bottleneck: memory",
+        "inputs": {
+          "database": "dbmags_tpcc_base",
+          "anomaly_subtype": "memory",
+          "source_agent": "resource_bottleneck",
+          "duration_seconds": 8
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "shell",
+            "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade c mem load --mem-percent 70",
+            "database": "dbmags_tpcc_base"
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected memory from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "memory"
+      ],
+      "task_assignments": {
+        "memory": "resource_bottleneck"
+      },
+      "database_mapping": {
+        "memory": "dbmags_tpcc_base"
+      },
+      "task_parameters": {
+        "memory": {
+          "duration_seconds": 8
+        }
+      },
+      "expected_signals": [
+        "memory pressure"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "memory",
+          "category": "resource_bottleneck",
+          "source_agent": "resource_bottleneck",
+          "database": "dbmags_tpcc_base",
+          "parameters": {
+            "duration_seconds": 8
+          },
+          "rationale": "Fallback planner selected memory from request constraints.",
+          "expected_signals": [
+            "memory pressure"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "memory pressure"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "memory"
+    ],
+    "task_assignments": {
+      "memory": "resource_bottleneck"
+    },
+    "database_mapping": {
+      "memory": "dbmags_tpcc_base"
+    },
+    "task_parameters": {
+      "memory": {
+        "duration_seconds": 8
+      }
+    },
+    "expected_signals": [
+      "memory pressure"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "memory",
+        "category": "resource_bottleneck",
+        "source_agent": "resource_bottleneck",
+        "database": "dbmags_tpcc_base",
+        "parameters": {
+          "duration_seconds": 8
+        },
+        "rationale": "Fallback planner selected memory from request constraints.",
+        "expected_signals": [
+          "memory pressure"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

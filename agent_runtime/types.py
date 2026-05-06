@@ -17,9 +17,13 @@ class ExperimentRequest:
     user_goal: str
     target_database: str = ""
     allowed_anomalies: List[str] = field(default_factory=list)
+    allowed_subtypes: List[str] = field(default_factory=list)
+    anomaly_categories: List[str] = field(default_factory=list)
     execution_window_seconds: int = 120
     risk_level: str = "medium"
     require_confirmation: bool = True
+    execution_mode: str = "sequential"
+    database_topology: str = "base_and_copy"
     user_constraints: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -63,10 +67,35 @@ class TaskSpec:
 
 
 @dataclass
+class PlannedAnomaly:
+    anomaly_subtype: str
+    category: str
+    source_agent: str
+    database: str
+    parameters: Dict[str, Any] = field(default_factory=dict)
+    rationale: str = ""
+    expected_signals: List[str] = field(default_factory=list)
+    cleanup_strategy: List[str] = field(default_factory=list)
+
+
+@dataclass
+class PlannerDecision:
+    selected_anomalies: List[str] = field(default_factory=list)
+    task_assignments: Dict[str, str] = field(default_factory=dict)
+    database_mapping: Dict[str, str] = field(default_factory=dict)
+    task_parameters: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    expected_signals: List[str] = field(default_factory=list)
+    cleanup_strategy: List[str] = field(default_factory=list)
+    planned_tasks: List[PlannedAnomaly] = field(default_factory=list)
+    llm_summary: str = ""
+
+
+@dataclass
 class ExperimentPlan:
     summary: str
     db_context_summary: str
     tasks: List[TaskSpec] = field(default_factory=list)
+    planner_decision: Optional[PlannerDecision] = None
     expected_signals: List[str] = field(default_factory=list)
     safety_checks: List[str] = field(default_factory=list)
     cleanup_plan: List[str] = field(default_factory=list)
@@ -94,5 +123,6 @@ class ExperimentResult:
 @dataclass
 class PlannerResponse:
     plan: Optional[ExperimentPlan] = None
+    planner_decision: Optional[PlannerDecision] = None
     follow_up_questions: List[str] = field(default_factory=list)
     reasoning: str = ""

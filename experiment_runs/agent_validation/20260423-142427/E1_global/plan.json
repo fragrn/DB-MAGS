@@ -1,0 +1,250 @@
+{
+  "missing_response": {
+    "plan": null,
+    "follow_up_questions": [
+      "Which database should I target? If you leave it blank, I can use the default tpcc10_test.",
+      "Which anomaly types should I plan for? For example: missing_index, cpu, overall_workload."
+    ],
+    "reasoning": "Need more information before planning."
+  },
+  "response": {
+    "plan": {
+      "summary": "Prepare 3 task(s) for missing_index, cpu, overall_workload against dbmags_agent_lab with risk level medium.",
+      "db_context_summary": "order_line(rows=4348577, indexes=1); stock(rows=1430123, indexes=1); history(rows=448222, indexes=2); orders(rows=447664, indexes=2); customer(rows=430563, indexes=2)",
+      "tasks": [
+        {
+          "task_id": "sql-missing-index-1",
+          "agent_type": "sql",
+          "anomaly_type": "missing_index",
+          "title": "SQL anomaly: missing_index",
+          "inputs": {
+            "sql": "select count(*) from orders where o_c_id > 2050;",
+            "database": "dbmags_agent_lab"
+          },
+          "prechecks": [
+            {
+              "name": "validate_sql",
+              "result": {
+                "valid": true,
+                "errors": [],
+                "sql": "select count(*) from orders where o_c_id > 2050;"
+              }
+            }
+          ],
+          "execution_steps": [
+            {
+              "kind": "sql",
+              "sql": "select count(*) from orders where o_c_id > 2050;",
+              "database": "dbmags_agent_lab",
+              "hold_seconds": 10
+            }
+          ],
+          "validation_steps": [
+            {
+              "kind": "explain",
+              "sql": "select count(*) from orders where o_c_id > 2050;",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: count(0)  (cost=72065 rows=1)\n    -> Filter: (orders.o_c_id > 2050)  (cost=37686 rows=149206)\n        -> Covering index skip scan on orders using idx_orders_customer over 2050 < o_c_id  (cost=37686 rows=149206)\n"
+                  ]
+                ]
+              }
+            }
+          ],
+          "rollback_steps": [],
+          "explanation": "Execute candidate SQL for missing_index after validation and EXPLAIN verification."
+        },
+        {
+          "task_id": "resource-cpu",
+          "agent_type": "resource",
+          "anomaly_type": "cpu",
+          "title": "Resource bottleneck: cpu",
+          "inputs": {
+            "resource_type": "cpu",
+            "duration_seconds": 15
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "shell",
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload"
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Run ChaosBlade command to inject a cpu bottleneck."
+        },
+        {
+          "task_id": "traffic-overall-workload",
+          "agent_type": "traffic",
+          "anomaly_type": "overall_workload",
+          "title": "Traffic surge: overall_workload",
+          "inputs": {
+            "mode": "overall_workload",
+            "sleep_time": 0.005,
+            "thread_count": 500,
+            "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+            "database": "dbmags_agent_lab",
+            "duration_seconds": 15
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "workload_profile",
+              "mode": "overall_workload",
+              "sleep_time": 0.005,
+              "thread_count": 500,
+              "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+              "database": "dbmags_agent_lab",
+              "duration_seconds": 15
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Increase overall workload by reducing sleep time and raising concurrency."
+        }
+      ],
+      "expected_signals": [
+        "QPS change",
+        "latency increase",
+        "task-specific validation evidence",
+        "system CPU saturation",
+        "workload concurrency increase"
+      ],
+      "safety_checks": [
+        "No task executes before explicit user confirmation.",
+        "SQL tasks pass static validation and EXPLAIN before execution.",
+        "Task failures are isolated and cleanup is attempted per task."
+      ],
+      "cleanup_plan": [
+        "Run per-task rollback steps.",
+        "Collect execution artifacts and validation evidence."
+      ],
+      "missing_information": []
+    },
+    "follow_up_questions": [],
+    "reasoning": "Plan generated from schema context and allowed anomalies."
+  },
+  "revised_response": {
+    "plan": {
+      "summary": "Prepare 3 task(s) for missing_index, cpu, overall_workload against dbmags_agent_lab with risk level medium.",
+      "db_context_summary": "order_line(rows=4348577, indexes=1); stock(rows=1430123, indexes=1); history(rows=448222, indexes=2); orders(rows=447664, indexes=2); customer(rows=430563, indexes=2)",
+      "tasks": [
+        {
+          "task_id": "sql-missing-index-1",
+          "agent_type": "sql",
+          "anomaly_type": "missing_index",
+          "title": "SQL anomaly: missing_index",
+          "inputs": {
+            "sql": "select count(*) from orders where o_c_id > 2508;",
+            "database": "dbmags_agent_lab"
+          },
+          "prechecks": [
+            {
+              "name": "validate_sql",
+              "result": {
+                "valid": true,
+                "errors": [],
+                "sql": "select count(*) from orders where o_c_id > 2508;"
+              }
+            }
+          ],
+          "execution_steps": [
+            {
+              "kind": "sql",
+              "sql": "select count(*) from orders where o_c_id > 2508;",
+              "database": "dbmags_agent_lab",
+              "hold_seconds": 10
+            }
+          ],
+          "validation_steps": [
+            {
+              "kind": "explain",
+              "sql": "select count(*) from orders where o_c_id > 2508;",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: count(0)  (cost=72065 rows=1)\n    -> Filter: (orders.o_c_id > 2508)  (cost=37686 rows=149206)\n        -> Covering index skip scan on orders using idx_orders_customer over 2508 < o_c_id  (cost=37686 rows=149206)\n"
+                  ]
+                ]
+              }
+            }
+          ],
+          "rollback_steps": [],
+          "explanation": "Execute candidate SQL for missing_index after validation and EXPLAIN verification."
+        },
+        {
+          "task_id": "resource-cpu",
+          "agent_type": "resource",
+          "anomaly_type": "cpu",
+          "title": "Resource bottleneck: cpu",
+          "inputs": {
+            "resource_type": "cpu",
+            "duration_seconds": 15
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "shell",
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload"
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Run ChaosBlade command to inject a cpu bottleneck."
+        },
+        {
+          "task_id": "traffic-overall-workload",
+          "agent_type": "traffic",
+          "anomaly_type": "overall_workload",
+          "title": "Traffic surge: overall_workload",
+          "inputs": {
+            "mode": "overall_workload",
+            "sleep_time": 0.005,
+            "thread_count": 500,
+            "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+            "database": "dbmags_agent_lab",
+            "duration_seconds": 15
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "workload_profile",
+              "mode": "overall_workload",
+              "sleep_time": 0.005,
+              "thread_count": 500,
+              "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+              "database": "dbmags_agent_lab",
+              "duration_seconds": 15
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Increase overall workload by reducing sleep time and raising concurrency."
+        }
+      ],
+      "expected_signals": [
+        "QPS change",
+        "latency increase",
+        "task-specific validation evidence",
+        "system CPU saturation",
+        "workload concurrency increase"
+      ],
+      "safety_checks": [
+        "No task executes before explicit user confirmation.",
+        "SQL tasks pass static validation and EXPLAIN before execution.",
+        "Task failures are isolated and cleanup is attempted per task."
+      ],
+      "cleanup_plan": [
+        "Run per-task rollback steps.",
+        "Collect execution artifacts and validation evidence."
+      ],
+      "missing_information": []
+    },
+    "follow_up_questions": [],
+    "reasoning": "Plan generated from schema context and allowed anomalies."
+  }
+}

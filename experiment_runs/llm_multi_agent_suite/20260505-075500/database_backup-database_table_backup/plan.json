@@ -1,0 +1,148 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for database_table_backup against dbmags_tpcc_copy with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4355925, indexes=1); stock(rows=1434243, indexes=1); agent_large_scan_support(rows=448977, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "backup-orders",
+        "agent_type": "database_backup",
+        "anomaly_type": "database_table_backup",
+        "title": "Backup table orders into orders_backup_agent.",
+        "inputs": {
+          "database": "dbmags_tpcc_copy_copy",
+          "anomaly_subtype": "database_table_backup",
+          "source_agent": "database_backup",
+          "duration_seconds": 8,
+          "source_table": "orders"
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_copy_copy"
+          },
+          {
+            "kind": "sql",
+            "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+            "database": "dbmags_tpcc_copy_copy"
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_copy_copy"
+          }
+        ],
+        "explanation": "Fallback planner selected database_table_backup from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "database_table_backup"
+      ],
+      "task_assignments": {
+        "database_table_backup": "database_backup"
+      },
+      "database_mapping": {
+        "database_table_backup": "dbmags_tpcc_copy_copy"
+      },
+      "task_parameters": {
+        "database_table_backup": {
+          "duration_seconds": 8,
+          "source_table": "orders"
+        }
+      },
+      "expected_signals": [
+        "backup table created"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "database_table_backup",
+          "category": "database_backup",
+          "source_agent": "database_backup",
+          "database": "dbmags_tpcc_copy_copy",
+          "parameters": {
+            "duration_seconds": 8,
+            "source_table": "orders"
+          },
+          "rationale": "Fallback planner selected database_table_backup from request constraints.",
+          "expected_signals": [
+            "backup table created"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "backup table created"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "database_table_backup"
+    ],
+    "task_assignments": {
+      "database_table_backup": "database_backup"
+    },
+    "database_mapping": {
+      "database_table_backup": "dbmags_tpcc_copy_copy"
+    },
+    "task_parameters": {
+      "database_table_backup": {
+        "duration_seconds": 8,
+        "source_table": "orders"
+      }
+    },
+    "expected_signals": [
+      "backup table created"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "database_table_backup",
+        "category": "database_backup",
+        "source_agent": "database_backup",
+        "database": "dbmags_tpcc_copy_copy",
+        "parameters": {
+          "duration_seconds": 8,
+          "source_table": "orders"
+        },
+        "rationale": "Fallback planner selected database_table_backup from request constraints.",
+        "expected_signals": [
+          "backup table created"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

@@ -1,0 +1,36 @@
+{
+  "experiment_id": "E16_table_lock",
+  "category": "lock_conflict",
+  "subtype": "table_lock",
+  "database": "dbmags_tpcc_copy",
+  "status": "completed",
+  "agent": "lock_conflict",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "lock-table-lock",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "LOCK TABLES new_orders WRITE",
+              "database": "dbmags_tpcc_copy",
+              "hold_seconds": 5.0
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=lock-table-lock",
+          "anomaly=table_lock",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": []
+}

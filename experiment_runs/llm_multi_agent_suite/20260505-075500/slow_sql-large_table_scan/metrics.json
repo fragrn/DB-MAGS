@@ -1,0 +1,54 @@
+{
+  "signals": [
+    "task=slow-sql-large-table-scan",
+    "anomaly=large_table_scan",
+    "executed=true"
+  ],
+  "task_results": [
+    {
+      "task_id": "slow-sql-large-table-scan",
+      "status": "executed_but_not_validated",
+      "artifacts": {
+        "prechecks": [],
+        "validation": [
+          {
+            "kind": "explain",
+            "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Aggregate: count(0)  (cost=66097 rows=1)\n    -> Filter: (agent_large_scan_support.c_credit in ('BC','GC'))  (cost=45384 rows=89894)\n        -> Table scan on agent_large_scan_support  (cost=45384 rows=449469)\n"
+                ]
+              ]
+            }
+          },
+          {
+            "kind": "support_tables",
+            "result": {
+              "created_tables": [
+                "agent_order_by_support",
+                "agent_group_by_support",
+                "agent_large_scan_support"
+              ]
+            }
+          }
+        ],
+        "execution": [
+          {
+            "executed": true,
+            "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+            "database": "dbmags_tpcc_base"
+          }
+        ]
+      },
+      "observed_signals": [
+        "task=slow-sql-large-table-scan",
+        "anomaly=large_table_scan",
+        "executed=true"
+      ],
+      "errors": [],
+      "cleanup_status": "completed"
+    }
+  ]
+}

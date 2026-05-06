@@ -15,7 +15,7 @@ class RuntimeConfig:
     sql_temperature: float = 0.1
     planner_enabled: bool = True
     sql_llm_enabled: bool = True
-    default_database: str = "tpcc10_test"
+    default_database: str = "dbmags_tpcc_base"
     max_concurrency: int = 3
 
     @classmethod
@@ -29,6 +29,6 @@ class RuntimeConfig:
             sql_temperature=float(os.getenv("OPENAI_SQL_TEMPERATURE", "0.1")),
             planner_enabled=os.getenv("ENABLE_OPENAI_PLANNER", "1") != "0",
             sql_llm_enabled=os.getenv("ENABLE_OPENAI_SQL", "1") != "0",
-            default_database=os.getenv("DBMAGS_DEFAULT_DATABASE", "tpcc10_test"),
+            default_database=os.getenv("DBMAGS_DEFAULT_DATABASE", "dbmags_tpcc_base"),
             max_concurrency=int(os.getenv("DBMAGS_MAX_CONCURRENCY", "3")),
         )

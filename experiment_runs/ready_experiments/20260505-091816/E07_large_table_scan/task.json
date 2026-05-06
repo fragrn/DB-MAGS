@@ -1,0 +1,67 @@
+{
+  "tasks": [
+    {
+      "task_id": "slow-sql-large-table-scan",
+      "agent_type": "slow_sql",
+      "anomaly_type": "large_table_scan",
+      "title": "Slow SQL: large_table_scan",
+      "inputs": {
+        "database": "dbmags_tpcc_base",
+        "anomaly_subtype": "large_table_scan",
+        "source_agent": "slow_sql",
+        "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+        "duration_seconds": 5
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_order_by_support AS SELECT ol_w_id, ol_d_id, ol_o_id, ol_i_id, ol_quantity, ol_amount, ol_dist_info FROM order_line",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_group_by_support AS SELECT ol_w_id, ol_i_id, ol_quantity, ol_amount FROM order_line",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_large_scan_support AS SELECT c_w_id, c_d_id, c_id, c_last, c_credit, c_balance, c_delivery_cnt FROM customer",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+          "database": "dbmags_tpcc_base",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=65905 rows=1)\n    -> Filter: (agent_large_scan_support.c_credit in ('BC','GC'))  (cost=45253 rows=89631)\n        -> Table scan on agent_large_scan_support  (cost=45253 rows=448157)\n"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "support_tables",
+          "result": {
+            "created_tables": [
+              "agent_order_by_support",
+              "agent_group_by_support",
+              "agent_large_scan_support"
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected large_table_scan from request constraints."
+    }
+  ]
+}

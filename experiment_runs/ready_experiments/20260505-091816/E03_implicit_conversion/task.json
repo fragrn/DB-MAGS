@@ -1,0 +1,60 @@
+{
+  "tasks": [
+    {
+      "task_id": "slow-sql-implicit-conversion",
+      "agent_type": "slow_sql",
+      "anomaly_type": "implicit_conversion",
+      "title": "Slow SQL: implicit_conversion",
+      "inputs": {
+        "database": "dbmags_tpcc_base",
+        "anomaly_subtype": "implicit_conversion",
+        "source_agent": "slow_sql",
+        "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+        "duration_seconds": 5
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_implicit_conversion_support (id INT PRIMARY KEY AUTO_INCREMENT, customer_id_varchar VARCHAR(32) NOT NULL, customer_id_int INT NOT NULL, amount_text VARCHAR(32) NOT NULL, KEY idx_customer_id_varchar (customer_id_varchar), KEY idx_customer_id_int (customer_id_int)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "INSERT INTO agent_implicit_conversion_support(customer_id_varchar, customer_id_int, amount_text) SELECT CAST(c_id AS CHAR), c_id, CAST(c_balance AS CHAR) FROM customer LIMIT 50000",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+          "database": "dbmags_tpcc_base",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=6299 rows=1)\n    -> Filter: (agent_implicit_conversion_support.customer_id_varchar = 12345)  (cost=5150 rows=4990)\n        -> Covering index scan on agent_implicit_conversion_support using idx_customer_id_varchar  (cost=5150 rows=49896)\n"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "support_tables",
+          "result": {
+            "created_tables": [
+              "agent_implicit_conversion_support"
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected implicit_conversion from request constraints."
+    }
+  ]
+}

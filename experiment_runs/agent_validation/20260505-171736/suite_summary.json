@@ -1,0 +1,143 @@
+{
+  "generated_at": "2026-05-05T09:17:36.499088+00:00",
+  "database": "dbmags_tpcc_base",
+  "model": "gpt-5",
+  "openai_available": true,
+  "experiments": [
+    {
+      "status": "pass",
+      "agent": "GlobalPlannerAgent",
+      "input_summary": {
+        "database": "dbmags_tpcc_base",
+        "allowed_subtypes": [
+          "missing_index",
+          "cpu",
+          "overall_workload"
+        ],
+        "openai_available": true
+      },
+      "artifacts": {
+        "request": "experiment_runs/agent_validation/20260505-171736/E1_global/request.json",
+        "plan": "experiment_runs/agent_validation/20260505-171736/E1_global/plan.json"
+      },
+      "observations": [
+        "follow_up_count=2",
+        "initial_task_count=3",
+        "revised_task_count=1"
+      ],
+      "failure_reason": null,
+      "next_action": "Ready for live LLM-path execution."
+    },
+    {
+      "status": "pass",
+      "agent": "SlowSQLAgent",
+      "input_summary": {
+        "database": "dbmags_tpcc_base",
+        "allowed_subtypes": [
+          "missing_index"
+        ]
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260505-171736/E2_slow_sql/task.json"
+      },
+      "observations": [
+        "task_count=1"
+      ],
+      "failure_reason": null,
+      "next_action": "Task generation succeeded."
+    },
+    {
+      "status": "pass",
+      "agent": "ResourceBottleneckAgent",
+      "input_summary": {
+        "database": "dbmags_tpcc_base",
+        "allowed_subtypes": [
+          "cpu"
+        ]
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260505-171736/E3_resource/task.json"
+      },
+      "observations": [
+        "task_count=1"
+      ],
+      "failure_reason": null,
+      "next_action": "Task generation succeeded."
+    },
+    {
+      "status": "pass",
+      "agent": "TrafficSurgeAgent",
+      "input_summary": {
+        "database": "dbmags_tpcc_base",
+        "allowed_subtypes": [
+          "overall_workload"
+        ]
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260505-171736/E4_traffic/task.json"
+      },
+      "observations": [
+        "task_count=1"
+      ],
+      "failure_reason": null,
+      "next_action": "Task generation succeeded."
+    },
+    {
+      "status": "pass",
+      "agent": "LockConflictAgent",
+      "input_summary": {
+        "database": "dbmags_tpcc_copy",
+        "allowed_subtypes": [
+          "record_lock"
+        ]
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260505-171736/E5_lock/task.json"
+      },
+      "observations": [
+        "task_count=1"
+      ],
+      "failure_reason": null,
+      "next_action": "Task generation succeeded."
+    },
+    {
+      "status": "pass",
+      "agent": "BackupAgent",
+      "input_summary": {
+        "database": "dbmags_tpcc_copy",
+        "allowed_subtypes": [
+          "database_table_backup"
+        ]
+      },
+      "artifacts": {
+        "task": "experiment_runs/agent_validation/20260505-171736/E6_backup/task.json"
+      },
+      "observations": [
+        "task_count=1"
+      ],
+      "failure_reason": null,
+      "next_action": "Task generation succeeded."
+    },
+    {
+      "status": "pass",
+      "agent": "GlobalPlannerAgent+TaskAgents",
+      "input_summary": {
+        "database": "dbmags_tpcc_base",
+        "allowed_subtypes": [
+          "missing_index",
+          "cpu",
+          "overall_workload",
+          "record_lock"
+        ]
+      },
+      "artifacts": {
+        "plan": "experiment_runs/agent_validation/20260505-171736/E7_end_to_end/plan.json"
+      },
+      "observations": [
+        "initial_agents=['lock_conflict', 'resource_bottleneck', 'slow_sql', 'traffic_surge']"
+      ],
+      "failure_reason": null,
+      "next_action": "Ready for live suite execution."
+    }
+  ]
+}

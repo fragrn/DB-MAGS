@@ -1,0 +1,160 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for implicit_conversion against dbmags_tpcc_base with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4329070, indexes=1); stock(rows=1430123, indexes=1); agent_large_scan_support(rows=449469, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "slow-sql-implicit-conversion",
+        "agent_type": "slow_sql",
+        "anomaly_type": "implicit_conversion",
+        "title": "Slow SQL: implicit_conversion",
+        "inputs": {
+          "database": "dbmags_tpcc_base",
+          "anomaly_subtype": "implicit_conversion",
+          "source_agent": "slow_sql",
+          "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+          "duration_seconds": 8
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "sql",
+            "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+            "database": "dbmags_tpcc_base",
+            "hold_seconds": 8
+          }
+        ],
+        "validation_steps": [
+          {
+            "kind": "explain",
+            "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Aggregate: count(0)  (cost=6193 rows=1)\n    -> Filter: (agent_implicit_conversion_support.customer_id_varchar = 12345)  (cost=5063 rows=4903)\n        -> Covering index scan on agent_implicit_conversion_support using idx_customer_id_varchar  (cost=5063 rows=49032)\n"
+                ]
+              ]
+            }
+          },
+          {
+            "kind": "support_tables",
+            "result": {
+              "created_tables": [
+                "agent_implicit_conversion_support"
+              ]
+            }
+          }
+        ],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected implicit_conversion from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "implicit_conversion"
+      ],
+      "task_assignments": {
+        "implicit_conversion": "slow_sql"
+      },
+      "database_mapping": {
+        "implicit_conversion": "dbmags_tpcc_base"
+      },
+      "task_parameters": {
+        "implicit_conversion": {
+          "duration_seconds": 8
+        }
+      },
+      "expected_signals": [
+        "index invalidation",
+        "latency increase"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "implicit_conversion",
+          "category": "slow_sql",
+          "source_agent": "slow_sql",
+          "database": "dbmags_tpcc_base",
+          "parameters": {
+            "duration_seconds": 8
+          },
+          "rationale": "Fallback planner selected implicit_conversion from request constraints.",
+          "expected_signals": [
+            "index invalidation",
+            "latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "index invalidation",
+      "latency increase"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "implicit_conversion"
+    ],
+    "task_assignments": {
+      "implicit_conversion": "slow_sql"
+    },
+    "database_mapping": {
+      "implicit_conversion": "dbmags_tpcc_base"
+    },
+    "task_parameters": {
+      "implicit_conversion": {
+        "duration_seconds": 8
+      }
+    },
+    "expected_signals": [
+      "index invalidation",
+      "latency increase"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "implicit_conversion",
+        "category": "slow_sql",
+        "source_agent": "slow_sql",
+        "database": "dbmags_tpcc_base",
+        "parameters": {
+          "duration_seconds": 8
+        },
+        "rationale": "Fallback planner selected implicit_conversion from request constraints.",
+        "expected_signals": [
+          "index invalidation",
+          "latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

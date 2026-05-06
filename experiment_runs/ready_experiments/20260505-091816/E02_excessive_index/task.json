@@ -1,0 +1,68 @@
+{
+  "tasks": [
+    {
+      "task_id": "slow-sql-excessive-index",
+      "agent_type": "slow_sql",
+      "anomaly_type": "excessive_index",
+      "title": "Slow SQL: excessive_index",
+      "inputs": {
+        "database": "dbmags_tpcc_base",
+        "anomaly_subtype": "excessive_index",
+        "source_agent": "slow_sql",
+        "sql": "UPDATE agent_excessive_index SET o_ol_cnt = o_ol_cnt + 1 WHERE o_c_id > 1000;",
+        "duration_seconds": 5
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_excessive_index AS SELECT o_id, o_c_id, o_carrier_id, o_ol_cnt FROM orders LIMIT 50000",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX idx_agent_excessive_index_c1 ON agent_excessive_index(o_c_id)",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX idx_agent_excessive_index_c2 ON agent_excessive_index(o_c_id, o_carrier_id)",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE INDEX idx_agent_excessive_index_c3 ON agent_excessive_index(o_carrier_id, o_ol_cnt)",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "UPDATE agent_excessive_index SET o_ol_cnt = o_ol_cnt + 1 WHERE o_c_id > 1000;",
+          "database": "dbmags_tpcc_base",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "UPDATE agent_excessive_index SET o_ol_cnt = o_ol_cnt + 1 WHERE o_c_id > 1000;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> <not executable by iterator executor>\n"
+              ]
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS agent_excessive_index",
+          "database": "dbmags_tpcc_base"
+        }
+      ],
+      "explanation": "Fallback planner selected excessive_index from request constraints."
+    }
+  ]
+}

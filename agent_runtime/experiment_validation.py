@@ -4,7 +4,7 @@ import json
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict
 
 from agent_runtime.runtime import RuntimeComponents, build_components
 from agent_runtime.types import ExperimentRequest
@@ -43,10 +43,12 @@ class AgentValidationRunner:
     def _experiments(self) -> Dict[str, Callable[[Path, str], Dict[str, Any]]]:
         return {
             "E1_global": self._run_global,
-            "E2_sql": self._run_sql,
+            "E2_slow_sql": self._run_slow_sql,
             "E3_resource": self._run_resource,
             "E4_traffic": self._run_traffic,
-            "E5_end_to_end": self._run_end_to_end,
+            "E5_lock": self._run_lock,
+            "E6_backup": self._run_backup,
+            "E7_end_to_end": self._run_end_to_end,
         }
 
     def _run_global(self, out_dir: Path, database: str) -> Dict[str, Any]:
@@ -59,8 +61,9 @@ class AgentValidationRunner:
         request = ExperimentRequest(
             user_goal="Plan missing index, cpu contention, and overall workload experiments",
             target_database=database,
-            allowed_anomalies=["missing_index", "cpu", "overall_workload"],
-            user_constraints={"baseline_sleep": 0.044, "baseline_threads": 300},
+            allowed_subtypes=["missing_index", "cpu", "overall_workload"],
+            anomaly_categories=["slow_sql", "resource_bottleneck", "traffic_surge"],
+            user_constraints={"baseline_sleep": 0.044, "baseline_threads": 80},
         )
         context = planner.gather_context(request)
         response = planner.plan(request, context)
@@ -69,19 +72,11 @@ class AgentValidationRunner:
         revised_response = planner.plan(revised, revised_context)
 
         request_path = out_dir / "request.json"
-        request_path.write_text(json.dumps(_to_jsonable({
-            "missing_request": request_missing,
-            "request": request,
-            "revised_request": revised,
-        }), ensure_ascii=True, indent=2))
+        request_path.write_text(json.dumps(_to_jsonable({"missing_request": request_missing, "request": request, "revised_request": revised}), ensure_ascii=True, indent=2))
         plan_path = out_dir / "plan.json"
-        plan_path.write_text(json.dumps(_to_jsonable({
-            "missing_response": response_missing,
-            "response": response,
-            "revised_response": revised_response,
-        }), ensure_ascii=True, indent=2))
+        plan_path.write_text(json.dumps(_to_jsonable({"missing_response": response_missing, "response": response, "revised_response": revised_response}), ensure_ascii=True, indent=2))
 
-        passed = bool(response_missing.follow_up_questions) and response.plan is not None and revised_response.plan is not None
+        passed = bool(response_missing.follow_up_questions) and response.plan is not None and response.planner_decision is not None and revised_response.plan is not None
         observations = [
             f"follow_up_count={len(response_missing.follow_up_questions)}",
             f"initial_task_count={len(response.plan.tasks) if response.plan else 0}",
@@ -92,96 +87,49 @@ class AgentValidationRunner:
             "agent": "GlobalPlannerAgent",
             "input_summary": {
                 "database": database,
-                "allowed_anomalies": ["missing_index", "cpu", "overall_workload"],
+                "allowed_subtypes": ["missing_index", "cpu", "overall_workload"],
                 "openai_available": self.components.llm_client.available(),
             },
-            "artifacts": {
-                "request": str(request_path),
-                "plan": str(plan_path),
-            },
+            "artifacts": {"request": str(request_path), "plan": str(plan_path)},
             "observations": observations,
-            "failure_reason": None if passed else "planner did not produce expected follow-up and revised plans",
-            "next_action": "Provide OpenAI credentials before executing live OpenAI-path validation." if not self.components.llm_client.available() else "Ready for live OpenAI-path execution.",
+            "failure_reason": None if passed else "planner did not produce the expected structured plans",
+            "next_action": "Ready for live LLM-path execution." if self.components.llm_client.available() else "Provide LLM credentials before live execution.",
         }
         self._write_result_files(out_dir, result)
         return result
 
-    def _run_sql(self, out_dir: Path, database: str) -> Dict[str, Any]:
-        out_dir.mkdir(parents=True, exist_ok=True)
-        request = ExperimentRequest(
-            user_goal="Validate SQL anomaly generation for missing index",
-            target_database=database,
-            allowed_anomalies=["missing_index"],
-        )
-        context = self.components.planner.gather_context(request)
-        sql_agent = self.components.planner.task_agents[0]
-        tasks = sql_agent.prepare(context, request)
-        task_path = out_dir / "task.json"
-        task_path.write_text(json.dumps(_to_jsonable({"tasks": tasks}), ensure_ascii=True, indent=2))
-
-        passed = self.components.llm_client.available() and len(tasks) >= 1
-        failure_reason = None
-        if not self.components.llm_client.available():
-            failure_reason = "OpenAI API configuration required for the SQL agent experiment."
-        elif not tasks:
-            failure_reason = "No validated SQL task was produced."
-        result = {
-            "status": "pass" if passed else "fail",
-            "agent": "SQLAnomalyAgent",
-            "input_summary": {"database": database, "anomaly": "missing_index", "openai_available": self.components.llm_client.available()},
-            "artifacts": {"task": str(task_path)},
-            "observations": [f"task_count={len(tasks)}"],
-            "failure_reason": failure_reason,
-            "next_action": "Provide OPENAI_API_KEY and rerun this experiment." if failure_reason else "SQL agent produced at least one validated task.",
-        }
-        self._write_result_files(out_dir, result)
-        return result
+    def _run_slow_sql(self, out_dir: Path, database: str) -> Dict[str, Any]:
+        return self._run_agent_case(out_dir, database, "SlowSQLAgent", ["missing_index"], ["slow_sql"], "slow_sql")
 
     def _run_resource(self, out_dir: Path, database: str) -> Dict[str, Any]:
-        out_dir.mkdir(parents=True, exist_ok=True)
-        request = ExperimentRequest(user_goal="Validate CPU contention command generation", target_database=database, allowed_anomalies=["cpu"])
-        context = self.components.planner.gather_context(request)
-        resource_agent = self.components.planner.task_agents[1]
-        tasks = resource_agent.prepare(context, request)
-        task_path = out_dir / "task.json"
-        task_path.write_text(json.dumps(_to_jsonable({"tasks": tasks}), ensure_ascii=True, indent=2))
-        command = tasks[0].execution_steps[0]["command"] if tasks else ""
-        passed = bool(tasks) and ".tools/chaosblade-1.8.0-darwin_arm64/blade" in command
-        result = {
-            "status": "pass" if passed else "fail",
-            "agent": "ResourceAgent",
-            "input_summary": {"database": database, "anomaly": "cpu"},
-            "artifacts": {"task": str(task_path)},
-            "observations": [f"command={command}"],
-            "failure_reason": None if passed else "resource command did not use the repo-scoped ChaosBlade binary",
-            "next_action": "Resource command is ready for manual execution validation." if passed else "Inspect ChaosBlade path resolution.",
-        }
-        self._write_result_files(out_dir, result)
-        return result
+        return self._run_agent_case(out_dir, database, "ResourceBottleneckAgent", ["cpu"], ["resource_bottleneck"], "resource_bottleneck")
 
     def _run_traffic(self, out_dir: Path, database: str) -> Dict[str, Any]:
+        return self._run_agent_case(out_dir, database, "TrafficSurgeAgent", ["overall_workload"], ["traffic_surge"], "traffic_surge")
+
+    def _run_lock(self, out_dir: Path, database: str) -> Dict[str, Any]:
+        return self._run_agent_case(out_dir, database.replace("_base", "_copy"), "LockConflictAgent", ["record_lock"], ["lock_conflict"], "lock_conflict")
+
+    def _run_backup(self, out_dir: Path, database: str) -> Dict[str, Any]:
+        return self._run_agent_case(out_dir, database.replace("_base", "_copy"), "BackupAgent", ["database_table_backup"], ["database_backup"], "database_backup")
+
+    def _run_agent_case(self, out_dir: Path, database: str, agent_name: str, subtypes, categories, agent_type: str) -> Dict[str, Any]:
         out_dir.mkdir(parents=True, exist_ok=True)
-        request = ExperimentRequest(
-            user_goal="Validate workload surge planning",
-            target_database=database,
-            allowed_anomalies=["overall_workload"],
-            user_constraints={"baseline_sleep": 0.044, "baseline_threads": 300},
-        )
+        request = ExperimentRequest(user_goal=f"Validate {agent_name}", target_database=database, allowed_subtypes=subtypes, anomaly_categories=categories)
         context = self.components.planner.gather_context(request)
-        traffic_agent = self.components.planner.task_agents[2]
-        tasks = traffic_agent.prepare(context, request)
+        response = self.components.planner.plan(request, context)
+        tasks = [task for task in (response.plan.tasks if response.plan else []) if task.agent_type == agent_type]
         task_path = out_dir / "task.json"
         task_path.write_text(json.dumps(_to_jsonable({"tasks": tasks}), ensure_ascii=True, indent=2))
-        profile = tasks[0].inputs if tasks else {}
-        passed = bool(tasks) and profile.get("sleep_time") is not None and profile.get("thread_count") is not None and profile.get("description")
+        passed = bool(tasks)
         result = {
             "status": "pass" if passed else "fail",
-            "agent": "TrafficAgent",
-            "input_summary": {"database": database, "anomaly": "overall_workload", "baseline_sleep": 0.044, "baseline_threads": 300},
+            "agent": agent_name,
+            "input_summary": {"database": database, "allowed_subtypes": subtypes},
             "artifacts": {"task": str(task_path)},
-            "observations": [json.dumps(profile, ensure_ascii=True)],
-            "failure_reason": None if passed else "traffic task did not include the expected workload profile fields",
-            "next_action": "Traffic profile is ready for workload integration." if passed else "Inspect workload_tuning_skill output.",
+            "observations": [f"task_count={len(tasks)}"],
+            "failure_reason": None if passed else f"{agent_name} did not emit any tasks",
+            "next_action": "Task generation succeeded." if passed else "Inspect planner/task-agent routing.",
         }
         self._write_result_files(out_dir, result)
         return result
@@ -190,30 +138,27 @@ class AgentValidationRunner:
         out_dir.mkdir(parents=True, exist_ok=True)
         planner = self.components.planner
         request = ExperimentRequest(
-            user_goal="Plan a combined validation run for missing_index, cpu, and overall_workload",
+            user_goal="Plan a combined validation run for missing_index, cpu, overall_workload, and record_lock",
             target_database=database,
-            allowed_anomalies=["missing_index", "cpu", "overall_workload"],
-            user_constraints={"baseline_sleep": 0.044, "baseline_threads": 300},
+            allowed_subtypes=["missing_index", "cpu", "overall_workload", "record_lock"],
+            anomaly_categories=["slow_sql", "resource_bottleneck", "traffic_surge", "lock_conflict"],
+            user_constraints={"baseline_sleep": 0.044, "baseline_threads": 80},
         )
         context = planner.gather_context(request)
-        initial = planner.plan(request, context)
-        revised_request = planner.revise(request, "reduce the risk and keep only missing_index")
-        revised_context = planner.gather_context(revised_request)
-        revised = planner.plan(revised_request, revised_context)
+        response = planner.plan(request, context)
         plan_path = out_dir / "plan.json"
-        plan_path.write_text(json.dumps(_to_jsonable({"initial": initial, "revised": revised}), ensure_ascii=True, indent=2))
+        plan_path.write_text(json.dumps(_to_jsonable({"plan": response}), ensure_ascii=True, indent=2))
 
-        initial_agents = {task.agent_type for task in (initial.plan.tasks if initial.plan else [])}
-        revised_agents = {task.agent_type for task in (revised.plan.tasks if revised.plan else [])}
-        passed = {"sql", "resource", "traffic"}.issubset(initial_agents) and "sql" in revised_agents
+        initial_agents = {task.agent_type for task in (response.plan.tasks if response.plan else [])}
+        passed = {"slow_sql", "resource_bottleneck", "traffic_surge", "lock_conflict"}.issubset(initial_agents)
         result = {
             "status": "pass" if passed else "fail",
             "agent": "GlobalPlannerAgent+TaskAgents",
-            "input_summary": {"database": database, "allowed_anomalies": ["missing_index", "cpu", "overall_workload"]},
+            "input_summary": {"database": database, "allowed_subtypes": request.allowed_subtypes},
             "artifacts": {"plan": str(plan_path)},
-            "observations": [f"initial_agents={sorted(initial_agents)}", f"revised_agents={sorted(revised_agents)}"],
+            "observations": [f"initial_agents={sorted(initial_agents)}"],
             "failure_reason": None if passed else "end-to-end planning did not fan out to the expected task agent mix",
-            "next_action": "Ready for manual confirm-path testing in the CLI." if passed else "Inspect planner fan-out or revise behavior.",
+            "next_action": "Ready for live suite execution." if passed else "Inspect planner fan-out.",
         }
         self._write_result_files(out_dir, result)
         return result

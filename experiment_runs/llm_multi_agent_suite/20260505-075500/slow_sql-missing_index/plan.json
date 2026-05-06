@@ -1,0 +1,152 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for missing_index against dbmags_tpcc_base with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4329070, indexes=1); stock(rows=1430123, indexes=1); agent_large_scan_support(rows=449469, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "slow-sql-missing-index",
+        "agent_type": "slow_sql",
+        "anomaly_type": "missing_index",
+        "title": "Slow SQL: missing_index",
+        "inputs": {
+          "database": "dbmags_tpcc_base",
+          "anomaly_subtype": "missing_index",
+          "source_agent": "slow_sql",
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+          "duration_seconds": 8
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "sql",
+            "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+            "database": "dbmags_tpcc_base",
+            "hold_seconds": 8
+          }
+        ],
+        "validation_steps": [
+          {
+            "kind": "explain",
+            "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+                ]
+              ]
+            }
+          }
+        ],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected missing_index from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "missing_index"
+      ],
+      "task_assignments": {
+        "missing_index": "slow_sql"
+      },
+      "database_mapping": {
+        "missing_index": "dbmags_tpcc_base"
+      },
+      "task_parameters": {
+        "missing_index": {
+          "duration_seconds": 8
+        }
+      },
+      "expected_signals": [
+        "full scan or skip scan",
+        "latency increase"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "missing_index",
+          "category": "slow_sql",
+          "source_agent": "slow_sql",
+          "database": "dbmags_tpcc_base",
+          "parameters": {
+            "duration_seconds": 8
+          },
+          "rationale": "Fallback planner selected missing_index from request constraints.",
+          "expected_signals": [
+            "full scan or skip scan",
+            "latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "full scan or skip scan",
+      "latency increase"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "missing_index"
+    ],
+    "task_assignments": {
+      "missing_index": "slow_sql"
+    },
+    "database_mapping": {
+      "missing_index": "dbmags_tpcc_base"
+    },
+    "task_parameters": {
+      "missing_index": {
+        "duration_seconds": 8
+      }
+    },
+    "expected_signals": [
+      "full scan or skip scan",
+      "latency increase"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "missing_index",
+        "category": "slow_sql",
+        "source_agent": "slow_sql",
+        "database": "dbmags_tpcc_base",
+        "parameters": {
+          "duration_seconds": 8
+        },
+        "rationale": "Fallback planner selected missing_index from request constraints.",
+        "expected_signals": [
+          "full scan or skip scan",
+          "latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

@@ -1,0 +1,138 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for record_lock against dbmags_tpcc_copy with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4355925, indexes=1); stock(rows=1434243, indexes=1); agent_large_scan_support(rows=448977, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "lock-record-lock",
+        "agent_type": "lock_conflict",
+        "anomaly_type": "record_lock",
+        "title": "Hold a row-level write lock on new_orders.",
+        "inputs": {
+          "database": "dbmags_tpcc_copy_copy",
+          "anomaly_subtype": "record_lock",
+          "source_agent": "lock_conflict",
+          "duration_seconds": 8
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "hold_sql",
+            "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+            "database": "dbmags_tpcc_copy_copy",
+            "hold_seconds": 8
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected record_lock from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "record_lock"
+      ],
+      "task_assignments": {
+        "record_lock": "lock_conflict"
+      },
+      "database_mapping": {
+        "record_lock": "dbmags_tpcc_copy_copy"
+      },
+      "task_parameters": {
+        "record_lock": {
+          "duration_seconds": 8
+        }
+      },
+      "expected_signals": [
+        "row lock wait",
+        "transaction blocking"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "record_lock",
+          "category": "lock_conflict",
+          "source_agent": "lock_conflict",
+          "database": "dbmags_tpcc_copy_copy",
+          "parameters": {
+            "duration_seconds": 8
+          },
+          "rationale": "Fallback planner selected record_lock from request constraints.",
+          "expected_signals": [
+            "row lock wait",
+            "transaction blocking"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "row lock wait",
+      "transaction blocking"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "record_lock"
+    ],
+    "task_assignments": {
+      "record_lock": "lock_conflict"
+    },
+    "database_mapping": {
+      "record_lock": "dbmags_tpcc_copy_copy"
+    },
+    "task_parameters": {
+      "record_lock": {
+        "duration_seconds": 8
+      }
+    },
+    "expected_signals": [
+      "row lock wait",
+      "transaction blocking"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "record_lock",
+        "category": "lock_conflict",
+        "source_agent": "lock_conflict",
+        "database": "dbmags_tpcc_copy_copy",
+        "parameters": {
+          "duration_seconds": 8
+        },
+        "rationale": "Fallback planner selected record_lock from request constraints.",
+        "expected_signals": [
+          "row lock wait",
+          "transaction blocking"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

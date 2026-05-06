@@ -1,0 +1,152 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for single_sql against dbmags_tpcc_base with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4329070, indexes=1); stock(rows=1430123, indexes=1); agent_large_scan_support(rows=449469, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "traffic-single-sql",
+        "agent_type": "traffic_surge",
+        "anomaly_type": "single_sql",
+        "title": "Traffic surge: single_sql",
+        "inputs": {
+          "database": "dbmags_tpcc_base",
+          "anomaly_subtype": "single_sql",
+          "source_agent": "traffic_surge",
+          "mode": "single_sql",
+          "sleep_time": 0.01,
+          "thread_count": 12,
+          "repeat": 25,
+          "description": "Increase pressure on a single SQL statement by repeating it with a short pause.",
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000",
+          "duration_seconds": 8
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "single_sql",
+            "sleep_time": 0.01,
+            "thread_count": 12,
+            "repeat": 25,
+            "description": "Increase pressure on a single SQL statement by repeating it with a short pause.",
+            "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000",
+            "database": "dbmags_tpcc_base",
+            "duration_seconds": 8
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected single_sql from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "single_sql"
+      ],
+      "task_assignments": {
+        "single_sql": "traffic_surge"
+      },
+      "database_mapping": {
+        "single_sql": "dbmags_tpcc_base"
+      },
+      "task_parameters": {
+        "single_sql": {
+          "duration_seconds": 8,
+          "baseline_sleep": 0.02,
+          "baseline_threads": 12
+        }
+      },
+      "expected_signals": [
+        "single query latency increase"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "single_sql",
+          "category": "traffic_surge",
+          "source_agent": "traffic_surge",
+          "database": "dbmags_tpcc_base",
+          "parameters": {
+            "duration_seconds": 8,
+            "baseline_sleep": 0.02,
+            "baseline_threads": 12
+          },
+          "rationale": "Fallback planner selected single_sql from request constraints.",
+          "expected_signals": [
+            "single query latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "single query latency increase"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "single_sql"
+    ],
+    "task_assignments": {
+      "single_sql": "traffic_surge"
+    },
+    "database_mapping": {
+      "single_sql": "dbmags_tpcc_base"
+    },
+    "task_parameters": {
+      "single_sql": {
+        "duration_seconds": 8,
+        "baseline_sleep": 0.02,
+        "baseline_threads": 12
+      }
+    },
+    "expected_signals": [
+      "single query latency increase"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "single_sql",
+        "category": "traffic_surge",
+        "source_agent": "traffic_surge",
+        "database": "dbmags_tpcc_base",
+        "parameters": {
+          "duration_seconds": 8,
+          "baseline_sleep": 0.02,
+          "baseline_threads": 12
+        },
+        "rationale": "Fallback planner selected single_sql from request constraints.",
+        "expected_signals": [
+          "single query latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

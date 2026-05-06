@@ -57,7 +57,19 @@ class RunInjectionSkill(Skill):
     @staticmethod
     def _run_shell(step: Dict[str, object]) -> Dict[str, object]:
         command = str(step.get("command", ""))
-        proc = subprocess.run(command, shell=True, capture_output=True, text=True)
+        timeout_seconds = float(step.get("timeout_seconds", 20))
+        try:
+            proc = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout_seconds)
+        except subprocess.TimeoutExpired as exc:
+            return {
+                "executed": False,
+                "command": command,
+                "stdout": (exc.stdout or "").strip(),
+                "stderr": (exc.stderr or "").strip(),
+                "returncode": None,
+                "uid": "",
+                "error": f"command timed out after {timeout_seconds} seconds",
+            }
         stdout = (proc.stdout or "").strip()
         stderr = (proc.stderr or "").strip()
         combined = stdout or stderr
@@ -83,11 +95,15 @@ class RunInjectionSkill(Skill):
         deadline = time.time() + duration_seconds
         success = 0
         failures = 0
+        sql = str(step.get("sql", "")).strip()
         while time.time() < deadline:
             try:
                 with db_cursor(database=str(database) if database else None) as (conn, _cur):
-                    txn, params = doOne()
-                    executeTransaction(txn, params, conn)
+                    if sql:
+                        _cur.execute(sql)
+                    else:
+                        txn, params = doOne()
+                        executeTransaction(txn, params, conn)
                     conn.commit()
                 success += 1
             except Exception:
@@ -100,4 +116,5 @@ class RunInjectionSkill(Skill):
             "successful_transactions": success,
             "failed_transactions": failures,
             "thread_count": int(step.get("thread_count", 1)),
+            "sql": sql,
         }

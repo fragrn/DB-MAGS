@@ -1,0 +1,41 @@
+{
+  "signals": [
+    "task=resource-memory",
+    "anomaly=memory",
+    "executed=true"
+  ],
+  "task_results": [
+    {
+      "task_id": "resource-memory",
+      "status": "completed",
+      "artifacts": {
+        "prechecks": [],
+        "validation": [],
+        "execution": [
+          {
+            "executed": true,
+            "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade c mem load --mem-percent 70",
+            "stdout": "{\"code\":200,\"success\":true,\"result\":\"79b614266b14d3e3\"}",
+            "stderr": "",
+            "returncode": 0,
+            "uid": "79b614266b14d3e3"
+          }
+        ],
+        "dynamic_cleanup": [
+          {
+            "cleaned": true,
+            "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"mem\",\"action\":\"load\",\"flags\":{\"mem-percent\":\"70\"},\"ActionProcessHang\":false}}",
+            "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade destroy 79b614266b14d3e3"
+          }
+        ]
+      },
+      "observed_signals": [
+        "task=resource-memory",
+        "anomaly=memory",
+        "executed=true"
+      ],
+      "errors": [],
+      "cleanup_status": "completed"
+    }
+  ]
+}

@@ -1,0 +1,67 @@
+{
+  "tasks": [
+    {
+      "task_id": "slow-sql-order-by",
+      "agent_type": "slow_sql",
+      "anomaly_type": "order_by",
+      "title": "Slow SQL: order_by",
+      "inputs": {
+        "database": "dbmags_tpcc_base",
+        "anomaly_subtype": "order_by",
+        "source_agent": "slow_sql",
+        "sql": "SELECT * FROM agent_order_by_support ORDER BY ol_amount DESC, ol_dist_info ASC LIMIT 5000;",
+        "duration_seconds": 5
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_order_by_support AS SELECT ol_w_id, ol_d_id, ol_o_id, ol_i_id, ol_quantity, ol_amount, ol_dist_info FROM order_line",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_group_by_support AS SELECT ol_w_id, ol_i_id, ol_quantity, ol_amount FROM order_line",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE IF NOT EXISTS agent_large_scan_support AS SELECT c_w_id, c_d_id, c_id, c_last, c_credit, c_balance, c_delivery_cnt FROM customer",
+          "database": "dbmags_tpcc_base"
+        },
+        {
+          "kind": "sql",
+          "sql": "SELECT * FROM agent_order_by_support ORDER BY ol_amount DESC, ol_dist_info ASC LIMIT 5000;",
+          "database": "dbmags_tpcc_base",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT * FROM agent_order_by_support ORDER BY ol_amount DESC, ol_dist_info ASC LIMIT 5000;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Limit: 5000 row(s)  (cost=467340 rows=5000)\n    -> Sort: agent_order_by_support.ol_amount DESC, agent_order_by_support.ol_dist_info, limit input to 5000 row(s) per chunk  (cost=467340 rows=4.48e+6)\n        -> Table scan on agent_order_by_support  (cost=467340 rows=4.48e+6)\n"
+              ]
+            ]
+          }
+        },
+        {
+          "kind": "support_tables",
+          "result": {
+            "created_tables": [
+              "agent_order_by_support",
+              "agent_group_by_support",
+              "agent_large_scan_support"
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected order_by from request constraints."
+    }
+  ]
+}

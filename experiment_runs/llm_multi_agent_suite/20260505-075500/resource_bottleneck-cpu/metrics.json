@@ -1,0 +1,41 @@
+{
+  "signals": [
+    "task=resource-cpu",
+    "anomaly=cpu",
+    "executed=true"
+  ],
+  "task_results": [
+    {
+      "task_id": "resource-cpu",
+      "status": "completed",
+      "artifacts": {
+        "prechecks": [],
+        "validation": [],
+        "execution": [
+          {
+            "executed": true,
+            "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+            "stdout": "{\"code\":200,\"success\":true,\"result\":\"02fd561cde025226\"}",
+            "stderr": "",
+            "returncode": 0,
+            "uid": "02fd561cde025226"
+          }
+        ],
+        "dynamic_cleanup": [
+          {
+            "cleaned": true,
+            "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+            "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade destroy 02fd561cde025226"
+          }
+        ]
+      },
+      "observed_signals": [
+        "task=resource-cpu",
+        "anomaly=cpu",
+        "executed=true"
+      ],
+      "errors": [],
+      "cleanup_status": "completed"
+    }
+  ]
+}

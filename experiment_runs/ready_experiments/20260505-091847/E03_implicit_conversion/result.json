@@ -1,0 +1,66 @@
+{
+  "experiment_id": "E03_implicit_conversion",
+  "category": "slow_sql",
+  "subtype": "implicit_conversion",
+  "database": "dbmags_tpcc_base",
+  "status": "executed_but_not_validated",
+  "agent": "slow_sql",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "slow-sql-implicit-conversion",
+        "status": "executed_but_not_validated",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: count(0)  (cost=12530 rows=1)\n    -> Filter: (agent_implicit_conversion_support.customer_id_varchar = 12345)  (cost=10223 rows=10012)\n        -> Covering index scan on agent_implicit_conversion_support using idx_customer_id_varchar  (cost=10223 rows=100119)\n"
+                  ]
+                ]
+              }
+            },
+            {
+              "kind": "support_tables",
+              "result": {
+                "created_tables": [
+                  "agent_implicit_conversion_support"
+                ]
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "CREATE TABLE IF NOT EXISTS agent_implicit_conversion_support (id INT PRIMARY KEY AUTO_INCREMENT, customer_id_varchar VARCHAR(32) NOT NULL, customer_id_int INT NOT NULL, amount_text VARCHAR(32) NOT NULL, KEY idx_customer_id_varchar (customer_id_varchar), KEY idx_customer_id_int (customer_id_int)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+              "database": "dbmags_tpcc_base"
+            },
+            {
+              "executed": true,
+              "sql": "INSERT INTO agent_implicit_conversion_support(customer_id_varchar, customer_id_int, amount_text) SELECT CAST(c_id AS CHAR), c_id, CAST(c_balance AS CHAR) FROM customer LIMIT 50000",
+              "database": "dbmags_tpcc_base"
+            },
+            {
+              "executed": true,
+              "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+              "database": "dbmags_tpcc_base"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=slow-sql-implicit-conversion",
+          "anomaly=implicit_conversion",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": []
+}

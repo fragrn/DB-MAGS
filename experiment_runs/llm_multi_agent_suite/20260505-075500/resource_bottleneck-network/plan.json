@@ -1,0 +1,132 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for network against dbmags_tpcc_base with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4331453, indexes=1); stock(rows=1430123, indexes=1); agent_large_scan_support(rows=449469, indexes=0)",
+    "tasks": [
+      {
+        "task_id": "resource-network",
+        "agent_type": "resource_bottleneck",
+        "anomaly_type": "network",
+        "title": "Resource bottleneck: network",
+        "inputs": {
+          "database": "dbmags_tpcc_base",
+          "anomaly_subtype": "network",
+          "source_agent": "resource_bottleneck",
+          "duration_seconds": 8
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "shell",
+            "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade create network delay --time 5000 --offset 1000 --interface eth0 --local-port 3306",
+            "database": "dbmags_tpcc_base"
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected network from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "network"
+      ],
+      "task_assignments": {
+        "network": "resource_bottleneck"
+      },
+      "database_mapping": {
+        "network": "dbmags_tpcc_base"
+      },
+      "task_parameters": {
+        "network": {
+          "duration_seconds": 8
+        }
+      },
+      "expected_signals": [
+        "network delay"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "network",
+          "category": "resource_bottleneck",
+          "source_agent": "resource_bottleneck",
+          "database": "dbmags_tpcc_base",
+          "parameters": {
+            "duration_seconds": 8
+          },
+          "rationale": "Fallback planner selected network from request constraints.",
+          "expected_signals": [
+            "network delay"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": ""
+    },
+    "expected_signals": [
+      "network delay"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "network"
+    ],
+    "task_assignments": {
+      "network": "resource_bottleneck"
+    },
+    "database_mapping": {
+      "network": "dbmags_tpcc_base"
+    },
+    "task_parameters": {
+      "network": {
+        "duration_seconds": 8
+      }
+    },
+    "expected_signals": [
+      "network delay"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "network",
+        "category": "resource_bottleneck",
+        "source_agent": "resource_bottleneck",
+        "database": "dbmags_tpcc_base",
+        "parameters": {
+          "duration_seconds": 8
+        },
+        "rationale": "Fallback planner selected network from request constraints.",
+        "expected_signals": [
+          "network delay"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "LLM planner produced a structured anomaly plan."
+}

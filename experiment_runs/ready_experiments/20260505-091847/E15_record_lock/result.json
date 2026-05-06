@@ -1,0 +1,40 @@
+{
+  "experiment_id": "E15_record_lock",
+  "category": "lock_conflict",
+  "subtype": "record_lock",
+  "database": "dbmags_tpcc_copy",
+  "status": "partial_failure",
+  "agent": "lock_conflict",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "lock-record-lock",
+        "status": "failed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": false,
+              "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+              "database": "dbmags_tpcc_copy_copy",
+              "hold_seconds": 5.0,
+              "error": "(1049, \"Unknown database 'dbmags_tpcc_copy_copy'\")"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=lock-record-lock",
+          "anomaly=record_lock"
+        ],
+        "errors": [
+          "(1049, \"Unknown database 'dbmags_tpcc_copy_copy'\")"
+        ],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [
+    "(1049, \"Unknown database 'dbmags_tpcc_copy_copy'\")"
+  ]
+}

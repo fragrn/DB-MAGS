@@ -1,0 +1,52 @@
+{
+  "signals": [
+    "task=slow-sql-implicit-conversion",
+    "anomaly=implicit_conversion",
+    "executed=true"
+  ],
+  "task_results": [
+    {
+      "task_id": "slow-sql-implicit-conversion",
+      "status": "executed_but_not_validated",
+      "artifacts": {
+        "prechecks": [],
+        "validation": [
+          {
+            "kind": "explain",
+            "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Aggregate: count(0)  (cost=6193 rows=1)\n    -> Filter: (agent_implicit_conversion_support.customer_id_varchar = 12345)  (cost=5063 rows=4903)\n        -> Covering index scan on agent_implicit_conversion_support using idx_customer_id_varchar  (cost=5063 rows=49032)\n"
+                ]
+              ]
+            }
+          },
+          {
+            "kind": "support_tables",
+            "result": {
+              "created_tables": [
+                "agent_implicit_conversion_support"
+              ]
+            }
+          }
+        ],
+        "execution": [
+          {
+            "executed": true,
+            "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+            "database": "dbmags_tpcc_base"
+          }
+        ]
+      },
+      "observed_signals": [
+        "task=slow-sql-implicit-conversion",
+        "anomaly=implicit_conversion",
+        "executed=true"
+      ],
+      "errors": [],
+      "cleanup_status": "completed"
+    }
+  ]
+}
