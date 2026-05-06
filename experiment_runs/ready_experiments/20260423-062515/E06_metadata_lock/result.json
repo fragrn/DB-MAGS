@@ -1,0 +1,56 @@
+{
+  "experiment_id": "E06_metadata_lock",
+  "agent": "sql",
+  "anomaly_type": "metadata_lock",
+  "database": "dbmags_agent_lab_copy",
+  "status": "partial_failure",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "sql-metadata-lock-1",
+        "status": "failed",
+        "artifacts": {
+          "prechecks": [
+            {
+              "name": "validate_sql",
+              "result": {
+                "valid": true,
+                "errors": [],
+                "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);"
+              }
+            }
+          ],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);",
+              "result": {
+                "validated": true,
+                "skipped": true
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": false,
+              "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);",
+              "database": "dbmags_agent_lab_copy",
+              "error": "(1060, \"Duplicate column name 'agent_meta_lock_1'\")"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=sql-metadata-lock-1",
+          "anomaly=metadata_lock"
+        ],
+        "errors": [
+          "(1060, \"Duplicate column name 'agent_meta_lock_1'\")"
+        ],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [
+    "(1060, \"Duplicate column name 'agent_meta_lock_1'\")"
+  ]
+}

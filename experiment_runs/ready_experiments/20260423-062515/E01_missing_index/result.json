@@ -1,0 +1,56 @@
+{
+  "experiment_id": "E01_missing_index",
+  "agent": "sql",
+  "anomaly_type": "missing_index",
+  "database": "dbmags_agent_lab",
+  "status": "completed",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "sql-missing-index-1",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [
+            {
+              "name": "validate_sql",
+              "result": {
+                "valid": true,
+                "errors": [],
+                "sql": "select count(*) from orders where o_c_id > 1907;"
+              }
+            }
+          ],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "select count(*) from orders where o_c_id > 1907;",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: count(0)  (cost=72065 rows=1)\n    -> Filter: (orders.o_c_id > 1907)  (cost=37686 rows=149206)\n        -> Covering index skip scan on orders using idx_orders_customer over 1907 < o_c_id  (cost=37686 rows=149206)\n"
+                  ]
+                ]
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "select count(*) from orders where o_c_id > 1907;",
+              "database": "dbmags_agent_lab"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=sql-missing-index-1",
+          "anomaly=missing_index",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": []
+}

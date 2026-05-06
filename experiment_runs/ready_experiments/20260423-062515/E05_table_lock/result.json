@@ -1,0 +1,53 @@
+{
+  "experiment_id": "E05_table_lock",
+  "agent": "sql",
+  "anomaly_type": "table_lock",
+  "database": "dbmags_agent_lab_copy",
+  "status": "completed",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "sql-table-lock-1",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [
+            {
+              "name": "validate_sql",
+              "result": {
+                "valid": true,
+                "errors": [],
+                "sql": "Lock TABLES new_orders WRITE;"
+              }
+            }
+          ],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "Lock TABLES new_orders WRITE;",
+              "result": {
+                "validated": true,
+                "skipped": true
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "Lock TABLES new_orders WRITE;",
+              "database": "dbmags_agent_lab_copy",
+              "hold_seconds": 5.0
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=sql-table-lock-1",
+          "anomaly=table_lock",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": []
+}

@@ -1,0 +1,44 @@
+{
+  "experiment_id": "E02_cpu",
+  "agent": "resource",
+  "anomaly_type": "cpu",
+  "database": "dbmags_agent_lab",
+  "status": "completed",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "resource-cpu",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": true,
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+              "stdout": "{\"code\":200,\"success\":true,\"result\":\"6a10834559d44489\"}",
+              "stderr": "",
+              "returncode": 0,
+              "uid": "6a10834559d44489"
+            }
+          ],
+          "dynamic_cleanup": [
+            {
+              "cleaned": true,
+              "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 6a10834559d44489"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=resource-cpu",
+          "anomaly=cpu",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": []
+}

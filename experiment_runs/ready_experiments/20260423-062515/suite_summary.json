@@ -1,0 +1,306 @@
+{
+  "generated_at": "2026-04-23T06:25:15.500724+00:00",
+  "model": "gpt-5",
+  "openai_available": true,
+  "experiments": [
+    {
+      "experiment_id": "E01_missing_index",
+      "agent": "sql",
+      "anomaly_type": "missing_index",
+      "database": "dbmags_agent_lab",
+      "status": "completed",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "sql-missing-index-1",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [
+                {
+                  "name": "validate_sql",
+                  "result": {
+                    "valid": true,
+                    "errors": [],
+                    "sql": "select count(*) from orders where o_c_id > 1907;"
+                  }
+                }
+              ],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "select count(*) from orders where o_c_id > 1907;",
+                  "result": {
+                    "validated": true,
+                    "rows": [
+                      [
+                        "-> Aggregate: count(0)  (cost=72065 rows=1)\n    -> Filter: (orders.o_c_id > 1907)  (cost=37686 rows=149206)\n        -> Covering index skip scan on orders using idx_orders_customer over 1907 < o_c_id  (cost=37686 rows=149206)\n"
+                      ]
+                    ]
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "select count(*) from orders where o_c_id > 1907;",
+                  "database": "dbmags_agent_lab"
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=sql-missing-index-1",
+              "anomaly=missing_index",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": []
+    },
+    {
+      "experiment_id": "E02_cpu",
+      "agent": "resource",
+      "anomaly_type": "cpu",
+      "database": "dbmags_agent_lab",
+      "status": "completed",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "resource-cpu",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":\"6a10834559d44489\"}",
+                  "stderr": "",
+                  "returncode": 0,
+                  "uid": "6a10834559d44489"
+                }
+              ],
+              "dynamic_cleanup": [
+                {
+                  "cleaned": true,
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 6a10834559d44489"
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=resource-cpu",
+              "anomaly=cpu",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": []
+    },
+    {
+      "experiment_id": "E03_overall_workload",
+      "agent": "traffic",
+      "anomaly_type": "overall_workload",
+      "database": "dbmags_agent_lab",
+      "status": "completed",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "traffic-overall-workload",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "database": "dbmags_agent_lab",
+                  "duration_seconds": 8.0,
+                  "successful_transactions": 454,
+                  "failed_transactions": 0,
+                  "thread_count": 500
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=traffic-overall-workload",
+              "anomaly=overall_workload",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": []
+    },
+    {
+      "experiment_id": "E04_record_lock",
+      "agent": "sql",
+      "anomaly_type": "record_lock",
+      "database": "dbmags_agent_lab_copy",
+      "status": "completed",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "sql-record-lock-1",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [
+                {
+                  "name": "validate_sql",
+                  "result": {
+                    "valid": true,
+                    "errors": [],
+                    "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;"
+                  }
+                }
+              ],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;",
+                  "result": {
+                    "validated": true,
+                    "skipped": true
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "Update new_orders set no_o_id = no_o_id + 0 where no_o_id > 12530;",
+                  "database": "dbmags_agent_lab_copy",
+                  "hold_seconds": 5.0
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=sql-record-lock-1",
+              "anomaly=record_lock",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": []
+    },
+    {
+      "experiment_id": "E05_table_lock",
+      "agent": "sql",
+      "anomaly_type": "table_lock",
+      "database": "dbmags_agent_lab_copy",
+      "status": "completed",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "sql-table-lock-1",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [
+                {
+                  "name": "validate_sql",
+                  "result": {
+                    "valid": true,
+                    "errors": [],
+                    "sql": "Lock TABLES new_orders WRITE;"
+                  }
+                }
+              ],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "Lock TABLES new_orders WRITE;",
+                  "result": {
+                    "validated": true,
+                    "skipped": true
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "Lock TABLES new_orders WRITE;",
+                  "database": "dbmags_agent_lab_copy",
+                  "hold_seconds": 5.0
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=sql-table-lock-1",
+              "anomaly=table_lock",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": []
+    },
+    {
+      "experiment_id": "E06_metadata_lock",
+      "agent": "sql",
+      "anomaly_type": "metadata_lock",
+      "database": "dbmags_agent_lab_copy",
+      "status": "partial_failure",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "sql-metadata-lock-1",
+            "status": "failed",
+            "artifacts": {
+              "prechecks": [
+                {
+                  "name": "validate_sql",
+                  "result": {
+                    "valid": true,
+                    "errors": [],
+                    "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);"
+                  }
+                }
+              ],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);",
+                  "result": {
+                    "validated": true,
+                    "skipped": true
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": false,
+                  "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_1 CHAR(2);",
+                  "database": "dbmags_agent_lab_copy",
+                  "error": "(1060, \"Duplicate column name 'agent_meta_lock_1'\")"
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=sql-metadata-lock-1",
+              "anomaly=metadata_lock"
+            ],
+            "errors": [
+              "(1060, \"Duplicate column name 'agent_meta_lock_1'\")"
+            ],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [
+        "(1060, \"Duplicate column name 'agent_meta_lock_1'\")"
+      ]
+    }
+  ]
+}

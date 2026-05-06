@@ -1,0 +1,24 @@
+{
+  "tasks": [
+    {
+      "task_id": "resource-cpu",
+      "agent_type": "resource",
+      "anomaly_type": "cpu",
+      "title": "Resource bottleneck: cpu",
+      "inputs": {
+        "resource_type": "cpu",
+        "duration_seconds": 8
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "shell",
+          "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload"
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Run ChaosBlade command to inject a cpu bottleneck."
+    }
+  ]
+}
