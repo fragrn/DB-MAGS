@@ -1,0 +1,27 @@
+{
+  "database": "dbmags_tpcc_base",
+  "probe_sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+  "elapsed_seconds": 6.041631625033915,
+  "successful_transactions": 5,
+  "failed_transactions": 0,
+  "qps": 0.8275910069197462,
+  "avg_latency_ms": 1208.326325006783,
+  "p95_latency_ms": 1240.5495840357617,
+  "p99_latency_ms": 1240.5495840357617,
+  "single_sql_mean_ms": 1208.326325006783,
+  "errors": [],
+  "db_evidence": {
+    "explain": {
+      "validated": true,
+      "rows": [
+        [
+          "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+        ]
+      ]
+    },
+    "explain_features": [
+      "explain captured"
+    ]
+  },
+  "comparison_mode": "anomalous_sql"
+}

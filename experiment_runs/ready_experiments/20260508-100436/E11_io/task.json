@@ -1,0 +1,27 @@
+{
+  "tasks": [
+    {
+      "task_id": "resource-io",
+      "agent_type": "resource_bottleneck",
+      "anomaly_type": "io",
+      "title": "Resource bottleneck: io",
+      "inputs": {
+        "database": "dbmags_tpcc_base",
+        "anomaly_subtype": "io",
+        "source_agent": "resource_bottleneck",
+        "duration_seconds": 8
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "shell",
+          "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create disk burn --read --path /home",
+          "database": "dbmags_tpcc_base"
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected io from request constraints."
+    }
+  ]
+}

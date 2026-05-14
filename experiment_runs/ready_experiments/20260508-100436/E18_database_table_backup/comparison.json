@@ -1,0 +1,75 @@
+{
+  "comparison_status": "completed",
+  "baseline": {
+    "executed": true,
+    "database": "dbmags_tpcc_copy",
+    "duration_seconds": 5.0,
+    "elapsed_seconds": 5.031163041945547,
+    "successful_transactions": 73,
+    "failed_transactions": 0,
+    "qps": 14.5095675475806,
+    "avg_latency_ms": 18.917465186996818,
+    "p95_latency_ms": 33.46454200800508,
+    "p99_latency_ms": 37.680250010453165,
+    "single_sql_mean_ms": 0.0,
+    "thread_count": 40,
+    "sql": "",
+    "probe_sql": "",
+    "db_evidence": {}
+  },
+  "post": {
+    "executed": true,
+    "database": "dbmags_tpcc_copy",
+    "duration_seconds": 5.0,
+    "elapsed_seconds": 5.044970832997933,
+    "successful_transactions": 55,
+    "failed_transactions": 0,
+    "qps": 10.901946080690559,
+    "avg_latency_ms": 41.384705297902904,
+    "p95_latency_ms": 38.11154200229794,
+    "p99_latency_ms": 69.0342920133844,
+    "single_sql_mean_ms": 0.0,
+    "thread_count": 40,
+    "sql": "",
+    "probe_sql": "",
+    "db_evidence": {
+      "backup": {
+        "backup_table": "orders_backup_agent",
+        "source_table": "orders",
+        "backup_row_count": 450038,
+        "source_row_count": 450060,
+        "create_executed": true
+      }
+    },
+    "comparison_mode": "verification_replay"
+  },
+  "delta": {
+    "qps_ratio_delta": -0.24863742182940488,
+    "avg_latency_ratio_delta": 1.1876453789564394,
+    "p95_latency_ratio_delta": 0.13886339735894912,
+    "single_sql_ratio_delta": null,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {},
+    "post": {
+      "backup": {
+        "backup_table": "orders_backup_agent",
+        "source_table": "orders",
+        "backup_row_count": 450038,
+        "source_row_count": 450060,
+        "create_executed": true
+      }
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 14.5095675475806,
+    "post_qps": 10.901946080690559,
+    "baseline_p95_latency_ms": 33.46454200800508,
+    "post_p95_latency_ms": 38.11154200229794,
+    "baseline_failures": 0,
+    "post_failures": 0
+  },
+  "anomaly_confirmed": false,
+  "confirmation_reason": "backup table creation did not complete or the copied row counts did not match"
+}

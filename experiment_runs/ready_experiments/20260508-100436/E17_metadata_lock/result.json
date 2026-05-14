@@ -1,0 +1,43 @@
+{
+  "experiment_id": "E17_metadata_lock",
+  "category": "lock_conflict",
+  "subtype": "metadata_lock",
+  "database": "dbmags_tpcc_copy",
+  "status": "completed",
+  "agent": "lock_conflict",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "lock-metadata-lock",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_835f2b29 CHAR(2)",
+              "database": "dbmags_tpcc_copy",
+              "elapsed_seconds": 0.02549854200333357,
+              "latency_ms": 25.49854200333357,
+              "single_sql_mean_ms": 25.49854200333357
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=lock-metadata-lock",
+          "anomaly=metadata_lock",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": true,
+    "confirmation_reason": "the ALTER TABLE probe waited much longer while a metadata lock holder was active"
+  }
+}

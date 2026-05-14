@@ -1,0 +1,27 @@
+{
+  "database": "dbmags_tpcc_base",
+  "probe_sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+  "elapsed_seconds": 0.8417557061184198,
+  "successful_transactions": 5,
+  "failed_transactions": 0,
+  "qps": 5.939965673718392,
+  "avg_latency_ms": 168.35114122368395,
+  "p95_latency_ms": 168.91404101625085,
+  "p99_latency_ms": 168.91404101625085,
+  "single_sql_mean_ms": 168.35114122368395,
+  "errors": [],
+  "db_evidence": {
+    "explain": {
+      "validated": true,
+      "rows": [
+        [
+          "-> Aggregate: count(0)  (cost=65905 rows=1)\n    -> Filter: (agent_large_scan_support.c_credit in ('BC','GC'))  (cost=45253 rows=89631)\n        -> Table scan on agent_large_scan_support  (cost=45253 rows=448157)\n"
+        ]
+      ]
+    },
+    "explain_features": [
+      "explain captured"
+    ]
+  },
+  "comparison_mode": "anomalous_sql"
+}

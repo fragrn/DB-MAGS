@@ -1,0 +1,56 @@
+{
+  "experiment_id": "E01_missing_index",
+  "category": "slow_sql",
+  "subtype": "missing_index",
+  "database": "dbmags_tpcc_base",
+  "status": "completed",
+  "agent": "slow_sql",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "slow-sql-missing-index",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+                  ]
+                ]
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+              "database": "dbmags_tpcc_base",
+              "elapsed_seconds": 1.1462040409678593,
+              "latency_ms": 1146.2040409678593,
+              "single_sql_mean_ms": 1146.2040409678593
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=slow-sql-missing-index",
+          "anomaly=missing_index",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": true,
+    "confirmation_reason": "post SQL is slower than baseline control SQL and EXPLAIN shows slow-path evidence"
+  }
+}

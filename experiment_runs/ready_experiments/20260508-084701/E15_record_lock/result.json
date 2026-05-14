@@ -1,0 +1,43 @@
+{
+  "experiment_id": "E15_record_lock",
+  "category": "lock_conflict",
+  "subtype": "record_lock",
+  "database": "dbmags_tpcc_copy",
+  "status": "completed",
+  "agent": "lock_conflict",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "lock-record-lock",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+              "database": "dbmags_tpcc_copy",
+              "hold_seconds": 5.0,
+              "elapsed_seconds": 5.0066680000163615,
+              "latency_ms": 5006.6680000163615
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=lock-record-lock",
+          "anomaly=record_lock",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": true,
+    "confirmation_reason": "the same SQL waited much longer when the row-lock holder was active"
+  }
+}

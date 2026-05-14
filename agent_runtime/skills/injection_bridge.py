@@ -29,19 +29,36 @@ class RunInjectionSkill(Skill):
     def _run_sql(step: Dict[str, object]) -> Dict[str, object]:
         sql = str(step.get("sql", ""))
         database = step.get("database")
+        started = time.perf_counter()
         try:
             with db_cursor(database=str(database) if database else None) as (conn, cur):
                 cur.execute(sql)
                 conn.commit()
-            return {"executed": True, "sql": sql, "database": database}
+            elapsed_seconds = time.perf_counter() - started
+            latency_ms = elapsed_seconds * 1000.0
+            return {
+                "executed": True,
+                "sql": sql,
+                "database": database,
+                "elapsed_seconds": elapsed_seconds,
+                "latency_ms": latency_ms,
+                "single_sql_mean_ms": latency_ms,
+            }
         except Exception as exc:
-            return {"executed": False, "sql": sql, "database": database, "error": str(exc)}
+            return {
+                "executed": False,
+                "sql": sql,
+                "database": database,
+                "error": str(exc),
+                "elapsed_seconds": time.perf_counter() - started,
+            }
 
     @staticmethod
     def _run_hold_sql(step: Dict[str, object]) -> Dict[str, object]:
         sql = str(step.get("sql", ""))
         database = step.get("database")
         hold_seconds = float(step.get("hold_seconds", 5))
+        started = time.perf_counter()
         try:
             with db_cursor(database=str(database) if database else None) as (conn, cur):
                 cur.execute(sql)
@@ -50,14 +67,30 @@ class RunInjectionSkill(Skill):
                     cur.execute("UNLOCK TABLES")
                 else:
                     conn.commit()
-            return {"executed": True, "sql": sql, "database": database, "hold_seconds": hold_seconds}
+            elapsed_seconds = time.perf_counter() - started
+            return {
+                "executed": True,
+                "sql": sql,
+                "database": database,
+                "hold_seconds": hold_seconds,
+                "elapsed_seconds": elapsed_seconds,
+                "latency_ms": elapsed_seconds * 1000.0,
+            }
         except Exception as exc:
-            return {"executed": False, "sql": sql, "database": database, "hold_seconds": hold_seconds, "error": str(exc)}
+            return {
+                "executed": False,
+                "sql": sql,
+                "database": database,
+                "hold_seconds": hold_seconds,
+                "error": str(exc),
+                "elapsed_seconds": time.perf_counter() - started,
+            }
 
     @staticmethod
     def _run_shell(step: Dict[str, object]) -> Dict[str, object]:
         command = str(step.get("command", ""))
         timeout_seconds = float(step.get("timeout_seconds", 20))
+        started = time.perf_counter()
         try:
             proc = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=timeout_seconds)
         except subprocess.TimeoutExpired as exc:
@@ -68,6 +101,7 @@ class RunInjectionSkill(Skill):
                 "stderr": (exc.stderr or "").strip(),
                 "returncode": None,
                 "uid": "",
+                "elapsed_seconds": time.perf_counter() - started,
                 "error": f"command timed out after {timeout_seconds} seconds",
             }
         stdout = (proc.stdout or "").strip()
@@ -86,6 +120,7 @@ class RunInjectionSkill(Skill):
             "stderr": stderr,
             "returncode": proc.returncode,
             "uid": uid,
+            "elapsed_seconds": time.perf_counter() - started,
         }
 
     @staticmethod
@@ -96,7 +131,10 @@ class RunInjectionSkill(Skill):
         success = 0
         failures = 0
         sql = str(step.get("sql", "")).strip()
+        latencies_ms = []
+        started = time.perf_counter()
         while time.time() < deadline:
+            loop_started = time.perf_counter()
             try:
                 with db_cursor(database=str(database) if database else None) as (conn, _cur):
                     if sql:
@@ -108,13 +146,31 @@ class RunInjectionSkill(Skill):
                 success += 1
             except Exception:
                 failures += 1
+            finally:
+                latencies_ms.append((time.perf_counter() - loop_started) * 1000.0)
             time.sleep(float(step.get("sleep_time", 0.001)))
+        elapsed_seconds = max(time.perf_counter() - started, 1e-9)
+        sorted_latencies = sorted(latencies_ms)
+        avg_latency = sum(latencies_ms) / len(latencies_ms) if latencies_ms else 0.0
+
+        def percentile(fraction: float) -> float:
+            if not sorted_latencies:
+                return 0.0
+            index = min(max(int(round((len(sorted_latencies) - 1) * fraction)), 0), len(sorted_latencies) - 1)
+            return sorted_latencies[index]
+
         return {
             "executed": success > 0,
             "database": database,
             "duration_seconds": duration_seconds,
+            "elapsed_seconds": elapsed_seconds,
             "successful_transactions": success,
             "failed_transactions": failures,
+            "qps": success / elapsed_seconds,
+            "avg_latency_ms": avg_latency,
+            "p95_latency_ms": percentile(0.95),
+            "p99_latency_ms": percentile(0.99),
+            "single_sql_mean_ms": avg_latency if sql else 0.0,
             "thread_count": int(step.get("thread_count", 1)),
             "sql": sql,
         }

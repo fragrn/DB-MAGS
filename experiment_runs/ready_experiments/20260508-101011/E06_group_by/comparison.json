@@ -1,0 +1,102 @@
+{
+  "comparison_status": "completed",
+  "baseline": {
+    "database": "dbmags_tpcc_base",
+    "probe_sql": "SELECT SUM(ol_amount) FROM agent_group_by_support;",
+    "elapsed_seconds": 3.718205625889823,
+    "successful_transactions": 3,
+    "failed_transactions": 0,
+    "qps": 0.8068407995273404,
+    "avg_latency_ms": 1239.4018752966076,
+    "p95_latency_ms": 1249.3399590021,
+    "p99_latency_ms": 1249.3399590021,
+    "single_sql_mean_ms": 1239.4018752966076,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Aggregate: sum(agent_group_by_support.ol_amount)  (cost=1.49e+6 rows=1)\n    -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "comparison_mode": "control_sql"
+  },
+  "post": {
+    "database": "dbmags_tpcc_base",
+    "probe_sql": "SELECT ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_i_id ORDER BY SUM(ol_amount) DESC;",
+    "elapsed_seconds": 8.298960958025418,
+    "successful_transactions": 3,
+    "failed_transactions": 0,
+    "qps": 0.361491036669944,
+    "avg_latency_ms": 2766.320319341806,
+    "p95_latency_ms": 2785.202750004828,
+    "p99_latency_ms": 2785.202750004828,
+    "single_sql_mean_ms": 2766.320319341806,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Sort: SUM(ol_amount) DESC\n    -> Table scan on <temporary>\n        -> Aggregate using temporary table\n            -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "using temporary"
+      ]
+    },
+    "comparison_mode": "anomalous_sql"
+  },
+  "delta": {
+    "qps_ratio_delta": -0.5519673312483567,
+    "avg_latency_ratio_delta": 1.2319800982064708,
+    "p95_latency_ratio_delta": 1.2293393643068025,
+    "single_sql_ratio_delta": 1.2319800982064708,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Aggregate: sum(agent_group_by_support.ol_amount)  (cost=1.49e+6 rows=1)\n    -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "post": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Sort: SUM(ol_amount) DESC\n    -> Table scan on <temporary>\n        -> Aggregate using temporary table\n            -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "using temporary"
+      ]
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 0.8068407995273404,
+    "post_qps": 0.361491036669944,
+    "baseline_p95_latency_ms": 1249.3399590021,
+    "post_p95_latency_ms": 2785.202750004828,
+    "baseline_failures": 0,
+    "post_failures": 0
+  },
+  "anomaly_confirmed": true,
+  "confirmation_reason": "group-by query is slower than the aggregate control and EXPLAIN shows temporary/filesort work"
+}

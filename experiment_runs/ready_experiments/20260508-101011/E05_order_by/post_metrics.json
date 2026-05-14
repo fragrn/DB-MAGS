@@ -1,0 +1,27 @@
+{
+  "database": "dbmags_tpcc_base",
+  "probe_sql": "SELECT * FROM agent_order_by_support ORDER BY ol_amount DESC, ol_dist_info ASC LIMIT 5000;",
+  "elapsed_seconds": 10.568242916022427,
+  "successful_transactions": 3,
+  "failed_transactions": 0,
+  "qps": 0.2838693266079004,
+  "avg_latency_ms": 3522.7476386741423,
+  "p95_latency_ms": 3532.7719160122797,
+  "p99_latency_ms": 3532.7719160122797,
+  "single_sql_mean_ms": 3522.7476386741423,
+  "errors": [],
+  "db_evidence": {
+    "explain": {
+      "validated": true,
+      "rows": [
+        [
+          "-> Limit: 5000 row(s)  (cost=467340 rows=5000)\n    -> Sort: agent_order_by_support.ol_amount DESC, agent_order_by_support.ol_dist_info, limit input to 5000 row(s) per chunk  (cost=467340 rows=4.48e+6)\n        -> Table scan on agent_order_by_support  (cost=467340 rows=4.48e+6)\n"
+        ]
+      ]
+    },
+    "explain_features": [
+      "explain captured"
+    ]
+  },
+  "comparison_mode": "anomalous_sql"
+}

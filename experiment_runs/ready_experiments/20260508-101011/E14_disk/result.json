@@ -1,0 +1,51 @@
+{
+  "experiment_id": "E14_disk",
+  "category": "resource_bottleneck",
+  "subtype": "disk",
+  "database": "dbmags_tpcc_base",
+  "status": "completed",
+  "agent": "resource_bottleneck",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "resource-disk",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": true,
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create disk fill --path /tmp --size 64",
+              "stdout": "{\"code\":200,\"success\":true,\"result\":\"02d76a81b65ce0b1\"}",
+              "stderr": "",
+              "returncode": 0,
+              "uid": "02d76a81b65ce0b1",
+              "elapsed_seconds": 0.17861324991099536
+            }
+          ],
+          "dynamic_cleanup": [
+            {
+              "cleaned": true,
+              "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"disk\",\"action\":\"fill\",\"flags\":{\"path\":\"/tmp\",\"size\":\"64\"},\"ActionProcessHang\":false}}",
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 02d76a81b65ce0b1"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=resource-disk",
+          "anomaly=disk",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": true,
+    "confirmation_reason": "disk injection succeeded and the workload probe degraded"
+  }
+}

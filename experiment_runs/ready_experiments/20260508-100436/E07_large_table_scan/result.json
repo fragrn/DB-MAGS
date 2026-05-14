@@ -1,0 +1,66 @@
+{
+  "experiment_id": "E07_large_table_scan",
+  "category": "slow_sql",
+  "subtype": "large_table_scan",
+  "database": "dbmags_tpcc_base",
+  "status": "executed_but_not_validated",
+  "agent": "slow_sql",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "slow-sql-large-table-scan",
+        "status": "executed_but_not_validated",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: count(0)  (cost=65905 rows=1)\n    -> Filter: (agent_large_scan_support.c_credit in ('BC','GC'))  (cost=45253 rows=89631)\n        -> Table scan on agent_large_scan_support  (cost=45253 rows=448157)\n"
+                  ]
+                ]
+              }
+            },
+            {
+              "kind": "support_tables",
+              "result": {
+                "created_tables": [
+                  "agent_order_by_support",
+                  "agent_group_by_support",
+                  "agent_large_scan_support"
+                ]
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+              "database": "dbmags_tpcc_base",
+              "elapsed_seconds": 0.19167208299040794,
+              "latency_ms": 191.67208299040794,
+              "single_sql_mean_ms": 191.67208299040794
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=slow-sql-large-table-scan",
+          "anomaly=large_table_scan",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": true,
+    "confirmation_reason": "large-table scan is slower than the point lookup control and EXPLAIN shows scan-heavy access"
+  }
+}

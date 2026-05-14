@@ -1,0 +1,83 @@
+{
+  "comparison_status": "completed",
+  "baseline": {
+    "executed": true,
+    "database": "dbmags_tpcc_base",
+    "duration_seconds": 8.0,
+    "elapsed_seconds": 8.051801417022943,
+    "successful_transactions": 140,
+    "failed_transactions": 0,
+    "qps": 17.387413418320904,
+    "avg_latency_ms": 10.061172647069075,
+    "p95_latency_ms": 19.962624995969236,
+    "p99_latency_ms": 28.66120799444616,
+    "single_sql_mean_ms": 0.0,
+    "thread_count": 40,
+    "sql": "",
+    "probe_sql": "",
+    "db_evidence": {}
+  },
+  "post": {
+    "executed": true,
+    "database": "dbmags_tpcc_base",
+    "duration_seconds": 8.0,
+    "elapsed_seconds": 8.037611291976646,
+    "successful_transactions": 137,
+    "failed_transactions": 0,
+    "qps": 17.044865075368474,
+    "avg_latency_ms": 11.318980789247112,
+    "p95_latency_ms": 24.316165945492685,
+    "p99_latency_ms": 31.405249959789217,
+    "single_sql_mean_ms": 0.0,
+    "thread_count": 40,
+    "sql": "",
+    "probe_sql": "",
+    "db_evidence": {
+      "chaosblade": {
+        "executed": true,
+        "uid": "c168202cb804a584",
+        "cleaned": true
+      }
+    },
+    "resource_injection": {
+      "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+      "executed": true,
+      "uid": "c168202cb804a584",
+      "blade_path": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+      "stdout": "{\"code\":200,\"success\":true,\"result\":\"c168202cb804a584\"}"
+    },
+    "resource_cleanup": {
+      "cleaned": true,
+      "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+      "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy c168202cb804a584"
+    },
+    "comparison_mode": "verification_replay"
+  },
+  "delta": {
+    "qps_ratio_delta": -0.019700937379880257,
+    "avg_latency_ratio_delta": 0.12501605789902134,
+    "p95_latency_ratio_delta": 0.21808459310348696,
+    "single_sql_ratio_delta": null,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {},
+    "post": {
+      "chaosblade": {
+        "executed": true,
+        "uid": "c168202cb804a584",
+        "cleaned": true
+      }
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 17.387413418320904,
+    "post_qps": 17.044865075368474,
+    "baseline_p95_latency_ms": 19.962624995969236,
+    "post_p95_latency_ms": 24.316165945492685,
+    "baseline_failures": 0,
+    "post_failures": 0
+  },
+  "anomaly_confirmed": true,
+  "confirmation_reason": "resource injection succeeded and workload degraded under the same probe"
+}

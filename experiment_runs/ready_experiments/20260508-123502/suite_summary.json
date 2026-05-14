@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-05-08T12:35:02.612557+00:00",
+  "db_base": "dbmags_tpcc_base",
+  "db_copy": "dbmags_tpcc_copy",
+  "model": "gpt-5",
+  "openai_available": true,
+  "execution_mode": "sequential",
+  "comparison_strategy": "same_script_before_after",
+  "experiments": [
+    {
+      "experiment_id": "E18_database_table_backup",
+      "category": "database_backup",
+      "subtype": "database_table_backup",
+      "database": "dbmags_tpcc_copy",
+      "status": "completed",
+      "agent": "database_backup",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "backup-orders",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+                  "database": "dbmags_tpcc_copy",
+                  "elapsed_seconds": 0.08299308305140585,
+                  "latency_ms": 82.99308305140585,
+                  "single_sql_mean_ms": 82.99308305140585
+                },
+                {
+                  "executed": true,
+                  "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+                  "database": "dbmags_tpcc_copy",
+                  "elapsed_seconds": 1.7309483750723302,
+                  "latency_ms": 1730.9483750723302,
+                  "single_sql_mean_ms": 1730.9483750723302
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=backup-orders",
+              "anomaly=database_table_backup",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "backup table was created successfully and the concurrent workload showed measurable impact"
+      }
+    }
+  ]
+}

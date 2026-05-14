@@ -8,11 +8,13 @@ from unittest.mock import patch
 from agent_runtime.conversation import CLIConversationOrchestrator
 from agent_runtime.executor import TaskExecutor
 from agent_runtime.experiment_validation import AgentValidationRunner
+from agent_runtime.skills.injection_bridge import RunInjectionSkill
 from agent_runtime.planner import GlobalPlannerAgent
 from agent_runtime.runtime import build_runtime
 from agent_runtime.scheduler import TaskScheduler
 from agent_runtime.skill_registry import SkillRegistry
 from agent_runtime.skills.base import Skill
+from scripts.run_ready_experiments import compare_metrics
 from agent_runtime.types import (
     DBContextSummary,
     DBTableProfile,
@@ -108,6 +110,92 @@ class SchedulerTests(unittest.TestCase):
         by_id = {item.task_id: item for item in results}
         self.assertEqual(by_id["ok"].status, "completed")
         self.assertEqual(by_id["bad"].status, "failed")
+
+
+class ComparisonTests(unittest.TestCase):
+    def test_compare_metrics_confirms_single_sql_when_qps_and_latency_rise(self):
+        comparison = compare_metrics(
+            {"subtype": "single_sql"},
+            {
+                "qps": 100.0,
+                "avg_latency_ms": 5.0,
+                "p95_latency_ms": 8.0,
+                "failed_transactions": 0,
+            },
+            {
+                "qps": 140.0,
+                "avg_latency_ms": 8.0,
+                "p95_latency_ms": 12.0,
+                "failed_transactions": 0,
+            },
+        )
+        self.assertTrue(comparison["anomaly_confirmed"])
+
+    def test_compare_metrics_confirms_excessive_index_when_update_slows_down(self):
+        comparison = compare_metrics(
+            {"subtype": "excessive_index"},
+            {"avg_latency_ms": 10.0, "failed_transactions": 0, "db_evidence": {}},
+            {"avg_latency_ms": 18.0, "failed_transactions": 0, "db_evidence": {"redundant_indexes_present": True}},
+        )
+        self.assertTrue(comparison["anomaly_confirmed"])
+
+    def test_compare_metrics_marks_network_as_environment_blocked(self):
+        comparison = compare_metrics(
+            {"subtype": "network"},
+            {"qps": 10.0, "p95_latency_ms": 10.0, "failed_transactions": 0},
+            {"qps": 10.0, "p95_latency_ms": 10.0, "failed_transactions": 0, "db_evidence": {"chaosblade": {"executed": False}}},
+        )
+        self.assertEqual(comparison["comparison_status"], "environment_blocked")
+        self.assertFalse(comparison["anomaly_confirmed"])
+
+    def test_compare_metrics_confirms_table_lock_when_probe_waits(self):
+        comparison = compare_metrics(
+            {"subtype": "table_lock"},
+            {"single_sql_mean_ms": 15.0, "failed_transactions": 0},
+            {"single_sql_mean_ms": 1500.0, "failed_transactions": 0, "db_evidence": {"lock_holder": {"executed": True}}},
+        )
+        self.assertTrue(comparison["anomaly_confirmed"])
+
+    def test_compare_metrics_confirms_backup_when_row_counts_match(self):
+        comparison = compare_metrics(
+            {"subtype": "database_table_backup"},
+            {"qps": 20.0, "p95_latency_ms": 10.0, "failed_transactions": 0},
+            {
+                "qps": 18.0,
+                "p95_latency_ms": 12.0,
+                "failed_transactions": 0,
+                "db_evidence": {"backup": {"backup_row_count": 100, "source_row_count": 100}},
+            },
+        )
+        self.assertTrue(comparison["anomaly_confirmed"])
+
+    def test_run_sql_probe_path_records_latency(self):
+        class DummyCursor:
+            def execute(self, _sql):
+                return None
+
+            def close(self):
+                return None
+
+        class DummyConn:
+            def commit(self):
+                return None
+
+            def close(self):
+                return None
+
+        from contextlib import contextmanager
+
+        @contextmanager
+        def fake_db_cursor(*args, **kwargs):
+            yield DummyConn(), DummyCursor()
+
+        runner = RunInjectionSkill()
+        with patch("agent_runtime.skills.injection_bridge.db_cursor", fake_db_cursor):
+            result = runner.execute({"kind": "sql", "sql": "SELECT 1", "database": "dbmags_tpcc_base"})
+        self.assertTrue(result["executed"])
+        self.assertIn("latency_ms", result)
+        self.assertIn("elapsed_seconds", result)
 
 
 class ConversationTests(unittest.TestCase):

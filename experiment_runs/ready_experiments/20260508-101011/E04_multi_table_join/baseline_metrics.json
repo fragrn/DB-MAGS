@@ -1,0 +1,27 @@
+{
+  "database": "dbmags_tpcc_base",
+  "probe_sql": "SELECT COUNT(*) FROM orders o JOIN order_line ol ON o.o_w_id = ol.ol_w_id AND o.o_d_id = ol.ol_d_id AND o.o_id = ol.ol_o_id WHERE o.o_carrier_id IS NOT NULL;",
+  "elapsed_seconds": 4.063503499957733,
+  "successful_transactions": 3,
+  "failed_transactions": 0,
+  "qps": 0.7382791721555562,
+  "avg_latency_ms": 1354.5011666525777,
+  "p95_latency_ms": 1382.6078749261796,
+  "p99_latency_ms": 1382.6078749261796,
+  "single_sql_mean_ms": 1354.5011666525777,
+  "errors": [],
+  "db_evidence": {
+    "explain": {
+      "validated": true,
+      "rows": [
+        [
+          "-> Aggregate: count(0)  (cost=1.82e+6 rows=1)\n    -> Nested loop inner join  (cost=871576 rows=4.12e+6)\n        -> Filter: (o.o_carrier_id is not null)  (cost=46170 rows=406119)\n            -> Table scan on o  (cost=46170 rows=451243)\n        -> Covering index lookup on ol using PRIMARY (ol_w_id = o.o_w_id, ol_d_id = o.o_d_id, ol_o_id = o.o_id)  (cost=1.02 rows=10.1)\n"
+        ]
+      ]
+    },
+    "explain_features": [
+      "explain captured"
+    ]
+  },
+  "comparison_mode": "control_sql"
+}

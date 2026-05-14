@@ -1,0 +1,102 @@
+{
+  "comparison_status": "completed",
+  "baseline": {
+    "database": "dbmags_tpcc_base",
+    "probe_sql": "SELECT COUNT(*) FROM agent_group_by_support",
+    "elapsed_seconds": 0.5914265409810469,
+    "successful_transactions": 5,
+    "failed_transactions": 0,
+    "qps": 8.454135304286645,
+    "avg_latency_ms": 118.28530819620937,
+    "p95_latency_ms": 138.6078749783337,
+    "p99_latency_ms": 138.6078749783337,
+    "single_sql_mean_ms": 118.28530819620937,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Count rows in agent_group_by_support\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "comparison_mode": "control_sql"
+  },
+  "post": {
+    "database": "dbmags_tpcc_base",
+    "probe_sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+    "elapsed_seconds": 5.704502749023959,
+    "successful_transactions": 5,
+    "failed_transactions": 0,
+    "qps": 0.8765005855866229,
+    "avg_latency_ms": 1140.9005498047918,
+    "p95_latency_ms": 1143.3616250287741,
+    "p99_latency_ms": 1143.3616250287741,
+    "single_sql_mean_ms": 1140.9005498047918,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "comparison_mode": "anomalous_sql"
+  },
+  "delta": {
+    "qps_ratio_delta": -0.8963228580997283,
+    "avg_latency_ratio_delta": 8.645327616784733,
+    "p95_latency_ratio_delta": 7.248893688093098,
+    "single_sql_ratio_delta": 8.645327616784733,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Count rows in agent_group_by_support\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "post": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 8.454135304286645,
+    "post_qps": 0.8765005855866229,
+    "baseline_p95_latency_ms": 138.6078749783337,
+    "post_p95_latency_ms": 1143.3616250287741,
+    "baseline_failures": 0,
+    "post_failures": 0
+  },
+  "anomaly_confirmed": true,
+  "confirmation_reason": "post SQL is slower than baseline control SQL and EXPLAIN shows slow-path evidence"
+}

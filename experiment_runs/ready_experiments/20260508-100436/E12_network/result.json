@@ -1,0 +1,47 @@
+{
+  "experiment_id": "E12_network",
+  "category": "resource_bottleneck",
+  "subtype": "network",
+  "database": "dbmags_tpcc_base",
+  "status": "partial_failure",
+  "agent": "resource_bottleneck",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "resource-network",
+        "status": "failed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": false,
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create network drop --destination-port 3306 --network-traffic out",
+              "stdout": "",
+              "stderr": "{\"code\":52004,\"success\":false,\"error\":\"`iptables`: command not found\"}",
+              "returncode": 1,
+              "uid": "",
+              "elapsed_seconds": 0.16984608303755522
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=resource-network",
+          "anomaly=network"
+        ],
+        "errors": [
+          "step failed: {'kind': 'shell', 'command': '/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create network drop --destination-port 3306 --network-traffic out', 'database': 'dbmags_tpcc_base'}"
+        ],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [
+    "step failed: {'kind': 'shell', 'command': '/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create network drop --destination-port 3306 --network-traffic out', 'database': 'dbmags_tpcc_base'}"
+  ],
+  "comparison": {
+    "comparison_status": "environment_blocked",
+    "anomaly_confirmed": false,
+    "confirmation_reason": "network injection is blocked in the current environment (likely platform or iptables dependency)"
+  }
+}

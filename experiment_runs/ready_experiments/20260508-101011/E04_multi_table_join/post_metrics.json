@@ -1,0 +1,27 @@
+{
+  "database": "dbmags_tpcc_base",
+  "probe_sql": "SELECT COUNT(*) FROM orders o JOIN order_line ol ON o.o_w_id = ol.ol_w_id AND o.o_d_id = ol.ol_d_id AND o.o_id = ol.ol_o_id JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id WHERE o.o_carrier_id IS NOT NULL;",
+  "elapsed_seconds": 6.215195666998625,
+  "successful_transactions": 3,
+  "failed_transactions": 0,
+  "qps": 0.4826879410940135,
+  "avg_latency_ms": 2071.7318889995418,
+  "p95_latency_ms": 2099.9985419912264,
+  "p99_latency_ms": 2099.9985419912264,
+  "single_sql_mean_ms": 2071.7318889995418,
+  "errors": [],
+  "db_evidence": {
+    "explain": {
+      "validated": true,
+      "rows": [
+        [
+          "-> Aggregate: count(0)  (cost=2.21e+6 rows=1)\n    -> Nested loop inner join  (cost=1.26e+6 rows=4.12e+6)\n        -> Nested loop inner join  (cost=468493 rows=406119)\n            -> Filter: (o.o_carrier_id is not null)  (cost=46141 rows=406119)\n                -> Table scan on o  (cost=46141 rows=451243)\n            -> Single-row covering index lookup on c using PRIMARY (c_w_id = o.o_w_id, c_d_id = o.o_d_id, c_id = o.o_c_id)  (cost=0.94 rows=1)\n        -> Covering index lookup on ol using PRIMARY (ol_w_id = o.o_w_id, ol_d_id = o.o_d_id, ol_o_id = o.o_id)  (cost=0.924 rows=10.1)\n"
+        ]
+      ]
+    },
+    "explain_features": [
+      "explain captured"
+    ]
+  },
+  "comparison_mode": "anomalous_sql"
+}

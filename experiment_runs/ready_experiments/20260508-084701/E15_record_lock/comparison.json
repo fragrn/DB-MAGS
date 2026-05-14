@@ -1,0 +1,71 @@
+{
+  "comparison_status": "completed",
+  "baseline": {
+    "database": "dbmags_tpcc_copy",
+    "probe_sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+    "elapsed_seconds": 0.005652541061863303,
+    "successful_transactions": 1,
+    "failed_transactions": 0,
+    "qps": 176.91158525973805,
+    "avg_latency_ms": 5.652541061863303,
+    "p95_latency_ms": 5.652541061863303,
+    "p99_latency_ms": 5.652541061863303,
+    "single_sql_mean_ms": 5.652541061863303,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": false,
+        "rows": []
+      },
+      "explain_features": []
+    },
+    "comparison_mode": "no_lock"
+  },
+  "post": {
+    "executed": true,
+    "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+    "database": "dbmags_tpcc_copy",
+    "elapsed_seconds": 4.80901862506289,
+    "latency_ms": 4809.01862506289,
+    "single_sql_mean_ms": 4809.01862506289,
+    "db_evidence": {
+      "lock_holder": {
+        "executed": true,
+        "hold_seconds": 5
+      }
+    },
+    "comparison_mode": "verification_replay"
+  },
+  "delta": {
+    "qps_ratio_delta": null,
+    "avg_latency_ratio_delta": null,
+    "p95_latency_ratio_delta": null,
+    "single_sql_ratio_delta": 849.7711085034817,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {
+      "explain": {
+        "validated": false,
+        "rows": []
+      },
+      "explain_features": []
+    },
+    "post": {
+      "lock_holder": {
+        "executed": true,
+        "hold_seconds": 5
+      }
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 176.91158525973805,
+    "post_qps": null,
+    "baseline_p95_latency_ms": 5.652541061863303,
+    "post_p95_latency_ms": null,
+    "baseline_failures": 0,
+    "post_failures": null
+  },
+  "anomaly_confirmed": true,
+  "confirmation_reason": "the same SQL waited much longer when the row-lock holder was active"
+}

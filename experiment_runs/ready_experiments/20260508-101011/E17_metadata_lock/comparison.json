@@ -1,0 +1,71 @@
+{
+  "comparison_status": "completed",
+  "baseline": {
+    "database": "dbmags_tpcc_copy",
+    "probe_sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_033fe210 CHAR(2)",
+    "elapsed_seconds": 0.027127915993332863,
+    "successful_transactions": 1,
+    "failed_transactions": 0,
+    "qps": 36.86239666348741,
+    "avg_latency_ms": 27.127915993332863,
+    "p95_latency_ms": 27.127915993332863,
+    "p99_latency_ms": 27.127915993332863,
+    "single_sql_mean_ms": 27.127915993332863,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": false,
+        "rows": []
+      },
+      "explain_features": []
+    },
+    "comparison_mode": "no_lock",
+    "ddl_latency_ms": 27.127915993332863
+  },
+  "post": {
+    "executed": true,
+    "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_033fe210 CHAR(2)",
+    "database": "dbmags_tpcc_copy",
+    "elapsed_seconds": 4.821700958069414,
+    "latency_ms": 4821.700958069414,
+    "single_sql_mean_ms": 4821.700958069414,
+    "db_evidence": {
+      "metadata_lock_holder": {
+        "executed": true
+      }
+    },
+    "comparison_mode": "verification_replay",
+    "ddl_latency_ms": 4821.700958069414
+  },
+  "delta": {
+    "qps_ratio_delta": null,
+    "avg_latency_ratio_delta": null,
+    "p95_latency_ratio_delta": null,
+    "single_sql_ratio_delta": 176.739453309072,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {
+      "explain": {
+        "validated": false,
+        "rows": []
+      },
+      "explain_features": []
+    },
+    "post": {
+      "metadata_lock_holder": {
+        "executed": true
+      }
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 36.86239666348741,
+    "post_qps": null,
+    "baseline_p95_latency_ms": 27.127915993332863,
+    "post_p95_latency_ms": null,
+    "baseline_failures": 0,
+    "post_failures": null
+  },
+  "anomaly_confirmed": true,
+  "confirmation_reason": "the ALTER TABLE probe waited much longer while a metadata lock holder was active"
+}

@@ -1,0 +1,53 @@
+{
+  "experiment_id": "E08_single_sql",
+  "category": "traffic_surge",
+  "subtype": "single_sql",
+  "database": "dbmags_tpcc_base",
+  "status": "completed",
+  "agent": "traffic_surge",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "traffic-single-sql",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": true,
+              "database": "dbmags_tpcc_base",
+              "duration_seconds": 8.0,
+              "elapsed_seconds": 8.15887354197912,
+              "successful_transactions": 7,
+              "failed_transactions": 0,
+              "qps": 0.8579615756983521,
+              "avg_latency_ms": 1153.2908511414591,
+              "p95_latency_ms": 1197.6772079942748,
+              "p99_latency_ms": 1197.6772079942748,
+              "single_sql_mean_ms": 1153.2908511414591,
+              "thread_count": 12,
+              "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000",
+              "comparison_mode": "task_execution",
+              "probe_sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000",
+              "db_evidence": {}
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=traffic-single-sql",
+          "anomaly=single_sql",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": false,
+    "confirmation_reason": "post workload shows both throughput increase and latency increase"
+  }
+}

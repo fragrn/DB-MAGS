@@ -1,0 +1,51 @@
+{
+  "experiment_id": "E10_cpu",
+  "category": "resource_bottleneck",
+  "subtype": "cpu",
+  "database": "dbmags_tpcc_base",
+  "status": "completed",
+  "agent": "resource_bottleneck",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "resource-cpu",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": true,
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+              "stdout": "{\"code\":200,\"success\":true,\"result\":\"b6a387f06961ecc8\"}",
+              "stderr": "",
+              "returncode": 0,
+              "uid": "b6a387f06961ecc8",
+              "elapsed_seconds": 0.33501012495253235
+            }
+          ],
+          "dynamic_cleanup": [
+            {
+              "cleaned": true,
+              "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy b6a387f06961ecc8"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=resource-cpu",
+          "anomaly=cpu",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": false,
+    "confirmation_reason": "resource injection succeeded, but the verification workload did not show clear degradation"
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "comparison_status": "completed",
+  "baseline": {
+    "executed": true,
+    "database": "dbmags_tpcc_base",
+    "duration_seconds": 8.0,
+    "elapsed_seconds": 8.046838375041261,
+    "successful_transactions": 132,
+    "failed_transactions": 0,
+    "qps": 16.403958156960393,
+    "avg_latency_ms": 10.59596361874631,
+    "p95_latency_ms": 20.7931250333786,
+    "p99_latency_ms": 26.448291959241033,
+    "single_sql_mean_ms": 0.0,
+    "thread_count": 40,
+    "sql": "",
+    "probe_sql": "",
+    "db_evidence": {}
+  },
+  "post": {
+    "executed": true,
+    "database": "dbmags_tpcc_base",
+    "duration_seconds": 8.0,
+    "elapsed_seconds": 8.064106958918273,
+    "successful_transactions": 131,
+    "failed_transactions": 0,
+    "qps": 16.2448242151754,
+    "avg_latency_ms": 10.963022965717464,
+    "p95_latency_ms": 21.80741704069078,
+    "p99_latency_ms": 27.265208074823022,
+    "single_sql_mean_ms": 0.0,
+    "thread_count": 40,
+    "sql": "",
+    "probe_sql": "",
+    "db_evidence": {
+      "chaosblade": {
+        "executed": true,
+        "uid": "5ba868ad550e4029",
+        "cleaned": true,
+        "error": "{\"code\":200,\"success\":true,\"result\":\"5ba868ad550e4029\"}"
+      }
+    },
+    "resource_injection": {
+      "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create disk fill --path /tmp --size 64",
+      "executed": true,
+      "uid": "5ba868ad550e4029",
+      "blade_path": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+      "stdout": "{\"code\":200,\"success\":true,\"result\":\"5ba868ad550e4029\"}"
+    },
+    "resource_cleanup": {
+      "cleaned": true,
+      "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"disk\",\"action\":\"fill\",\"flags\":{\"path\":\"/tmp\",\"size\":\"64\"},\"ActionProcessHang\":false}}",
+      "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 5ba868ad550e4029"
+    },
+    "comparison_mode": "verification_replay"
+  },
+  "delta": {
+    "qps_ratio_delta": -0.009700947799447497,
+    "avg_latency_ratio_delta": 0.034641431414671374,
+    "p95_latency_ratio_delta": 0.04878016198546226,
+    "single_sql_ratio_delta": null,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {},
+    "post": {
+      "chaosblade": {
+        "executed": true,
+        "uid": "5ba868ad550e4029",
+        "cleaned": true,
+        "error": "{\"code\":200,\"success\":true,\"result\":\"5ba868ad550e4029\"}"
+      }
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 16.403958156960393,
+    "post_qps": 16.2448242151754,
+    "baseline_p95_latency_ms": 20.7931250333786,
+    "post_p95_latency_ms": 21.80741704069078,
+    "baseline_failures": 0,
+    "post_failures": 0
+  },
+  "anomaly_confirmed": true,
+  "confirmation_reason": "disk injection succeeded and the workload probe degraded"
+}

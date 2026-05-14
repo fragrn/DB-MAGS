@@ -1,0 +1,84 @@
+{
+  "comparison_status": "environment_blocked",
+  "baseline": {
+    "executed": true,
+    "database": "dbmags_tpcc_base",
+    "duration_seconds": 8.0,
+    "elapsed_seconds": 8.015119999996386,
+    "successful_transactions": 130,
+    "failed_transactions": 0,
+    "qps": 16.21934543713115,
+    "avg_latency_ms": 11.04687946006799,
+    "p95_latency_ms": 21.198667003773153,
+    "p99_latency_ms": 24.800040991976857,
+    "single_sql_mean_ms": 0.0,
+    "thread_count": 40,
+    "sql": "",
+    "probe_sql": "",
+    "db_evidence": {}
+  },
+  "post": {
+    "executed": true,
+    "database": "dbmags_tpcc_base",
+    "duration_seconds": 8.0,
+    "elapsed_seconds": 8.037638125009835,
+    "successful_transactions": 131,
+    "failed_transactions": 0,
+    "qps": 16.298320223248382,
+    "avg_latency_ms": 10.739617998789967,
+    "p95_latency_ms": 22.624125005677342,
+    "p99_latency_ms": 26.407666970044374,
+    "single_sql_mean_ms": 0.0,
+    "thread_count": 40,
+    "sql": "",
+    "probe_sql": "",
+    "db_evidence": {
+      "chaosblade": {
+        "executed": false,
+        "uid": "",
+        "cleaned": false,
+        "error": "{\"code\":52004,\"success\":false,\"error\":\"`iptables`: command not found\"}"
+      }
+    },
+    "resource_injection": {
+      "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create network drop --destination-port 3306 --network-traffic out",
+      "executed": false,
+      "uid": "",
+      "blade_path": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+      "stdout": "{\"code\":52004,\"success\":false,\"error\":\"`iptables`: command not found\"}"
+    },
+    "resource_cleanup": {
+      "cleaned": false,
+      "error": "no uid"
+    },
+    "comparison_mode": "verification_replay"
+  },
+  "delta": {
+    "qps_ratio_delta": 0.004869172213105119,
+    "avg_latency_ratio_delta": -0.02781432189865964,
+    "p95_latency_ratio_delta": 0.06724281303397389,
+    "single_sql_ratio_delta": null,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {},
+    "post": {
+      "chaosblade": {
+        "executed": false,
+        "uid": "",
+        "cleaned": false,
+        "error": "{\"code\":52004,\"success\":false,\"error\":\"`iptables`: command not found\"}"
+      }
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 16.21934543713115,
+    "post_qps": 16.298320223248382,
+    "baseline_p95_latency_ms": 21.198667003773153,
+    "post_p95_latency_ms": 22.624125005677342,
+    "baseline_failures": 0,
+    "post_failures": 0
+  },
+  "anomaly_confirmed": false,
+  "confirmation_reason": "network injection is blocked in the current environment (likely platform or iptables dependency)"
+}

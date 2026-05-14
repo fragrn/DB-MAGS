@@ -1,0 +1,27 @@
+{
+  "database": "dbmags_tpcc_base",
+  "probe_sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_int = 12345;",
+  "elapsed_seconds": 0.003553460235707462,
+  "successful_transactions": 5,
+  "failed_transactions": 0,
+  "qps": 1407.0792040267604,
+  "avg_latency_ms": 0.7106920471414924,
+  "p95_latency_ms": 0.810875091701746,
+  "p99_latency_ms": 0.810875091701746,
+  "single_sql_mean_ms": 0.7106920471414924,
+  "errors": [],
+  "db_evidence": {
+    "explain": {
+      "validated": true,
+      "rows": [
+        [
+          "-> Aggregate: count(0)  (cost=1.33 rows=1)\n    -> Covering index lookup on agent_implicit_conversion_support using idx_customer_id_int (customer_id_int = 12345)  (cost=1.1 rows=1)\n"
+        ]
+      ]
+    },
+    "explain_features": [
+      "explain captured"
+    ]
+  },
+  "comparison_mode": "control_sql"
+}

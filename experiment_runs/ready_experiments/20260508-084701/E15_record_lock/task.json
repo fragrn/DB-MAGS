@@ -1,0 +1,29 @@
+{
+  "tasks": [
+    {
+      "task_id": "lock-record-lock",
+      "agent_type": "lock_conflict",
+      "anomaly_type": "record_lock",
+      "title": "Hold a row-level write lock on new_orders.",
+      "inputs": {
+        "database": "dbmags_tpcc_copy",
+        "anomaly_subtype": "record_lock",
+        "source_agent": "lock_conflict",
+        "column_name": "agent_meta_lock_f0de0429",
+        "duration_seconds": 5
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "hold_sql",
+          "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+          "database": "dbmags_tpcc_copy",
+          "hold_seconds": 5
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected record_lock from request constraints."
+    }
+  ]
+}

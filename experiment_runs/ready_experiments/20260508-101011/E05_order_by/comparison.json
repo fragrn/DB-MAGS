@@ -1,0 +1,102 @@
+{
+  "comparison_status": "completed",
+  "baseline": {
+    "database": "dbmags_tpcc_base",
+    "probe_sql": "SELECT * FROM agent_order_by_support LIMIT 5000;",
+    "elapsed_seconds": 0.0837442500051111,
+    "successful_transactions": 3,
+    "failed_transactions": 0,
+    "qps": 35.82335503412955,
+    "avg_latency_ms": 27.9147500017037,
+    "p95_latency_ms": 30.94575006980449,
+    "p99_latency_ms": 30.94575006980449,
+    "single_sql_mean_ms": 27.9147500017037,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Limit: 5000 row(s)  (cost=467340 rows=5000)\n    -> Table scan on agent_order_by_support  (cost=467340 rows=4.48e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "comparison_mode": "control_sql"
+  },
+  "post": {
+    "database": "dbmags_tpcc_base",
+    "probe_sql": "SELECT * FROM agent_order_by_support ORDER BY ol_amount DESC, ol_dist_info ASC LIMIT 5000;",
+    "elapsed_seconds": 10.568242916022427,
+    "successful_transactions": 3,
+    "failed_transactions": 0,
+    "qps": 0.2838693266079004,
+    "avg_latency_ms": 3522.7476386741423,
+    "p95_latency_ms": 3532.7719160122797,
+    "p99_latency_ms": 3532.7719160122797,
+    "single_sql_mean_ms": 3522.7476386741423,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Limit: 5000 row(s)  (cost=467340 rows=5000)\n    -> Sort: agent_order_by_support.ol_amount DESC, agent_order_by_support.ol_dist_info, limit input to 5000 row(s) per chunk  (cost=467340 rows=4.48e+6)\n        -> Table scan on agent_order_by_support  (cost=467340 rows=4.48e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "comparison_mode": "anomalous_sql"
+  },
+  "delta": {
+    "qps_ratio_delta": -0.9920758587145885,
+    "avg_latency_ratio_delta": 125.19663935586532,
+    "p95_latency_ratio_delta": 113.16016441816365,
+    "single_sql_ratio_delta": 125.19663935586532,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Limit: 5000 row(s)  (cost=467340 rows=5000)\n    -> Table scan on agent_order_by_support  (cost=467340 rows=4.48e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "post": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Limit: 5000 row(s)  (cost=467340 rows=5000)\n    -> Sort: agent_order_by_support.ol_amount DESC, agent_order_by_support.ol_dist_info, limit input to 5000 row(s) per chunk  (cost=467340 rows=4.48e+6)\n        -> Table scan on agent_order_by_support  (cost=467340 rows=4.48e+6)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 35.82335503412955,
+    "post_qps": 0.2838693266079004,
+    "baseline_p95_latency_ms": 30.94575006980449,
+    "post_p95_latency_ms": 3532.7719160122797,
+    "baseline_failures": 0,
+    "post_failures": 0
+  },
+  "anomaly_confirmed": false,
+  "confirmation_reason": "order-by probe did not show both slowdown and filesort evidence"
+}

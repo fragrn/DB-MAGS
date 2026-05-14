@@ -1,0 +1,66 @@
+{
+  "experiment_id": "E06_group_by",
+  "category": "slow_sql",
+  "subtype": "group_by",
+  "database": "dbmags_tpcc_base",
+  "status": "executed_but_not_validated",
+  "agent": "slow_sql",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "slow-sql-group-by",
+        "status": "executed_but_not_validated",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [
+            {
+              "kind": "explain",
+              "sql": "SELECT ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_i_id ORDER BY SUM(ol_amount) DESC;",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Sort: SUM(ol_amount) DESC\n    -> Table scan on <temporary>\n        -> Aggregate using temporary table\n            -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+                  ]
+                ]
+              }
+            },
+            {
+              "kind": "support_tables",
+              "result": {
+                "created_tables": [
+                  "agent_order_by_support",
+                  "agent_group_by_support",
+                  "agent_large_scan_support"
+                ]
+              }
+            }
+          ],
+          "execution": [
+            {
+              "executed": true,
+              "sql": "SELECT ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_i_id ORDER BY SUM(ol_amount) DESC;",
+              "database": "dbmags_tpcc_base",
+              "elapsed_seconds": 2.768798124976456,
+              "latency_ms": 2768.798124976456,
+              "single_sql_mean_ms": 2768.798124976456
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=slow-sql-group-by",
+          "anomaly=group_by",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": true,
+    "confirmation_reason": "group-by query is slower than the aggregate control and EXPLAIN shows temporary/filesort work"
+  }
+}

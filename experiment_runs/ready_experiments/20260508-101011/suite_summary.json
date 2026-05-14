@@ -1,0 +1,980 @@
+{
+  "generated_at": "2026-05-08T10:10:11.205434+00:00",
+  "db_base": "dbmags_tpcc_base",
+  "db_copy": "dbmags_tpcc_copy",
+  "model": "gpt-5",
+  "openai_available": true,
+  "execution_mode": "sequential",
+  "comparison_strategy": "same_script_before_after",
+  "experiments": [
+    {
+      "experiment_id": "E01_missing_index",
+      "category": "slow_sql",
+      "subtype": "missing_index",
+      "database": "dbmags_tpcc_base",
+      "status": "completed",
+      "agent": "slow_sql",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "slow-sql-missing-index",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+                  "result": {
+                    "validated": true,
+                    "rows": [
+                      [
+                        "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+                      ]
+                    ]
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+                  "database": "dbmags_tpcc_base",
+                  "elapsed_seconds": 1.1462040409678593,
+                  "latency_ms": 1146.2040409678593,
+                  "single_sql_mean_ms": 1146.2040409678593
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=slow-sql-missing-index",
+              "anomaly=missing_index",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "post SQL is slower than baseline control SQL and EXPLAIN shows slow-path evidence"
+      }
+    },
+    {
+      "experiment_id": "E02_excessive_index",
+      "category": "slow_sql",
+      "subtype": "excessive_index",
+      "database": "dbmags_tpcc_base",
+      "status": "executed_but_not_validated",
+      "agent": "slow_sql",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "slow-sql-excessive-index",
+            "status": "executed_but_not_validated",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [
+                {
+                  "kind": "support_table",
+                  "result": {
+                    "table": "agent_excessive_index"
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "CREATE TABLE IF NOT EXISTS agent_excessive_index AS SELECT o_id, o_c_id, o_carrier_id, o_ol_cnt FROM orders LIMIT 50000",
+                  "database": "dbmags_tpcc_base",
+                  "elapsed_seconds": 0.17987341701518744,
+                  "latency_ms": 179.87341701518744,
+                  "single_sql_mean_ms": 179.87341701518744
+                },
+                {
+                  "executed": true,
+                  "sql": "UPDATE agent_excessive_index SET o_ol_cnt = o_ol_cnt + 1 WHERE o_c_id > 1000",
+                  "database": "dbmags_tpcc_base",
+                  "elapsed_seconds": 0.12116379104554653,
+                  "latency_ms": 121.16379104554653,
+                  "single_sql_mean_ms": 121.16379104554653
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=slow-sql-excessive-index",
+              "anomaly=excessive_index",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": false,
+        "confirmation_reason": "redundant-index workload did not show enough write overhead compared with the control table"
+      }
+    },
+    {
+      "experiment_id": "E03_implicit_conversion",
+      "category": "slow_sql",
+      "subtype": "implicit_conversion",
+      "database": "dbmags_tpcc_base",
+      "status": "executed_but_not_validated",
+      "agent": "slow_sql",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "slow-sql-implicit-conversion",
+            "status": "executed_but_not_validated",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+                  "result": {
+                    "validated": true,
+                    "rows": [
+                      [
+                        "-> Aggregate: count(0)  (cost=18825 rows=1)\n    -> Filter: (agent_implicit_conversion_support.customer_id_varchar = 12345)  (cost=15377 rows=14961)\n        -> Covering index scan on agent_implicit_conversion_support using idx_customer_id_varchar  (cost=15377 rows=149612)\n"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "kind": "support_tables",
+                  "result": {
+                    "created_tables": [
+                      "agent_implicit_conversion_support"
+                    ]
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "SELECT COUNT(*) FROM agent_implicit_conversion_support WHERE customer_id_varchar = 12345;",
+                  "database": "dbmags_tpcc_base",
+                  "elapsed_seconds": 0.06280791701283306,
+                  "latency_ms": 62.80791701283306,
+                  "single_sql_mean_ms": 62.80791701283306
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=slow-sql-implicit-conversion",
+              "anomaly=implicit_conversion",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "implicit-conversion SQL is slower than the typed control SQL and EXPLAIN captured degraded access"
+      }
+    },
+    {
+      "experiment_id": "E04_multi_table_join",
+      "category": "slow_sql",
+      "subtype": "multi_table_join",
+      "database": "dbmags_tpcc_base",
+      "status": "completed",
+      "agent": "slow_sql",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "slow-sql-multi-table-join",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "SELECT COUNT(*) FROM orders o JOIN order_line ol ON o.o_w_id = ol.ol_w_id AND o.o_d_id = ol.ol_d_id AND o.o_id = ol.ol_o_id JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id WHERE o.o_carrier_id IS NOT NULL;",
+                  "result": {
+                    "validated": true,
+                    "rows": [
+                      [
+                        "-> Aggregate: count(0)  (cost=2.27e+6 rows=1)\n    -> Nested loop inner join  (cost=1.32e+6 rows=4.12e+6)\n        -> Nested loop inner join  (cost=492883 rows=406119)\n            -> Filter: (o.o_carrier_id is not null)  (cost=46170 rows=406119)\n                -> Table scan on o  (cost=46170 rows=451243)\n            -> Single-row covering index lookup on c using PRIMARY (c_w_id = o.o_w_id, c_d_id = o.o_d_id, c_id = o.o_c_id)  (cost=1 rows=1)\n        -> Covering index lookup on ol using PRIMARY (ol_w_id = o.o_w_id, ol_d_id = o.o_d_id, ol_o_id = o.o_id)  (cost=1.02 rows=10.1)\n"
+                      ]
+                    ]
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "SELECT COUNT(*) FROM orders o JOIN order_line ol ON o.o_w_id = ol.ol_w_id AND o.o_d_id = ol.ol_d_id AND o.o_id = ol.ol_o_id JOIN customer c ON c.c_w_id = o.o_w_id AND c.c_d_id = o.o_d_id AND c.c_id = o.o_c_id WHERE o.o_carrier_id IS NOT NULL;",
+                  "database": "dbmags_tpcc_base",
+                  "elapsed_seconds": 2.0840095001040027,
+                  "latency_ms": 2084.0095001040027,
+                  "single_sql_mean_ms": 2084.0095001040027
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=slow-sql-multi-table-join",
+              "anomaly=multi_table_join",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "the wider join is slower than the two-table control join"
+      }
+    },
+    {
+      "experiment_id": "E05_order_by",
+      "category": "slow_sql",
+      "subtype": "order_by",
+      "database": "dbmags_tpcc_base",
+      "status": "executed_but_not_validated",
+      "agent": "slow_sql",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "slow-sql-order-by",
+            "status": "executed_but_not_validated",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "SELECT * FROM agent_order_by_support ORDER BY ol_amount DESC, ol_dist_info ASC LIMIT 5000;",
+                  "result": {
+                    "validated": true,
+                    "rows": [
+                      [
+                        "-> Limit: 5000 row(s)  (cost=467340 rows=5000)\n    -> Sort: agent_order_by_support.ol_amount DESC, agent_order_by_support.ol_dist_info, limit input to 5000 row(s) per chunk  (cost=467340 rows=4.48e+6)\n        -> Table scan on agent_order_by_support  (cost=467340 rows=4.48e+6)\n"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "kind": "support_tables",
+                  "result": {
+                    "created_tables": [
+                      "agent_order_by_support",
+                      "agent_group_by_support",
+                      "agent_large_scan_support"
+                    ]
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "SELECT * FROM agent_order_by_support ORDER BY ol_amount DESC, ol_dist_info ASC LIMIT 5000;",
+                  "database": "dbmags_tpcc_base",
+                  "elapsed_seconds": 3.79820895800367,
+                  "latency_ms": 3798.20895800367,
+                  "single_sql_mean_ms": 3798.20895800367
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=slow-sql-order-by",
+              "anomaly=order_by",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": false,
+        "confirmation_reason": "order-by probe did not show both slowdown and filesort evidence"
+      }
+    },
+    {
+      "experiment_id": "E06_group_by",
+      "category": "slow_sql",
+      "subtype": "group_by",
+      "database": "dbmags_tpcc_base",
+      "status": "executed_but_not_validated",
+      "agent": "slow_sql",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "slow-sql-group-by",
+            "status": "executed_but_not_validated",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "SELECT ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_i_id ORDER BY SUM(ol_amount) DESC;",
+                  "result": {
+                    "validated": true,
+                    "rows": [
+                      [
+                        "-> Sort: SUM(ol_amount) DESC\n    -> Table scan on <temporary>\n        -> Aggregate using temporary table\n            -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "kind": "support_tables",
+                  "result": {
+                    "created_tables": [
+                      "agent_order_by_support",
+                      "agent_group_by_support",
+                      "agent_large_scan_support"
+                    ]
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "SELECT ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_i_id ORDER BY SUM(ol_amount) DESC;",
+                  "database": "dbmags_tpcc_base",
+                  "elapsed_seconds": 2.768798124976456,
+                  "latency_ms": 2768.798124976456,
+                  "single_sql_mean_ms": 2768.798124976456
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=slow-sql-group-by",
+              "anomaly=group_by",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "group-by query is slower than the aggregate control and EXPLAIN shows temporary/filesort work"
+      }
+    },
+    {
+      "experiment_id": "E07_large_table_scan",
+      "category": "slow_sql",
+      "subtype": "large_table_scan",
+      "database": "dbmags_tpcc_base",
+      "status": "executed_but_not_validated",
+      "agent": "slow_sql",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "slow-sql-large-table-scan",
+            "status": "executed_but_not_validated",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [
+                {
+                  "kind": "explain",
+                  "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+                  "result": {
+                    "validated": true,
+                    "rows": [
+                      [
+                        "-> Aggregate: count(0)  (cost=65905 rows=1)\n    -> Filter: (agent_large_scan_support.c_credit in ('BC','GC'))  (cost=45253 rows=89631)\n        -> Table scan on agent_large_scan_support  (cost=45253 rows=448157)\n"
+                      ]
+                    ]
+                  }
+                },
+                {
+                  "kind": "support_tables",
+                  "result": {
+                    "created_tables": [
+                      "agent_order_by_support",
+                      "agent_group_by_support",
+                      "agent_large_scan_support"
+                    ]
+                  }
+                }
+              ],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+                  "database": "dbmags_tpcc_base",
+                  "elapsed_seconds": 0.1891425420762971,
+                  "latency_ms": 189.1425420762971,
+                  "single_sql_mean_ms": 189.1425420762971
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=slow-sql-large-table-scan",
+              "anomaly=large_table_scan",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "large-table scan is slower than the point lookup control and EXPLAIN shows scan-heavy access"
+      }
+    },
+    {
+      "experiment_id": "E08_single_sql",
+      "category": "traffic_surge",
+      "subtype": "single_sql",
+      "database": "dbmags_tpcc_base",
+      "status": "completed",
+      "agent": "traffic_surge",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "traffic-single-sql",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "database": "dbmags_tpcc_base",
+                  "duration_seconds": 8.0,
+                  "elapsed_seconds": 8.017223917064257,
+                  "successful_transactions": 7,
+                  "failed_transactions": 0,
+                  "qps": 0.8731201813012672,
+                  "avg_latency_ms": 1131.392827407191,
+                  "p95_latency_ms": 1135.1755840005353,
+                  "p99_latency_ms": 1135.1755840005353,
+                  "single_sql_mean_ms": 1131.392827407191,
+                  "thread_count": 12,
+                  "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000",
+                  "comparison_mode": "task_execution",
+                  "probe_sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000",
+                  "db_evidence": {}
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=traffic-single-sql",
+              "anomaly=single_sql",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "post workload shows both throughput increase and latency increase"
+      }
+    },
+    {
+      "experiment_id": "E09_overall_workload",
+      "category": "traffic_surge",
+      "subtype": "overall_workload",
+      "database": "dbmags_tpcc_base",
+      "status": "completed",
+      "agent": "traffic_surge",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "traffic-overall-workload",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "database": "dbmags_tpcc_base",
+                  "duration_seconds": 8.0,
+                  "elapsed_seconds": 8.009510291041806,
+                  "successful_transactions": 519,
+                  "failed_transactions": 0,
+                  "qps": 64.79796905691884,
+                  "avg_latency_ms": 8.495948310611277,
+                  "p95_latency_ms": 19.20454192440957,
+                  "p99_latency_ms": 25.32562508713454,
+                  "single_sql_mean_ms": 0.0,
+                  "thread_count": 500,
+                  "sql": "",
+                  "comparison_mode": "task_execution",
+                  "probe_sql": "",
+                  "db_evidence": {}
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=traffic-overall-workload",
+              "anomaly=overall_workload",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": false,
+        "confirmation_reason": "post workload changed throughput, but latency did not rise together with it"
+      }
+    },
+    {
+      "experiment_id": "E10_cpu",
+      "category": "resource_bottleneck",
+      "subtype": "cpu",
+      "database": "dbmags_tpcc_base",
+      "status": "completed",
+      "agent": "resource_bottleneck",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "resource-cpu",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":\"b6a387f06961ecc8\"}",
+                  "stderr": "",
+                  "returncode": 0,
+                  "uid": "b6a387f06961ecc8",
+                  "elapsed_seconds": 0.33501012495253235
+                }
+              ],
+              "dynamic_cleanup": [
+                {
+                  "cleaned": true,
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy b6a387f06961ecc8"
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=resource-cpu",
+              "anomaly=cpu",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": false,
+        "confirmation_reason": "resource injection succeeded, but the verification workload did not show clear degradation"
+      }
+    },
+    {
+      "experiment_id": "E11_io",
+      "category": "resource_bottleneck",
+      "subtype": "io",
+      "database": "dbmags_tpcc_base",
+      "status": "completed",
+      "agent": "resource_bottleneck",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "resource-io",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create disk burn --read --path /home",
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":\"e94c56f6e61c8d9a\"}",
+                  "stderr": "",
+                  "returncode": 0,
+                  "uid": "e94c56f6e61c8d9a",
+                  "elapsed_seconds": 0.2654519999632612
+                }
+              ],
+              "dynamic_cleanup": [
+                {
+                  "cleaned": true,
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"disk\",\"action\":\"burn\",\"flags\":{\"path\":\"/home\",\"read\":\"true\"},\"ActionProcessHang\":false}}",
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy e94c56f6e61c8d9a"
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=resource-io",
+              "anomaly=io",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": false,
+        "confirmation_reason": "io injection succeeded, but the workload probe did not show clear degradation"
+      }
+    },
+    {
+      "experiment_id": "E12_network",
+      "category": "resource_bottleneck",
+      "subtype": "network",
+      "database": "dbmags_tpcc_base",
+      "status": "partial_failure",
+      "agent": "resource_bottleneck",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "resource-network",
+            "status": "failed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": false,
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create network drop --destination-port 3306 --network-traffic out",
+                  "stdout": "",
+                  "stderr": "{\"code\":52004,\"success\":false,\"error\":\"`iptables`: command not found\"}",
+                  "returncode": 1,
+                  "uid": "",
+                  "elapsed_seconds": 0.1691322079859674
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=resource-network",
+              "anomaly=network"
+            ],
+            "errors": [
+              "step failed: {'kind': 'shell', 'command': '/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create network drop --destination-port 3306 --network-traffic out', 'database': 'dbmags_tpcc_base'}"
+            ],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [
+        "step failed: {'kind': 'shell', 'command': '/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create network drop --destination-port 3306 --network-traffic out', 'database': 'dbmags_tpcc_base'}"
+      ],
+      "comparison": {
+        "comparison_status": "environment_blocked",
+        "anomaly_confirmed": false,
+        "confirmation_reason": "network injection is blocked in the current environment (likely platform or iptables dependency)"
+      }
+    },
+    {
+      "experiment_id": "E13_memory",
+      "category": "resource_bottleneck",
+      "subtype": "memory",
+      "database": "dbmags_tpcc_base",
+      "status": "completed",
+      "agent": "resource_bottleneck",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "resource-memory",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade c mem load --mem-percent 70",
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":\"7b5618faeebfe526\"}",
+                  "stderr": "",
+                  "returncode": 0,
+                  "uid": "7b5618faeebfe526",
+                  "elapsed_seconds": 0.2583169159479439
+                }
+              ],
+              "dynamic_cleanup": [
+                {
+                  "cleaned": true,
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"mem\",\"action\":\"load\",\"flags\":{\"mem-percent\":\"70\"},\"ActionProcessHang\":false}}",
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 7b5618faeebfe526"
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=resource-memory",
+              "anomaly=memory",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "memory injection succeeded and the workload probe degraded"
+      }
+    },
+    {
+      "experiment_id": "E14_disk",
+      "category": "resource_bottleneck",
+      "subtype": "disk",
+      "database": "dbmags_tpcc_base",
+      "status": "completed",
+      "agent": "resource_bottleneck",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "resource-disk",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create disk fill --path /tmp --size 64",
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":\"02d76a81b65ce0b1\"}",
+                  "stderr": "",
+                  "returncode": 0,
+                  "uid": "02d76a81b65ce0b1",
+                  "elapsed_seconds": 0.17861324991099536
+                }
+              ],
+              "dynamic_cleanup": [
+                {
+                  "cleaned": true,
+                  "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"disk\",\"action\":\"fill\",\"flags\":{\"path\":\"/tmp\",\"size\":\"64\"},\"ActionProcessHang\":false}}",
+                  "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 02d76a81b65ce0b1"
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=resource-disk",
+              "anomaly=disk",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "disk injection succeeded and the workload probe degraded"
+      }
+    },
+    {
+      "experiment_id": "E15_record_lock",
+      "category": "lock_conflict",
+      "subtype": "record_lock",
+      "database": "dbmags_tpcc_copy",
+      "status": "completed",
+      "agent": "lock_conflict",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "lock-record-lock",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+                  "database": "dbmags_tpcc_copy",
+                  "hold_seconds": 5.0,
+                  "elapsed_seconds": 5.013383083045483,
+                  "latency_ms": 5013.383083045483
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=lock-record-lock",
+              "anomaly=record_lock",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "the same SQL waited much longer when the row-lock holder was active"
+      }
+    },
+    {
+      "experiment_id": "E16_table_lock",
+      "category": "lock_conflict",
+      "subtype": "table_lock",
+      "database": "dbmags_tpcc_copy",
+      "status": "completed",
+      "agent": "lock_conflict",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "lock-table-lock",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "LOCK TABLES new_orders WRITE",
+                  "database": "dbmags_tpcc_copy",
+                  "hold_seconds": 5.0,
+                  "elapsed_seconds": 5.002097625052556,
+                  "latency_ms": 5002.097625052556
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=lock-table-lock",
+              "anomaly=table_lock",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "the read probe waited much longer while the WRITE lock was held"
+      }
+    },
+    {
+      "experiment_id": "E17_metadata_lock",
+      "category": "lock_conflict",
+      "subtype": "metadata_lock",
+      "database": "dbmags_tpcc_copy",
+      "status": "completed",
+      "agent": "lock_conflict",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "lock-metadata-lock",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "ALTER TABLE new_orders ADD COLUMN agent_meta_lock_033fe210 CHAR(2)",
+                  "database": "dbmags_tpcc_copy",
+                  "elapsed_seconds": 0.014455209020525217,
+                  "latency_ms": 14.455209020525217,
+                  "single_sql_mean_ms": 14.455209020525217
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=lock-metadata-lock",
+              "anomaly=metadata_lock",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": true,
+        "confirmation_reason": "the ALTER TABLE probe waited much longer while a metadata lock holder was active"
+      }
+    },
+    {
+      "experiment_id": "E18_database_table_backup",
+      "category": "database_backup",
+      "subtype": "database_table_backup",
+      "database": "dbmags_tpcc_copy",
+      "status": "completed",
+      "agent": "database_backup",
+      "artifacts": {
+        "task_results": [
+          {
+            "task_id": "backup-orders",
+            "status": "completed",
+            "artifacts": {
+              "prechecks": [],
+              "validation": [],
+              "execution": [
+                {
+                  "executed": true,
+                  "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+                  "database": "dbmags_tpcc_copy",
+                  "elapsed_seconds": 0.00729395798407495,
+                  "latency_ms": 7.29395798407495,
+                  "single_sql_mean_ms": 7.29395798407495
+                },
+                {
+                  "executed": true,
+                  "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+                  "database": "dbmags_tpcc_copy",
+                  "elapsed_seconds": 1.7162170830415562,
+                  "latency_ms": 1716.2170830415562,
+                  "single_sql_mean_ms": 1716.2170830415562
+                }
+              ]
+            },
+            "observed_signals": [
+              "task=backup-orders",
+              "anomaly=database_table_backup",
+              "executed=true"
+            ],
+            "errors": [],
+            "cleanup_status": "completed"
+          }
+        ]
+      },
+      "errors": [],
+      "comparison": {
+        "comparison_status": "completed",
+        "anomaly_confirmed": false,
+        "confirmation_reason": "backup table creation did not complete or the copied row counts did not match"
+      }
+    }
+  ]
+}

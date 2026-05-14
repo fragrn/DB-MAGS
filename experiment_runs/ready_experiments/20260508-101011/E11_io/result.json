@@ -1,0 +1,51 @@
+{
+  "experiment_id": "E11_io",
+  "category": "resource_bottleneck",
+  "subtype": "io",
+  "database": "dbmags_tpcc_base",
+  "status": "completed",
+  "agent": "resource_bottleneck",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "resource-io",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": true,
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create disk burn --read --path /home",
+              "stdout": "{\"code\":200,\"success\":true,\"result\":\"e94c56f6e61c8d9a\"}",
+              "stderr": "",
+              "returncode": 0,
+              "uid": "e94c56f6e61c8d9a",
+              "elapsed_seconds": 0.2654519999632612
+            }
+          ],
+          "dynamic_cleanup": [
+            {
+              "cleaned": true,
+              "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"disk\",\"action\":\"burn\",\"flags\":{\"path\":\"/home\",\"read\":\"true\"},\"ActionProcessHang\":false}}",
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy e94c56f6e61c8d9a"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=resource-io",
+          "anomaly=io",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": false,
+    "confirmation_reason": "io injection succeeded, but the workload probe did not show clear degradation"
+  }
+}

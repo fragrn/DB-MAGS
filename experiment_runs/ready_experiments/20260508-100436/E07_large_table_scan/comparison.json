@@ -1,0 +1,102 @@
+{
+  "comparison_status": "completed",
+  "baseline": {
+    "database": "dbmags_tpcc_base",
+    "probe_sql": "SELECT COUNT(*) FROM customer WHERE c_w_id = 1 AND c_d_id = 1 AND c_id = 1;",
+    "elapsed_seconds": 0.008332374156452715,
+    "successful_transactions": 5,
+    "failed_transactions": 0,
+    "qps": 600.0690686852948,
+    "avg_latency_ms": 1.666474831290543,
+    "p95_latency_ms": 2.9345410875976086,
+    "p99_latency_ms": 2.9345410875976086,
+    "single_sql_mean_ms": 1.666474831290543,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Aggregate: count(0)  (cost=0.23..0.23 rows=1)\n    -> Rows fetched before execution  (cost=0..0 rows=1)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "comparison_mode": "control_sql"
+  },
+  "post": {
+    "database": "dbmags_tpcc_base",
+    "probe_sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+    "elapsed_seconds": 0.8417557061184198,
+    "successful_transactions": 5,
+    "failed_transactions": 0,
+    "qps": 5.939965673718392,
+    "avg_latency_ms": 168.35114122368395,
+    "p95_latency_ms": 168.91404101625085,
+    "p99_latency_ms": 168.91404101625085,
+    "single_sql_mean_ms": 168.35114122368395,
+    "errors": [],
+    "db_evidence": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Aggregate: count(0)  (cost=65905 rows=1)\n    -> Filter: (agent_large_scan_support.c_credit in ('BC','GC'))  (cost=45253 rows=89631)\n        -> Table scan on agent_large_scan_support  (cost=45253 rows=448157)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "comparison_mode": "anomalous_sql"
+  },
+  "delta": {
+    "qps_ratio_delta": -0.9901011967060186,
+    "avg_latency_ratio_delta": 100.02231252620257,
+    "p95_latency_ratio_delta": 56.56063247168027,
+    "single_sql_ratio_delta": 100.02231252620257,
+    "failure_delta": 0
+  },
+  "db_evidence": {
+    "baseline": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Aggregate: count(0)  (cost=0.23..0.23 rows=1)\n    -> Rows fetched before execution  (cost=0..0 rows=1)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    },
+    "post": {
+      "explain": {
+        "validated": true,
+        "rows": [
+          [
+            "-> Aggregate: count(0)  (cost=65905 rows=1)\n    -> Filter: (agent_large_scan_support.c_credit in ('BC','GC'))  (cost=45253 rows=89631)\n        -> Table scan on agent_large_scan_support  (cost=45253 rows=448157)\n"
+          ]
+        ]
+      },
+      "explain_features": [
+        "explain captured"
+      ]
+    }
+  },
+  "workload_evidence": {
+    "baseline_qps": 600.0690686852948,
+    "post_qps": 5.939965673718392,
+    "baseline_p95_latency_ms": 2.9345410875976086,
+    "post_p95_latency_ms": 168.91404101625085,
+    "baseline_failures": 0,
+    "post_failures": 0
+  },
+  "anomaly_confirmed": true,
+  "confirmation_reason": "large-table scan is slower than the point lookup control and EXPLAIN shows scan-heavy access"
+}

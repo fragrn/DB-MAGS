@@ -1,0 +1,51 @@
+{
+  "experiment_id": "E13_memory",
+  "category": "resource_bottleneck",
+  "subtype": "memory",
+  "database": "dbmags_tpcc_base",
+  "status": "completed",
+  "agent": "resource_bottleneck",
+  "artifacts": {
+    "task_results": [
+      {
+        "task_id": "resource-memory",
+        "status": "completed",
+        "artifacts": {
+          "prechecks": [],
+          "validation": [],
+          "execution": [
+            {
+              "executed": true,
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade c mem load --mem-percent 70",
+              "stdout": "{\"code\":200,\"success\":true,\"result\":\"fb777fd91eca61df\"}",
+              "stderr": "",
+              "returncode": 0,
+              "uid": "fb777fd91eca61df",
+              "elapsed_seconds": 0.25594154198188335
+            }
+          ],
+          "dynamic_cleanup": [
+            {
+              "cleaned": true,
+              "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"mem\",\"action\":\"load\",\"flags\":{\"mem-percent\":\"70\"},\"ActionProcessHang\":false}}",
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy fb777fd91eca61df"
+            }
+          ]
+        },
+        "observed_signals": [
+          "task=resource-memory",
+          "anomaly=memory",
+          "executed=true"
+        ],
+        "errors": [],
+        "cleanup_status": "completed"
+      }
+    ]
+  },
+  "errors": [],
+  "comparison": {
+    "comparison_status": "completed",
+    "anomaly_confirmed": true,
+    "confirmation_reason": "memory injection succeeded and the workload probe degraded"
+  }
+}

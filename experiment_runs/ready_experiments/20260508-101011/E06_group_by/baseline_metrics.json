@@ -1,0 +1,27 @@
+{
+  "database": "dbmags_tpcc_base",
+  "probe_sql": "SELECT SUM(ol_amount) FROM agent_group_by_support;",
+  "elapsed_seconds": 3.718205625889823,
+  "successful_transactions": 3,
+  "failed_transactions": 0,
+  "qps": 0.8068407995273404,
+  "avg_latency_ms": 1239.4018752966076,
+  "p95_latency_ms": 1249.3399590021,
+  "p99_latency_ms": 1249.3399590021,
+  "single_sql_mean_ms": 1239.4018752966076,
+  "errors": [],
+  "db_evidence": {
+    "explain": {
+      "validated": true,
+      "rows": [
+        [
+          "-> Aggregate: sum(agent_group_by_support.ol_amount)  (cost=1.49e+6 rows=1)\n    -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+        ]
+      ]
+    },
+    "explain_features": [
+      "explain captured"
+    ]
+  },
+  "comparison_mode": "control_sql"
+}
