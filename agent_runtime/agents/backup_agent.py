@@ -34,6 +34,7 @@ class BackupAgent(BaseTaskAgent):
                     agent_type=self.agent_type,
                     anomaly_type=planned_task.anomaly_subtype,
                     title=payload["title"],
+                    task_role="backup_job",
                     inputs={
                         "database": planned_task.database,
                         "anomaly_subtype": planned_task.anomaly_subtype,

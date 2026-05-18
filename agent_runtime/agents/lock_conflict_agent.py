@@ -30,8 +30,9 @@ class LockConflictAgent(BaseTaskAgent):
             payload = preparer.execute(
                 anomaly_subtype=planned_task.anomaly_subtype,
                 database=planned_task.database,
-                duration_seconds=min(max(request.execution_window_seconds, 1), 10),
+                duration_seconds=int(planned_task.parameters.get("background_duration_seconds", min(max(request.execution_window_seconds, 1), 12))),
                 column_name=str(column_name),
+                multi_mode=request.mode != "single",
             )
             task_specs.append(
                 TaskSpec(
@@ -39,6 +40,7 @@ class LockConflictAgent(BaseTaskAgent):
                     agent_type=self.agent_type,
                     anomaly_type=planned_task.anomaly_subtype,
                     title=payload["title"],
+                    task_role="lock_holder",
                     inputs={
                         "database": planned_task.database,
                         "anomaly_subtype": planned_task.anomaly_subtype,

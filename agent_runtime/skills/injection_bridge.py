@@ -19,6 +19,8 @@ class RunInjectionSkill(Skill):
             return self._run_sql(step)
         if kind == "hold_sql":
             return self._run_hold_sql(step)
+        if kind == "hold_metadata_lock":
+            return self._run_hold_metadata_lock(step)
         if kind == "shell":
             return self._run_shell(step)
         if kind == "workload_profile":
@@ -85,6 +87,33 @@ class RunInjectionSkill(Skill):
                 "error": str(exc),
                 "elapsed_seconds": time.perf_counter() - started,
             }
+
+
+    @staticmethod
+    def _run_hold_metadata_lock(step: Dict[str, object]) -> Dict[str, object]:
+        database = step.get("database")
+        hold_seconds = float(step.get("hold_seconds", 5))
+        sql = str(step.get("sql", "SELECT 1"))
+        started = time.perf_counter()
+        try:
+            with db_cursor(database=str(database) if database else None) as (conn, cur):
+                cur.execute("SET autocommit = 0")
+                cur.execute("START TRANSACTION")
+                cur.execute(sql)
+                time.sleep(max(hold_seconds, 0.0))
+                conn.commit()
+            elapsed = time.perf_counter() - started
+            return {
+                "executed": True,
+                "sql": sql,
+                "database": database,
+                "hold_seconds": hold_seconds,
+                "elapsed_seconds": elapsed,
+                "latency_ms": elapsed * 1000.0,
+                "single_sql_mean_ms": elapsed * 1000.0,
+            }
+        except Exception as exc:
+            return {"executed": False, "sql": sql, "database": database, "error": str(exc)}
 
     @staticmethod
     def _run_shell(step: Dict[str, object]) -> Dict[str, object]:

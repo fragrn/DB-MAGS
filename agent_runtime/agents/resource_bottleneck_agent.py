@@ -32,6 +32,7 @@ class ResourceBottleneckAgent(BaseTaskAgent):
                     agent_type=self.agent_type,
                     anomaly_type=planned_task.anomaly_subtype,
                     title=f"Resource bottleneck: {planned_task.anomaly_subtype}",
+                    task_role="resource_injection",
                     inputs={
                         "database": planned_task.database,
                         "anomaly_subtype": planned_task.anomaly_subtype,

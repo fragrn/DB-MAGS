@@ -14,7 +14,21 @@ class PrepareLockSQLSkill(Skill):
         database: str,
         duration_seconds: int = 5,
         column_name: str = "agent_meta_lock_run",
+        multi_mode: bool = False,
     ) -> Dict[str, object]:
+        if anomaly_subtype == "metadata_lock" and multi_mode:
+            return {
+                "title": "Hold a metadata lock on new_orders via a long transaction.",
+                "execution_steps": [
+                    {
+                        "kind": "hold_metadata_lock",
+                        "sql": "SELECT COUNT(*) FROM new_orders WHERE no_w_id = 1",
+                        "database": database,
+                        "hold_seconds": duration_seconds,
+                    }
+                ],
+                "rollback_steps": [],
+            }
         mapping = {
             "record_lock": {
                 "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",

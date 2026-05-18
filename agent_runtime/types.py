@@ -25,6 +25,10 @@ class ExperimentRequest:
     execution_mode: str = "sequential"
     database_topology: str = "base_and_copy"
     user_constraints: Dict[str, Any] = field(default_factory=dict)
+    mode: str = "single"
+    test_enabled: bool = False
+    fresh_database_per_run: bool = False
+    keep_database: bool = False
 
 
 @dataclass
@@ -58,6 +62,7 @@ class TaskSpec:
     agent_type: str
     anomaly_type: str
     title: str
+    task_role: str = "one_shot_sql"
     inputs: Dict[str, Any] = field(default_factory=dict)
     prechecks: List[Dict[str, Any]] = field(default_factory=list)
     execution_steps: List[Dict[str, Any]] = field(default_factory=list)
@@ -88,6 +93,15 @@ class PlannerDecision:
     cleanup_strategy: List[str] = field(default_factory=list)
     planned_tasks: List[PlannedAnomaly] = field(default_factory=list)
     llm_summary: str = ""
+    selection_mode: str = "single"
+    execution_database: str = ""
+    activation_order: List[str] = field(default_factory=list)
+    cleanup_order: List[str] = field(default_factory=list)
+    composite_experiment_name: str = ""
+    selection_rationale: str = ""
+    llm_used: bool = False
+    llm_error: str = ""
+    llm_error_type: str = ""
 
 
 @dataclass

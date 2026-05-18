@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Dict, List, Sequence
 
 from agent_runtime.agents.base import BaseTaskAgent
@@ -55,6 +56,9 @@ SUBTYPE_TO_AGENT = {
 }
 
 LOCKISH_SUBTYPES = {"record_lock", "table_lock", "metadata_lock", "database_table_backup"}
+AUTO_MULTI_PRIORITY = ["missing_index", "cpu", "record_lock", "overall_workload", "database_table_backup"]
+
+logger = logging.getLogger(__name__)
 
 
 class GlobalPlannerAgent:
@@ -64,6 +68,7 @@ class GlobalPlannerAgent:
         self.task_agents = list(task_agents)
         self.task_agent_map = {agent.agent_type: agent for agent in self.task_agents}
         self.llm_client = ResponsesAPIClient(config)
+        self.last_llm_result = None
 
     def gather_context(self, request: ExperimentRequest) -> DBContextSummary:
         database = request.target_database or self.config.default_database
@@ -107,7 +112,7 @@ class GlobalPlannerAgent:
         return PlannerResponse(
             plan=plan,
             planner_decision=planner_decision,
-            reasoning="LLM planner produced a structured anomaly plan.",
+            reasoning="Planner produced a structured anomaly plan.",
         )
 
     def revise(self, request: ExperimentRequest, revision_text: str) -> ExperimentRequest:
@@ -140,7 +145,9 @@ class GlobalPlannerAgent:
         missing = []
         if not request.target_database:
             missing.append("Which database should I target? If you leave it blank, I can use the default TPCC database.")
-        if not (request.allowed_anomalies or request.allowed_subtypes or request.anomaly_categories):
+        if request.mode == "single" and request.allowed_subtypes and len(request.allowed_subtypes) != 1 and request.user_constraints.get("enforce_single", False):
+            missing.append("Single mode requires exactly one anomaly subtype.")
+        if request.mode != "multi_auto" and not (request.allowed_anomalies or request.allowed_subtypes or request.anomaly_categories):
             missing.append(
                 "Which anomaly categories or subtypes should I plan for? For example: slow_sql, lock_conflict, cpu, missing_index."
             )
@@ -148,11 +155,26 @@ class GlobalPlannerAgent:
             missing.append("I could not read schema metadata. Please confirm the target database or provide table hints.")
         return missing
 
+    @staticmethod
+    def _effective_mode(request: ExperimentRequest) -> str:
+        if request.mode == "single" and len(request.allowed_subtypes) > 1:
+            return "multi_manual"
+        return request.mode
+
     def _planner_decision(self, request: ExperimentRequest, planner_context: Dict[str, object]) -> PlannerDecision:
+        if self._effective_mode(request) == "multi_auto":
+            decision = self._auto_multi_planner_decision(request, planner_context)
+            if decision is not None:
+                return decision
         if self.llm_client.available():
             decision = self._llm_planner_decision(request, planner_context)
             if decision is not None:
                 return decision
+            return self._annotate_fallback(
+                self._fallback_planner_decision(request),
+                self.last_llm_result,
+                "Planner LLM path fell back",
+            )
         return self._fallback_planner_decision(request)
 
     def _llm_planner_decision(self, request: ExperimentRequest, planner_context: Dict[str, object]) -> PlannerDecision | None:
@@ -164,6 +186,7 @@ class GlobalPlannerAgent:
             {
                 "request": {
                     "goal": request.user_goal,
+                    "mode": self._effective_mode(request),
                     "risk_level": request.risk_level,
                     "execution_window_seconds": request.execution_window_seconds,
                     "allowed_categories": self._normalize_categories(request),
@@ -175,8 +198,9 @@ class GlobalPlannerAgent:
                 "task_agent_map": SUBTYPE_TO_AGENT,
                 "planner_context": planner_context,
                 "rules": {
-                    "lock_and_backup_use_copy_db": True,
+                    "lock_and_backup_use_copy_db": False,
                     "single_sql_and_overall_workload_use_base_db": True,
+                    "multi_auto_min_items": 2,
                     "return_keys": [
                         "summary",
                         "selected_anomalies",
@@ -185,19 +209,29 @@ class GlobalPlannerAgent:
                         "task_parameters",
                         "expected_signals",
                         "cleanup_strategy",
+                        "selection_rationale",
                     ],
                 },
             },
             ensure_ascii=True,
         )
         result = self.llm_client.generate_json(system_prompt, user_prompt, self.config.planner_temperature)
+        self.last_llm_result = result
         if result.used_fallback or not result.text:
+            if result.error_message:
+                logger.warning("Planner LLM path fell back: %s", result.error_message)
             return None
         try:
             payload = json.loads(result.text)
         except json.JSONDecodeError:
+            logger.warning("Planner LLM path returned non-JSON text; falling back.")
             return None
         selected = [item for item in payload.get("selected_anomalies", []) if item in SUBTYPE_TO_AGENT]
+        mode = self._effective_mode(request)
+        if mode == "single":
+            selected = selected[:1]
+        if mode == "multi_auto" and len(selected) < 2:
+            return None
         if not selected:
             return None
         assignments = {item: payload.get("task_assignments", {}).get(item, SUBTYPE_TO_AGENT[item]) for item in selected}
@@ -205,13 +239,17 @@ class GlobalPlannerAgent:
             item: assignments[item] if assignments[item] in self.task_agent_map else SUBTYPE_TO_AGENT[item]
             for item in selected
         }
+        execution_database = str(payload.get("execution_database", request.target_database or self.config.default_database))
         database_mapping = {
-            item: payload.get("database_mapping", {}).get(item, self._database_for_subtype(item, request.target_database))
+            item: payload.get("database_mapping", {}).get(item, execution_database)
             for item in selected
         }
         task_parameters = payload.get("task_parameters", {})
         expected_signals = payload.get("expected_signals", [])
         cleanup_strategy = payload.get("cleanup_strategy", [])
+        selection_rationale = str(payload.get("selection_rationale", "")).strip()
+        activation_order = self._activation_order(selected)
+        cleanup_order = list(reversed(activation_order))
         planned_tasks = [
             PlannedAnomaly(
                 anomaly_subtype=item,
@@ -219,7 +257,7 @@ class GlobalPlannerAgent:
                 source_agent=assignments[item],
                 database=database_mapping[item],
                 parameters=task_parameters.get(item, {}),
-                rationale=str(payload.get("rationale", f"LLM selected {item} for goal: {request.user_goal}")),
+                rationale=selection_rationale or str(payload.get("rationale", f"LLM selected {item} for goal: {request.user_goal}")),
                 expected_signals=expected_signals if isinstance(expected_signals, list) else [],
                 cleanup_strategy=cleanup_strategy if isinstance(cleanup_strategy, list) else [],
             )
@@ -234,7 +272,75 @@ class GlobalPlannerAgent:
             cleanup_strategy=cleanup_strategy if isinstance(cleanup_strategy, list) else [],
             planned_tasks=planned_tasks,
             llm_summary=str(payload.get("summary", "")).strip(),
+            selection_mode=mode,
+            execution_database=execution_database,
+            activation_order=activation_order,
+            cleanup_order=cleanup_order,
+            composite_experiment_name=self._composite_name(selected),
+            selection_rationale=selection_rationale or str(payload.get("summary", "")).strip(),
+            llm_used=True,
         )
+
+    def _auto_multi_planner_decision(self, request: ExperimentRequest, planner_context: Dict[str, object]) -> PlannerDecision | None:
+        if self.llm_client.available():
+            system_prompt = (
+                "You design complex multi-anomaly MySQL experiments. Return JSON only. "
+                "Pick a diverse set of at least 2 anomaly subtypes from the allow-list."
+            )
+            user_prompt = json.dumps(
+                {
+                    "goal": request.user_goal,
+                    "mode": self._effective_mode(request),
+                    "allowed_categories": self._normalize_categories(request) or list(CATEGORY_TO_SUBTYPES),
+                    "allowed_subtypes": self._normalize_subtypes(request) or sorted(SUBTYPE_TO_AGENT),
+                    "planner_context": planner_context,
+                    "task_agent_map": SUBTYPE_TO_AGENT,
+                    "return_keys": ["selected_anomalies", "task_parameters", "summary", "selection_rationale"],
+                },
+                ensure_ascii=True,
+            )
+            result = self.llm_client.generate_json(system_prompt, user_prompt, self.config.planner_temperature)
+            self.last_llm_result = result
+            if not result.used_fallback and result.text:
+                try:
+                    payload = json.loads(result.text)
+                    chosen = [item for item in payload.get("selected_anomalies", []) if item in SUBTYPE_TO_AGENT]
+                    if len(chosen) >= 2:
+                        request.allowed_subtypes = chosen
+                        request.allowed_anomalies = list(chosen)
+                        decision = self._fallback_planner_decision(request)
+                        decision.selection_mode = "multi_auto"
+                        decision.llm_summary = str(payload.get("summary", "")).strip()
+                        decision.selection_rationale = str(payload.get("selection_rationale", decision.llm_summary)).strip()
+                        decision.llm_used = True
+                        planner_params = payload.get("task_parameters", {})
+                        for task in decision.planned_tasks:
+                            task.parameters.update(planner_params.get(task.anomaly_subtype, {}))
+                            decision.task_parameters[task.anomaly_subtype] = task.parameters
+                        return decision
+                except json.JSONDecodeError:
+                    logger.warning("Auto-multi LLM path returned non-JSON text; falling back.")
+            elif result.error_message:
+                logger.warning("Auto-multi LLM path fell back: %s", result.error_message)
+        chosen: List[str] = []
+        allowed = self._normalize_subtypes(request) or sorted(SUBTYPE_TO_AGENT)
+        for subtype in AUTO_MULTI_PRIORITY:
+            if subtype in allowed and subtype not in chosen:
+                chosen.append(subtype)
+        if len(chosen) < 2:
+            for subtype in allowed:
+                if subtype not in chosen:
+                    chosen.append(subtype)
+                if len(chosen) >= 3:
+                    break
+        if len(chosen) < 2:
+            return None
+        request.allowed_subtypes = chosen
+        request.allowed_anomalies = list(chosen)
+        decision = self._fallback_planner_decision(request)
+        decision.selection_mode = "multi_auto"
+        decision.selection_rationale = "Fallback auto-multi selected a diverse complex anomaly mix."
+        return self._annotate_fallback(decision, self.last_llm_result, "Auto-multi LLM path fell back")
 
     def _fallback_planner_decision(self, request: ExperimentRequest) -> PlannerDecision:
         selected = self._normalize_subtypes(request)
@@ -242,11 +348,19 @@ class GlobalPlannerAgent:
             for category in self._normalize_categories(request):
                 selected.extend(CATEGORY_TO_SUBTYPES.get(category, []))
         selected = [item for item in selected if item in SUBTYPE_TO_AGENT]
+        mode = self._effective_mode(request)
+        if mode == "single":
+            selected = selected[:1]
+        if mode == "multi_auto" and len(selected) < 2:
+            extras = [item for item in AUTO_MULTI_PRIORITY if item not in selected and item in SUBTYPE_TO_AGENT]
+            selected.extend(extras[: max(0, 2 - len(selected))])
         if not selected:
             selected = ["missing_index"]
+        execution_database = request.target_database or self.config.default_database
         assignments = {item: SUBTYPE_TO_AGENT[item] for item in selected}
-        database_mapping = {item: self._database_for_subtype(item, request.target_database) for item in selected}
+        database_mapping = {item: execution_database for item in selected}
         task_parameters = {item: self._default_parameters(item, request) for item in selected}
+        activation_order = self._activation_order(selected)
         planned_tasks = [
             PlannedAnomaly(
                 anomaly_subtype=item,
@@ -269,7 +383,26 @@ class GlobalPlannerAgent:
             cleanup_strategy=["run rollback steps", "collect metrics"],
             planned_tasks=planned_tasks,
             llm_summary="",
+            selection_mode=request.mode,
+            execution_database=execution_database,
+            activation_order=activation_order,
+            cleanup_order=list(reversed(activation_order)),
+            composite_experiment_name=self._composite_name(selected),
+            selection_rationale=(
+                "Fallback auto-multi selected a complex anomaly mix." if mode == "multi_auto" else "Fallback planner selected requested anomaly set."
+            ),
         )
+
+    @staticmethod
+    def _annotate_fallback(decision: PlannerDecision, result, context: str) -> PlannerDecision:
+        decision.llm_used = False
+        if getattr(result, "error_message", ""):
+            decision.llm_error = f"{context}: {result.error_message}"
+            decision.llm_error_type = getattr(result, "error_type", "fallback")
+        elif result is not None:
+            decision.llm_error = f"{context}: LLM result was empty or invalid."
+            decision.llm_error_type = getattr(result, "error_type", "fallback") or "fallback"
+        return decision
 
     def _normalize_categories(self, request: ExperimentRequest) -> List[str]:
         categories = list(request.anomaly_categories)
@@ -312,6 +445,8 @@ class GlobalPlannerAgent:
 
     def _default_parameters(self, subtype: str, request: ExperimentRequest) -> Dict[str, object]:
         parameters: Dict[str, object] = {"duration_seconds": min(max(request.execution_window_seconds, 1), 20)}
+        if self._effective_mode(request) != "single":
+            parameters["background_duration_seconds"] = min(max(request.execution_window_seconds + 4, 4), 60)
         if subtype == "overall_workload":
             parameters.update(
                 {
@@ -355,6 +490,21 @@ class GlobalPlannerAgent:
         return mapping.get(subtype, ["task-specific validation evidence"])
 
     @staticmethod
+    def _activation_order(selected: List[str]) -> List[str]:
+        order_map = {
+            "resource_bottleneck": 0,
+            "lock_conflict": 1,
+            "slow_sql": 2,
+            "database_backup": 3,
+            "traffic_surge": 4,
+        }
+        return sorted(selected, key=lambda item: (order_map.get(GlobalPlannerAgent._category_for_subtype(item), 99), item))
+
+    @staticmethod
+    def _composite_name(selected: List[str]) -> str:
+        return "__".join(selected[:5]) or "single"
+
+    @staticmethod
     def _fallback_summary(request: ExperimentRequest, tasks) -> str:
         anomalies = ", ".join(task.anomaly_type for task in tasks) or "unspecified anomalies"
         return (
@@ -375,8 +525,9 @@ class GlobalPlannerAgent:
     @staticmethod
     def _expected_signals(request: ExperimentRequest) -> List[str]:
         signals = ["QPS change", "latency increase", "task-specific validation evidence"]
-        if any(item in request.allowed_anomalies for item in ("cpu", "resource_bottleneck")):
+        combined = request.allowed_anomalies + request.allowed_subtypes + request.anomaly_categories
+        if any(item in combined for item in ("cpu", "resource_bottleneck")):
             signals.append("system CPU saturation")
-        if any(item in request.allowed_anomalies for item in ("traffic_surge", "overall_workload", "single_sql")):
+        if any(item in combined for item in ("traffic_surge", "overall_workload", "single_sql")):
             signals.append("workload concurrency increase")
         return signals

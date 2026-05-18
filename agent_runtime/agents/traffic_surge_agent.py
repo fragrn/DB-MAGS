@@ -36,13 +36,14 @@ class TrafficSurgeAgent(BaseTaskAgent):
                 if candidates:
                     tuning["sql"] = candidates[0]
             tuning["database"] = planned_task.database
-            tuning["duration_seconds"] = int(planned_task.parameters.get("duration_seconds", min(max(request.execution_window_seconds, 1), 20)))
+            tuning["duration_seconds"] = int(planned_task.parameters.get("background_duration_seconds", planned_task.parameters.get("duration_seconds", min(max(request.execution_window_seconds, 1), 20))))
             tasks.append(
                 TaskSpec(
                     task_id=f"traffic-{slugify(planned_task.anomaly_subtype)}",
                     agent_type=self.agent_type,
                     anomaly_type=planned_task.anomaly_subtype,
                     title=f"Traffic surge: {planned_task.anomaly_subtype}",
+                    task_role="background_anomaly",
                     inputs={
                         "database": planned_task.database,
                         "anomaly_subtype": planned_task.anomaly_subtype,

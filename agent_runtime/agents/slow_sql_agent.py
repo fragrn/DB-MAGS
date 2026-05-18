@@ -59,47 +59,66 @@ class SlowSQLAgent(BaseTaskAgent):
                 support = excessive_support.execute(database=planned_task.database)
                 setup_steps.extend(support["setup_steps"])
                 rollback_steps.extend(support["rollback_steps"])
-                candidates = [support["query"]]
                 selected_sql = support["query"]
-                selected_explain = {"validated": True, "rows": [], "note": "excessive index uses pre-created support table"}
                 validation_steps.insert(0, {"kind": "support_table", "result": {"table": "agent_excessive_index"}})
             else:
                 candidates = generator.execute(planned_task.anomaly_subtype, context)
                 selected_sql = ""
-                selected_explain = {"validated": False, "error": "no candidate passed validation"}
                 for candidate in candidates[:6]:
-                    validation = validator.execute(sql=candidate, allowed_tables=allowed_tables + [
-                        "agent_order_by_support",
-                        "agent_group_by_support",
-                        "agent_large_scan_support",
-                        "agent_implicit_conversion_support",
-                        "agent_excessive_index",
-                    ], anomaly_type=planned_task.anomaly_subtype)
+                    validation = validator.execute(
+                        sql=candidate,
+                        allowed_tables=allowed_tables
+                        + [
+                            "agent_order_by_support",
+                            "agent_group_by_support",
+                            "agent_large_scan_support",
+                            "agent_implicit_conversion_support",
+                            "agent_excessive_index",
+                        ],
+                        anomaly_type=planned_task.anomaly_subtype,
+                    )
                     if not validation["valid"]:
                         continue
                     explain = explainer.execute(validation["sql"], database=planned_task.database)
                     if explain.get("validated"):
                         selected_sql = validation["sql"]
-                        selected_explain = explain
                         validation_steps.insert(0, {"kind": "explain", "sql": validation["sql"], "result": explain})
                         break
             if not selected_sql:
                 continue
-            execution_steps = list(setup_steps)
-            execution_steps.append(
-                {
-                    "kind": "sql",
+            multi_mode = request.mode != "single" or request.test_enabled
+            if multi_mode:
+                tuning = {
+                    "kind": "workload_profile",
+                    "mode": "single_sql",
+                    "sleep_time": float(planned_task.parameters.get("background_sleep", 0.01)),
+                    "thread_count": int(planned_task.parameters.get("background_threads", 6)),
+                    "repeat": int(planned_task.parameters.get("repeat", 25)),
+                    "description": f"Background slow SQL pressure for {planned_task.anomaly_subtype}.",
                     "sql": selected_sql,
                     "database": planned_task.database,
-                    "hold_seconds": min(max(request.execution_window_seconds, 1), 12),
+                    "duration_seconds": int(planned_task.parameters.get("background_duration_seconds", planned_task.parameters.get("duration_seconds", 12))),
                 }
-            )
+                execution_steps = list(setup_steps) + [tuning]
+                task_role = "background_anomaly"
+            else:
+                execution_steps = list(setup_steps)
+                execution_steps.append(
+                    {
+                        "kind": "sql",
+                        "sql": selected_sql,
+                        "database": planned_task.database,
+                        "hold_seconds": min(max(request.execution_window_seconds, 1), 12),
+                    }
+                )
+                task_role = "one_shot_sql"
             task_specs.append(
                 TaskSpec(
                     task_id=f"slow-sql-{slugify(planned_task.anomaly_subtype)}",
                     agent_type=self.agent_type,
                     anomaly_type=planned_task.anomaly_subtype,
                     title=f"Slow SQL: {planned_task.anomaly_subtype}",
+                    task_role=task_role,
                     inputs={
                         "database": planned_task.database,
                         "anomaly_subtype": planned_task.anomaly_subtype,

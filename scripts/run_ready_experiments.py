@@ -18,8 +18,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from agent_runtime.config import RuntimeConfig
+from agent_runtime.database_clone import clone_database, drop_database, unique_database_name
 from agent_runtime.db import db_cursor
 from agent_runtime.runtime import build_components
+from agent_runtime.verifier import ProbeProfile, ProbeWorkloadVerifier
 from agent_runtime.skills.chaosblade import ChaosBladeInjectionSkill
 from agent_runtime.skills.injection_bridge import RunInjectionSkill
 from agent_runtime.skills.sql_explain import ExplainSQLSkill
@@ -72,11 +74,18 @@ EXPERIMENTS = [
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Run the full LLM-driven anomaly suite against the TPCC base/copy databases.")
+    parser = argparse.ArgumentParser(description="Run the anomaly suite or a composite multi-anomaly experiment against TPCC databases.")
     parser.add_argument("--db-base", default="dbmags_tpcc_base")
     parser.add_argument("--db-copy", default="dbmags_tpcc_copy")
     parser.add_argument("--output-root", default="")
-    parser.add_argument("--anomalies", default="", help="Optional comma-separated subtype filter.")
+    parser.add_argument("--anomalies", default="", help="Optional comma-separated subtype filter for the legacy suite runner.")
+    parser.add_argument("--subtypes", default="", help="Comma-separated subtype list for single or manual multi-anomaly mode.")
+    parser.add_argument("--single", action="store_true", help="Run the new single-anomaly path and preserve one-subtype injection behavior.")
+    parser.add_argument("--auto-multi", action="store_true", help="Let GlobalPlannerAgent automatically choose a complex multi-anomaly combination.")
+    parser.add_argument("--test", action="store_true", help="Run TPCC probe workload before/after anomaly activation.")
+    parser.add_argument("--keep-db", action="store_true", help="Keep the fresh temporary database for debugging.")
+    parser.add_argument("--window", type=int, default=12, help="Execution window for single/multi injection flows.")
+    parser.add_argument("--risk", default="medium", help="Risk level passed into the planner.")
     parser.add_argument("--sequential", action="store_true", help="Keep execution sequential. Enabled by default.")
     return parser.parse_args()
 
@@ -990,6 +999,215 @@ def main() -> int:
     write_csv(output_root / "comparison_summary.csv", comparison_rows)
     print(str(output_root))
     return 0
+
+
+class ActiveTaskHandle:
+    def __init__(self, task: TaskSpec, thread=None, injection=None, cleanup=None):
+        self.task = task
+        self.thread = thread
+        self.injection = injection or {}
+        self.cleanup = cleanup or {}
+        self.result = None
+        self.error = ""
+
+
+def parse_subtypes_arg(raw: str) -> list[str]:
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def fresh_database_name(base_name: str) -> str:
+    stamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
+    return unique_database_name(base_name, stamp.lower())
+
+
+def create_fresh_experiment_database(source_db: str) -> str:
+    target = fresh_database_name(source_db)
+    clone_database(source_db, target)
+    return target
+
+
+def build_request_for_mode(args, target_database: str) -> ExperimentRequest:
+    subtypes = parse_subtypes_arg(args.subtypes)
+    if args.single:
+        mode = "single"
+        if len(subtypes) != 1:
+            raise SystemExit("--single requires exactly one subtype via --subtypes")
+    elif args.auto_multi:
+        mode = "multi_auto"
+    elif subtypes:
+        mode = "multi_manual"
+    else:
+        mode = "legacy"
+    return ExperimentRequest(
+        user_goal=(
+            "Inject a single anomaly on a fresh TPCC clone"
+            if mode == "single"
+            else "Inject a complex multi-anomaly combination on a fresh TPCC clone"
+        ),
+        target_database=target_database,
+        allowed_anomalies=list(subtypes),
+        allowed_subtypes=list(subtypes),
+        execution_window_seconds=args.window,
+        risk_level=args.risk,
+        require_confirmation=False,
+        execution_mode="sequential",
+        database_topology="base_and_copy",
+        mode=mode if mode != "legacy" else "single",
+        test_enabled=bool(args.test),
+        fresh_database_per_run=True,
+        keep_database=bool(args.keep_db),
+    )
+
+
+def activation_profile(task: TaskSpec, request: ExperimentRequest) -> int:
+    for step in task.execution_steps:
+        if step.get("kind") == "workload_profile":
+            return int(step.get("duration_seconds", request.execution_window_seconds + 4))
+        if step.get("kind") in {"hold_sql", "hold_metadata_lock", "sql"}:
+            return int(step.get("hold_seconds", request.execution_window_seconds + 4))
+    return request.execution_window_seconds + 4
+
+
+def activate_task(task: TaskSpec, runner: RunInjectionSkill, chaos: ChaosBladeInjectionSkill) -> ActiveTaskHandle:
+    handle = ActiveTaskHandle(task)
+    role = task.task_role
+    if role in {"background_anomaly", "lock_holder", "backup_job"}:
+        def job():
+            try:
+                results = []
+                for step in task.execution_steps:
+                    results.append(runner.execute(step=step))
+                handle.result = results
+            except Exception as exc:  # pragma: no cover - defensive
+                handle.error = str(exc)
+        thread = threading.Thread(target=job, daemon=True)
+        thread.start()
+        handle.thread = thread
+        time.sleep(0.2)
+        return handle
+    if role == "resource_injection":
+        result = chaos.execute(task.anomaly_type, execute=True)
+        handle.injection = result
+        return handle
+    results = []
+    for step in task.execution_steps:
+        results.append(runner.execute(step=step))
+    handle.result = results
+    return handle
+
+
+def wait_for_handles(handles: list[ActiveTaskHandle], timeout_seconds: float) -> None:
+    deadline = time.time() + timeout_seconds
+    for handle in handles:
+        if handle.thread is not None:
+            remaining = max(0.0, deadline - time.time())
+            handle.thread.join(timeout=remaining)
+
+
+def cleanup_handles(handles: list[ActiveTaskHandle], chaos: ChaosBladeInjectionSkill) -> list[dict[str, object]]:
+    cleanup_artifacts = []
+    for handle in reversed(handles):
+        if handle.injection.get("uid"):
+            cleanup = chaos.cleanup(str(handle.injection.get("uid", "")))
+            handle.cleanup = cleanup
+            cleanup_artifacts.append({"task_id": handle.task.task_id, "cleanup": cleanup})
+    return cleanup_artifacts
+
+
+def composite_output_root(args, request: ExperimentRequest, subtypes: list[str]) -> Path:
+    if args.output_root:
+        root = Path(args.output_root)
+    else:
+        root = ROOT / "experiment_runs" / "composite_experiments"
+    root.mkdir(parents=True, exist_ok=True)
+    name = "__".join(subtypes[:5]) if subtypes else "auto_multi"
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    out = root / f"{stamp}_{name}"
+    out.mkdir(parents=True, exist_ok=True)
+    return out
+
+
+def run_composite_or_single(args) -> int:
+    components = build_components(RuntimeConfig.from_env())
+    fresh_db = create_fresh_experiment_database(args.db_base)
+    request = build_request_for_mode(args, fresh_db)
+    context = components.planner.gather_context(request)
+    response = components.planner.plan(request, context)
+    out_dir = composite_output_root(args, request, response.planner_decision.selected_anomalies if response.planner_decision else request.allowed_subtypes)
+    (out_dir / "request.json").write_text(json.dumps(to_jsonable(request), ensure_ascii=True, indent=2))
+    (out_dir / "plan.json").write_text(json.dumps(to_jsonable(response), ensure_ascii=True, indent=2))
+    if response.follow_up_questions or response.plan is None or not response.plan.tasks:
+        result = {"status": "failed", "errors": response.follow_up_questions or ["planner returned no tasks"]}
+        (out_dir / "result.json").write_text(json.dumps(result, ensure_ascii=True, indent=2))
+        if not args.keep_db:
+            drop_database(fresh_db)
+        print(str(out_dir))
+        return 1
+
+    tasks = response.plan.tasks
+    (out_dir / "tasks.json").write_text(json.dumps(to_jsonable({"tasks": tasks}), ensure_ascii=True, indent=2))
+    runner = RunInjectionSkill()
+    chaos = ChaosBladeInjectionSkill()
+    verifier = ProbeWorkloadVerifier(components.skills)
+    baseline = {}
+    post = {}
+    comparison = {}
+    activation_log = []
+    probe_profile = ProbeProfile(database=fresh_db, duration_seconds=max(6, min(args.window, 20)), sleep_time=0.044, thread_count=40)
+    if request.test_enabled:
+        baseline = verifier.run_probe(probe_profile, comparison_mode="baseline_tpcc_probe")
+    handles: list[ActiveTaskHandle] = []
+    try:
+        order = response.planner_decision.activation_order if response.planner_decision else [task.anomaly_type for task in tasks]
+        by_subtype = {task.anomaly_type: task for task in tasks}
+        for subtype in order:
+            task = by_subtype.get(subtype)
+            if task is None:
+                continue
+            handle = activate_task(task, runner, chaos)
+            handles.append(handle)
+            activation_log.append({
+                "task_id": task.task_id,
+                "anomaly_type": task.anomaly_type,
+                "task_role": task.task_role,
+                "resource_injection": handle.injection,
+            })
+        if request.test_enabled:
+            post = verifier.run_probe(probe_profile, comparison_mode="post_tpcc_probe")
+            comparison = verifier.compare(baseline, post)
+            comparison.update({
+                "requested_subtypes": request.allowed_subtypes or (response.planner_decision.selected_anomalies if response.planner_decision else []),
+                "selection_mode": request.mode,
+                "execution_database": fresh_db,
+            })
+        wait_for_handles(handles, timeout_seconds=args.window + 10)
+    finally:
+        cleanup_artifacts = cleanup_handles(handles, chaos)
+        if not args.keep_db:
+            drop_database(fresh_db)
+    result = {
+        "status": "completed",
+        "selection_mode": request.mode,
+        "execution_database": fresh_db,
+        "activated_tasks": to_jsonable(activation_log),
+        "cleanup": cleanup_artifacts,
+        "comparison": comparison if request.test_enabled else {},
+    }
+    if request.test_enabled:
+        (out_dir / "baseline_metrics.json").write_text(json.dumps(baseline, ensure_ascii=True, indent=2))
+        (out_dir / "post_metrics.json").write_text(json.dumps(post, ensure_ascii=True, indent=2))
+        (out_dir / "comparison.json").write_text(json.dumps(comparison, ensure_ascii=True, indent=2))
+    (out_dir / "activation.json").write_text(json.dumps(to_jsonable(activation_log), ensure_ascii=True, indent=2))
+    (out_dir / "result.json").write_text(json.dumps(result, ensure_ascii=True, indent=2))
+    print(str(out_dir))
+    return 0
+
+
+def main():
+    args = parse_args()
+    if args.single or args.auto_multi or args.subtypes:
+        return run_composite_or_single(args)
+    return legacy_suite_main()
 
 
 if __name__ == "__main__":

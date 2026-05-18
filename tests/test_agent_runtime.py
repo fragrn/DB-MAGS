@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import io
+import json
+import urllib.error
 import unittest
 from unittest.mock import patch
 
 from agent_runtime.conversation import CLIConversationOrchestrator
 from agent_runtime.executor import TaskExecutor
 from agent_runtime.experiment_validation import AgentValidationRunner
+from agent_runtime.llm import ResponsesAPIClient
 from agent_runtime.skills.injection_bridge import RunInjectionSkill
 from agent_runtime.planner import GlobalPlannerAgent
 from agent_runtime.runtime import build_runtime
@@ -94,6 +98,113 @@ class PlannerTests(unittest.TestCase):
         response = planner.plan(request, context)
         self.assertIsNotNone(response.plan)
         self.assertEqual(sorted(response.planner_decision.selected_anomalies), ["cpu", "missing_index"])
+
+    def test_planner_records_llm_fallback_error_details(self):
+        planner = GlobalPlannerAgent(
+            config=type("Config", (), {"default_database": "tpcc10_test", "planner_temperature": 0.0})(),
+            skills=SkillRegistry([DummySkill(payload={"tables": []}, name="build_planner_context_skill")]),
+            task_agents=[],
+        )
+
+        class FakeLLMResult:
+            used_fallback = True
+            text = ""
+            error_type = "http_error"
+            error_message = "Unsupported parameter: 'temperature' is not supported with this model."
+
+        planner.llm_client = type(
+            "LLM",
+            (),
+            {
+                "available": lambda self: True,
+                "generate_json": lambda self, *_args, **_kwargs: FakeLLMResult(),
+            },
+        )()
+        request = ExperimentRequest(
+            user_goal="auto mix",
+            target_database="dbmags_tpcc_base",
+            mode="multi_auto",
+        )
+        context = DBContextSummary(database="dbmags_tpcc_base", tables=[DBTableProfile(name="orders", row_count=1000)])
+        response = planner.plan(request, context)
+        self.assertIn("temperature", response.planner_decision.llm_error)
+        self.assertEqual(response.planner_decision.llm_error_type, "http_error")
+
+
+class LLMClientTests(unittest.TestCase):
+    def test_gpt5_request_omits_temperature(self):
+        config = type(
+            "Config",
+            (),
+            {
+                "openai_api_key": "test-key",
+                "openai_base_url": "https://api.openai.com/v1",
+                "openai_model": "gpt-5",
+                "planner_enabled": True,
+            },
+        )()
+        client = ResponsesAPIClient(config)
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return json.dumps({"output_text": "{\"ok\":true}"}).encode("utf-8")
+
+        captured = {}
+
+        def fake_urlopen(req, timeout=60):
+            captured["payload"] = json.loads(req.data.decode("utf-8"))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            result = client.generate_json("system", "user", 0.2)
+        self.assertFalse(result.used_fallback)
+        self.assertNotIn("temperature", captured["payload"])
+
+    def test_client_retries_without_temperature_on_unsupported_parameter_error(self):
+        config = type(
+            "Config",
+            (),
+            {
+                "openai_api_key": "test-key",
+                "openai_base_url": "https://api.openai.com/v1",
+                "openai_model": "custom-model",
+                "planner_enabled": True,
+            },
+        )()
+        client = ResponsesAPIClient(config)
+
+        attempts = {"count": 0}
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return json.dumps({"output_text": "{\"ok\":true}"}).encode("utf-8")
+
+        def fake_urlopen(req, timeout=60):
+            payload = json.loads(req.data.decode("utf-8"))
+            attempts["count"] += 1
+            if attempts["count"] == 1:
+                self.assertIn("temperature", payload)
+                body = json.dumps({"error": {"message": "Unsupported parameter: 'temperature' is not supported with this model."}}).encode("utf-8")
+                raise urllib.error.HTTPError(req.full_url, 400, "Bad Request", hdrs=None, fp=io.BytesIO(body))
+            self.assertNotIn("temperature", payload)
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            result = client.generate_json("system", "user", 0.2)
+        self.assertFalse(result.used_fallback)
+        self.assertEqual(attempts["count"], 2)
 
 
 class SchedulerTests(unittest.TestCase):
