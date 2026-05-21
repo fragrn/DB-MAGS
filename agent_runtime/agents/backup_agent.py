@@ -46,6 +46,10 @@ class BackupAgent(BaseTaskAgent):
                     validation_steps=[],
                     rollback_steps=payload["rollback_steps"],
                     explanation=planned_task.rationale or payload["title"],
+                    expected_metrics={"disk_read_throughput": "increase", "io_wait": "increase", "query_latency": "increase"},
+                    local_success_criteria={"backup_table_created": True},
+                    risk_assessment={"risk_level": "medium", "main_risk": "IO interference or metadata lock", "confidence": 0.65},
+                    cleanup_actions=payload["rollback_steps"],
                 )
             )
         return tasks

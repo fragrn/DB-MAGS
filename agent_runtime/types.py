@@ -15,6 +15,13 @@ class MessageEvent:
 @dataclass
 class ExperimentRequest:
     user_goal: str
+    target_anomaly: str = ""
+    target_mode: str = "single_root"
+    target_chain: List[str] = field(default_factory=list)
+    target_subgraph: Dict[str, Any] = field(default_factory=dict)
+    workload_config: Dict[str, Any] = field(default_factory=dict)
+    max_retry_rounds: int = 5
+    safety_constraints: Dict[str, Any] = field(default_factory=dict)
     target_database: str = ""
     allowed_anomalies: List[str] = field(default_factory=list)
     allowed_subtypes: List[str] = field(default_factory=list)
@@ -69,6 +76,146 @@ class TaskSpec:
     validation_steps: List[Dict[str, Any]] = field(default_factory=list)
     rollback_steps: List[Dict[str, Any]] = field(default_factory=list)
     explanation: str = ""
+    dependencies: List[str] = field(default_factory=list)
+    start_after_sec: float = 0.0
+    start_condition: Dict[str, Any] = field(default_factory=dict)
+    expected_metrics: Dict[str, Any] = field(default_factory=dict)
+    local_success_criteria: Dict[str, Any] = field(default_factory=dict)
+    risk_assessment: Dict[str, Any] = field(default_factory=dict)
+    cleanup_actions: List[Dict[str, Any]] = field(default_factory=list)
+
+
+@dataclass
+class ReActStep:
+    thought: str
+    action: str
+    observation: Dict[str, Any] = field(default_factory=dict)
+    decision: str = ""
+
+
+@dataclass
+class EnvironmentSnapshot:
+    database: str
+    dbms: str = "mysql"
+    version: str = ""
+    schema: Dict[str, Any] = field(default_factory=dict)
+    index_info: Dict[str, Any] = field(default_factory=dict)
+    table_stats: Dict[str, Any] = field(default_factory=dict)
+    workload_status: Dict[str, Any] = field(default_factory=dict)
+    db_metrics: Dict[str, Any] = field(default_factory=dict)
+    os_metrics: Dict[str, Any] = field(default_factory=dict)
+    config: Dict[str, Any] = field(default_factory=dict)
+    notes: List[str] = field(default_factory=list)
+
+
+@dataclass
+class GlobalPlan:
+    mode: str = "single_root"
+    root_causes_to_inject: List[str] = field(default_factory=list)
+    effects_to_observe: List[str] = field(default_factory=list)
+    task_agents: List[str] = field(default_factory=list)
+    task_dependencies: List[List[str]] = field(default_factory=list)
+    evaluation_targets: List[str] = field(default_factory=list)
+    safety_constraints: Dict[str, Any] = field(default_factory=dict)
+    rationale: str = ""
+
+
+@dataclass
+class TaskAgentInput:
+    subgoal: str
+    global_context: Dict[str, Any] = field(default_factory=dict)
+    environment_snapshot: Dict[str, Any] = field(default_factory=dict)
+    constraints: Dict[str, Any] = field(default_factory=dict)
+    expected_effect: List[str] = field(default_factory=list)
+    memory: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class TaskAgentOutput:
+    agent_name: str
+    subgoal: str
+    local_hypothesis: str
+    task_spec: TaskSpec
+    expected_metrics: Dict[str, Any] = field(default_factory=dict)
+    local_success_criteria: Dict[str, Any] = field(default_factory=dict)
+    risk_assessment: Dict[str, Any] = field(default_factory=dict)
+    safety_constraints: Dict[str, Any] = field(default_factory=dict)
+    cleanup_actions: List[Dict[str, Any]] = field(default_factory=list)
+    fallback_plan: Dict[str, Any] = field(default_factory=dict)
+    confidence: float = 0.5
+    react_trace: List[ReActStep] = field(default_factory=list)
+
+
+@dataclass
+class TaskDAGNode:
+    task_id: str
+    task_spec: TaskSpec
+    start_after_sec: float = 0.0
+    start_condition: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class TaskDAGEdge:
+    from_task: str
+    to_task: str
+    condition: str = ""
+
+
+@dataclass
+class TaskDAG:
+    tasks: Dict[str, TaskDAGNode] = field(default_factory=dict)
+    edges: List[TaskDAGEdge] = field(default_factory=list)
+    schedule: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
+
+@dataclass
+class SafetyCheckResult:
+    approved: bool
+    reasons: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    checked_constraints: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ExecutionTrace:
+    task_status: Dict[str, str] = field(default_factory=dict)
+    start_time: Dict[str, str] = field(default_factory=dict)
+    end_time: Dict[str, str] = field(default_factory=dict)
+    stdout: Dict[str, Any] = field(default_factory=dict)
+    stderr: Dict[str, Any] = field(default_factory=dict)
+    errors: Dict[str, Any] = field(default_factory=dict)
+    cleanup_status: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EvaluationResult:
+    baseline_metrics: Dict[str, Any] = field(default_factory=dict)
+    after_metrics: Dict[str, Any] = field(default_factory=dict)
+    target_anomaly_scores: Dict[str, float] = field(default_factory=dict)
+    reward: Dict[str, Any] = field(default_factory=dict)
+    chain_events: List[Dict[str, Any]] = field(default_factory=list)
+    success: bool = False
+    reason: str = ""
+
+
+@dataclass
+class ReflectionResult:
+    failure_reason: List[str] = field(default_factory=list)
+    suggested_changes: List[str] = field(default_factory=list)
+    risk_warning: List[str] = field(default_factory=list)
+    memory_update: List[str] = field(default_factory=list)
+    raw_text: str = ""
+
+
+@dataclass
+class MemoryItem:
+    dbms: str
+    workload: str
+    anomaly_type: str
+    context: str
+    lesson: str
+    evidence: Dict[str, Any] = field(default_factory=dict)
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 @dataclass
@@ -102,6 +249,8 @@ class PlannerDecision:
     llm_used: bool = False
     llm_error: str = ""
     llm_error_type: str = ""
+    llm_transport: str = ""
+    global_plan: Optional[GlobalPlan] = None
 
 
 @dataclass

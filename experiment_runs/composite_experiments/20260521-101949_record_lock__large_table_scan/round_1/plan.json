@@ -1,0 +1,422 @@
+{
+  "plan": {
+    "summary": "A combination of a prolonged row-level record lock on the 'order_line' table and a full table scan on the 'agent_large_scan_support' table has been injected to simulate a complex multi-anomaly scenario.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4411007, indexes=1); stock(rows=1430123, indexes=1); orders(rows=452239, indexes=2)",
+    "tasks": [
+      {
+        "task_id": "lock-record-lock",
+        "agent_type": "lock_conflict",
+        "anomaly_type": "record_lock",
+        "title": "Hold a row-level write lock on new_orders.",
+        "task_role": "lock_holder",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260521101802",
+          "anomaly_subtype": "record_lock",
+          "source_agent": "lock_conflict",
+          "column_name": "agent_meta_lock_df2582bb",
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "hold_sql",
+            "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+            "database": "dbmags_tpcc_base_run_20260521101802",
+            "hold_seconds": 16
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected record_lock from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "lock_waits": "increase",
+          "blocked_transactions": "increase",
+          "p95_latency": "increase"
+        },
+        "local_success_criteria": {
+          "lock_wait_time_increase_ratio": 2.0,
+          "blocked_transaction_min_count": 1
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "deadlock or timeout",
+          "confidence": 0.75
+        },
+        "cleanup_actions": []
+      },
+      {
+        "task_id": "slow-sql-large-table-scan",
+        "agent_type": "slow_sql",
+        "anomaly_type": "large_table_scan",
+        "title": "Slow SQL: large_table_scan",
+        "task_role": "background_anomaly",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260521101802",
+          "anomaly_subtype": "large_table_scan",
+          "source_agent": "slow_sql",
+          "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "single_sql",
+            "sleep_time": 0.01,
+            "thread_count": 6,
+            "repeat": 25,
+            "description": "Background slow SQL pressure for large_table_scan.",
+            "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+            "database": "dbmags_tpcc_base_run_20260521101802",
+            "duration_seconds": 16
+          }
+        ],
+        "validation_steps": [
+          {
+            "kind": "explain",
+            "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Aggregate: count(0)  (cost=65917 rows=1)\n    -> Filter: (agent_large_scan_support.c_credit in ('BC','GC'))  (cost=45261 rows=89648)\n        -> Table scan on agent_large_scan_support  (cost=45261 rows=448239)\n"
+                ]
+              ]
+            }
+          },
+          {
+            "kind": "support_tables",
+            "result": {
+              "created_tables": [
+                "agent_order_by_support",
+                "agent_group_by_support",
+                "agent_large_scan_support"
+              ]
+            }
+          }
+        ],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected large_table_scan from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "query_latency": "increase",
+          "rows_examined": "increase",
+          "slow_query_count": "increase"
+        },
+        "local_success_criteria": {
+          "explain_validated": true,
+          "latency_direction": "increase"
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "long-running query pressure",
+          "confidence": 0.7
+        },
+        "cleanup_actions": []
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "record_lock",
+        "large_table_scan"
+      ],
+      "task_assignments": {
+        "record_lock": "lock_conflict",
+        "large_table_scan": "slow_sql"
+      },
+      "database_mapping": {
+        "record_lock": "dbmags_tpcc_base_run_20260521101802",
+        "large_table_scan": "dbmags_tpcc_base_run_20260521101802"
+      },
+      "task_parameters": {
+        "record_lock": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "large_table_scan": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        }
+      },
+      "expected_signals": [
+        "row lock wait",
+        "rows examined increase",
+        "transaction blocking",
+        "type=ALL"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "record_lock",
+          "category": "lock_conflict",
+          "source_agent": "lock_conflict",
+          "database": "dbmags_tpcc_base_run_20260521101802",
+          "parameters": {
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "rationale": "Fallback planner selected record_lock from request constraints.",
+          "expected_signals": [
+            "row lock wait",
+            "transaction blocking"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        },
+        {
+          "anomaly_subtype": "large_table_scan",
+          "category": "slow_sql",
+          "source_agent": "slow_sql",
+          "database": "dbmags_tpcc_base_run_20260521101802",
+          "parameters": {
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "rationale": "Fallback planner selected large_table_scan from request constraints.",
+          "expected_signals": [
+            "type=ALL",
+            "rows examined increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": "A combination of a prolonged row-level record lock on the 'order_line' table and a full table scan on the 'agent_large_scan_support' table has been injected to simulate a complex multi-anomaly scenario.",
+      "selection_mode": "multi_auto",
+      "execution_database": "dbmags_tpcc_base_run_20260521101802",
+      "activation_order": [
+        "record_lock",
+        "large_table_scan"
+      ],
+      "cleanup_order": [
+        "large_table_scan",
+        "record_lock"
+      ],
+      "composite_experiment_name": "record_lock__large_table_scan",
+      "selection_rationale": "The selected anomalies represent a diverse combination of lock conflicts and slow SQL operations. 'record_lock' introduces contention at the row level, while 'large_table_scan' stresses query performance by scanning a large table without filters. This combination is designed to test system behavior under simultaneous locking and query inefficiencies.",
+      "llm_used": true,
+      "llm_error": "",
+      "llm_error_type": "",
+      "llm_transport": "chat_completions",
+      "global_plan": {
+        "mode": "causal_chain",
+        "root_causes_to_inject": [
+          "record_lock"
+        ],
+        "effects_to_observe": [
+          "traffic_surge",
+          "connections_up",
+          "lock_contention",
+          "slow_query",
+          "qps_drop"
+        ],
+        "task_agents": [
+          "lock_conflict",
+          "slow_sql"
+        ],
+        "task_dependencies": [
+          [
+            "traffic_surge",
+            "connections_up"
+          ],
+          [
+            "connections_up",
+            "lock_contention"
+          ],
+          [
+            "lock_contention",
+            "slow_query"
+          ],
+          [
+            "slow_query",
+            "qps_drop"
+          ]
+        ],
+        "evaluation_targets": [
+          "traffic_surge",
+          "connections_up",
+          "lock_contention",
+          "slow_query",
+          "qps_drop"
+        ],
+        "safety_constraints": {
+          "max_duration_sec": 300,
+          "max_connection_usage_ratio": 0.8,
+          "max_cpu_usage": 90
+        },
+        "rationale": "The selected anomalies represent a diverse combination of lock conflicts and slow SQL operations. 'record_lock' introduces contention at the row level, while 'large_table_scan' stresses query performance by scanning a large table without filters. This combination is designed to test system behavior under simultaneous locking and query inefficiencies."
+      }
+    },
+    "expected_signals": [
+      "row lock wait",
+      "rows examined increase",
+      "transaction blocking",
+      "type=ALL"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "record_lock",
+      "large_table_scan"
+    ],
+    "task_assignments": {
+      "record_lock": "lock_conflict",
+      "large_table_scan": "slow_sql"
+    },
+    "database_mapping": {
+      "record_lock": "dbmags_tpcc_base_run_20260521101802",
+      "large_table_scan": "dbmags_tpcc_base_run_20260521101802"
+    },
+    "task_parameters": {
+      "record_lock": {
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      },
+      "large_table_scan": {
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      }
+    },
+    "expected_signals": [
+      "row lock wait",
+      "rows examined increase",
+      "transaction blocking",
+      "type=ALL"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "record_lock",
+        "category": "lock_conflict",
+        "source_agent": "lock_conflict",
+        "database": "dbmags_tpcc_base_run_20260521101802",
+        "parameters": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "rationale": "Fallback planner selected record_lock from request constraints.",
+        "expected_signals": [
+          "row lock wait",
+          "transaction blocking"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      },
+      {
+        "anomaly_subtype": "large_table_scan",
+        "category": "slow_sql",
+        "source_agent": "slow_sql",
+        "database": "dbmags_tpcc_base_run_20260521101802",
+        "parameters": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "rationale": "Fallback planner selected large_table_scan from request constraints.",
+        "expected_signals": [
+          "type=ALL",
+          "rows examined increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": "A combination of a prolonged row-level record lock on the 'order_line' table and a full table scan on the 'agent_large_scan_support' table has been injected to simulate a complex multi-anomaly scenario.",
+    "selection_mode": "multi_auto",
+    "execution_database": "dbmags_tpcc_base_run_20260521101802",
+    "activation_order": [
+      "record_lock",
+      "large_table_scan"
+    ],
+    "cleanup_order": [
+      "large_table_scan",
+      "record_lock"
+    ],
+    "composite_experiment_name": "record_lock__large_table_scan",
+    "selection_rationale": "The selected anomalies represent a diverse combination of lock conflicts and slow SQL operations. 'record_lock' introduces contention at the row level, while 'large_table_scan' stresses query performance by scanning a large table without filters. This combination is designed to test system behavior under simultaneous locking and query inefficiencies.",
+    "llm_used": true,
+    "llm_error": "",
+    "llm_error_type": "",
+    "llm_transport": "chat_completions",
+    "global_plan": {
+      "mode": "causal_chain",
+      "root_causes_to_inject": [
+        "record_lock"
+      ],
+      "effects_to_observe": [
+        "traffic_surge",
+        "connections_up",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "task_agents": [
+        "lock_conflict",
+        "slow_sql"
+      ],
+      "task_dependencies": [
+        [
+          "traffic_surge",
+          "connections_up"
+        ],
+        [
+          "connections_up",
+          "lock_contention"
+        ],
+        [
+          "lock_contention",
+          "slow_query"
+        ],
+        [
+          "slow_query",
+          "qps_drop"
+        ]
+      ],
+      "evaluation_targets": [
+        "traffic_surge",
+        "connections_up",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "safety_constraints": {
+        "max_duration_sec": 300,
+        "max_connection_usage_ratio": 0.8,
+        "max_cpu_usage": 90
+      },
+      "rationale": "The selected anomalies represent a diverse combination of lock conflicts and slow SQL operations. 'record_lock' introduces contention at the row level, while 'large_table_scan' stresses query performance by scanning a large table without filters. This combination is designed to test system behavior under simultaneous locking and query inefficiencies."
+    }
+  },
+  "follow_up_questions": [],
+  "reasoning": "Planner produced a structured anomaly plan."
+}

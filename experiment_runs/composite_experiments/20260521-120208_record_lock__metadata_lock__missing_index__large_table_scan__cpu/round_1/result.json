@@ -1,0 +1,124 @@
+{
+  "status": "completed",
+  "selection_mode": "multi_auto",
+  "execution_database": "dbmags_tpcc_base_run_20260521115805",
+  "activated_tasks": [
+    {
+      "task_id": "resource-cpu",
+      "anomaly_type": "cpu",
+      "task_role": "resource_injection",
+      "resource_injection": {
+        "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+        "executed": true,
+        "uid": "b0ee718cbd427a66",
+        "blade_path": ".tools/chaosblade-1.8.0-darwin_arm64/blade",
+        "stdout": "{\"code\":200,\"success\":true,\"result\":\"b0ee718cbd427a66\"}"
+      }
+    },
+    {
+      "task_id": "lock-metadata-lock",
+      "anomaly_type": "metadata_lock",
+      "task_role": "lock_holder",
+      "resource_injection": {}
+    },
+    {
+      "task_id": "lock-record-lock",
+      "anomaly_type": "record_lock",
+      "task_role": "lock_holder",
+      "resource_injection": {}
+    },
+    {
+      "task_id": "slow-sql-large-table-scan",
+      "anomaly_type": "large_table_scan",
+      "task_role": "background_anomaly",
+      "resource_injection": {}
+    },
+    {
+      "task_id": "slow-sql-missing-index",
+      "anomaly_type": "missing_index",
+      "task_role": "background_anomaly",
+      "resource_injection": {}
+    },
+    {
+      "task_id": "backup-orders",
+      "anomaly_type": "database_table_backup",
+      "task_role": "backup_job",
+      "resource_injection": {}
+    }
+  ],
+  "cleanup": [
+    {
+      "task_id": "resource-cpu",
+      "cleanup": {
+        "cleaned": true,
+        "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+        "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade destroy b0ee718cbd427a66"
+      }
+    }
+  ],
+  "comparison": {
+    "baseline": {
+      "executed": true,
+      "database": "dbmags_tpcc_base_run_20260521115805",
+      "duration_seconds": 12.0,
+      "elapsed_seconds": 12.188844833988696,
+      "successful_transactions": 172,
+      "failed_transactions": 0,
+      "qps": 14.111263400480459,
+      "avg_latency_ms": 23.422097896908,
+      "p95_latency_ms": 56.31316592916846,
+      "p99_latency_ms": 169.04929210431874,
+      "single_sql_mean_ms": 0.0,
+      "thread_count": 40,
+      "sql": "",
+      "probe_sql": "",
+      "db_evidence": {},
+      "comparison_mode": "baseline_tpcc_probe"
+    },
+    "post": {
+      "executed": true,
+      "database": "dbmags_tpcc_base_run_20260521115805",
+      "duration_seconds": 12.0,
+      "elapsed_seconds": 15.303678208962083,
+      "successful_transactions": 7,
+      "failed_transactions": 0,
+      "qps": 0.457406376716722,
+      "avg_latency_ms": 2137.9143513040617,
+      "p95_latency_ms": 13693.87229194399,
+      "p99_latency_ms": 13693.87229194399,
+      "single_sql_mean_ms": 0.0,
+      "thread_count": 40,
+      "sql": "",
+      "probe_sql": "",
+      "db_evidence": {},
+      "comparison_mode": "after_anomaly_probe"
+    },
+    "delta": {
+      "qps_ratio": 0.032414275301611076,
+      "p95_ratio": 243.17354682505945,
+      "failure_delta": 0
+    },
+    "anomaly_confirmed": true,
+    "confirmation_reason": "post TPCC probe shows lower throughput or higher latency under combined anomalies",
+    "requested_subtypes": [
+      "record_lock",
+      "metadata_lock",
+      "missing_index",
+      "large_table_scan",
+      "cpu",
+      "database_table_backup"
+    ],
+    "selection_mode": "multi_auto",
+    "execution_database": "dbmags_tpcc_base_run_20260521115805",
+    "reward": {
+      "performance_score": 1.0,
+      "target_anomaly_score": 0.8166666666666668,
+      "causal_order_score": 0.8,
+      "stability_score": 0.6,
+      "safety_penalty": 0.0,
+      "final_score": 0.865,
+      "success": true
+    },
+    "evaluation_success": true
+  }
+}

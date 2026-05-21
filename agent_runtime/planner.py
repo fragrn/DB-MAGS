@@ -12,6 +12,7 @@ from agent_runtime.types import (
     DBContextSummary,
     ExperimentPlan,
     ExperimentRequest,
+    GlobalPlan,
     PlannedAnomaly,
     PlannerDecision,
     PlannerResponse,
@@ -57,6 +58,14 @@ SUBTYPE_TO_AGENT = {
 
 LOCKISH_SUBTYPES = {"record_lock", "table_lock", "metadata_lock", "database_table_backup"}
 AUTO_MULTI_PRIORITY = ["missing_index", "cpu", "record_lock", "overall_workload", "database_table_backup"]
+# Causal-chain evaluation nodes -> concrete injectable subtypes for task agents.
+CHAIN_NODE_TO_SUBTYPE = {
+    "traffic_surge": "overall_workload",
+    "connections_up": "overall_workload",
+    "lock_contention": "record_lock",
+    "slow_query": "missing_index",
+    "qps_drop": "missing_index",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -88,6 +97,7 @@ class GlobalPlannerAgent:
             database_topology=request.database_topology,
         )
         planner_decision = self._planner_decision(request, planner_context)
+        planner_decision.global_plan = self._global_plan_from_decision(request, planner_decision)
         tasks = []
         for agent_type, agent in self.task_agent_map.items():
             planned_tasks = [item for item in planner_decision.planned_tasks if item.source_agent == agent_type]
@@ -138,6 +148,21 @@ class GlobalPlannerAgent:
             for item in mentioned_categories:
                 if item not in request.anomaly_categories:
                     request.anomaly_categories.append(item)
+        return request
+
+    def replan_from_reflection(self, request: ExperimentRequest, reflection, evaluation, memory_items=None) -> ExperimentRequest:
+        request.user_constraints.setdefault("reflections", []).append(
+            {
+                "failure_reason": getattr(reflection, "failure_reason", []),
+                "suggested_changes": getattr(reflection, "suggested_changes", []),
+                "evaluation_reason": getattr(evaluation, "reason", ""),
+                "memory_items": memory_items or [],
+            }
+        )
+        request.execution_window_seconds = min(max(request.execution_window_seconds + 4, 1), 60)
+        if self._effective_mode(request) == "multi_auto" and not request.allowed_subtypes:
+            request.allowed_subtypes = list(AUTO_MULTI_PRIORITY)
+            request.allowed_anomalies = list(AUTO_MULTI_PRIORITY)
         return request
 
     @staticmethod
@@ -226,7 +251,7 @@ class GlobalPlannerAgent:
         except json.JSONDecodeError:
             logger.warning("Planner LLM path returned non-JSON text; falling back.")
             return None
-        selected = [item for item in payload.get("selected_anomalies", []) if item in SUBTYPE_TO_AGENT]
+        selected = self._parse_selected_anomalies(payload.get("selected_anomalies", []))
         mode = self._effective_mode(request)
         if mode == "single":
             selected = selected[:1]
@@ -279,13 +304,16 @@ class GlobalPlannerAgent:
             composite_experiment_name=self._composite_name(selected),
             selection_rationale=selection_rationale or str(payload.get("summary", "")).strip(),
             llm_used=True,
+            llm_transport=getattr(result, "transport_used", ""),
         )
 
     def _auto_multi_planner_decision(self, request: ExperimentRequest, planner_context: Dict[str, object]) -> PlannerDecision | None:
         if self.llm_client.available():
             system_prompt = (
                 "You design complex multi-anomaly MySQL experiments. Return JSON only. "
-                "Pick a diverse set of at least 2 anomaly subtypes from the allow-list."
+                "Pick a diverse set of at least 2 anomaly subtypes from the allow-list. "
+                "selected_anomalies must be a JSON array of subtype strings (e.g. missing_index, record_lock), "
+                "not objects."
             )
             user_prompt = json.dumps(
                 {
@@ -304,7 +332,7 @@ class GlobalPlannerAgent:
             if not result.used_fallback and result.text:
                 try:
                     payload = json.loads(result.text)
-                    chosen = [item for item in payload.get("selected_anomalies", []) if item in SUBTYPE_TO_AGENT]
+                    chosen = self._parse_selected_anomalies(payload.get("selected_anomalies", []))
                     if len(chosen) >= 2:
                         request.allowed_subtypes = chosen
                         request.allowed_anomalies = list(chosen)
@@ -313,13 +341,14 @@ class GlobalPlannerAgent:
                         decision.llm_summary = str(payload.get("summary", "")).strip()
                         decision.selection_rationale = str(payload.get("selection_rationale", decision.llm_summary)).strip()
                         decision.llm_used = True
+                        decision.llm_transport = getattr(result, "transport_used", "")
                         planner_params = payload.get("task_parameters", {})
                         for task in decision.planned_tasks:
                             task.parameters.update(planner_params.get(task.anomaly_subtype, {}))
                             decision.task_parameters[task.anomaly_subtype] = task.parameters
                         return decision
-                except json.JSONDecodeError:
-                    logger.warning("Auto-multi LLM path returned non-JSON text; falling back.")
+                except (json.JSONDecodeError, TypeError, ValueError):
+                    logger.warning("Auto-multi LLM path returned invalid JSON structure; falling back.")
             elif result.error_message:
                 logger.warning("Auto-multi LLM path fell back: %s", result.error_message)
         chosen: List[str] = []
@@ -396,6 +425,7 @@ class GlobalPlannerAgent:
     @staticmethod
     def _annotate_fallback(decision: PlannerDecision, result, context: str) -> PlannerDecision:
         decision.llm_used = False
+        decision.llm_transport = getattr(result, "transport_used", "")
         if getattr(result, "error_message", ""):
             decision.llm_error = f"{context}: {result.error_message}"
             decision.llm_error_type = getattr(result, "error_type", "fallback")
@@ -403,6 +433,37 @@ class GlobalPlannerAgent:
             decision.llm_error = f"{context}: LLM result was empty or invalid."
             decision.llm_error_type = getattr(result, "error_type", "fallback") or "fallback"
         return decision
+
+    @staticmethod
+    def _parse_selected_anomalies(raw: object) -> List[str]:
+        """Normalize LLM selected_anomalies to injectable subtype strings."""
+        if not isinstance(raw, list):
+            return []
+        chosen: List[str] = []
+        dict_keys = ("anomaly_subtype", "subtype", "anomaly", "name", "type", "id", "node")
+        for item in raw:
+            candidate = ""
+            if isinstance(item, str):
+                candidate = item.strip()
+            elif isinstance(item, dict):
+                for key in dict_keys:
+                    value = item.get(key)
+                    if isinstance(value, str) and value.strip():
+                        candidate = value.strip()
+                        break
+            if not candidate:
+                continue
+            if candidate in SUBTYPE_TO_AGENT:
+                subtype = candidate
+            elif candidate in CHAIN_NODE_TO_SUBTYPE:
+                subtype = CHAIN_NODE_TO_SUBTYPE[candidate]
+            elif candidate in CATEGORY_TO_SUBTYPES:
+                subtype = CATEGORY_TO_SUBTYPES[candidate][0]
+            else:
+                continue
+            if subtype in SUBTYPE_TO_AGENT and subtype not in chosen:
+                chosen.append(subtype)
+        return chosen
 
     def _normalize_categories(self, request: ExperimentRequest) -> List[str]:
         categories = list(request.anomaly_categories)
@@ -531,3 +592,43 @@ class GlobalPlannerAgent:
         if any(item in combined for item in ("traffic_surge", "overall_workload", "single_sql")):
             signals.append("workload concurrency increase")
         return signals
+
+    def _global_plan_from_decision(self, request: ExperimentRequest, decision: PlannerDecision) -> GlobalPlan:
+        selected = list(decision.selected_anomalies)
+        target_chain = list(request.target_chain)
+        if target_chain:
+            root_causes = [item for item in selected if item in target_chain[:1]] or selected[:1]
+            effects = [item for item in target_chain if item not in root_causes]
+            dependencies = [[target_chain[i], target_chain[i + 1]] for i in range(len(target_chain) - 1)]
+        else:
+            root_causes = selected
+            effects = ["qps_down", "p95_latency_up"] if request.test_enabled else decision.expected_signals
+            dependencies = [[decision.activation_order[i], decision.activation_order[i + 1]] for i in range(len(decision.activation_order) - 1)]
+        task_agents = sorted(set(decision.task_assignments.values()))
+        evaluation_targets = self._evaluation_targets(request, decision)
+        return GlobalPlan(
+            mode=request.target_mode or decision.selection_mode,
+            root_causes_to_inject=root_causes,
+            effects_to_observe=effects,
+            task_agents=task_agents,
+            task_dependencies=dependencies,
+            evaluation_targets=evaluation_targets,
+            safety_constraints=request.safety_constraints or {"max_cpu_usage": 90, "max_connection_usage_ratio": 0.8, "max_duration_sec": max(request.execution_window_seconds, 1) * max(request.max_retry_rounds, 1)},
+            rationale=decision.selection_rationale or decision.llm_summary,
+        )
+
+    @staticmethod
+    def _evaluation_targets(request: ExperimentRequest, decision: PlannerDecision) -> List[str]:
+        if request.target_chain:
+            return list(request.target_chain)
+        targets = ["qps_down", "p95_latency_up"]
+        for subtype in decision.selected_anomalies:
+            if subtype in {"record_lock", "table_lock", "metadata_lock"}:
+                targets.append("lock_wait_time_up")
+            elif subtype in {"cpu", "io", "memory", "disk", "network"}:
+                targets.append("resource_pressure_up")
+            elif subtype in {"missing_index", "order_by", "group_by", "large_table_scan", "multi_table_join", "implicit_conversion"}:
+                targets.append("slow_query_metric_up")
+            elif subtype == "overall_workload":
+                targets.append("active_connections_up")
+        return sorted(set(targets))

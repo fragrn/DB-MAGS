@@ -11,6 +11,7 @@ class RuntimeConfig:
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-5"
+    openai_api_mode: str = "chat_completions"
     planner_temperature: float = 0.2
     sql_temperature: float = 0.1
     planner_enabled: bool = True
@@ -25,6 +26,7 @@ class RuntimeConfig:
             openai_api_key=os.getenv("OPENAI_API_KEY", ""),
             openai_base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
             openai_model=os.getenv("OPENAI_MODEL", "gpt-5"),
+            openai_api_mode=os.getenv("OPENAI_API_MODE", "chat_completions"),
             planner_temperature=float(os.getenv("OPENAI_PLANNER_TEMPERATURE", "0.2")),
             sql_temperature=float(os.getenv("OPENAI_SQL_TEMPERATURE", "0.1")),
             planner_enabled=os.getenv("ENABLE_OPENAI_PLANNER", "1") != "0",

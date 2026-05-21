@@ -1,0 +1,51 @@
+{
+  "mode": "causal_chain",
+  "root_causes_to_inject": [
+    "missing_index"
+  ],
+  "effects_to_observe": [
+    "traffic_surge",
+    "connections_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "task_agents": [
+    "database_backup",
+    "lock_conflict",
+    "resource_bottleneck",
+    "slow_sql",
+    "traffic_surge"
+  ],
+  "task_dependencies": [
+    [
+      "traffic_surge",
+      "connections_up"
+    ],
+    [
+      "connections_up",
+      "lock_contention"
+    ],
+    [
+      "lock_contention",
+      "slow_query"
+    ],
+    [
+      "slow_query",
+      "qps_drop"
+    ]
+  ],
+  "evaluation_targets": [
+    "traffic_surge",
+    "connections_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "safety_constraints": {
+    "max_duration_sec": 300,
+    "max_connection_usage_ratio": 0.8,
+    "max_cpu_usage": 90
+  },
+  "rationale": "Fallback auto-multi selected a diverse complex anomaly mix."
+}

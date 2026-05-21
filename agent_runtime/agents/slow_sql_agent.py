@@ -131,6 +131,10 @@ class SlowSQLAgent(BaseTaskAgent):
                     validation_steps=validation_steps,
                     rollback_steps=rollback_steps,
                     explanation=planned_task.rationale or f"Generate and run a {planned_task.anomaly_subtype} SQL candidate.",
+                    expected_metrics={"query_latency": "increase", "rows_examined": "increase", "slow_query_count": "increase"},
+                    local_success_criteria={"explain_validated": True, "latency_direction": "increase"},
+                    risk_assessment={"risk_level": "medium", "main_risk": "long-running query pressure", "confidence": 0.7},
+                    cleanup_actions=rollback_steps,
                 )
             )
         return task_specs

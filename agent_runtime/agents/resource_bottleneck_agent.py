@@ -44,6 +44,9 @@ class ResourceBottleneckAgent(BaseTaskAgent):
                     validation_steps=[],
                     rollback_steps=[],
                     explanation=planned_task.rationale or f"Inject {planned_task.anomaly_subtype} bottleneck via ChaosBlade.",
+                    expected_metrics={f"{planned_task.anomaly_subtype}_pressure": "increase", "query_latency": "increase"},
+                    local_success_criteria={"chaosblade_uid": "present", "qps": "decrease_or_latency_increase"},
+                    risk_assessment={"risk_level": "medium", "main_risk": "host resource contention", "confidence": 0.65},
                 )
             )
         return tasks

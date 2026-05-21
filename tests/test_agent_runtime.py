@@ -111,6 +111,7 @@ class PlannerTests(unittest.TestCase):
             text = ""
             error_type = "http_error"
             error_message = "Unsupported parameter: 'temperature' is not supported with this model."
+            transport_used = "responses"
 
         planner.llm_client = type(
             "LLM",
@@ -129,10 +130,88 @@ class PlannerTests(unittest.TestCase):
         response = planner.plan(request, context)
         self.assertIn("temperature", response.planner_decision.llm_error)
         self.assertEqual(response.planner_decision.llm_error_type, "http_error")
+        self.assertEqual(response.planner_decision.llm_transport, "responses")
+
+    def test_parse_selected_anomalies_accepts_dict_entries(self):
+        raw = [
+            {"anomaly_subtype": "missing_index"},
+            {"subtype": "record_lock"},
+            "overall_workload",
+            "traffic_surge",
+        ]
+        chosen = GlobalPlannerAgent._parse_selected_anomalies(raw)
+        self.assertEqual(chosen, ["missing_index", "record_lock", "overall_workload"])
 
 
 class LLMClientTests(unittest.TestCase):
-    def test_gpt5_request_omits_temperature(self):
+    def test_default_mode_uses_chat_completions(self):
+        config = type(
+            "Config",
+            (),
+            {
+                "openai_api_key": "test-key",
+                "openai_base_url": "https://api.openai.com/v1",
+                "openai_model": "gpt-4o",
+                "openai_api_mode": "chat_completions",
+                "planner_enabled": True,
+            },
+        )()
+        client = ResponsesAPIClient(config)
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return json.dumps({"choices": [{"message": {"content": "{\"ok\":true}"}}]}).encode("utf-8")
+
+        captured = {}
+
+        def fake_urlopen(req, timeout=60):
+            captured["payload"] = json.loads(req.data.decode("utf-8"))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            result = client.generate_json("system", "user", 0.2)
+        self.assertFalse(result.used_fallback)
+        self.assertEqual(result.transport_used, "chat_completions")
+        self.assertIn("messages", captured["payload"])
+        self.assertEqual(captured["payload"]["messages"][0]["role"], "system")
+        self.assertEqual(captured["payload"]["messages"][1]["role"], "user")
+
+    def test_chat_completion_strips_json_fences(self):
+        config = type(
+            "Config",
+            (),
+            {
+                "openai_api_key": "test-key",
+                "openai_base_url": "https://api.vectorengine.cn/v1",
+                "openai_model": "gpt-4o",
+                "openai_api_mode": "chat_completions",
+                "planner_enabled": True,
+            },
+        )()
+        client = ResponsesAPIClient(config)
+
+        class FakeResponse:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return json.dumps({"choices": [{"message": {"content": "```json\n{\"ok\": true}\n```"}}]}).encode("utf-8")
+
+        with patch("urllib.request.urlopen", lambda req, timeout=60: FakeResponse()):
+            result = client.generate_json("system", "user", 0.2)
+        self.assertFalse(result.used_fallback)
+        self.assertEqual(result.text, "{\"ok\": true}")
+
+    def test_gpt5_request_omits_temperature_for_responses(self):
         config = type(
             "Config",
             (),
@@ -140,6 +219,7 @@ class LLMClientTests(unittest.TestCase):
                 "openai_api_key": "test-key",
                 "openai_base_url": "https://api.openai.com/v1",
                 "openai_model": "gpt-5",
+                "openai_api_mode": "responses",
                 "planner_enabled": True,
             },
         )()
@@ -164,6 +244,7 @@ class LLMClientTests(unittest.TestCase):
         with patch("urllib.request.urlopen", fake_urlopen):
             result = client.generate_json("system", "user", 0.2)
         self.assertFalse(result.used_fallback)
+        self.assertEqual(result.transport_used, "responses")
         self.assertNotIn("temperature", captured["payload"])
 
     def test_client_retries_without_temperature_on_unsupported_parameter_error(self):
@@ -174,6 +255,7 @@ class LLMClientTests(unittest.TestCase):
                 "openai_api_key": "test-key",
                 "openai_base_url": "https://api.openai.com/v1",
                 "openai_model": "custom-model",
+                "openai_api_mode": "responses",
                 "planner_enabled": True,
             },
         )()
@@ -205,6 +287,51 @@ class LLMClientTests(unittest.TestCase):
             result = client.generate_json("system", "user", 0.2)
         self.assertFalse(result.used_fallback)
         self.assertEqual(attempts["count"], 2)
+        self.assertEqual(result.transport_used, "responses")
+
+    def test_auto_mode_falls_back_from_chat_to_responses(self):
+        config = type(
+            "Config",
+            (),
+            {
+                "openai_api_key": "test-key",
+                "openai_base_url": "https://api.vectorengine.cn/v1",
+                "openai_model": "gpt-4o",
+                "openai_api_mode": "auto",
+                "planner_enabled": True,
+            },
+        )()
+        client = ResponsesAPIClient(config)
+
+        calls = []
+
+        class FakeResponse:
+            def __init__(self, body):
+                self.body = body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return json.dumps(self.body).encode("utf-8")
+
+        def fake_urlopen(req, timeout=60):
+            calls.append(req.full_url)
+            payload = json.loads(req.data.decode("utf-8"))
+            if req.full_url.endswith("/chat/completions"):
+                body = json.dumps({"error": {"message": "当前分组上游负载已饱和"}}).encode("utf-8")
+                raise urllib.error.HTTPError(req.full_url, 429, "Too Many Requests", hdrs=None, fp=io.BytesIO(body))
+            self.assertIn("input", payload)
+            return FakeResponse({"output_text": "{\"ok\":true}"})
+
+        with patch("urllib.request.urlopen", fake_urlopen):
+            result = client.generate_json("system", "user", 0.2)
+        self.assertFalse(result.used_fallback)
+        self.assertEqual(result.transport_used, "responses")
+        self.assertEqual(calls, ["https://api.vectorengine.cn/v1/chat/completions", "https://api.vectorengine.cn/v1/responses"])
 
 
 class SchedulerTests(unittest.TestCase):

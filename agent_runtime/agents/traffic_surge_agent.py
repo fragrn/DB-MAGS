@@ -55,6 +55,9 @@ class TrafficSurgeAgent(BaseTaskAgent):
                     validation_steps=[],
                     rollback_steps=[],
                     explanation=planned_task.rationale or tuning["description"],
+                    expected_metrics={"active_connections": "increase", "qps": "increase_initially", "latency": "increase_after_saturation"},
+                    local_success_criteria={"qps_or_latency_change": True},
+                    risk_assessment={"risk_level": "medium", "main_risk": "connection saturation", "confidence": 0.65},
                 )
             )
         return tasks

@@ -1,0 +1,101 @@
+{
+  "task_status": {
+    "resource-cpu": "completed",
+    "lock-metadata-lock": "completed",
+    "lock-record-lock": "completed",
+    "slow-sql-large-table-scan": "completed",
+    "slow-sql-missing-index": "completed",
+    "backup-orders": "completed"
+  },
+  "stdout": {
+    "resource-cpu": {
+      "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+      "executed": true,
+      "uid": "b0ee718cbd427a66",
+      "blade_path": ".tools/chaosblade-1.8.0-darwin_arm64/blade",
+      "stdout": "{\"code\":200,\"success\":true,\"result\":\"b0ee718cbd427a66\"}"
+    },
+    "lock-metadata-lock": [
+      {
+        "executed": true,
+        "sql": "SELECT COUNT(*) FROM new_orders WHERE no_w_id = 1",
+        "database": "dbmags_tpcc_base_run_20260521115805",
+        "hold_seconds": 16.0,
+        "elapsed_seconds": 16.006051999982446,
+        "latency_ms": 16006.051999982446,
+        "single_sql_mean_ms": 16006.051999982446
+      }
+    ],
+    "lock-record-lock": [
+      {
+        "executed": true,
+        "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+        "database": "dbmags_tpcc_base_run_20260521115805",
+        "hold_seconds": 16.0,
+        "elapsed_seconds": 16.085050915949978,
+        "latency_ms": 16085.050915949978
+      }
+    ],
+    "slow-sql-large-table-scan": [
+      {
+        "executed": true,
+        "database": "dbmags_tpcc_base_run_20260521115805",
+        "duration_seconds": 16.0,
+        "elapsed_seconds": 16.05251175002195,
+        "successful_transactions": 54,
+        "failed_transactions": 0,
+        "qps": 3.363959537355652,
+        "avg_latency_ms": 285.5908773274644,
+        "p95_latency_ms": 627.1852500503883,
+        "p99_latency_ms": 1243.0166660342366,
+        "single_sql_mean_ms": 285.5908773274644,
+        "thread_count": 6,
+        "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');"
+      }
+    ],
+    "slow-sql-missing-index": [
+      {
+        "executed": true,
+        "database": "dbmags_tpcc_base_run_20260521115805",
+        "duration_seconds": 16.0,
+        "elapsed_seconds": 16.800447250017896,
+        "successful_transactions": 9,
+        "failed_transactions": 0,
+        "qps": 0.5357000242949135,
+        "avg_latency_ms": 1854.6052545360808,
+        "p95_latency_ms": 4196.829124935903,
+        "p99_latency_ms": 4196.829124935903,
+        "single_sql_mean_ms": 1854.6052545360808,
+        "thread_count": 6,
+        "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;"
+      }
+    ],
+    "backup-orders": [
+      {
+        "executed": true,
+        "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+        "database": "dbmags_tpcc_base_run_20260521115805",
+        "elapsed_seconds": 0.637201500008814,
+        "latency_ms": 637.201500008814,
+        "single_sql_mean_ms": 637.201500008814
+      },
+      {
+        "executed": true,
+        "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+        "database": "dbmags_tpcc_base_run_20260521115805",
+        "elapsed_seconds": 4.3789474160876125,
+        "latency_ms": 4378.9474160876125,
+        "single_sql_mean_ms": 4378.9474160876125
+      }
+    ]
+  },
+  "stderr": {},
+  "errors": {},
+  "cleanup_status": {
+    "resource-cpu": {
+      "cleaned": true,
+      "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+      "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade destroy b0ee718cbd427a66"
+    }
+  }
+}

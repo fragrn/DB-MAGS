@@ -1,0 +1,50 @@
+{
+  "mode": "causal_chain",
+  "root_causes_to_inject": [
+    "record_lock"
+  ],
+  "effects_to_observe": [
+    "traffic_surge",
+    "connections_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "task_agents": [
+    "database_backup",
+    "lock_conflict",
+    "resource_bottleneck",
+    "slow_sql"
+  ],
+  "task_dependencies": [
+    [
+      "traffic_surge",
+      "connections_up"
+    ],
+    [
+      "connections_up",
+      "lock_contention"
+    ],
+    [
+      "lock_contention",
+      "slow_query"
+    ],
+    [
+      "slow_query",
+      "qps_drop"
+    ]
+  ],
+  "evaluation_targets": [
+    "traffic_surge",
+    "connections_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "safety_constraints": {
+    "max_duration_sec": 300,
+    "max_connection_usage_ratio": 0.8,
+    "max_cpu_usage": 90
+  },
+  "rationale": "['record_lock: creates clear InnoDB row-lock waits using a deterministic hot key (stock w_id=1,i_id=1).', 'metadata_lock: long transaction plus ALTER TABLE reliably produces MDL waits affecting unrelated sessions.', 'missing_index + large_table_scan: agent_group_by_support and agent_order_by_support have no indexes and multi-million rows, ideal for scan-heavy slow SQL.', 'cpu: concurrent aggregations amplify latency and contention, producing resource bottleneck signals.', 'database_table_backup: INSERT...SELECT table copy simulates backup behavior while increasing IO and buffer churn, interacting with the slow-scan workload.']"
+}

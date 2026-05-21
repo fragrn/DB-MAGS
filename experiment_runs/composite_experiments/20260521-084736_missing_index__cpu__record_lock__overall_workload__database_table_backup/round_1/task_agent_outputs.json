@@ -1,0 +1,384 @@
+[
+  {
+    "agent_name": "lock_conflict",
+    "subgoal": "record_lock",
+    "local_hypothesis": "Fallback planner selected record_lock from request constraints.",
+    "task_spec": {
+      "task_id": "lock-record-lock",
+      "agent_type": "lock_conflict",
+      "anomaly_type": "record_lock",
+      "title": "Hold a row-level write lock on new_orders.",
+      "task_role": "lock_holder",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260521084559",
+        "anomaly_subtype": "record_lock",
+        "source_agent": "lock_conflict",
+        "column_name": "agent_meta_lock_4564db0c",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "hold_sql",
+          "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+          "database": "dbmags_tpcc_base_run_20260521084559",
+          "hold_seconds": 16
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected record_lock from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "lock_waits": "increase",
+        "blocked_transactions": "increase",
+        "p95_latency": "increase"
+      },
+      "local_success_criteria": {
+        "lock_wait_time_increase_ratio": 2.0,
+        "blocked_transaction_min_count": 1
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "deadlock or timeout",
+        "confidence": 0.75
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "lock_waits": "increase",
+      "blocked_transactions": "increase",
+      "p95_latency": "increase"
+    },
+    "local_success_criteria": {
+      "lock_wait_time_increase_ratio": 2.0,
+      "blocked_transaction_min_count": 1
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "deadlock or timeout",
+      "confidence": 0.75
+    },
+    "safety_constraints": {},
+    "cleanup_actions": [],
+    "fallback_plan": {},
+    "confidence": 0.75,
+    "react_trace": []
+  },
+  {
+    "agent_name": "traffic_surge",
+    "subgoal": "overall_workload",
+    "local_hypothesis": "Fallback planner selected overall_workload from request constraints.",
+    "task_spec": {
+      "task_id": "traffic-overall-workload",
+      "agent_type": "traffic_surge",
+      "anomaly_type": "overall_workload",
+      "title": "Traffic surge: overall_workload",
+      "task_role": "background_anomaly",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260521084559",
+        "anomaly_subtype": "overall_workload",
+        "source_agent": "traffic_surge",
+        "mode": "overall_workload",
+        "sleep_time": 0.005,
+        "thread_count": 500,
+        "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+        "duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "overall_workload",
+          "sleep_time": 0.005,
+          "thread_count": 500,
+          "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+          "database": "dbmags_tpcc_base_run_20260521084559",
+          "duration_seconds": 16
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected overall_workload from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "active_connections": "increase",
+        "qps": "increase_initially",
+        "latency": "increase_after_saturation"
+      },
+      "local_success_criteria": {
+        "qps_or_latency_change": true
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "connection saturation",
+        "confidence": 0.65
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "active_connections": "increase",
+      "qps": "increase_initially",
+      "latency": "increase_after_saturation"
+    },
+    "local_success_criteria": {
+      "qps_or_latency_change": true
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "connection saturation",
+      "confidence": 0.65
+    },
+    "safety_constraints": {},
+    "cleanup_actions": [],
+    "fallback_plan": {},
+    "confidence": 0.65,
+    "react_trace": []
+  },
+  {
+    "agent_name": "slow_sql",
+    "subgoal": "missing_index",
+    "local_hypothesis": "Fallback planner selected missing_index from request constraints.",
+    "task_spec": {
+      "task_id": "slow-sql-missing-index",
+      "agent_type": "slow_sql",
+      "anomaly_type": "missing_index",
+      "title": "Slow SQL: missing_index",
+      "task_role": "background_anomaly",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260521084559",
+        "anomaly_subtype": "missing_index",
+        "source_agent": "slow_sql",
+        "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "single_sql",
+          "sleep_time": 0.01,
+          "thread_count": 6,
+          "repeat": 25,
+          "description": "Background slow SQL pressure for missing_index.",
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+          "database": "dbmags_tpcc_base_run_20260521084559",
+          "duration_seconds": 16
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+              ]
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected missing_index from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "query_latency": "increase",
+        "rows_examined": "increase",
+        "slow_query_count": "increase"
+      },
+      "local_success_criteria": {
+        "explain_validated": true,
+        "latency_direction": "increase"
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "long-running query pressure",
+        "confidence": 0.7
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "query_latency": "increase",
+      "rows_examined": "increase",
+      "slow_query_count": "increase"
+    },
+    "local_success_criteria": {
+      "explain_validated": true,
+      "latency_direction": "increase"
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "long-running query pressure",
+      "confidence": 0.7
+    },
+    "safety_constraints": {},
+    "cleanup_actions": [],
+    "fallback_plan": {},
+    "confidence": 0.7,
+    "react_trace": []
+  },
+  {
+    "agent_name": "resource_bottleneck",
+    "subgoal": "cpu",
+    "local_hypothesis": "Fallback planner selected cpu from request constraints.",
+    "task_spec": {
+      "task_id": "resource-cpu",
+      "agent_type": "resource_bottleneck",
+      "anomaly_type": "cpu",
+      "title": "Resource bottleneck: cpu",
+      "task_role": "resource_injection",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260521084559",
+        "anomaly_subtype": "cpu",
+        "source_agent": "resource_bottleneck",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "shell",
+          "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+          "database": "dbmags_tpcc_base_run_20260521084559"
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected cpu from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "cpu_pressure": "increase",
+        "query_latency": "increase"
+      },
+      "local_success_criteria": {
+        "chaosblade_uid": "present",
+        "qps": "decrease_or_latency_increase"
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "host resource contention",
+        "confidence": 0.65
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "cpu_pressure": "increase",
+      "query_latency": "increase"
+    },
+    "local_success_criteria": {
+      "chaosblade_uid": "present",
+      "qps": "decrease_or_latency_increase"
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "host resource contention",
+      "confidence": 0.65
+    },
+    "safety_constraints": {},
+    "cleanup_actions": [],
+    "fallback_plan": {},
+    "confidence": 0.65,
+    "react_trace": []
+  },
+  {
+    "agent_name": "database_backup",
+    "subgoal": "database_table_backup",
+    "local_hypothesis": "Fallback planner selected database_table_backup from request constraints.",
+    "task_spec": {
+      "task_id": "backup-orders",
+      "agent_type": "database_backup",
+      "anomaly_type": "database_table_backup",
+      "title": "Backup table orders into orders_backup_agent.",
+      "task_role": "backup_job",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260521084559",
+        "anomaly_subtype": "database_table_backup",
+        "source_agent": "database_backup",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16,
+        "source_table": "orders"
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260521084559"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+          "database": "dbmags_tpcc_base_run_20260521084559"
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260521084559"
+        }
+      ],
+      "explanation": "Fallback planner selected database_table_backup from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "disk_read_throughput": "increase",
+        "io_wait": "increase",
+        "query_latency": "increase"
+      },
+      "local_success_criteria": {
+        "backup_table_created": true
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "IO interference or metadata lock",
+        "confidence": 0.65
+      },
+      "cleanup_actions": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260521084559"
+        }
+      ]
+    },
+    "expected_metrics": {
+      "disk_read_throughput": "increase",
+      "io_wait": "increase",
+      "query_latency": "increase"
+    },
+    "local_success_criteria": {
+      "backup_table_created": true
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "IO interference or metadata lock",
+      "confidence": 0.65
+    },
+    "safety_constraints": {},
+    "cleanup_actions": [
+      {
+        "kind": "sql",
+        "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+        "database": "dbmags_tpcc_base_run_20260521084559"
+      }
+    ],
+    "fallback_plan": {},
+    "confidence": 0.65,
+    "react_trace": []
+  }
+]

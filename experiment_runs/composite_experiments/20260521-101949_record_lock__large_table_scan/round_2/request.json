@@ -1,0 +1,72 @@
+{
+  "user_goal": "Inject a complex multi-anomaly combination on a fresh TPCC clone",
+  "target_anomaly": "",
+  "target_mode": "causal_chain",
+  "target_chain": [
+    "traffic_surge",
+    "connections_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "target_subgraph": {},
+  "workload_config": {
+    "type": "tpcc",
+    "probe_workload": true
+  },
+  "max_retry_rounds": 5,
+  "safety_constraints": {
+    "max_duration_sec": 300,
+    "max_connection_usage_ratio": 0.8,
+    "max_cpu_usage": 90
+  },
+  "target_database": "dbmags_tpcc_base_run_20260521102056",
+  "allowed_anomalies": [
+    "missing_index",
+    "record_lock"
+  ],
+  "allowed_subtypes": [
+    "missing_index",
+    "record_lock"
+  ],
+  "anomaly_categories": [],
+  "execution_window_seconds": 16,
+  "risk_level": "medium",
+  "require_confirmation": false,
+  "execution_mode": "sequential",
+  "database_topology": "base_and_copy",
+  "user_constraints": {
+    "reflections": [
+      {
+        "failure_reason": [],
+        "suggested_changes": [
+          "{'record_lock': {'adjustments': [{'parameter': 'duration_seconds', 'current_value': 12, 'suggested_value': 20, 'rationale': 'Increasing the lock duration may amplify contention and better simulate a real-world locking issue.'}, {'parameter': 'hold_sql', 'current_value': 'UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10', 'suggested_value': 'UPDATE new_orders SET no_o_id = no_o_id + 1 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10', 'rationale': 'Introducing a write operation instead of a no-op update may increase lock contention and blocked transactions.'}]}, 'large_table_scan': {'adjustments': [{'parameter': 'thread_count', 'current_value': 6, 'suggested_value': 12, 'rationale': 'Doubling the thread count can increase query pressure and exacerbate the impact of the large table scan.'}, {'parameter': 'repeat', 'current_value': 25, 'suggested_value': 50, 'rationale': 'Increasing the number of query repetitions can amplify the workload and better simulate a slow SQL scenario.'}, {'parameter': 'sql', 'current_value': \"SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC');\", 'suggested_value': \"SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last IS NOT NULL AND c_credit IN ('BC', 'GC') AND c_balance > 1000;\", 'rationale': 'Adding an additional filter condition may increase the complexity of the query and further stress the database.'}]}, 'global_plan': {'adjustments': [{'parameter': 'max_duration_sec', 'current_value': 300, 'suggested_value': 360, 'rationale': 'Extending the maximum duration allows more time for the anomalies to propagate and their effects to be observed.'}, {'parameter': 'evaluation_targets', 'current_value': ['traffic_surge', 'connections_up', 'lock_contention', 'slow_query', 'qps_drop'], 'suggested_value': ['traffic_surge', 'connections_up', 'lock_contention', 'slow_query', 'qps_drop', 'cpu_spike'], 'rationale': \"Adding 'cpu_spike' as an evaluation target can provide additional insights into the system's behavior under stress.\"}]}}"
+        ],
+        "evaluation_reason": "metrics did not meet reward or chain success threshold",
+        "memory_items": [
+          {
+            "dbms": "mysql",
+            "workload": "tpcc",
+            "anomaly_type": "missing_index,cpu,record_lock,overall_workload,database_table_backup",
+            "context": "causal_chain",
+            "lesson": "Attempt scored 0.8420000000000001; stronger overlap or concurrency may be needed.",
+            "evidence": {
+              "performance_score": 1.0,
+              "target_anomaly_score": 0.74,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.8420000000000001,
+              "success": false
+            },
+            "timestamp": "2026-05-21T09:39:05.378747+00:00"
+          }
+        ]
+      }
+    ]
+  },
+  "mode": "multi_auto",
+  "test_enabled": true,
+  "fresh_database_per_run": true,
+  "keep_database": false
+}

@@ -20,7 +20,14 @@ if str(ROOT) not in sys.path:
 from agent_runtime.config import RuntimeConfig
 from agent_runtime.database_clone import clone_database, drop_database, unique_database_name
 from agent_runtime.db import db_cursor
+from agent_runtime.evaluator import Evaluator
+from agent_runtime.inspector import OneShotEnvironmentInspector
+from agent_runtime.memory import MemoryStore
+from agent_runtime.reflection import SelfReflectionAgent
+from agent_runtime.report import ReportGenerator
 from agent_runtime.runtime import build_components
+from agent_runtime.safety import SafetyChecker
+from agent_runtime.task_dag import TaskDAGBuilder
 from agent_runtime.verifier import ProbeProfile, ProbeWorkloadVerifier
 from agent_runtime.skills.chaosblade import ChaosBladeInjectionSkill
 from agent_runtime.skills.injection_bridge import RunInjectionSkill
@@ -86,6 +93,12 @@ def parse_args():
     parser.add_argument("--keep-db", action="store_true", help="Keep the fresh temporary database for debugging.")
     parser.add_argument("--window", type=int, default=12, help="Execution window for single/multi injection flows.")
     parser.add_argument("--risk", default="medium", help="Risk level passed into the planner.")
+    parser.add_argument("--target-anomaly", default="", help="High-level target anomaly name for causal-chain runs.")
+    parser.add_argument("--target-mode", default="single_root", choices=["single_root", "multi_root", "causal_chain", "causal_subgraph"], help="Target reproduction mode.")
+    parser.add_argument("--target-chain", default="", help="Comma-separated causal chain nodes, e.g. traffic_surge,connections_up,lock_contention,slow_query,qps_drop.")
+    parser.add_argument("--max-retry-rounds", type=int, default=5, help="Maximum reflexion/replan rounds for --test flows.")
+    parser.add_argument("--reward-threshold", type=float, default=0.7, help="Minimum evaluator reward score for success.")
+    parser.add_argument("--memory-path", default=str(ROOT / "experiment_runs" / "agent_memory" / "memory.jsonl"))
     parser.add_argument("--sequential", action="store_true", help="Keep execution sequential. Enabled by default.")
     return parser.parse_args()
 
@@ -1040,10 +1053,18 @@ def build_request_for_mode(args, target_database: str) -> ExperimentRequest:
         mode = "legacy"
     return ExperimentRequest(
         user_goal=(
-            "Inject a single anomaly on a fresh TPCC clone"
+            args.target_anomaly
+            or "Inject a single anomaly on a fresh TPCC clone"
             if mode == "single"
-            else "Inject a complex multi-anomaly combination on a fresh TPCC clone"
+            else args.target_anomaly
+            or "Inject a complex multi-anomaly combination on a fresh TPCC clone"
         ),
+        target_anomaly=args.target_anomaly,
+        target_mode=args.target_mode,
+        target_chain=parse_subtypes_arg(args.target_chain),
+        workload_config={"type": "tpcc", "probe_workload": bool(args.test)},
+        max_retry_rounds=max(1, args.max_retry_rounds),
+        safety_constraints={"max_duration_sec": max(300, max(1, args.window) * max(1, args.max_retry_rounds)), "max_connection_usage_ratio": 0.8, "max_cpu_usage": 90},
         target_database=target_database,
         allowed_anomalies=list(subtypes),
         allowed_subtypes=list(subtypes),
@@ -1114,6 +1135,33 @@ def cleanup_handles(handles: list[ActiveTaskHandle], chaos: ChaosBladeInjectionS
     return cleanup_artifacts
 
 
+def execution_trace_from_handles(handles: list[ActiveTaskHandle], cleanup_artifacts: list[dict[str, object]]):
+    return {
+        "task_status": {
+            handle.task.task_id: "failed" if handle.error else "completed"
+            for handle in handles
+        },
+        "stdout": {
+            handle.task.task_id: handle.result if handle.result is not None else handle.injection
+            for handle in handles
+        },
+        "stderr": {
+            handle.task.task_id: handle.error
+            for handle in handles
+            if handle.error
+        },
+        "errors": {
+            handle.task.task_id: handle.error
+            for handle in handles
+            if handle.error
+        },
+        "cleanup_status": {
+            item.get("task_id", ""): item.get("cleanup", {})
+            for item in cleanup_artifacts
+        },
+    }
+
+
 def composite_output_root(args, request: ExperimentRequest, subtypes: list[str]) -> Path:
     if args.output_root:
         root = Path(args.output_root)
@@ -1129,78 +1177,197 @@ def composite_output_root(args, request: ExperimentRequest, subtypes: list[str])
 
 def run_composite_or_single(args) -> int:
     components = build_components(RuntimeConfig.from_env())
-    fresh_db = create_fresh_experiment_database(args.db_base)
-    request = build_request_for_mode(args, fresh_db)
-    context = components.planner.gather_context(request)
-    response = components.planner.plan(request, context)
-    out_dir = composite_output_root(args, request, response.planner_decision.selected_anomalies if response.planner_decision else request.allowed_subtypes)
-    (out_dir / "request.json").write_text(json.dumps(to_jsonable(request), ensure_ascii=True, indent=2))
-    (out_dir / "plan.json").write_text(json.dumps(to_jsonable(response), ensure_ascii=True, indent=2))
-    if response.follow_up_questions or response.plan is None or not response.plan.tasks:
-        result = {"status": "failed", "errors": response.follow_up_questions or ["planner returned no tasks"]}
-        (out_dir / "result.json").write_text(json.dumps(result, ensure_ascii=True, indent=2))
-        if not args.keep_db:
-            drop_database(fresh_db)
-        print(str(out_dir))
-        return 1
-
-    tasks = response.plan.tasks
-    (out_dir / "tasks.json").write_text(json.dumps(to_jsonable({"tasks": tasks}), ensure_ascii=True, indent=2))
+    inspector = OneShotEnvironmentInspector(components.skills)
+    dag_builder = TaskDAGBuilder()
+    safety_checker = SafetyChecker()
+    evaluator = Evaluator(reward_threshold=args.reward_threshold)
+    reflector = SelfReflectionAgent(components.llm_client)
+    memory = MemoryStore(args.memory_path)
+    reporter = ReportGenerator()
     runner = RunInjectionSkill()
     chaos = ChaosBladeInjectionSkill()
     verifier = ProbeWorkloadVerifier(components.skills)
-    baseline = {}
-    post = {}
-    comparison = {}
-    activation_log = []
-    probe_profile = ProbeProfile(database=fresh_db, duration_seconds=max(6, min(args.window, 20)), sleep_time=0.044, thread_count=40)
-    if request.test_enabled:
-        baseline = verifier.run_probe(probe_profile, comparison_mode="baseline_tpcc_probe")
-    handles: list[ActiveTaskHandle] = []
-    try:
-        order = response.planner_decision.activation_order if response.planner_decision else [task.anomaly_type for task in tasks]
-        by_subtype = {task.anomaly_type: task for task in tasks}
-        for subtype in order:
-            task = by_subtype.get(subtype)
-            if task is None:
-                continue
-            handle = activate_task(task, runner, chaos)
-            handles.append(handle)
-            activation_log.append({
-                "task_id": task.task_id,
-                "anomaly_type": task.anomaly_type,
-                "task_role": task.task_role,
-                "resource_injection": handle.injection,
-            })
+
+    out_dir = None
+    attempts: list[dict[str, Any]] = []
+    final_payload: dict[str, Any] = {}
+    max_rounds = args.max_retry_rounds if args.test else 1
+    reflection = None
+    evaluation = None
+
+    for round_index in range(1, max_rounds + 1):
+        fresh_db = create_fresh_experiment_database(args.db_base)
+        request = build_request_for_mode(args, fresh_db)
+        if reflection and evaluation:
+            request = components.planner.replan_from_reflection(request, reflection, evaluation, memory.load_recent())
+        context = components.planner.gather_context(request)
+        environment_snapshot = inspector.inspect(request, context)
+        response = components.planner.plan(request, context)
+        if out_dir is None:
+            selected = response.planner_decision.selected_anomalies if response.planner_decision else request.allowed_subtypes
+            out_dir = composite_output_root(args, request, selected)
+            (out_dir / "request.json").write_text(json.dumps(to_jsonable(request), ensure_ascii=True, indent=2))
+            (out_dir / "environment_snapshot.json").write_text(json.dumps(to_jsonable(environment_snapshot), ensure_ascii=True, indent=2))
+        round_dir = out_dir / f"round_{round_index}"
+        round_dir.mkdir(parents=True, exist_ok=True)
+        (round_dir / "request.json").write_text(json.dumps(to_jsonable(request), ensure_ascii=True, indent=2))
+        (round_dir / "environment_snapshot.json").write_text(json.dumps(to_jsonable(environment_snapshot), ensure_ascii=True, indent=2))
+        (round_dir / "plan.json").write_text(json.dumps(to_jsonable(response), ensure_ascii=True, indent=2))
+
+        if response.follow_up_questions or response.plan is None or not response.plan.tasks:
+            result = {"status": "failed", "errors": response.follow_up_questions or ["planner returned no tasks"]}
+            (round_dir / "result.json").write_text(json.dumps(result, ensure_ascii=True, indent=2))
+            if not args.keep_db:
+                drop_database(fresh_db)
+            attempts.append({"round": round_index, "status": "failed", "execution_database": fresh_db, "errors": result["errors"]})
+            final_payload = result
+            break
+
+        tasks = response.plan.tasks
+        task_agent_outputs = dag_builder.task_agent_outputs(tasks)
+        task_dag = dag_builder.build(tasks, response.planner_decision)
+        safety = safety_checker.check(task_dag, environment_snapshot, request)
+        (round_dir / "task_agent_outputs.json").write_text(json.dumps(to_jsonable(task_agent_outputs), ensure_ascii=True, indent=2))
+        (round_dir / "task_dag.json").write_text(json.dumps(to_jsonable(task_dag), ensure_ascii=True, indent=2))
+        (round_dir / "safety_check.json").write_text(json.dumps(to_jsonable(safety), ensure_ascii=True, indent=2))
+        if round_index == 1:
+            (out_dir / "global_plan.json").write_text(json.dumps(to_jsonable(response.planner_decision.global_plan if response.planner_decision else {}), ensure_ascii=True, indent=2))
+            (out_dir / "task_dag.json").write_text(json.dumps(to_jsonable(task_dag), ensure_ascii=True, indent=2))
+            (out_dir / "safety_check.json").write_text(json.dumps(to_jsonable(safety), ensure_ascii=True, indent=2))
+
+        if not safety.approved:
+            result = {"status": "rejected_by_safety_checker", "reasons": safety.reasons, "warnings": safety.warnings}
+            (round_dir / "result.json").write_text(json.dumps(result, ensure_ascii=True, indent=2))
+            if not args.keep_db:
+                drop_database(fresh_db)
+            attempts.append({"round": round_index, "status": result["status"], "execution_database": fresh_db, "safety": to_jsonable(safety)})
+            final_payload = result
+            break
+
+        baseline = {}
+        post = {}
+        comparison = {}
+        activation_log = []
+        handles: list[ActiveTaskHandle] = []
+        cleanup_artifacts = []
+        execution_trace = {}
+        probe_profile = ProbeProfile(database=fresh_db, duration_seconds=max(6, min(args.window, 20)), sleep_time=0.044, thread_count=40)
+        try:
+            if request.test_enabled:
+                baseline = verifier.run_probe(probe_profile, comparison_mode="baseline_tpcc_probe")
+            order = response.planner_decision.activation_order if response.planner_decision else [task.anomaly_type for task in tasks]
+            by_subtype = {task.anomaly_type: task for task in tasks}
+            for subtype in order:
+                task = by_subtype.get(subtype)
+                if task is None:
+                    continue
+                handle = activate_task(task, runner, chaos)
+                handles.append(handle)
+                activation_log.append({
+                    "task_id": task.task_id,
+                    "anomaly_type": task.anomaly_type,
+                    "task_role": task.task_role,
+                    "resource_injection": handle.injection,
+                })
+            if request.test_enabled:
+                post = verifier.run_probe(probe_profile, comparison_mode="after_anomaly_probe")
+                comparison = verifier.compare(baseline, post)
+                evaluation = evaluator.evaluate(request, task_dag, baseline, post, {"safety_violated": False})
+                comparison.update({
+                    "requested_subtypes": request.allowed_subtypes or (response.planner_decision.selected_anomalies if response.planner_decision else []),
+                    "selection_mode": request.mode,
+                    "execution_database": fresh_db,
+                    "reward": evaluation.reward,
+                    "evaluation_success": evaluation.success,
+                })
+            wait_for_handles(handles, timeout_seconds=args.window + 10)
+        finally:
+            cleanup_artifacts = cleanup_handles(handles, chaos)
+            execution_trace = execution_trace_from_handles(handles, cleanup_artifacts)
+            if not args.keep_db:
+                drop_database(fresh_db)
+
+        if request.test_enabled and evaluation and not evaluation.success:
+            reflection = reflector.reflect(
+                {
+                    "global_plan": response.planner_decision.global_plan if response.planner_decision else {},
+                    "task_outputs": task_agent_outputs,
+                    "execution_trace": execution_trace,
+                    "baseline_metrics": baseline,
+                    "after_metrics": post,
+                    "evaluation_result": evaluation,
+                }
+            )
+            memory.append_reflection(
+                reflection,
+                {
+                    "dbms": environment_snapshot.dbms,
+                    "workload": request.workload_config.get("type", "tpcc"),
+                    "anomaly_type": ",".join(response.planner_decision.selected_anomalies if response.planner_decision else request.allowed_subtypes),
+                    "context": request.target_mode,
+                    "evidence": evaluation.reward,
+                },
+            )
+        else:
+            reflection = None
+
+        result = {
+            "status": "completed",
+            "selection_mode": request.mode,
+            "execution_database": fresh_db,
+            "activated_tasks": to_jsonable(activation_log),
+            "cleanup": cleanup_artifacts,
+            "comparison": comparison if request.test_enabled else {},
+        }
+        (round_dir / "activation.json").write_text(json.dumps(to_jsonable(activation_log), ensure_ascii=True, indent=2))
+        (round_dir / "execution_trace.json").write_text(json.dumps(to_jsonable(execution_trace), ensure_ascii=True, indent=2))
+        (round_dir / "cleanup.json").write_text(json.dumps(to_jsonable(cleanup_artifacts), ensure_ascii=True, indent=2))
+        (round_dir / "result.json").write_text(json.dumps(result, ensure_ascii=True, indent=2))
         if request.test_enabled:
-            post = verifier.run_probe(probe_profile, comparison_mode="post_tpcc_probe")
-            comparison = verifier.compare(baseline, post)
-            comparison.update({
-                "requested_subtypes": request.allowed_subtypes or (response.planner_decision.selected_anomalies if response.planner_decision else []),
-                "selection_mode": request.mode,
+            (round_dir / "baseline_metrics.json").write_text(json.dumps(baseline, ensure_ascii=True, indent=2))
+            (round_dir / "after_metrics.json").write_text(json.dumps(post, ensure_ascii=True, indent=2))
+            (round_dir / "comparison.json").write_text(json.dumps(comparison, ensure_ascii=True, indent=2))
+            (round_dir / "evaluation.json").write_text(json.dumps(to_jsonable(evaluation), ensure_ascii=True, indent=2))
+            (round_dir / "reflection.json").write_text(json.dumps(to_jsonable(reflection or {}), ensure_ascii=True, indent=2))
+        attempts.append(
+            {
+                "round": round_index,
+                "status": "completed",
                 "execution_database": fresh_db,
-            })
-        wait_for_handles(handles, timeout_seconds=args.window + 10)
-    finally:
-        cleanup_artifacts = cleanup_handles(handles, chaos)
-        if not args.keep_db:
-            drop_database(fresh_db)
-    result = {
-        "status": "completed",
-        "selection_mode": request.mode,
-        "execution_database": fresh_db,
-        "activated_tasks": to_jsonable(activation_log),
-        "cleanup": cleanup_artifacts,
-        "comparison": comparison if request.test_enabled else {},
-    }
-    if request.test_enabled:
-        (out_dir / "baseline_metrics.json").write_text(json.dumps(baseline, ensure_ascii=True, indent=2))
-        (out_dir / "post_metrics.json").write_text(json.dumps(post, ensure_ascii=True, indent=2))
-        (out_dir / "comparison.json").write_text(json.dumps(comparison, ensure_ascii=True, indent=2))
-    (out_dir / "activation.json").write_text(json.dumps(to_jsonable(activation_log), ensure_ascii=True, indent=2))
-    (out_dir / "result.json").write_text(json.dumps(result, ensure_ascii=True, indent=2))
+                "success": bool(evaluation.success) if evaluation else None,
+                "reward": evaluation.reward if evaluation else {},
+            }
+        )
+        final_payload = {
+            "status": "completed",
+            "attempts": attempts,
+            "final_round": round_index,
+            "success": bool(evaluation.success) if evaluation else True,
+            "selection_mode": request.mode,
+        }
+        if not request.test_enabled or (evaluation and evaluation.success):
+            break
+
+    if out_dir is None:
+        out_dir = ROOT / "experiment_runs" / "composite_experiments" / f"{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}_failed"
+        out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "attempts.json").write_text(json.dumps(to_jsonable(attempts), ensure_ascii=True, indent=2))
+    final_report = reporter.build(
+        {
+            "request": to_jsonable(request) if "request" in locals() else {},
+            "environment": environment_snapshot if "environment_snapshot" in locals() else {},
+            "global_plan": response.planner_decision.global_plan if "response" in locals() and response.planner_decision else {},
+            "task_dag": task_dag if "task_dag" in locals() else {},
+            "execution_trace": execution_trace if "execution_trace" in locals() else {},
+            "evaluation": evaluation,
+            "reflection": reflection,
+            "cleanup": cleanup_artifacts if "cleanup_artifacts" in locals() else [],
+        }
+    )
+    (out_dir / "final_report.json").write_text(json.dumps(to_jsonable(final_report), ensure_ascii=True, indent=2))
+    (out_dir / "result.json").write_text(json.dumps(to_jsonable(final_payload), ensure_ascii=True, indent=2))
     print(str(out_dir))
-    return 0
+    return 0 if final_payload.get("status") == "completed" else 1
 
 
 def main():

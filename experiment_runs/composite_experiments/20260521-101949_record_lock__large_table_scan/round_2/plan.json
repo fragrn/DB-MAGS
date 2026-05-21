@@ -1,0 +1,457 @@
+{
+  "plan": {
+    "summary": "A combination of missing indexes and record locks will be injected to simulate a complex multi-anomaly scenario. Missing indexes will target the 'agent_group_by_support' table, while record locks will focus on the 'order_line' table.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4393264, indexes=1); stock(rows=1430123, indexes=1); history(rows=451226, indexes=2)",
+    "tasks": [
+      {
+        "task_id": "lock-record-lock",
+        "agent_type": "lock_conflict",
+        "anomaly_type": "record_lock",
+        "title": "Hold a row-level write lock on new_orders.",
+        "task_role": "lock_holder",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260521102056",
+          "anomaly_subtype": "record_lock",
+          "source_agent": "lock_conflict",
+          "column_name": "agent_meta_lock_b6e090f0",
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "target_table": "order_line",
+          "lock_type": "row-level",
+          "rationale": "Simulate contention by introducing row-level locks on frequently accessed rows."
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "hold_sql",
+            "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+            "database": "dbmags_tpcc_base_run_20260521102056",
+            "hold_seconds": 20
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected record_lock from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "lock_waits": "increase",
+          "blocked_transactions": "increase",
+          "p95_latency": "increase"
+        },
+        "local_success_criteria": {
+          "lock_wait_time_increase_ratio": 2.0,
+          "blocked_transaction_min_count": 1
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "deadlock or timeout",
+          "confidence": 0.75
+        },
+        "cleanup_actions": []
+      },
+      {
+        "task_id": "slow-sql-missing-index",
+        "agent_type": "slow_sql",
+        "anomaly_type": "missing_index",
+        "title": "Slow SQL: missing_index",
+        "task_role": "background_anomaly",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260521102056",
+          "anomaly_subtype": "missing_index",
+          "source_agent": "slow_sql",
+          "sql": "SELECT ol_w_id, ol_i_id, SUM(ol_quantity) FROM agent_group_by_support GROUP BY ol_w_id, ol_i_id;",
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "target_table": "agent_group_by_support",
+          "columns": [
+            "ol_w_id",
+            "ol_i_id"
+          ],
+          "rationale": "High query volume on these columns without indexes."
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "single_sql",
+            "sleep_time": 0.01,
+            "thread_count": 6,
+            "repeat": 25,
+            "description": "Background slow SQL pressure for missing_index.",
+            "sql": "SELECT ol_w_id, ol_i_id, SUM(ol_quantity) FROM agent_group_by_support GROUP BY ol_w_id, ol_i_id;",
+            "database": "dbmags_tpcc_base_run_20260521102056",
+            "duration_seconds": 20
+          }
+        ],
+        "validation_steps": [
+          {
+            "kind": "explain",
+            "sql": "SELECT ol_w_id, ol_i_id, SUM(ol_quantity) FROM agent_group_by_support GROUP BY ol_w_id, ol_i_id;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Table scan on <temporary>\n    -> Aggregate using temporary table\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+                ]
+              ]
+            }
+          }
+        ],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected missing_index from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "query_latency": "increase",
+          "rows_examined": "increase",
+          "slow_query_count": "increase"
+        },
+        "local_success_criteria": {
+          "explain_validated": true,
+          "latency_direction": "increase"
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "long-running query pressure",
+          "confidence": 0.7
+        },
+        "cleanup_actions": []
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "missing_index",
+        "record_lock"
+      ],
+      "task_assignments": {
+        "missing_index": "slow_sql",
+        "record_lock": "lock_conflict"
+      },
+      "database_mapping": {
+        "missing_index": "dbmags_tpcc_base_run_20260521102056",
+        "record_lock": "dbmags_tpcc_base_run_20260521102056"
+      },
+      "task_parameters": {
+        "missing_index": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "target_table": "agent_group_by_support",
+          "columns": [
+            "ol_w_id",
+            "ol_i_id"
+          ],
+          "rationale": "High query volume on these columns without indexes."
+        },
+        "record_lock": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "target_table": "order_line",
+          "lock_type": "row-level",
+          "rationale": "Simulate contention by introducing row-level locks on frequently accessed rows."
+        }
+      },
+      "expected_signals": [
+        "full scan or skip scan",
+        "latency increase",
+        "row lock wait",
+        "transaction blocking"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "missing_index",
+          "category": "slow_sql",
+          "source_agent": "slow_sql",
+          "database": "dbmags_tpcc_base_run_20260521102056",
+          "parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "target_table": "agent_group_by_support",
+            "columns": [
+              "ol_w_id",
+              "ol_i_id"
+            ],
+            "rationale": "High query volume on these columns without indexes."
+          },
+          "rationale": "Fallback planner selected missing_index from request constraints.",
+          "expected_signals": [
+            "full scan or skip scan",
+            "latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        },
+        {
+          "anomaly_subtype": "record_lock",
+          "category": "lock_conflict",
+          "source_agent": "lock_conflict",
+          "database": "dbmags_tpcc_base_run_20260521102056",
+          "parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "target_table": "order_line",
+            "lock_type": "row-level",
+            "rationale": "Simulate contention by introducing row-level locks on frequently accessed rows."
+          },
+          "rationale": "Fallback planner selected record_lock from request constraints.",
+          "expected_signals": [
+            "row lock wait",
+            "transaction blocking"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": "A combination of missing indexes and record locks will be injected to simulate a complex multi-anomaly scenario. Missing indexes will target the 'agent_group_by_support' table, while record locks will focus on the 'order_line' table.",
+      "selection_mode": "multi_auto",
+      "execution_database": "dbmags_tpcc_base_run_20260521102056",
+      "activation_order": [
+        "record_lock",
+        "missing_index"
+      ],
+      "cleanup_order": [
+        "missing_index",
+        "record_lock"
+      ],
+      "composite_experiment_name": "missing_index__record_lock",
+      "selection_rationale": "[\"The 'missing_index' anomaly was chosen to create slow SQL queries on the 'agent_group_by_support' table, which has no existing indexes on frequently queried columns.\", \"The 'record_lock' anomaly was selected to simulate lock contention on the 'order_line' table, which is frequently accessed in TPCC workloads.\"]",
+      "llm_used": true,
+      "llm_error": "",
+      "llm_error_type": "",
+      "llm_transport": "chat_completions",
+      "global_plan": {
+        "mode": "causal_chain",
+        "root_causes_to_inject": [
+          "missing_index"
+        ],
+        "effects_to_observe": [
+          "traffic_surge",
+          "connections_up",
+          "lock_contention",
+          "slow_query",
+          "qps_drop"
+        ],
+        "task_agents": [
+          "lock_conflict",
+          "slow_sql"
+        ],
+        "task_dependencies": [
+          [
+            "traffic_surge",
+            "connections_up"
+          ],
+          [
+            "connections_up",
+            "lock_contention"
+          ],
+          [
+            "lock_contention",
+            "slow_query"
+          ],
+          [
+            "slow_query",
+            "qps_drop"
+          ]
+        ],
+        "evaluation_targets": [
+          "traffic_surge",
+          "connections_up",
+          "lock_contention",
+          "slow_query",
+          "qps_drop"
+        ],
+        "safety_constraints": {
+          "max_duration_sec": 300,
+          "max_connection_usage_ratio": 0.8,
+          "max_cpu_usage": 90
+        },
+        "rationale": "[\"The 'missing_index' anomaly was chosen to create slow SQL queries on the 'agent_group_by_support' table, which has no existing indexes on frequently queried columns.\", \"The 'record_lock' anomaly was selected to simulate lock contention on the 'order_line' table, which is frequently accessed in TPCC workloads.\"]"
+      }
+    },
+    "expected_signals": [
+      "full scan or skip scan",
+      "latency increase",
+      "row lock wait",
+      "transaction blocking"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "missing_index",
+      "record_lock"
+    ],
+    "task_assignments": {
+      "missing_index": "slow_sql",
+      "record_lock": "lock_conflict"
+    },
+    "database_mapping": {
+      "missing_index": "dbmags_tpcc_base_run_20260521102056",
+      "record_lock": "dbmags_tpcc_base_run_20260521102056"
+    },
+    "task_parameters": {
+      "missing_index": {
+        "duration_seconds": 16,
+        "background_duration_seconds": 20,
+        "target_table": "agent_group_by_support",
+        "columns": [
+          "ol_w_id",
+          "ol_i_id"
+        ],
+        "rationale": "High query volume on these columns without indexes."
+      },
+      "record_lock": {
+        "duration_seconds": 16,
+        "background_duration_seconds": 20,
+        "target_table": "order_line",
+        "lock_type": "row-level",
+        "rationale": "Simulate contention by introducing row-level locks on frequently accessed rows."
+      }
+    },
+    "expected_signals": [
+      "full scan or skip scan",
+      "latency increase",
+      "row lock wait",
+      "transaction blocking"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "missing_index",
+        "category": "slow_sql",
+        "source_agent": "slow_sql",
+        "database": "dbmags_tpcc_base_run_20260521102056",
+        "parameters": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "target_table": "agent_group_by_support",
+          "columns": [
+            "ol_w_id",
+            "ol_i_id"
+          ],
+          "rationale": "High query volume on these columns without indexes."
+        },
+        "rationale": "Fallback planner selected missing_index from request constraints.",
+        "expected_signals": [
+          "full scan or skip scan",
+          "latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      },
+      {
+        "anomaly_subtype": "record_lock",
+        "category": "lock_conflict",
+        "source_agent": "lock_conflict",
+        "database": "dbmags_tpcc_base_run_20260521102056",
+        "parameters": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "target_table": "order_line",
+          "lock_type": "row-level",
+          "rationale": "Simulate contention by introducing row-level locks on frequently accessed rows."
+        },
+        "rationale": "Fallback planner selected record_lock from request constraints.",
+        "expected_signals": [
+          "row lock wait",
+          "transaction blocking"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": "A combination of missing indexes and record locks will be injected to simulate a complex multi-anomaly scenario. Missing indexes will target the 'agent_group_by_support' table, while record locks will focus on the 'order_line' table.",
+    "selection_mode": "multi_auto",
+    "execution_database": "dbmags_tpcc_base_run_20260521102056",
+    "activation_order": [
+      "record_lock",
+      "missing_index"
+    ],
+    "cleanup_order": [
+      "missing_index",
+      "record_lock"
+    ],
+    "composite_experiment_name": "missing_index__record_lock",
+    "selection_rationale": "[\"The 'missing_index' anomaly was chosen to create slow SQL queries on the 'agent_group_by_support' table, which has no existing indexes on frequently queried columns.\", \"The 'record_lock' anomaly was selected to simulate lock contention on the 'order_line' table, which is frequently accessed in TPCC workloads.\"]",
+    "llm_used": true,
+    "llm_error": "",
+    "llm_error_type": "",
+    "llm_transport": "chat_completions",
+    "global_plan": {
+      "mode": "causal_chain",
+      "root_causes_to_inject": [
+        "missing_index"
+      ],
+      "effects_to_observe": [
+        "traffic_surge",
+        "connections_up",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "task_agents": [
+        "lock_conflict",
+        "slow_sql"
+      ],
+      "task_dependencies": [
+        [
+          "traffic_surge",
+          "connections_up"
+        ],
+        [
+          "connections_up",
+          "lock_contention"
+        ],
+        [
+          "lock_contention",
+          "slow_query"
+        ],
+        [
+          "slow_query",
+          "qps_drop"
+        ]
+      ],
+      "evaluation_targets": [
+        "traffic_surge",
+        "connections_up",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "safety_constraints": {
+        "max_duration_sec": 300,
+        "max_connection_usage_ratio": 0.8,
+        "max_cpu_usage": 90
+      },
+      "rationale": "[\"The 'missing_index' anomaly was chosen to create slow SQL queries on the 'agent_group_by_support' table, which has no existing indexes on frequently queried columns.\", \"The 'record_lock' anomaly was selected to simulate lock contention on the 'order_line' table, which is frequently accessed in TPCC workloads.\"]"
+    }
+  },
+  "follow_up_questions": [],
+  "reasoning": "Planner produced a structured anomaly plan."
+}

@@ -1,0 +1,89 @@
+{
+  "task_status": {
+    "resource-cpu": "completed",
+    "lock-record-lock": "completed",
+    "slow-sql-missing-index": "completed",
+    "backup-orders": "completed",
+    "traffic-overall-workload": "completed"
+  },
+  "stdout": {
+    "resource-cpu": {
+      "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+      "executed": true,
+      "uid": "a047fc10c5db2b86",
+      "blade_path": ".tools/chaosblade-1.8.0-darwin_arm64/blade",
+      "stdout": "{\"code\":200,\"success\":true,\"result\":\"a047fc10c5db2b86\"}"
+    },
+    "lock-record-lock": [
+      {
+        "executed": true,
+        "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+        "database": "dbmags_tpcc_base_run_20260521093644",
+        "hold_seconds": 16.0,
+        "elapsed_seconds": 16.01167475001421,
+        "latency_ms": 16011.674750014208
+      }
+    ],
+    "slow-sql-missing-index": [
+      {
+        "executed": true,
+        "database": "dbmags_tpcc_base_run_20260521093644",
+        "duration_seconds": 16.0,
+        "elapsed_seconds": 16.074913874967024,
+        "successful_transactions": 14,
+        "failed_transactions": 0,
+        "qps": 0.8709222400128548,
+        "avg_latency_ms": 1136.4478750620037,
+        "p95_latency_ms": 1191.041582962498,
+        "p99_latency_ms": 1217.2013750532642,
+        "single_sql_mean_ms": 1136.4478750620037,
+        "thread_count": 6,
+        "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;"
+      }
+    ],
+    "backup-orders": [
+      {
+        "executed": true,
+        "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+        "database": "dbmags_tpcc_base_run_20260521093644",
+        "elapsed_seconds": 0.00652145897038281,
+        "latency_ms": 6.52145897038281,
+        "single_sql_mean_ms": 6.52145897038281
+      },
+      {
+        "executed": true,
+        "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+        "database": "dbmags_tpcc_base_run_20260521093644",
+        "elapsed_seconds": 1.6787326670018956,
+        "latency_ms": 1678.7326670018956,
+        "single_sql_mean_ms": 1678.7326670018956
+      }
+    ],
+    "traffic-overall-workload": [
+      {
+        "executed": true,
+        "database": "dbmags_tpcc_base_run_20260521093644",
+        "duration_seconds": 16.0,
+        "elapsed_seconds": 16.011641792021692,
+        "successful_transactions": 136,
+        "failed_transactions": 0,
+        "qps": 8.493819794779965,
+        "avg_latency_ms": 111.66918694781249,
+        "p95_latency_ms": 13.495124992914498,
+        "p99_latency_ms": 1412.8536669304594,
+        "single_sql_mean_ms": 0.0,
+        "thread_count": 500,
+        "sql": ""
+      }
+    ]
+  },
+  "stderr": {},
+  "errors": {},
+  "cleanup_status": {
+    "resource-cpu": {
+      "cleaned": true,
+      "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+      "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade destroy a047fc10c5db2b86"
+    }
+  }
+}

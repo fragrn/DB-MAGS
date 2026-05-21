@@ -53,6 +53,10 @@ class LockConflictAgent(BaseTaskAgent):
                     validation_steps=[],
                     rollback_steps=payload["rollback_steps"],
                     explanation=planned_task.rationale or payload["title"],
+                    expected_metrics={"lock_waits": "increase", "blocked_transactions": "increase", "p95_latency": "increase"},
+                    local_success_criteria={"lock_wait_time_increase_ratio": 2.0, "blocked_transaction_min_count": 1},
+                    risk_assessment={"risk_level": "medium", "main_risk": "deadlock or timeout", "confidence": 0.75},
+                    cleanup_actions=payload["rollback_steps"],
                 )
             )
         return task_specs
