@@ -1,0 +1,1162 @@
+{
+  "plan": {
+    "summary": "{'goal': 'Inject a complex multi-anomaly combination on a fresh TPCC clone', 'database': 'dbmags_tpcc_base_run_20260526060506', 'anomaly_bundle': ['Missing composite index induces filesort/scan-heavy analytics', 'Row-lock contention hotspot on stock amplifies wait times', 'Overall workload surge adds queueing pressure', 'Logical backup of large table adds IO/buffer churn', 'CPU saturation increases latency and reduces throughput'], 'expected_observables': ['slow queries dominated by agent_order_by_support ORDER BY/GROUP BY', 'INNODB_LOCK_WAITS / performance_schema lock waits rising', 'higher Threads_running and stalled transactions', 'IO utilization spike during mysqldump', 'CPU utilization near saturation with increased scheduler run queue']}",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4393264, indexes=1); stock(rows=1430123, indexes=1); history(rows=451868, indexes=2)",
+    "tasks": [
+      {
+        "task_id": "lock-record-lock",
+        "agent_type": "lock_conflict",
+        "anomaly_type": "record_lock",
+        "title": "Hold a row-level write lock on new_orders.",
+        "task_role": "lock_holder",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "anomaly_subtype": "record_lock",
+          "source_agent": "lock_conflict",
+          "column_name": "agent_meta_lock_e9f369ea",
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "engine_assumption": "InnoDB",
+          "target_table": "stock",
+          "hot_rows_strategy": "single_warehouse_hot_item",
+          "hot_row_selector_sql": "SELECT s_w_id, s_i_id FROM stock WHERE s_w_id = 1 ORDER BY s_i_id LIMIT 1",
+          "blocker_session": {
+            "isolation_level": "REPEATABLE-READ",
+            "autocommit": 0,
+            "sql_sequence": [
+              "USE dbmags_tpcc_base_run_20260526060506",
+              "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+              "START TRANSACTION",
+              "SELECT s_quantity FROM stock WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1) FOR UPDATE",
+              "DO SLEEP(600)"
+            ]
+          },
+          "contender_sessions": {
+            "concurrency": 24,
+            "duration_seconds": 600,
+            "sql_template": "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+          },
+          "expected_symptoms": [
+            "high lock wait time",
+            "threads waiting for row lock",
+            "increased deadlock/lock wait timeout risk (depending on workload mix)"
+          ]
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "hold_sql",
+            "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "hold_seconds": 20
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected record_lock from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "lock_waits": "increase",
+          "blocked_transactions": "increase",
+          "p95_latency": "increase"
+        },
+        "local_success_criteria": {
+          "lock_wait_time_increase_ratio": 2.0,
+          "blocked_transaction_min_count": 1
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "deadlock or timeout",
+          "confidence": 0.75
+        },
+        "cleanup_actions": []
+      },
+      {
+        "task_id": "traffic-overall-workload",
+        "agent_type": "traffic_surge",
+        "anomaly_type": "overall_workload",
+        "title": "Traffic surge: overall_workload",
+        "task_role": "background_anomaly",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "anomaly_subtype": "overall_workload",
+          "source_agent": "traffic_surge",
+          "mode": "overall_workload",
+          "sleep_time": 0.005,
+          "thread_count": 500,
+          "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+          "duration_seconds": 20
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "overall_workload",
+            "sleep_time": 0.005,
+            "thread_count": 500,
+            "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "duration_seconds": 20
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected overall_workload from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "active_connections": "increase",
+          "qps": "increase_initially",
+          "latency": "increase_after_saturation"
+        },
+        "local_success_criteria": {
+          "qps_or_latency_change": true
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "connection saturation",
+          "confidence": 0.65
+        },
+        "cleanup_actions": []
+      },
+      {
+        "task_id": "slow-sql-missing-index",
+        "agent_type": "slow_sql",
+        "anomaly_type": "missing_index",
+        "title": "Slow SQL: missing_index",
+        "task_role": "background_anomaly",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "anomaly_subtype": "missing_index",
+          "source_agent": "slow_sql",
+          "sql": "SELECT /* missing_index_candidate: range predicate on non-indexed balance */ SQL_NO_CACHE SUM(c_balance) FROM agent_large_scan_support WHERE c_w_id = 1 AND c_d_id = 1 AND c_balance > 0;",
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "target_table": "agent_order_by_support",
+          "slow_query_pattern": "order_by",
+          "query_templates": [
+            "SELECT ol_w_id, ol_d_id, ol_o_id, ol_i_id, ol_quantity, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? ORDER BY ol_o_id DESC LIMIT 2000",
+            "SELECT ol_w_id, ol_d_id, ol_o_id, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? ORDER BY ol_o_id DESC LIMIT 5000"
+          ],
+          "expected_missing_index": [
+            "agent_order_by_support(ol_w_id, ol_d_id, ol_o_id)"
+          ],
+          "notes": "Ensure no composite index is created on (ol_w_id, ol_d_id, ol_o_id); allow filesort + large scan to manifest."
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "single_sql",
+            "sleep_time": 0.01,
+            "thread_count": 6,
+            "repeat": 25,
+            "description": "Background slow SQL pressure for missing_index.",
+            "sql": "SELECT /* missing_index_candidate: range predicate on non-indexed balance */ SQL_NO_CACHE SUM(c_balance) FROM agent_large_scan_support WHERE c_w_id = 1 AND c_d_id = 1 AND c_balance > 0;",
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "duration_seconds": 20
+          }
+        ],
+        "validation_steps": [
+          {
+            "kind": "explain",
+            "sql": "SELECT /* missing_index_candidate: range predicate on non-indexed balance */ SQL_NO_CACHE SUM(c_balance) FROM agent_large_scan_support WHERE c_w_id = 1 AND c_d_id = 1 AND c_balance > 0;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Aggregate: sum(agent_large_scan_support.c_balance)  (cost=45704 rows=1)\n    -> Filter: ((agent_large_scan_support.c_d_id = 1) and (agent_large_scan_support.c_w_id = 1) and (agent_large_scan_support.c_balance > 0.00))  (cost=45359 rows=1497)\n        -> Table scan on agent_large_scan_support  (cost=45359 rows=449223)\n"
+                ]
+              ]
+            }
+          }
+        ],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected missing_index from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "query_latency": "increase",
+          "rows_examined": "increase",
+          "slow_query_count": "increase"
+        },
+        "local_success_criteria": {
+          "explain_validated": true,
+          "latency_direction": "increase"
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "long-running query pressure",
+          "confidence": 0.7
+        },
+        "cleanup_actions": []
+      },
+      {
+        "task_id": "resource-cpu",
+        "agent_type": "resource_bottleneck",
+        "anomaly_type": "cpu",
+        "title": "Resource bottleneck: cpu",
+        "task_role": "resource_injection",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "anomaly_subtype": "cpu",
+          "source_agent": "resource_bottleneck",
+          "duration_seconds": 600,
+          "background_duration_seconds": 20,
+          "host_level_stressor": "cpu_burn",
+          "start_offset_seconds": 60,
+          "intensity": {
+            "cores": "80% of available cores",
+            "method": "multi-process tight loop"
+          },
+          "expected_symptoms": [
+            "elevated mysqld CPU run queue latency",
+            "reduced QPS / increased response time variability"
+          ]
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "shell",
+            "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+            "database": "dbmags_tpcc_base_run_20260526060506"
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected cpu from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "cpu_pressure": "increase",
+          "query_latency": "increase"
+        },
+        "local_success_criteria": {
+          "chaosblade_uid": "present",
+          "qps": "decrease_or_latency_increase"
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "host resource contention",
+          "confidence": 0.65
+        },
+        "cleanup_actions": []
+      },
+      {
+        "task_id": "backup-orders",
+        "agent_type": "database_backup",
+        "anomaly_type": "database_table_backup",
+        "title": "Backup table orders into orders_backup_agent.",
+        "task_role": "backup_job",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "anomaly_subtype": "database_table_backup",
+          "source_agent": "database_backup",
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "source_table": "orders",
+          "backup_method": "logical_single_table_dump",
+          "target_tables": [
+            "order_line"
+          ],
+          "command_template": "mysqldump --single-transaction --quick --skip-lock-tables dbmags_tpcc_base_run_20260526060506 order_line > /tmp/order_line_backup.sql",
+          "start_offset_seconds": 120,
+          "expected_symptoms": [
+            "increased disk IO",
+            "buffer pool churn",
+            "reduced throughput for concurrent workload"
+          ]
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526060506"
+          },
+          {
+            "kind": "sql",
+            "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+            "database": "dbmags_tpcc_base_run_20260526060506"
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526060506"
+          }
+        ],
+        "explanation": "Fallback planner selected database_table_backup from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "disk_read_throughput": "increase",
+          "io_wait": "increase",
+          "query_latency": "increase"
+        },
+        "local_success_criteria": {
+          "backup_table_created": true
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "IO interference or metadata lock",
+          "confidence": 0.65
+        },
+        "cleanup_actions": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526060506"
+          }
+        ]
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "missing_index",
+        "record_lock",
+        "overall_workload",
+        "database_table_backup",
+        "cpu"
+      ],
+      "task_assignments": {
+        "missing_index": "slow_sql",
+        "record_lock": "lock_conflict",
+        "overall_workload": "traffic_surge",
+        "database_table_backup": "database_backup",
+        "cpu": "resource_bottleneck"
+      },
+      "database_mapping": {
+        "missing_index": "dbmags_tpcc_base_run_20260526060506",
+        "record_lock": "dbmags_tpcc_base_run_20260526060506",
+        "overall_workload": "dbmags_tpcc_base_run_20260526060506",
+        "database_table_backup": "dbmags_tpcc_base_run_20260526060506",
+        "cpu": "dbmags_tpcc_base_run_20260526060506"
+      },
+      "task_parameters": {
+        "missing_index": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "target_table": "agent_order_by_support",
+          "slow_query_pattern": "order_by",
+          "query_templates": [
+            "SELECT ol_w_id, ol_d_id, ol_o_id, ol_i_id, ol_quantity, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? ORDER BY ol_o_id DESC LIMIT 2000",
+            "SELECT ol_w_id, ol_d_id, ol_o_id, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? ORDER BY ol_o_id DESC LIMIT 5000"
+          ],
+          "expected_missing_index": [
+            "agent_order_by_support(ol_w_id, ol_d_id, ol_o_id)"
+          ],
+          "notes": "Ensure no composite index is created on (ol_w_id, ol_d_id, ol_o_id); allow filesort + large scan to manifest."
+        },
+        "record_lock": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "engine_assumption": "InnoDB",
+          "target_table": "stock",
+          "hot_rows_strategy": "single_warehouse_hot_item",
+          "hot_row_selector_sql": "SELECT s_w_id, s_i_id FROM stock WHERE s_w_id = 1 ORDER BY s_i_id LIMIT 1",
+          "blocker_session": {
+            "isolation_level": "REPEATABLE-READ",
+            "autocommit": 0,
+            "sql_sequence": [
+              "USE dbmags_tpcc_base_run_20260526060506",
+              "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+              "START TRANSACTION",
+              "SELECT s_quantity FROM stock WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1) FOR UPDATE",
+              "DO SLEEP(600)"
+            ]
+          },
+          "contender_sessions": {
+            "concurrency": 24,
+            "duration_seconds": 600,
+            "sql_template": "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+          },
+          "expected_symptoms": [
+            "high lock wait time",
+            "threads waiting for row lock",
+            "increased deadlock/lock wait timeout risk (depending on workload mix)"
+          ]
+        },
+        "overall_workload": {
+          "duration_seconds": 600,
+          "background_duration_seconds": 20,
+          "baseline_sleep": 0.044,
+          "baseline_threads": 80,
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "workload_profile": "tpcc_mixed_plus_analytics",
+          "concurrency": 64,
+          "mix": [
+            {
+              "name": "tpcc_like_hot_path",
+              "weight": 0.65,
+              "templates": [
+                "SELECT c_id, c_last, c_first FROM customer WHERE c_w_id = ? AND c_d_id = ? AND c_last = ? ORDER BY c_first LIMIT 10",
+                "SELECT o_id, o_entry_d, o_ol_cnt FROM orders WHERE o_w_id = ? AND o_d_id = ? AND o_c_id = ? ORDER BY o_id DESC LIMIT 20"
+              ]
+            },
+            {
+              "name": "slow_analytics_missing_index_driver",
+              "weight": 0.25,
+              "templates": [
+                "SELECT ol_w_id, ol_d_id, ol_o_id, SUM(ol_amount) AS revenue FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? GROUP BY ol_w_id, ol_d_id, ol_o_id ORDER BY ol_o_id DESC LIMIT 2000"
+              ]
+            },
+            {
+              "name": "lock_contenders",
+              "weight": 0.1,
+              "templates": [
+                "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+              ]
+            }
+          ],
+          "notes": "Run concurrently with record_lock blocker session to amplify queueing and latency."
+        },
+        "database_table_backup": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "source_table": "orders",
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "backup_method": "logical_single_table_dump",
+          "target_tables": [
+            "order_line"
+          ],
+          "command_template": "mysqldump --single-transaction --quick --skip-lock-tables dbmags_tpcc_base_run_20260526060506 order_line > /tmp/order_line_backup.sql",
+          "start_offset_seconds": 120,
+          "expected_symptoms": [
+            "increased disk IO",
+            "buffer pool churn",
+            "reduced throughput for concurrent workload"
+          ]
+        },
+        "cpu": {
+          "duration_seconds": 600,
+          "background_duration_seconds": 20,
+          "host_level_stressor": "cpu_burn",
+          "start_offset_seconds": 60,
+          "intensity": {
+            "cores": "80% of available cores",
+            "method": "multi-process tight loop"
+          },
+          "expected_symptoms": [
+            "elevated mysqld CPU run queue latency",
+            "reduced QPS / increased response time variability"
+          ]
+        }
+      },
+      "expected_signals": [
+        "backup table created",
+        "cpu saturation",
+        "full scan or skip scan",
+        "latency increase",
+        "qps increase",
+        "row lock wait",
+        "transaction blocking"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "missing_index",
+          "category": "slow_sql",
+          "source_agent": "slow_sql",
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "target_table": "agent_order_by_support",
+            "slow_query_pattern": "order_by",
+            "query_templates": [
+              "SELECT ol_w_id, ol_d_id, ol_o_id, ol_i_id, ol_quantity, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? ORDER BY ol_o_id DESC LIMIT 2000",
+              "SELECT ol_w_id, ol_d_id, ol_o_id, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? ORDER BY ol_o_id DESC LIMIT 5000"
+            ],
+            "expected_missing_index": [
+              "agent_order_by_support(ol_w_id, ol_d_id, ol_o_id)"
+            ],
+            "notes": "Ensure no composite index is created on (ol_w_id, ol_d_id, ol_o_id); allow filesort + large scan to manifest."
+          },
+          "rationale": "Fallback planner selected missing_index from request constraints.",
+          "expected_signals": [
+            "full scan or skip scan",
+            "latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        },
+        {
+          "anomaly_subtype": "record_lock",
+          "category": "lock_conflict",
+          "source_agent": "lock_conflict",
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "engine_assumption": "InnoDB",
+            "target_table": "stock",
+            "hot_rows_strategy": "single_warehouse_hot_item",
+            "hot_row_selector_sql": "SELECT s_w_id, s_i_id FROM stock WHERE s_w_id = 1 ORDER BY s_i_id LIMIT 1",
+            "blocker_session": {
+              "isolation_level": "REPEATABLE-READ",
+              "autocommit": 0,
+              "sql_sequence": [
+                "USE dbmags_tpcc_base_run_20260526060506",
+                "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+                "START TRANSACTION",
+                "SELECT s_quantity FROM stock WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1) FOR UPDATE",
+                "DO SLEEP(600)"
+              ]
+            },
+            "contender_sessions": {
+              "concurrency": 24,
+              "duration_seconds": 600,
+              "sql_template": "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+            },
+            "expected_symptoms": [
+              "high lock wait time",
+              "threads waiting for row lock",
+              "increased deadlock/lock wait timeout risk (depending on workload mix)"
+            ]
+          },
+          "rationale": "Fallback planner selected record_lock from request constraints.",
+          "expected_signals": [
+            "row lock wait",
+            "transaction blocking"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        },
+        {
+          "anomaly_subtype": "overall_workload",
+          "category": "traffic_surge",
+          "source_agent": "traffic_surge",
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "parameters": {
+            "duration_seconds": 600,
+            "background_duration_seconds": 20,
+            "baseline_sleep": 0.044,
+            "baseline_threads": 80,
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "workload_profile": "tpcc_mixed_plus_analytics",
+            "concurrency": 64,
+            "mix": [
+              {
+                "name": "tpcc_like_hot_path",
+                "weight": 0.65,
+                "templates": [
+                  "SELECT c_id, c_last, c_first FROM customer WHERE c_w_id = ? AND c_d_id = ? AND c_last = ? ORDER BY c_first LIMIT 10",
+                  "SELECT o_id, o_entry_d, o_ol_cnt FROM orders WHERE o_w_id = ? AND o_d_id = ? AND o_c_id = ? ORDER BY o_id DESC LIMIT 20"
+                ]
+              },
+              {
+                "name": "slow_analytics_missing_index_driver",
+                "weight": 0.25,
+                "templates": [
+                  "SELECT ol_w_id, ol_d_id, ol_o_id, SUM(ol_amount) AS revenue FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? GROUP BY ol_w_id, ol_d_id, ol_o_id ORDER BY ol_o_id DESC LIMIT 2000"
+                ]
+              },
+              {
+                "name": "lock_contenders",
+                "weight": 0.1,
+                "templates": [
+                  "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+                ]
+              }
+            ],
+            "notes": "Run concurrently with record_lock blocker session to amplify queueing and latency."
+          },
+          "rationale": "Fallback planner selected overall_workload from request constraints.",
+          "expected_signals": [
+            "qps increase",
+            "latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        },
+        {
+          "anomaly_subtype": "database_table_backup",
+          "category": "database_backup",
+          "source_agent": "database_backup",
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "source_table": "orders",
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "backup_method": "logical_single_table_dump",
+            "target_tables": [
+              "order_line"
+            ],
+            "command_template": "mysqldump --single-transaction --quick --skip-lock-tables dbmags_tpcc_base_run_20260526060506 order_line > /tmp/order_line_backup.sql",
+            "start_offset_seconds": 120,
+            "expected_symptoms": [
+              "increased disk IO",
+              "buffer pool churn",
+              "reduced throughput for concurrent workload"
+            ]
+          },
+          "rationale": "Fallback planner selected database_table_backup from request constraints.",
+          "expected_signals": [
+            "backup table created"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        },
+        {
+          "anomaly_subtype": "cpu",
+          "category": "resource_bottleneck",
+          "source_agent": "resource_bottleneck",
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "parameters": {
+            "duration_seconds": 600,
+            "background_duration_seconds": 20,
+            "host_level_stressor": "cpu_burn",
+            "start_offset_seconds": 60,
+            "intensity": {
+              "cores": "80% of available cores",
+              "method": "multi-process tight loop"
+            },
+            "expected_symptoms": [
+              "elevated mysqld CPU run queue latency",
+              "reduced QPS / increased response time variability"
+            ]
+          },
+          "rationale": "Fallback planner selected cpu from request constraints.",
+          "expected_signals": [
+            "cpu saturation"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": "{'goal': 'Inject a complex multi-anomaly combination on a fresh TPCC clone', 'database': 'dbmags_tpcc_base_run_20260526060506', 'anomaly_bundle': ['Missing composite index induces filesort/scan-heavy analytics', 'Row-lock contention hotspot on stock amplifies wait times', 'Overall workload surge adds queueing pressure', 'Logical backup of large table adds IO/buffer churn', 'CPU saturation increases latency and reduces throughput'], 'expected_observables': ['slow queries dominated by agent_order_by_support ORDER BY/GROUP BY', 'INNODB_LOCK_WAITS / performance_schema lock waits rising', 'higher Threads_running and stalled transactions', 'IO utilization spike during mysqldump', 'CPU utilization near saturation with increased scheduler run queue']}",
+      "selection_mode": "multi_auto",
+      "execution_database": "dbmags_tpcc_base_run_20260526060506",
+      "activation_order": [
+        "cpu",
+        "record_lock",
+        "missing_index",
+        "database_table_backup",
+        "overall_workload"
+      ],
+      "cleanup_order": [
+        "overall_workload",
+        "database_table_backup",
+        "missing_index",
+        "record_lock",
+        "cpu"
+      ],
+      "composite_experiment_name": "missing_index__record_lock__overall_workload__database_table_backup__cpu",
+      "selection_rationale": "Chosen subtypes are diverse across allowed categories: slow_sql(missing_index), lock_conflict(record_lock), traffic_surge(overall_workload), database_backup(database_table_backup), and resource_bottleneck(cpu). They interact realistically: CPU/IO pressure and backup amplify the impact of missing indexes, while workload surge increases lock contention visibility and overall tail latency.",
+      "llm_used": true,
+      "llm_error": "",
+      "llm_error_type": "",
+      "llm_transport": "chat_completions",
+      "global_plan": {
+        "mode": "single_root",
+        "root_causes_to_inject": [
+          "missing_index",
+          "record_lock",
+          "overall_workload",
+          "database_table_backup",
+          "cpu"
+        ],
+        "effects_to_observe": [
+          "qps_down",
+          "p95_latency_up"
+        ],
+        "task_agents": [
+          "database_backup",
+          "lock_conflict",
+          "resource_bottleneck",
+          "slow_sql",
+          "traffic_surge"
+        ],
+        "task_dependencies": [
+          [
+            "cpu",
+            "record_lock"
+          ],
+          [
+            "record_lock",
+            "missing_index"
+          ],
+          [
+            "missing_index",
+            "database_table_backup"
+          ],
+          [
+            "database_table_backup",
+            "overall_workload"
+          ]
+        ],
+        "evaluation_targets": [
+          "active_connections_up",
+          "lock_wait_time_up",
+          "p95_latency_up",
+          "qps_down",
+          "resource_pressure_up",
+          "slow_query_metric_up"
+        ],
+        "safety_constraints": {
+          "max_duration_sec": 300,
+          "max_connection_usage_ratio": 0.8,
+          "max_cpu_usage": 90
+        },
+        "rationale": "Chosen subtypes are diverse across allowed categories: slow_sql(missing_index), lock_conflict(record_lock), traffic_surge(overall_workload), database_backup(database_table_backup), and resource_bottleneck(cpu). They interact realistically: CPU/IO pressure and backup amplify the impact of missing indexes, while workload surge increases lock contention visibility and overall tail latency."
+      }
+    },
+    "expected_signals": [
+      "backup table created",
+      "cpu saturation",
+      "full scan or skip scan",
+      "latency increase",
+      "qps increase",
+      "row lock wait",
+      "transaction blocking"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "missing_index",
+      "record_lock",
+      "overall_workload",
+      "database_table_backup",
+      "cpu"
+    ],
+    "task_assignments": {
+      "missing_index": "slow_sql",
+      "record_lock": "lock_conflict",
+      "overall_workload": "traffic_surge",
+      "database_table_backup": "database_backup",
+      "cpu": "resource_bottleneck"
+    },
+    "database_mapping": {
+      "missing_index": "dbmags_tpcc_base_run_20260526060506",
+      "record_lock": "dbmags_tpcc_base_run_20260526060506",
+      "overall_workload": "dbmags_tpcc_base_run_20260526060506",
+      "database_table_backup": "dbmags_tpcc_base_run_20260526060506",
+      "cpu": "dbmags_tpcc_base_run_20260526060506"
+    },
+    "task_parameters": {
+      "missing_index": {
+        "duration_seconds": 16,
+        "background_duration_seconds": 20,
+        "database": "dbmags_tpcc_base_run_20260526060506",
+        "target_table": "agent_order_by_support",
+        "slow_query_pattern": "order_by",
+        "query_templates": [
+          "SELECT ol_w_id, ol_d_id, ol_o_id, ol_i_id, ol_quantity, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? ORDER BY ol_o_id DESC LIMIT 2000",
+          "SELECT ol_w_id, ol_d_id, ol_o_id, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? ORDER BY ol_o_id DESC LIMIT 5000"
+        ],
+        "expected_missing_index": [
+          "agent_order_by_support(ol_w_id, ol_d_id, ol_o_id)"
+        ],
+        "notes": "Ensure no composite index is created on (ol_w_id, ol_d_id, ol_o_id); allow filesort + large scan to manifest."
+      },
+      "record_lock": {
+        "duration_seconds": 16,
+        "background_duration_seconds": 20,
+        "database": "dbmags_tpcc_base_run_20260526060506",
+        "engine_assumption": "InnoDB",
+        "target_table": "stock",
+        "hot_rows_strategy": "single_warehouse_hot_item",
+        "hot_row_selector_sql": "SELECT s_w_id, s_i_id FROM stock WHERE s_w_id = 1 ORDER BY s_i_id LIMIT 1",
+        "blocker_session": {
+          "isolation_level": "REPEATABLE-READ",
+          "autocommit": 0,
+          "sql_sequence": [
+            "USE dbmags_tpcc_base_run_20260526060506",
+            "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+            "START TRANSACTION",
+            "SELECT s_quantity FROM stock WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1) FOR UPDATE",
+            "DO SLEEP(600)"
+          ]
+        },
+        "contender_sessions": {
+          "concurrency": 24,
+          "duration_seconds": 600,
+          "sql_template": "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+        },
+        "expected_symptoms": [
+          "high lock wait time",
+          "threads waiting for row lock",
+          "increased deadlock/lock wait timeout risk (depending on workload mix)"
+        ]
+      },
+      "overall_workload": {
+        "duration_seconds": 600,
+        "background_duration_seconds": 20,
+        "baseline_sleep": 0.044,
+        "baseline_threads": 80,
+        "database": "dbmags_tpcc_base_run_20260526060506",
+        "workload_profile": "tpcc_mixed_plus_analytics",
+        "concurrency": 64,
+        "mix": [
+          {
+            "name": "tpcc_like_hot_path",
+            "weight": 0.65,
+            "templates": [
+              "SELECT c_id, c_last, c_first FROM customer WHERE c_w_id = ? AND c_d_id = ? AND c_last = ? ORDER BY c_first LIMIT 10",
+              "SELECT o_id, o_entry_d, o_ol_cnt FROM orders WHERE o_w_id = ? AND o_d_id = ? AND o_c_id = ? ORDER BY o_id DESC LIMIT 20"
+            ]
+          },
+          {
+            "name": "slow_analytics_missing_index_driver",
+            "weight": 0.25,
+            "templates": [
+              "SELECT ol_w_id, ol_d_id, ol_o_id, SUM(ol_amount) AS revenue FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? GROUP BY ol_w_id, ol_d_id, ol_o_id ORDER BY ol_o_id DESC LIMIT 2000"
+            ]
+          },
+          {
+            "name": "lock_contenders",
+            "weight": 0.1,
+            "templates": [
+              "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+            ]
+          }
+        ],
+        "notes": "Run concurrently with record_lock blocker session to amplify queueing and latency."
+      },
+      "database_table_backup": {
+        "duration_seconds": 16,
+        "background_duration_seconds": 20,
+        "source_table": "orders",
+        "database": "dbmags_tpcc_base_run_20260526060506",
+        "backup_method": "logical_single_table_dump",
+        "target_tables": [
+          "order_line"
+        ],
+        "command_template": "mysqldump --single-transaction --quick --skip-lock-tables dbmags_tpcc_base_run_20260526060506 order_line > /tmp/order_line_backup.sql",
+        "start_offset_seconds": 120,
+        "expected_symptoms": [
+          "increased disk IO",
+          "buffer pool churn",
+          "reduced throughput for concurrent workload"
+        ]
+      },
+      "cpu": {
+        "duration_seconds": 600,
+        "background_duration_seconds": 20,
+        "host_level_stressor": "cpu_burn",
+        "start_offset_seconds": 60,
+        "intensity": {
+          "cores": "80% of available cores",
+          "method": "multi-process tight loop"
+        },
+        "expected_symptoms": [
+          "elevated mysqld CPU run queue latency",
+          "reduced QPS / increased response time variability"
+        ]
+      }
+    },
+    "expected_signals": [
+      "backup table created",
+      "cpu saturation",
+      "full scan or skip scan",
+      "latency increase",
+      "qps increase",
+      "row lock wait",
+      "transaction blocking"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "missing_index",
+        "category": "slow_sql",
+        "source_agent": "slow_sql",
+        "database": "dbmags_tpcc_base_run_20260526060506",
+        "parameters": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "target_table": "agent_order_by_support",
+          "slow_query_pattern": "order_by",
+          "query_templates": [
+            "SELECT ol_w_id, ol_d_id, ol_o_id, ol_i_id, ol_quantity, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? ORDER BY ol_o_id DESC LIMIT 2000",
+            "SELECT ol_w_id, ol_d_id, ol_o_id, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? ORDER BY ol_o_id DESC LIMIT 5000"
+          ],
+          "expected_missing_index": [
+            "agent_order_by_support(ol_w_id, ol_d_id, ol_o_id)"
+          ],
+          "notes": "Ensure no composite index is created on (ol_w_id, ol_d_id, ol_o_id); allow filesort + large scan to manifest."
+        },
+        "rationale": "Fallback planner selected missing_index from request constraints.",
+        "expected_signals": [
+          "full scan or skip scan",
+          "latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      },
+      {
+        "anomaly_subtype": "record_lock",
+        "category": "lock_conflict",
+        "source_agent": "lock_conflict",
+        "database": "dbmags_tpcc_base_run_20260526060506",
+        "parameters": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "engine_assumption": "InnoDB",
+          "target_table": "stock",
+          "hot_rows_strategy": "single_warehouse_hot_item",
+          "hot_row_selector_sql": "SELECT s_w_id, s_i_id FROM stock WHERE s_w_id = 1 ORDER BY s_i_id LIMIT 1",
+          "blocker_session": {
+            "isolation_level": "REPEATABLE-READ",
+            "autocommit": 0,
+            "sql_sequence": [
+              "USE dbmags_tpcc_base_run_20260526060506",
+              "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+              "START TRANSACTION",
+              "SELECT s_quantity FROM stock WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1) FOR UPDATE",
+              "DO SLEEP(600)"
+            ]
+          },
+          "contender_sessions": {
+            "concurrency": 24,
+            "duration_seconds": 600,
+            "sql_template": "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+          },
+          "expected_symptoms": [
+            "high lock wait time",
+            "threads waiting for row lock",
+            "increased deadlock/lock wait timeout risk (depending on workload mix)"
+          ]
+        },
+        "rationale": "Fallback planner selected record_lock from request constraints.",
+        "expected_signals": [
+          "row lock wait",
+          "transaction blocking"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      },
+      {
+        "anomaly_subtype": "overall_workload",
+        "category": "traffic_surge",
+        "source_agent": "traffic_surge",
+        "database": "dbmags_tpcc_base_run_20260526060506",
+        "parameters": {
+          "duration_seconds": 600,
+          "background_duration_seconds": 20,
+          "baseline_sleep": 0.044,
+          "baseline_threads": 80,
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "workload_profile": "tpcc_mixed_plus_analytics",
+          "concurrency": 64,
+          "mix": [
+            {
+              "name": "tpcc_like_hot_path",
+              "weight": 0.65,
+              "templates": [
+                "SELECT c_id, c_last, c_first FROM customer WHERE c_w_id = ? AND c_d_id = ? AND c_last = ? ORDER BY c_first LIMIT 10",
+                "SELECT o_id, o_entry_d, o_ol_cnt FROM orders WHERE o_w_id = ? AND o_d_id = ? AND o_c_id = ? ORDER BY o_id DESC LIMIT 20"
+              ]
+            },
+            {
+              "name": "slow_analytics_missing_index_driver",
+              "weight": 0.25,
+              "templates": [
+                "SELECT ol_w_id, ol_d_id, ol_o_id, SUM(ol_amount) AS revenue FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? GROUP BY ol_w_id, ol_d_id, ol_o_id ORDER BY ol_o_id DESC LIMIT 2000"
+              ]
+            },
+            {
+              "name": "lock_contenders",
+              "weight": 0.1,
+              "templates": [
+                "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+              ]
+            }
+          ],
+          "notes": "Run concurrently with record_lock blocker session to amplify queueing and latency."
+        },
+        "rationale": "Fallback planner selected overall_workload from request constraints.",
+        "expected_signals": [
+          "qps increase",
+          "latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      },
+      {
+        "anomaly_subtype": "database_table_backup",
+        "category": "database_backup",
+        "source_agent": "database_backup",
+        "database": "dbmags_tpcc_base_run_20260526060506",
+        "parameters": {
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "source_table": "orders",
+          "database": "dbmags_tpcc_base_run_20260526060506",
+          "backup_method": "logical_single_table_dump",
+          "target_tables": [
+            "order_line"
+          ],
+          "command_template": "mysqldump --single-transaction --quick --skip-lock-tables dbmags_tpcc_base_run_20260526060506 order_line > /tmp/order_line_backup.sql",
+          "start_offset_seconds": 120,
+          "expected_symptoms": [
+            "increased disk IO",
+            "buffer pool churn",
+            "reduced throughput for concurrent workload"
+          ]
+        },
+        "rationale": "Fallback planner selected database_table_backup from request constraints.",
+        "expected_signals": [
+          "backup table created"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      },
+      {
+        "anomaly_subtype": "cpu",
+        "category": "resource_bottleneck",
+        "source_agent": "resource_bottleneck",
+        "database": "dbmags_tpcc_base_run_20260526060506",
+        "parameters": {
+          "duration_seconds": 600,
+          "background_duration_seconds": 20,
+          "host_level_stressor": "cpu_burn",
+          "start_offset_seconds": 60,
+          "intensity": {
+            "cores": "80% of available cores",
+            "method": "multi-process tight loop"
+          },
+          "expected_symptoms": [
+            "elevated mysqld CPU run queue latency",
+            "reduced QPS / increased response time variability"
+          ]
+        },
+        "rationale": "Fallback planner selected cpu from request constraints.",
+        "expected_signals": [
+          "cpu saturation"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": "{'goal': 'Inject a complex multi-anomaly combination on a fresh TPCC clone', 'database': 'dbmags_tpcc_base_run_20260526060506', 'anomaly_bundle': ['Missing composite index induces filesort/scan-heavy analytics', 'Row-lock contention hotspot on stock amplifies wait times', 'Overall workload surge adds queueing pressure', 'Logical backup of large table adds IO/buffer churn', 'CPU saturation increases latency and reduces throughput'], 'expected_observables': ['slow queries dominated by agent_order_by_support ORDER BY/GROUP BY', 'INNODB_LOCK_WAITS / performance_schema lock waits rising', 'higher Threads_running and stalled transactions', 'IO utilization spike during mysqldump', 'CPU utilization near saturation with increased scheduler run queue']}",
+    "selection_mode": "multi_auto",
+    "execution_database": "dbmags_tpcc_base_run_20260526060506",
+    "activation_order": [
+      "cpu",
+      "record_lock",
+      "missing_index",
+      "database_table_backup",
+      "overall_workload"
+    ],
+    "cleanup_order": [
+      "overall_workload",
+      "database_table_backup",
+      "missing_index",
+      "record_lock",
+      "cpu"
+    ],
+    "composite_experiment_name": "missing_index__record_lock__overall_workload__database_table_backup__cpu",
+    "selection_rationale": "Chosen subtypes are diverse across allowed categories: slow_sql(missing_index), lock_conflict(record_lock), traffic_surge(overall_workload), database_backup(database_table_backup), and resource_bottleneck(cpu). They interact realistically: CPU/IO pressure and backup amplify the impact of missing indexes, while workload surge increases lock contention visibility and overall tail latency.",
+    "llm_used": true,
+    "llm_error": "",
+    "llm_error_type": "",
+    "llm_transport": "chat_completions",
+    "global_plan": {
+      "mode": "single_root",
+      "root_causes_to_inject": [
+        "missing_index",
+        "record_lock",
+        "overall_workload",
+        "database_table_backup",
+        "cpu"
+      ],
+      "effects_to_observe": [
+        "qps_down",
+        "p95_latency_up"
+      ],
+      "task_agents": [
+        "database_backup",
+        "lock_conflict",
+        "resource_bottleneck",
+        "slow_sql",
+        "traffic_surge"
+      ],
+      "task_dependencies": [
+        [
+          "cpu",
+          "record_lock"
+        ],
+        [
+          "record_lock",
+          "missing_index"
+        ],
+        [
+          "missing_index",
+          "database_table_backup"
+        ],
+        [
+          "database_table_backup",
+          "overall_workload"
+        ]
+      ],
+      "evaluation_targets": [
+        "active_connections_up",
+        "lock_wait_time_up",
+        "p95_latency_up",
+        "qps_down",
+        "resource_pressure_up",
+        "slow_query_metric_up"
+      ],
+      "safety_constraints": {
+        "max_duration_sec": 300,
+        "max_connection_usage_ratio": 0.8,
+        "max_cpu_usage": 90
+      },
+      "rationale": "Chosen subtypes are diverse across allowed categories: slow_sql(missing_index), lock_conflict(record_lock), traffic_surge(overall_workload), database_backup(database_table_backup), and resource_bottleneck(cpu). They interact realistically: CPU/IO pressure and backup amplify the impact of missing indexes, while workload surge increases lock contention visibility and overall tail latency."
+    }
+  },
+  "follow_up_questions": [],
+  "reasoning": "Planner produced a structured anomaly plan."
+}

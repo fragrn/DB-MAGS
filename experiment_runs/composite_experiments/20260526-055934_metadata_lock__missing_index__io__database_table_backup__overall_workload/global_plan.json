@@ -1,0 +1,53 @@
+{
+  "mode": "single_root",
+  "root_causes_to_inject": [
+    "metadata_lock",
+    "missing_index",
+    "io",
+    "database_table_backup",
+    "overall_workload"
+  ],
+  "effects_to_observe": [
+    "qps_down",
+    "p95_latency_up"
+  ],
+  "task_agents": [
+    "database_backup",
+    "lock_conflict",
+    "resource_bottleneck",
+    "slow_sql",
+    "traffic_surge"
+  ],
+  "task_dependencies": [
+    [
+      "io",
+      "metadata_lock"
+    ],
+    [
+      "metadata_lock",
+      "missing_index"
+    ],
+    [
+      "missing_index",
+      "database_table_backup"
+    ],
+    [
+      "database_table_backup",
+      "overall_workload"
+    ]
+  ],
+  "evaluation_targets": [
+    "active_connections_up",
+    "lock_wait_time_up",
+    "p95_latency_up",
+    "qps_down",
+    "resource_pressure_up",
+    "slow_query_metric_up"
+  ],
+  "safety_constraints": {
+    "max_duration_sec": 300,
+    "max_connection_usage_ratio": 0.8,
+    "max_cpu_usage": 90
+  },
+  "rationale": "['metadata_lock adds a clear lock-conflict signal by forcing a DDL to wait on held MDL for orders.', 'missing_index targets large non-indexed agent_*_support tables to reliably induce table scans, filesort, and temp tables.', 'io complements slow SQL by increasing background and foreground write/read pressure via updates/inserts on stock/history.', 'database_table_backup introduces backup-like IO and metadata activity overlapping with production workload.', 'overall_workload creates a traffic surge so contention and resource bottlenecks compound and become observable.']"
+}

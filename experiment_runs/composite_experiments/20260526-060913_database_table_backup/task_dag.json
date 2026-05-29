@@ -1,0 +1,74 @@
+{
+  "tasks": {
+    "backup-orders": {
+      "task_id": "backup-orders",
+      "task_spec": {
+        "task_id": "backup-orders",
+        "agent_type": "database_backup",
+        "anomaly_type": "database_table_backup",
+        "title": "Backup table orders into orders_backup_agent.",
+        "task_role": "backup_job",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526060732",
+          "anomaly_subtype": "database_table_backup",
+          "source_agent": "database_backup"
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526060732"
+          },
+          {
+            "kind": "sql",
+            "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+            "database": "dbmags_tpcc_base_run_20260526060732"
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526060732"
+          }
+        ],
+        "explanation": "[\"Only allowed category/subtype is database_backup/database_table_backup.\", \"order_line is among the largest tables (~4.39M rows), making a short-window backup impactful enough for a medium-risk single anomaly.\", \"Backup executed on base DB per provided rules (lock_and_backup_use_copy_db=false).\"]",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "disk_read_throughput": "increase",
+          "io_wait": "increase",
+          "query_latency": "increase"
+        },
+        "local_success_criteria": {
+          "backup_table_created": true
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "IO interference or metadata lock",
+          "confidence": 0.65
+        },
+        "cleanup_actions": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526060732"
+          }
+        ]
+      },
+      "start_after_sec": 0.0,
+      "start_condition": {}
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "backup-orders": {
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "task_role": "backup_job"
+    }
+  }
+}

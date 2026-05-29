@@ -1,0 +1,1621 @@
+{
+  "experiment_goal": "Inject a complex multi-anomaly combination on a fresh TPCC clone",
+  "target_anomaly": "",
+  "target_mode": "causal_chain",
+  "environment": {
+    "database": "dbmags_tpcc_base_run_20260521121840",
+    "dbms": "mysql",
+    "version": "9.6.0",
+    "schema": {
+      "agent_group_by_support": {
+        "row_count": 4491080,
+        "columns": [
+          {
+            "name": "ol_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_quantity",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_amount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": []
+      },
+      "agent_implicit_conversion_support": {
+        "row_count": 149725,
+        "columns": [
+          {
+            "name": "id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "customer_id_varchar",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "customer_id_int",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "amount_text",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY",
+          "idx_customer_id_int",
+          "idx_customer_id_varchar"
+        ]
+      },
+      "agent_large_scan_support": {
+        "row_count": 449141,
+        "columns": [
+          {
+            "name": "c_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_last",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_credit",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_balance",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_delivery_cnt",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": []
+      },
+      "agent_order_by_support": {
+        "row_count": 4482155,
+        "columns": [
+          {
+            "name": "ol_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_quantity",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_amount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_dist_info",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": []
+      },
+      "customer": {
+        "row_count": 436582,
+        "columns": [
+          {
+            "name": "c_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_first",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_middle",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_last",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_street_1",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_street_2",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_city",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_state",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_zip",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_phone",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_since",
+            "data_type": "datetime",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_credit",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_credit_lim",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_discount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_balance",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_ytd_payment",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_payment_cnt",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_delivery_cnt",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_data",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY",
+          "idx_customer_last"
+        ]
+      },
+      "district": {
+        "row_count": 150,
+        "columns": [
+          {
+            "name": "d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "d_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "d_name",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_street_1",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_street_2",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_city",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_state",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_zip",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_tax",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_ytd",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_next_o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "history": {
+        "row_count": 450767,
+        "columns": [
+          {
+            "name": "h_c_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_c_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_c_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_date",
+            "data_type": "datetime",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "h_amount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "h_data",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "idx_history_customer",
+          "idx_history_warehouse"
+        ]
+      },
+      "item": {
+        "row_count": 99396,
+        "columns": [
+          {
+            "name": "i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "i_im_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "i_name",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "i_price",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "i_data",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "new_orders": {
+        "row_count": 135888,
+        "columns": [
+          {
+            "name": "no_o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "no_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "no_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "order_line": {
+        "row_count": 4375522,
+        "columns": [
+          {
+            "name": "ol_o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "ol_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "ol_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "ol_number",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "ol_i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_supply_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_delivery_d",
+            "data_type": "datetime",
+            "nullable": true,
+            "indexed": false
+          },
+          {
+            "name": "ol_quantity",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_amount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_dist_info",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "orders": {
+        "row_count": 451556,
+        "columns": [
+          {
+            "name": "o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_c_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_entry_d",
+            "data_type": "datetime",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "o_carrier_id",
+            "data_type": "tinyint",
+            "nullable": true,
+            "indexed": false
+          },
+          {
+            "name": "o_ol_cnt",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "o_all_local",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY",
+          "idx_orders_customer"
+        ]
+      },
+      "stock": {
+        "row_count": 1430123,
+        "columns": [
+          {
+            "name": "s_i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "s_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "s_quantity",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_01",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_02",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_03",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_04",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_05",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_06",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_07",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_08",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_09",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_10",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_ytd",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_order_cnt",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_remote_cnt",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_data",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "warehouse": {
+        "row_count": 15,
+        "columns": [
+          {
+            "name": "w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "w_name",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_street_1",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_street_2",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_city",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_state",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_zip",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_tax",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_ytd",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      }
+    },
+    "index_info": {
+      "agent_group_by_support": [],
+      "agent_implicit_conversion_support": [
+        "PRIMARY",
+        "idx_customer_id_int",
+        "idx_customer_id_varchar"
+      ],
+      "agent_large_scan_support": [],
+      "agent_order_by_support": [],
+      "customer": [
+        "PRIMARY",
+        "idx_customer_last"
+      ],
+      "district": [
+        "PRIMARY"
+      ],
+      "history": [
+        "idx_history_customer",
+        "idx_history_warehouse"
+      ],
+      "item": [
+        "PRIMARY"
+      ],
+      "new_orders": [
+        "PRIMARY"
+      ],
+      "order_line": [
+        "PRIMARY"
+      ],
+      "orders": [
+        "PRIMARY",
+        "idx_orders_customer"
+      ],
+      "stock": [
+        "PRIMARY"
+      ],
+      "warehouse": [
+        "PRIMARY"
+      ]
+    },
+    "table_stats": {
+      "agent_group_by_support": {
+        "row_count": 4491080
+      },
+      "agent_implicit_conversion_support": {
+        "row_count": 149725
+      },
+      "agent_large_scan_support": {
+        "row_count": 449141
+      },
+      "agent_order_by_support": {
+        "row_count": 4482155
+      },
+      "customer": {
+        "row_count": 436582
+      },
+      "district": {
+        "row_count": 150
+      },
+      "history": {
+        "row_count": 450767
+      },
+      "item": {
+        "row_count": 99396
+      },
+      "new_orders": {
+        "row_count": 135888
+      },
+      "order_line": {
+        "row_count": 4375522
+      },
+      "orders": {
+        "row_count": 451556
+      },
+      "stock": {
+        "row_count": 1430123
+      },
+      "warehouse": {
+        "row_count": 15
+      }
+    },
+    "workload_status": {
+      "type": "tpcc",
+      "probe_workload": true
+    },
+    "db_metrics": {
+      "threads_connected": 1,
+      "threads_running": 2,
+      "slow_queries": 111,
+      "innodb_row_lock_waits": 46,
+      "connections": 14326,
+      "max_connections": 151
+    },
+    "os_metrics": {
+      "load_average": [
+        5.66845703125,
+        4.87744140625,
+        3.9970703125
+      ]
+    },
+    "config": {
+      "risk_level": "medium",
+      "target_mode": "causal_chain"
+    },
+    "notes": [
+      "os metrics probe unavailable: No module named 'psutil'"
+    ]
+  },
+  "global_plan": {
+    "mode": "causal_chain",
+    "root_causes_to_inject": [
+      "record_lock"
+    ],
+    "effects_to_observe": [
+      "traffic_surge",
+      "connections_up",
+      "lock_contention",
+      "slow_query",
+      "qps_drop"
+    ],
+    "task_agents": [
+      "database_backup",
+      "lock_conflict",
+      "resource_bottleneck",
+      "slow_sql"
+    ],
+    "task_dependencies": [
+      [
+        "traffic_surge",
+        "connections_up"
+      ],
+      [
+        "connections_up",
+        "lock_contention"
+      ],
+      [
+        "lock_contention",
+        "slow_query"
+      ],
+      [
+        "slow_query",
+        "qps_drop"
+      ]
+    ],
+    "evaluation_targets": [
+      "traffic_surge",
+      "connections_up",
+      "lock_contention",
+      "slow_query",
+      "qps_drop"
+    ],
+    "safety_constraints": {
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "rationale": "{'why_these_subtypes': ['record_lock + metadata_lock create two distinct lock-conflict signatures (row-level waits vs MDL blocking).', 'missing_index + large_table_scan leverage existing agent_* tables with no indexes and multi-million rows to reliably generate slow queries without schema changes.', 'database_table_backup adds realistic operational load (bulk copy) that amplifies IO/buffer pressure and can interact with locks.', 'cpu provides a resource bottleneck that increases tail latency and makes the combined incident harder to diagnose.'], 'diversity_check': {'categories_used': ['lock_conflict', 'slow_sql', 'database_backup', 'resource_bottleneck'], 'subtypes_used_count': 6}}"
+  },
+  "task_dag": {
+    "tasks": {
+      "lock-record-lock": {
+        "task_id": "lock-record-lock",
+        "task_spec": {
+          "task_id": "lock-record-lock",
+          "agent_type": "lock_conflict",
+          "anomaly_type": "record_lock",
+          "title": "Hold a row-level write lock on new_orders.",
+          "task_role": "lock_holder",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260521121840",
+            "anomaly_subtype": "record_lock",
+            "source_agent": "lock_conflict",
+            "column_name": "agent_meta_lock_c1969945",
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "hold_sql",
+              "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+              "database": "dbmags_tpcc_base_run_20260521121840",
+              "hold_seconds": 16
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Fallback planner selected record_lock from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "lock_waits": "increase",
+            "blocked_transactions": "increase",
+            "p95_latency": "increase"
+          },
+          "local_success_criteria": {
+            "lock_wait_time_increase_ratio": 2.0,
+            "blocked_transaction_min_count": 1
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "deadlock or timeout",
+            "confidence": 0.75
+          },
+          "cleanup_actions": []
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      },
+      "lock-metadata-lock": {
+        "task_id": "lock-metadata-lock",
+        "task_spec": {
+          "task_id": "lock-metadata-lock",
+          "agent_type": "lock_conflict",
+          "anomaly_type": "metadata_lock",
+          "title": "Hold a metadata lock on new_orders via a long transaction.",
+          "task_role": "lock_holder",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260521121840",
+            "anomaly_subtype": "metadata_lock",
+            "source_agent": "lock_conflict",
+            "column_name": "agent_meta_lock_6bfbc526",
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "hold_metadata_lock",
+              "sql": "SELECT COUNT(*) FROM new_orders WHERE no_w_id = 1",
+              "database": "dbmags_tpcc_base_run_20260521121840",
+              "hold_seconds": 16
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Fallback planner selected metadata_lock from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "lock_waits": "increase",
+            "blocked_transactions": "increase",
+            "p95_latency": "increase"
+          },
+          "local_success_criteria": {
+            "lock_wait_time_increase_ratio": 2.0,
+            "blocked_transaction_min_count": 1
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "deadlock or timeout",
+            "confidence": 0.75
+          },
+          "cleanup_actions": []
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      },
+      "slow-sql-missing-index": {
+        "task_id": "slow-sql-missing-index",
+        "task_spec": {
+          "task_id": "slow-sql-missing-index",
+          "agent_type": "slow_sql",
+          "anomaly_type": "missing_index",
+          "title": "Slow SQL: missing_index",
+          "task_role": "background_anomaly",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260521121840",
+            "anomaly_subtype": "missing_index",
+            "source_agent": "slow_sql",
+            "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "workload_profile",
+              "mode": "single_sql",
+              "sleep_time": 0.01,
+              "thread_count": 6,
+              "repeat": 25,
+              "description": "Background slow SQL pressure for missing_index.",
+              "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+              "database": "dbmags_tpcc_base_run_20260521121840",
+              "duration_seconds": 16
+            }
+          ],
+          "validation_steps": [
+            {
+              "kind": "explain",
+              "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+                  ]
+                ]
+              }
+            }
+          ],
+          "rollback_steps": [],
+          "explanation": "Fallback planner selected missing_index from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "query_latency": "increase",
+            "rows_examined": "increase",
+            "slow_query_count": "increase"
+          },
+          "local_success_criteria": {
+            "explain_validated": true,
+            "latency_direction": "increase"
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "long-running query pressure",
+            "confidence": 0.7
+          },
+          "cleanup_actions": []
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      },
+      "slow-sql-large-table-scan": {
+        "task_id": "slow-sql-large-table-scan",
+        "task_spec": {
+          "task_id": "slow-sql-large-table-scan",
+          "agent_type": "slow_sql",
+          "anomaly_type": "large_table_scan",
+          "title": "Slow SQL: large_table_scan",
+          "task_role": "background_anomaly",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260521121840",
+            "anomaly_subtype": "large_table_scan",
+            "source_agent": "slow_sql",
+            "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last LIKE '%SMITH%';",
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "workload_profile",
+              "mode": "single_sql",
+              "sleep_time": 0.01,
+              "thread_count": 6,
+              "repeat": 25,
+              "description": "Background slow SQL pressure for large_table_scan.",
+              "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last LIKE '%SMITH%';",
+              "database": "dbmags_tpcc_base_run_20260521121840",
+              "duration_seconds": 16
+            }
+          ],
+          "validation_steps": [
+            {
+              "kind": "explain",
+              "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last LIKE '%SMITH%';",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: count(0)  (cost=56849 rows=1)\n    -> Filter: (agent_large_scan_support.c_last like '%SMITH%')  (cost=45351 rows=49900)\n        -> Table scan on agent_large_scan_support  (cost=45351 rows=449141)\n"
+                  ]
+                ]
+              }
+            },
+            {
+              "kind": "support_tables",
+              "result": {
+                "created_tables": [
+                  "agent_order_by_support",
+                  "agent_group_by_support",
+                  "agent_large_scan_support"
+                ]
+              }
+            }
+          ],
+          "rollback_steps": [],
+          "explanation": "Fallback planner selected large_table_scan from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "query_latency": "increase",
+            "rows_examined": "increase",
+            "slow_query_count": "increase"
+          },
+          "local_success_criteria": {
+            "explain_validated": true,
+            "latency_direction": "increase"
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "long-running query pressure",
+            "confidence": 0.7
+          },
+          "cleanup_actions": []
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      },
+      "resource-cpu": {
+        "task_id": "resource-cpu",
+        "task_spec": {
+          "task_id": "resource-cpu",
+          "agent_type": "resource_bottleneck",
+          "anomaly_type": "cpu",
+          "title": "Resource bottleneck: cpu",
+          "task_role": "resource_injection",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260521121840",
+            "anomaly_subtype": "cpu",
+            "source_agent": "resource_bottleneck",
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "shell",
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+              "database": "dbmags_tpcc_base_run_20260521121840"
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Fallback planner selected cpu from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "cpu_pressure": "increase",
+            "query_latency": "increase"
+          },
+          "local_success_criteria": {
+            "chaosblade_uid": "present",
+            "qps": "decrease_or_latency_increase"
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "host resource contention",
+            "confidence": 0.65
+          },
+          "cleanup_actions": []
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      },
+      "backup-orders": {
+        "task_id": "backup-orders",
+        "task_spec": {
+          "task_id": "backup-orders",
+          "agent_type": "database_backup",
+          "anomaly_type": "database_table_backup",
+          "title": "Backup table orders into orders_backup_agent.",
+          "task_role": "backup_job",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260521121840",
+            "anomaly_subtype": "database_table_backup",
+            "source_agent": "database_backup",
+            "duration_seconds": 12,
+            "background_duration_seconds": 16,
+            "source_table": "orders"
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "sql",
+              "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+              "database": "dbmags_tpcc_base_run_20260521121840"
+            },
+            {
+              "kind": "sql",
+              "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+              "database": "dbmags_tpcc_base_run_20260521121840"
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [
+            {
+              "kind": "sql",
+              "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+              "database": "dbmags_tpcc_base_run_20260521121840"
+            }
+          ],
+          "explanation": "Fallback planner selected database_table_backup from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "disk_read_throughput": "increase",
+            "io_wait": "increase",
+            "query_latency": "increase"
+          },
+          "local_success_criteria": {
+            "backup_table_created": true
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "IO interference or metadata lock",
+            "confidence": 0.65
+          },
+          "cleanup_actions": [
+            {
+              "kind": "sql",
+              "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+              "database": "dbmags_tpcc_base_run_20260521121840"
+            }
+          ]
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      }
+    },
+    "edges": [
+      {
+        "from_task": "resource-cpu",
+        "to_task": "lock-metadata-lock",
+        "condition": "activation_order"
+      },
+      {
+        "from_task": "lock-metadata-lock",
+        "to_task": "lock-record-lock",
+        "condition": "activation_order"
+      },
+      {
+        "from_task": "lock-record-lock",
+        "to_task": "slow-sql-large-table-scan",
+        "condition": "activation_order"
+      },
+      {
+        "from_task": "slow-sql-large-table-scan",
+        "to_task": "slow-sql-missing-index",
+        "condition": "activation_order"
+      },
+      {
+        "from_task": "slow-sql-missing-index",
+        "to_task": "backup-orders",
+        "condition": "activation_order"
+      }
+    ],
+    "schedule": {
+      "lock-record-lock": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "lock_holder"
+      },
+      "lock-metadata-lock": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "lock_holder"
+      },
+      "slow-sql-missing-index": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "background_anomaly"
+      },
+      "slow-sql-large-table-scan": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "background_anomaly"
+      },
+      "resource-cpu": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "resource_injection"
+      },
+      "backup-orders": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "backup_job"
+      }
+    }
+  },
+  "execution_trace": {
+    "task_status": {
+      "resource-cpu": "completed",
+      "lock-metadata-lock": "completed",
+      "lock-record-lock": "completed",
+      "slow-sql-large-table-scan": "completed",
+      "slow-sql-missing-index": "completed",
+      "backup-orders": "completed"
+    },
+    "stdout": {
+      "resource-cpu": {
+        "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+        "executed": true,
+        "uid": "d97815da8ffa12bb",
+        "blade_path": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+        "stdout": "{\"code\":200,\"success\":true,\"result\":\"d97815da8ffa12bb\"}"
+      },
+      "lock-metadata-lock": [
+        {
+          "executed": true,
+          "sql": "SELECT COUNT(*) FROM new_orders WHERE no_w_id = 1",
+          "database": "dbmags_tpcc_base_run_20260521121840",
+          "hold_seconds": 16.0,
+          "elapsed_seconds": 16.009535041986965,
+          "latency_ms": 16009.535041986965,
+          "single_sql_mean_ms": 16009.535041986965
+        }
+      ],
+      "lock-record-lock": [
+        {
+          "executed": true,
+          "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+          "database": "dbmags_tpcc_base_run_20260521121840",
+          "hold_seconds": 16.0,
+          "elapsed_seconds": 16.010190875036642,
+          "latency_ms": 16010.190875036642
+        }
+      ],
+      "slow-sql-large-table-scan": [
+        {
+          "executed": true,
+          "database": "dbmags_tpcc_base_run_20260521121840",
+          "duration_seconds": 16.0,
+          "elapsed_seconds": 16.073960207984783,
+          "successful_transactions": 59,
+          "failed_transactions": 0,
+          "qps": 3.670532913892097,
+          "avg_latency_ms": 260.52217160241076,
+          "p95_latency_ms": 313.25279106386006,
+          "p99_latency_ms": 337.42479200009257,
+          "single_sql_mean_ms": 260.52217160241076,
+          "thread_count": 6,
+          "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last LIKE '%SMITH%';"
+        }
+      ],
+      "slow-sql-missing-index": [
+        {
+          "executed": true,
+          "database": "dbmags_tpcc_base_run_20260521121840",
+          "duration_seconds": 16.0,
+          "elapsed_seconds": 16.122567582991906,
+          "successful_transactions": 8,
+          "failed_transactions": 0,
+          "qps": 0.4961988814014585,
+          "avg_latency_ms": 2003.0639949982287,
+          "p95_latency_ms": 2508.0605420516804,
+          "p99_latency_ms": 2508.0605420516804,
+          "single_sql_mean_ms": 2003.0639949982287,
+          "thread_count": 6,
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;"
+        }
+      ],
+      "backup-orders": [
+        {
+          "executed": true,
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260521121840",
+          "elapsed_seconds": 0.015143957920372486,
+          "latency_ms": 15.143957920372486,
+          "single_sql_mean_ms": 15.143957920372486
+        },
+        {
+          "executed": true,
+          "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+          "database": "dbmags_tpcc_base_run_20260521121840",
+          "elapsed_seconds": 3.539278500014916,
+          "latency_ms": 3539.278500014916,
+          "single_sql_mean_ms": 3539.278500014916
+        }
+      ]
+    },
+    "stderr": {},
+    "errors": {},
+    "cleanup_status": {
+      "resource-cpu": {
+        "cleaned": true,
+        "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+        "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy d97815da8ffa12bb"
+      }
+    }
+  },
+  "evaluation": {
+    "baseline_metrics": {
+      "executed": true,
+      "database": "dbmags_tpcc_base_run_20260521121840",
+      "duration_seconds": 12.0,
+      "elapsed_seconds": 12.008323207963258,
+      "successful_transactions": 198,
+      "failed_transactions": 0,
+      "qps": 16.488563521399666,
+      "avg_latency_ms": 12.894778826974822,
+      "p95_latency_ms": 25.932292104698718,
+      "p99_latency_ms": 47.347916988655925,
+      "single_sql_mean_ms": 0.0,
+      "thread_count": 40,
+      "sql": "",
+      "probe_sql": "",
+      "db_evidence": {},
+      "comparison_mode": "baseline_tpcc_probe"
+    },
+    "after_metrics": {
+      "executed": true,
+      "database": "dbmags_tpcc_base_run_20260521121840",
+      "duration_seconds": 12.0,
+      "elapsed_seconds": 15.27711675001774,
+      "successful_transactions": 66,
+      "failed_transactions": 0,
+      "qps": 4.320186922700801,
+      "avg_latency_ms": 183.83520131112274,
+      "p95_latency_ms": 46.927499934099615,
+      "p99_latency_ms": 3024.8067500069737,
+      "single_sql_mean_ms": 0.0,
+      "thread_count": 40,
+      "sql": "",
+      "probe_sql": "",
+      "db_evidence": {},
+      "comparison_mode": "after_anomaly_probe"
+    },
+    "target_anomaly_scores": {
+      "record_lock": 0.8,
+      "metadata_lock": 0.8,
+      "missing_index": 0.8,
+      "large_table_scan": 0.8,
+      "cpu": 1.0,
+      "database_table_backup": 0.7
+    },
+    "reward": {
+      "performance_score": 1.0,
+      "target_anomaly_score": 0.8166666666666668,
+      "causal_order_score": 0.8,
+      "stability_score": 0.6,
+      "safety_penalty": 0.0,
+      "final_score": 0.865,
+      "success": true
+    },
+    "chain_events": [
+      {
+        "node": "traffic_surge",
+        "order": 0,
+        "score": 1.0,
+        "observed": true
+      },
+      {
+        "node": "connections_up",
+        "order": 1,
+        "score": 1.0,
+        "observed": true
+      },
+      {
+        "node": "lock_contention",
+        "order": 2,
+        "score": 1.0,
+        "observed": true
+      },
+      {
+        "node": "slow_query",
+        "order": 3,
+        "score": 1.0,
+        "observed": true
+      },
+      {
+        "node": "qps_drop",
+        "order": 4,
+        "score": 1.0,
+        "observed": true
+      }
+    ],
+    "success": true,
+    "reason": "evaluation target reached"
+  },
+  "reflection": null,
+  "cleanup": [
+    {
+      "task_id": "resource-cpu",
+      "cleanup": {
+        "cleaned": true,
+        "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+        "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy d97815da8ffa12bb"
+      }
+    }
+  ],
+  "summary": {
+    "success": true,
+    "reward": {
+      "performance_score": 1.0,
+      "target_anomaly_score": 0.8166666666666668,
+      "causal_order_score": 0.8,
+      "stability_score": 0.6,
+      "safety_penalty": 0.0,
+      "final_score": 0.865,
+      "success": true
+    },
+    "reason": "evaluation target reached"
+  }
+}

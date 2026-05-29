@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 
 from agent_runtime.types import EnvironmentSnapshot, ExperimentRequest, SafetyCheckResult, TaskDAG
@@ -10,6 +11,13 @@ class SafetyChecker:
     DANGEROUS_COMMANDS = ("rm -rf", "mkfs", "shutdown", "reboot", "disk erase")
 
     def check(self, task_dag: TaskDAG, env: EnvironmentSnapshot, request: ExperimentRequest) -> SafetyCheckResult:
+        if os.environ.get("DBMAGS_DISABLE_SAFETY", "").strip().lower() in {"1", "true", "yes", "on"}:
+            return SafetyCheckResult(
+                approved=True,
+                reasons=[],
+                warnings=["safety checker disabled via DBMAGS_DISABLE_SAFETY"],
+                checked_constraints={"disabled": True},
+            )
         constraints = {
             "max_duration_sec": request.safety_constraints.get("max_duration_sec", request.max_retry_rounds * max(request.execution_window_seconds, 1)),
             "max_connection_usage_ratio": request.safety_constraints.get("max_connection_usage_ratio", 0.8),

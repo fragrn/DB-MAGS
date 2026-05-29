@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import asdict, is_dataclass
 from typing import Dict, List, Sequence
 
 from agent_runtime.agents.base import BaseTaskAgent
@@ -14,8 +15,10 @@ from agent_runtime.types import (
     ExperimentRequest,
     GlobalPlan,
     PlannedAnomaly,
+    PlanningMemoryContext,
     PlannerDecision,
     PlannerResponse,
+    TaskAgentInput,
 )
 
 
@@ -98,16 +101,25 @@ class GlobalPlannerAgent:
         )
         planner_decision = self._planner_decision(request, planner_context)
         planner_decision.global_plan = self._global_plan_from_decision(request, planner_decision)
-        tasks = []
+        task_agent_inputs: list[TaskAgentInput] = []
+        task_agent_outputs = []
         for agent_type, agent in self.task_agent_map.items():
             planned_tasks = [item for item in planner_decision.planned_tasks if item.source_agent == agent_type]
-            tasks.extend(agent.prepare(context, request, planner_tasks=planned_tasks))
+            inputs = {
+                item.anomaly_subtype: self._task_agent_input(request, context, planner_context, planner_decision, item)
+                for item in planned_tasks
+            }
+            task_agent_inputs.extend(inputs.values())
+            task_agent_outputs.extend(agent.prepare(context, request, planner_tasks=planned_tasks, task_inputs=inputs))
+        tasks = [output.task_spec for output in task_agent_outputs]
         summary = planner_decision.llm_summary or self._fallback_summary(request, tasks)
         plan = ExperimentPlan(
             summary=summary,
             db_context_summary=self._describe_context(context),
             planner_decision=planner_decision,
             tasks=tasks,
+            task_agent_inputs=task_agent_inputs,
+            task_agent_outputs=task_agent_outputs,
             expected_signals=planner_decision.expected_signals or self._expected_signals(request),
             safety_checks=[
                 "No task executes before explicit user confirmation when confirmation is enabled.",
@@ -151,14 +163,22 @@ class GlobalPlannerAgent:
         return request
 
     def replan_from_reflection(self, request: ExperimentRequest, reflection, evaluation, memory_items=None) -> ExperimentRequest:
+        task_parameter_updates = getattr(reflection, "task_parameter_updates", {}) or {}
         request.user_constraints.setdefault("reflections", []).append(
             {
                 "failure_reason": getattr(reflection, "failure_reason", []),
                 "suggested_changes": getattr(reflection, "suggested_changes", []),
+                "task_parameter_updates": task_parameter_updates,
+                "agent_specific_feedback": getattr(reflection, "agent_specific_feedback", {}),
                 "evaluation_reason": getattr(evaluation, "reason", ""),
+                "evaluation_reward": getattr(evaluation, "reward", {}),
                 "memory_items": memory_items or [],
             }
         )
+        overrides = request.user_constraints.setdefault("task_parameter_overrides", {})
+        for subtype, updates in task_parameter_updates.items():
+            if isinstance(updates, dict):
+                overrides.setdefault(subtype, {}).update(updates)
         request.execution_window_seconds = min(max(request.execution_window_seconds + 4, 1), 60)
         if self._effective_mode(request) == "multi_auto" and not request.allowed_subtypes:
             request.allowed_subtypes = list(AUTO_MULTI_PRIORITY)
@@ -218,10 +238,19 @@ class GlobalPlannerAgent:
                     "allowed_subtypes": self._normalize_subtypes(request),
                     "database_topology": request.database_topology,
                     "user_constraints": request.user_constraints,
+                    "planning_memory": request.user_constraints.get("planning_memory", {}),
                 },
                 "agent_catalog": CATEGORY_TO_SUBTYPES,
                 "task_agent_map": SUBTYPE_TO_AGENT,
                 "planner_context": planner_context,
+                "reflection_memory_rules": {
+                    "task_parameters_must_include_reflection_updates": True,
+                    "backup_supported_parameters": ["source_table", "backup_table", "concurrent_with_probe", "background_duration_seconds"],
+                    "slow_sql_supported_parameters": ["target_table", "sql", "background_threads", "background_sleep"],
+                    "lock_supported_parameters": ["target_table", "predicate", "hold_seconds", "background_duration_seconds"],
+                    "traffic_supported_parameters": ["thread_count", "sleep_time", "duration_seconds"],
+                    "resource_supported_parameters": ["resource_type", "duration_seconds", "intensity"],
+                },
                 "rules": {
                     "lock_and_backup_use_copy_db": False,
                     "single_sql_and_overall_workload_use_base_db": True,
@@ -259,20 +288,19 @@ class GlobalPlannerAgent:
             return None
         if not selected:
             return None
-        assignments = {item: payload.get("task_assignments", {}).get(item, SUBTYPE_TO_AGENT[item]) for item in selected}
+        raw_assignments = self._normalize_task_assignments(payload.get("task_assignments", {}), selected)
+        assignments = {item: raw_assignments.get(item, SUBTYPE_TO_AGENT[item]) for item in selected}
         assignments = {
             item: assignments[item] if assignments[item] in self.task_agent_map else SUBTYPE_TO_AGENT[item]
             for item in selected
         }
         execution_database = str(payload.get("execution_database", request.target_database or self.config.default_database))
-        database_mapping = {
-            item: payload.get("database_mapping", {}).get(item, execution_database)
-            for item in selected
-        }
-        task_parameters = payload.get("task_parameters", {})
-        expected_signals = payload.get("expected_signals", [])
-        cleanup_strategy = payload.get("cleanup_strategy", [])
-        selection_rationale = str(payload.get("selection_rationale", "")).strip()
+        raw_database_mapping = self._normalize_database_mapping(payload.get("database_mapping", {}), selected)
+        database_mapping = {item: raw_database_mapping.get(item, execution_database) for item in selected}
+        task_parameters = self._apply_parameter_overrides(self._normalize_task_parameters(payload.get("task_parameters", {}), selected), request, selected)
+        expected_signals = self._normalize_string_list(payload.get("expected_signals", []))
+        cleanup_strategy = self._normalize_string_list(payload.get("cleanup_strategy", []))
+        selection_rationale = self._normalize_text_field(payload.get("selection_rationale", ""))
         activation_order = self._activation_order(selected)
         cleanup_order = list(reversed(activation_order))
         planned_tasks = [
@@ -282,9 +310,9 @@ class GlobalPlannerAgent:
                 source_agent=assignments[item],
                 database=database_mapping[item],
                 parameters=task_parameters.get(item, {}),
-                rationale=selection_rationale or str(payload.get("rationale", f"LLM selected {item} for goal: {request.user_goal}")),
-                expected_signals=expected_signals if isinstance(expected_signals, list) else [],
-                cleanup_strategy=cleanup_strategy if isinstance(cleanup_strategy, list) else [],
+                rationale=selection_rationale or self._normalize_text_field(payload.get("rationale", f"LLM selected {item} for goal: {request.user_goal}")),
+                expected_signals=expected_signals,
+                cleanup_strategy=cleanup_strategy,
             )
             for item in selected
         ]
@@ -293,8 +321,8 @@ class GlobalPlannerAgent:
             task_assignments=assignments,
             database_mapping=database_mapping,
             task_parameters={item: task_parameters.get(item, {}) for item in selected},
-            expected_signals=expected_signals if isinstance(expected_signals, list) else [],
-            cleanup_strategy=cleanup_strategy if isinstance(cleanup_strategy, list) else [],
+            expected_signals=expected_signals,
+            cleanup_strategy=cleanup_strategy,
             planned_tasks=planned_tasks,
             llm_summary=str(payload.get("summary", "")).strip(),
             selection_mode=mode,
@@ -322,6 +350,7 @@ class GlobalPlannerAgent:
                     "allowed_categories": self._normalize_categories(request) or list(CATEGORY_TO_SUBTYPES),
                     "allowed_subtypes": self._normalize_subtypes(request) or sorted(SUBTYPE_TO_AGENT),
                     "planner_context": planner_context,
+                    "planning_memory": request.user_constraints.get("planning_memory", {}),
                     "task_agent_map": SUBTYPE_TO_AGENT,
                     "return_keys": ["selected_anomalies", "task_parameters", "summary", "selection_rationale"],
                 },
@@ -339,10 +368,10 @@ class GlobalPlannerAgent:
                         decision = self._fallback_planner_decision(request)
                         decision.selection_mode = "multi_auto"
                         decision.llm_summary = str(payload.get("summary", "")).strip()
-                        decision.selection_rationale = str(payload.get("selection_rationale", decision.llm_summary)).strip()
+                        decision.selection_rationale = self._normalize_text_field(payload.get("selection_rationale", decision.llm_summary))
                         decision.llm_used = True
                         decision.llm_transport = getattr(result, "transport_used", "")
-                        planner_params = payload.get("task_parameters", {})
+                        planner_params = self._apply_parameter_overrides(self._normalize_task_parameters(payload.get("task_parameters", {}), chosen), request, chosen)
                         for task in decision.planned_tasks:
                             task.parameters.update(planner_params.get(task.anomaly_subtype, {}))
                             decision.task_parameters[task.anomaly_subtype] = task.parameters
@@ -388,7 +417,7 @@ class GlobalPlannerAgent:
         execution_database = request.target_database or self.config.default_database
         assignments = {item: SUBTYPE_TO_AGENT[item] for item in selected}
         database_mapping = {item: execution_database for item in selected}
-        task_parameters = {item: self._default_parameters(item, request) for item in selected}
+        task_parameters = self._apply_parameter_overrides({item: self._default_parameters(item, request) for item in selected}, request, selected)
         activation_order = self._activation_order(selected)
         planned_tasks = [
             PlannedAnomaly(
@@ -464,6 +493,156 @@ class GlobalPlannerAgent:
             if subtype in SUBTYPE_TO_AGENT and subtype not in chosen:
                 chosen.append(subtype)
         return chosen
+
+    @staticmethod
+    def _normalize_task_assignments(raw: object, selected: List[str]) -> Dict[str, str]:
+        if isinstance(raw, dict):
+            return {key: str(value) for key, value in raw.items() if isinstance(key, str) and isinstance(value, str)}
+        normalized: Dict[str, str] = {}
+        if isinstance(raw, list):
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                subtype = item.get("anomaly_subtype") or item.get("subtype") or item.get("anomaly") or item.get("name")
+                agent = item.get("agent") or item.get("task_agent") or item.get("source_agent") or item.get("agent_type")
+                if isinstance(subtype, str) and isinstance(agent, str):
+                    normalized[subtype.strip()] = agent.strip()
+        if not normalized and len(selected) == 1 and isinstance(raw, str):
+            normalized[selected[0]] = raw.strip()
+        return normalized
+
+    @staticmethod
+    def _normalize_database_mapping(raw: object, selected: List[str]) -> Dict[str, str]:
+        if isinstance(raw, dict):
+            return {key: str(value) for key, value in raw.items() if isinstance(key, str) and value}
+        normalized: Dict[str, str] = {}
+        if isinstance(raw, list):
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                subtype = item.get("anomaly_subtype") or item.get("subtype") or item.get("anomaly") or item.get("name")
+                database = item.get("database") or item.get("target_database") or item.get("execution_database")
+                if isinstance(subtype, str) and database:
+                    normalized[subtype.strip()] = str(database)
+        if not normalized and len(selected) == 1 and isinstance(raw, str):
+            normalized[selected[0]] = raw.strip()
+        return normalized
+
+    @staticmethod
+    def _normalize_task_parameters(raw: object, selected: List[str]) -> Dict[str, Dict[str, object]]:
+        if isinstance(raw, dict):
+            if len(selected) == 1 and selected[0] not in raw and not any(key in SUBTYPE_TO_AGENT for key in raw):
+                return {selected[0]: raw}
+            return {key: value if isinstance(value, dict) else {"value": value} for key, value in raw.items() if isinstance(key, str)}
+        normalized: Dict[str, Dict[str, object]] = {}
+        if isinstance(raw, list):
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                subtype = item.get("anomaly_subtype") or item.get("subtype") or item.get("anomaly") or item.get("name")
+                params = item.get("parameters") or item.get("task_parameters") or item
+                if isinstance(subtype, str):
+                    normalized[subtype.strip()] = params if isinstance(params, dict) else {"value": params}
+        if not normalized and len(selected) == 1 and isinstance(raw, dict):
+            normalized[selected[0]] = raw
+        return normalized
+
+    @staticmethod
+    def _normalize_string_list(raw: object) -> List[str]:
+        if isinstance(raw, list):
+            return [str(item).strip() for item in raw if str(item).strip()]
+        if isinstance(raw, str) and raw.strip():
+            return [raw.strip()]
+        return []
+
+    @staticmethod
+    def _normalize_text_field(raw: object) -> str:
+        if isinstance(raw, list):
+            return json.dumps(raw, ensure_ascii=True)
+        if isinstance(raw, dict):
+            return json.dumps(raw, ensure_ascii=True)
+        return str(raw).strip() if raw is not None else ""
+
+    def _apply_parameter_overrides(self, parameters: Dict[str, Dict[str, object]], request: ExperimentRequest, selected: List[str]) -> Dict[str, Dict[str, object]]:
+        overrides = request.user_constraints.get("task_parameter_overrides", {})
+        if not isinstance(overrides, dict):
+            return parameters
+        for subtype in selected:
+            update = overrides.get(subtype)
+            if isinstance(update, dict):
+                parameters.setdefault(subtype, {}).update(update)
+        return self._normalize_supported_parameters(parameters, selected)
+
+    @staticmethod
+    def _normalize_supported_parameters(parameters: Dict[str, Dict[str, object]], selected: List[str]) -> Dict[str, Dict[str, object]]:
+        for subtype in selected:
+            params = parameters.setdefault(subtype, {})
+            if subtype == "database_table_backup":
+                if params.get("source_table"):
+                    params["source_table"] = str(params["source_table"])
+                if params.get("backup_table"):
+                    params["backup_table"] = str(params["backup_table"])
+                if "background_duration_seconds" in params:
+                    params["background_duration_seconds"] = int(float(params["background_duration_seconds"]))
+                if "concurrent_with_probe" in params:
+                    params["concurrent_with_probe"] = bool(params["concurrent_with_probe"])
+            elif subtype in {"missing_index", "order_by", "group_by", "large_table_scan", "multi_table_join", "implicit_conversion", "excessive_index"}:
+                for key in ("background_threads", "repeat"):
+                    if key in params:
+                        params[key] = int(float(params[key]))
+                for key in ("background_sleep",):
+                    if key in params:
+                        params[key] = float(params[key])
+            elif subtype in {"record_lock", "table_lock", "metadata_lock"}:
+                for key in ("hold_seconds", "background_duration_seconds"):
+                    if key in params:
+                        params[key] = int(float(params[key]))
+            elif subtype in {"overall_workload", "single_sql"}:
+                for key in ("thread_count", "baseline_threads", "repeat"):
+                    if key in params:
+                        params[key] = int(float(params[key]))
+                for key in ("sleep_time", "baseline_sleep"):
+                    if key in params:
+                        params[key] = float(params[key])
+            elif subtype in {"cpu", "io", "network", "memory", "disk"} and "duration_seconds" in params:
+                params["duration_seconds"] = int(float(params["duration_seconds"]))
+        return parameters
+
+    def _task_agent_input(
+        self,
+        request: ExperimentRequest,
+        context: DBContextSummary,
+        planner_context: Dict[str, object],
+        decision: PlannerDecision,
+        planned_task: PlannedAnomaly,
+    ) -> TaskAgentInput:
+        memory_context = request.user_constraints.get("planning_memory", {})
+        if isinstance(memory_context, PlanningMemoryContext):
+            memory_context = asdict(memory_context)
+        elif is_dataclass(memory_context):
+            memory_context = asdict(memory_context)
+        return TaskAgentInput(
+            subgoal=planned_task.anomaly_subtype,
+            global_context={
+                "target_mode": request.target_mode,
+                "target_chain": request.target_chain,
+                "planner_context": planner_context,
+                "global_plan": asdict(decision.global_plan) if decision.global_plan else {},
+                "planner_parameters": decision.task_parameters.get(planned_task.anomaly_subtype, {}),
+            },
+            environment_snapshot={
+                "database": context.database,
+                "tables": [{"name": table.name, "row_count": table.row_count, "indexes": table.indexes} for table in context.tables],
+                "distribution": context.distribution,
+            },
+            constraints={
+                "risk_level": request.risk_level,
+                "execution_window_seconds": request.execution_window_seconds,
+                **request.safety_constraints,
+            },
+            expected_effect=planned_task.expected_signals,
+            memory=memory_context if isinstance(memory_context, dict) else {},
+        )
 
     def _normalize_categories(self, request: ExperimentRequest) -> List[str]:
         categories = list(request.anomaly_categories)

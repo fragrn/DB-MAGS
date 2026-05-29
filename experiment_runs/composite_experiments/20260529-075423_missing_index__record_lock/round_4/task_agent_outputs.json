@@ -1,0 +1,1953 @@
+[
+  {
+    "agent_name": "lock_conflict",
+    "subgoal": "record_lock",
+    "local_hypothesis": "record_lock should introduce waiting during probe execution.",
+    "task_spec": {
+      "task_id": "lock-record-lock",
+      "agent_type": "lock_conflict",
+      "anomaly_type": "record_lock",
+      "title": "Hold a row-level write lock on new_orders.",
+      "task_role": "lock_holder",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260529075944",
+        "anomaly_subtype": "record_lock",
+        "source_agent": "lock_conflict",
+        "column_name": "agent_meta_lock_dea63de5",
+        "target_table": "new_orders",
+        "predicate": "no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+        "hold_seconds": 20,
+        "duration_seconds": 16,
+        "background_duration_seconds": 20,
+        "inputs": {
+          "hold_seconds": 30
+        }
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "hold_sql",
+          "sql": "SELECT * FROM new_orders WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10 FOR UPDATE",
+          "database": "dbmags_tpcc_base_run_20260529075944",
+          "hold_seconds": 20
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected record_lock from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "lock_waits": "increase",
+        "blocked_transactions": "increase",
+        "p95_latency": "increase"
+      },
+      "local_success_criteria": {
+        "lock_wait_time_increase_ratio": 2.0,
+        "blocked_transaction_min_count": 1
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "deadlock or timeout",
+        "confidence": 0.75
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "lock_waits": "increase",
+      "blocked_transactions": "increase",
+      "p95_latency": "increase"
+    },
+    "local_success_criteria": {
+      "lock_wait_time_increase_ratio": 2.0,
+      "blocked_transaction_min_count": 1
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "deadlock or timeout",
+      "confidence": 0.75
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 16,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [],
+    "fallback_plan": {
+      "lock_subtype": "record_lock"
+    },
+    "confidence": 0.75,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {
+            "failure_reason": [
+              "The metrics did not meet the reward or chain success threshold.",
+              "The expected increase in lock waits and blocked transactions was not significant enough.",
+              "The slow SQL task did not sufficiently degrade query performance metrics."
+            ],
+            "suggested_changes": [
+              "Increase the duration of the lock hold to amplify lock contention effects.",
+              "Adjust the SQL query in the slow SQL task to target a more critical table or index.",
+              "Increase the thread count or repeat frequency in the slow SQL task to enhance pressure."
+            ],
+            "task_parameter_updates": {
+              "record_lock": {
+                "inputs": {
+                  "hold_seconds": 30
+                }
+              },
+              "missing_index": {
+                "inputs": {
+                  "thread_count": 10,
+                  "repeat": 50
+                }
+              }
+            },
+            "agent_specific_feedback": {
+              "lock_conflict": [
+                "Consider using a more aggressive lock strategy to increase contention.",
+                "Evaluate the lock duration and predicate to ensure maximum impact."
+              ],
+              "slow_sql": [
+                "Reassess the SQL query to ensure it targets a high-impact area.",
+                "Increase workload intensity to better simulate missing index effects."
+              ]
+            },
+            "risk_warning": [
+              "Increasing lock duration may lead to higher risk of deadlocks.",
+              "Enhancing SQL workload pressure could result in significant query latency spikes."
+            ],
+            "memory_update": [
+              "Record the impact of increased lock duration on contention metrics.",
+              "Log the effects of higher thread count and repeat frequency on SQL performance."
+            ],
+            "raw_text": "{\n  \"failure_reason\": [\n    \"The metrics did not meet the reward or chain success threshold.\",\n    \"The expected increase in lock waits and blocked transactions was not significant enough.\",\n    \"The slow SQL task did not sufficiently degrade query performance metrics.\"\n  ],\n  \"suggested_changes\": [\n    \"Increase the duration of the lock hold to amplify lock contention effects.\",\n    \"Adjust the SQL query in the slow SQL task to target a more critical table or index.\",\n    \"Increase the thread count or repeat frequency in the slow SQL task to enhance pressure.\"\n  ],\n  \"task_parameter_updates\": {\n    \"record_lock\": {\n      \"inputs\": {\n        \"hold_seconds\": 30\n      }\n    },\n    \"missing_index\": {\n      \"inputs\": {\n        \"thread_count\": 10,\n        \"repeat\": 50\n      }\n    }\n  },\n  \"agent_specific_feedback\": {\n    \"lock_conflict\": [\n      \"Consider using a more aggressive lock strategy to increase contention.\",\n      \"Evaluate the lock duration and predicate to ensure maximum impact.\"\n    ],\n    \"slow_sql\": [\n      \"Reassess the SQL query to ensure it targets a high-impact area.\",\n      \"Increase workload intensity to better simulate missing index effects.\"\n    ]\n  },\n  \"risk_warning\": [\n    \"Increasing lock duration may lead to higher risk of deadlocks.\",\n    \"Enhancing SQL workload pressure could result in significant query latency spikes.\"\n  ],\n  \"memory_update\": [\n    \"Record the impact of increased lock duration on contention metrics.\",\n    \"Log the effects of higher thread count and repeat frequency on SQL performance.\"\n  ]\n}"
+          },
+          "short_term_rounds": 3,
+          "long_term_items": 8,
+          "effective_parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "inputs": {
+              "hold_seconds": 30
+            }
+          }
+        },
+        "decision": "Use reflexion overrides for record_lock before planner defaults when present.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {
+          "inputs": {
+            "hold_seconds": 30
+          }
+        }
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.041277166999862,
+            "successful_transactions": 207,
+            "failed_transactions": 0,
+            "qps": 17.190867474365675,
+            "avg_latency_ms": 10.46861096615584,
+            "p95_latency_ms": 21.42249999997148,
+            "p99_latency_ms": 23.058708000462502,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "baseline_tpcc_probe"
+          },
+          "after_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 19.66664258399942,
+            "successful_transactions": 26,
+            "failed_transactions": 0,
+            "qps": 1.322035517193633,
+            "avg_latency_ms": 709.6160641154851,
+            "p95_latency_ms": 11.204375000488653,
+            "p99_latency_ms": 18289.38054199989,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "after_anomaly_probe"
+          },
+          "evaluation": {
+            "baseline_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.041277166999862,
+              "successful_transactions": 207,
+              "failed_transactions": 0,
+              "qps": 17.190867474365675,
+              "avg_latency_ms": 10.46861096615584,
+              "p95_latency_ms": 21.42249999997148,
+              "p99_latency_ms": 23.058708000462502,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "baseline_tpcc_probe"
+            },
+            "after_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 19.66664258399942,
+              "successful_transactions": 26,
+              "failed_transactions": 0,
+              "qps": 1.322035517193633,
+              "avg_latency_ms": 709.6160641154851,
+              "p95_latency_ms": 11.204375000488653,
+              "p99_latency_ms": 18289.38054199989,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "after_anomaly_probe"
+            },
+            "target_anomaly_scores": {
+              "record_lock": 0.4,
+              "missing_index": 0.8
+            },
+            "reward": {
+              "performance_score": 1.0,
+              "target_anomaly_score": 0.6000000000000001,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.8,
+              "success": false
+            },
+            "chain_events": [
+              {
+                "node": "traffic_surge",
+                "order": 0,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "connections_up",
+                "order": 1,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "lock_contention",
+                "order": 2,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "slow_query",
+                "order": 3,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "qps_drop",
+                "order": 4,
+                "score": 1.0,
+                "observed": true
+              }
+            ],
+            "success": false,
+            "reason": "metrics did not meet reward or chain success threshold"
+          }
+        },
+        "decision": "Adjust record_lock candidates when prior metrics show weak degradation.",
+        "candidate_id": "record_lock:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate holder/waiter lock candidate from planner parameters and reflexion.",
+        "action": "generate_lock_candidates",
+        "observation": {
+          "target_table": "new_orders",
+          "predicate": "no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+          "hold_seconds": 20
+        },
+        "decision": "Use longer holder duration or provided target predicate when reflexion says contention was weak.",
+        "candidate_id": "lock:record_lock",
+        "score": null,
+        "adjustments": {
+          "target_table": "new_orders",
+          "predicate": "no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+          "hold_seconds": 20
+        }
+      },
+      {
+        "thought": "Validate lock candidate with schema-level checks before finalizing.",
+        "action": "schema_probe",
+        "observation": {
+          "available_tables": [
+            "agent_group_by_support",
+            "agent_implicit_conversion_support",
+            "agent_large_scan_support",
+            "agent_order_by_support",
+            "customer",
+            "district",
+            "history",
+            "item",
+            "new_orders",
+            "order_line",
+            "orders",
+            "stock",
+            "warehouse"
+          ],
+          "target_table": "new_orders"
+        },
+        "decision": "Finalize lock TaskSpec if target table is present or fallback lock SQL remains available.",
+        "candidate_id": "lock:record_lock",
+        "score": 0.75,
+        "adjustments": {}
+      }
+    ]
+  },
+  {
+    "agent_name": "traffic_surge",
+    "subgoal": "overall_workload",
+    "local_hypothesis": "overall_workload should increase workload pressure during post probe.",
+    "task_spec": {
+      "task_id": "traffic-overall-workload",
+      "agent_type": "traffic_surge",
+      "anomaly_type": "overall_workload",
+      "title": "Traffic surge: overall_workload",
+      "task_role": "background_anomaly",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260529075944",
+        "anomaly_subtype": "overall_workload",
+        "source_agent": "traffic_surge",
+        "mode": "overall_workload",
+        "sleep_time": 0.005,
+        "thread_count": 500,
+        "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+        "duration_seconds": 16,
+        "background_duration_seconds": 20,
+        "baseline_sleep": 0.044,
+        "baseline_threads": 80
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "overall_workload",
+          "sleep_time": 0.005,
+          "thread_count": 500,
+          "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+          "database": "dbmags_tpcc_base_run_20260529075944",
+          "duration_seconds": 20
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected overall_workload from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "active_connections": "increase",
+        "qps": "increase_initially",
+        "latency": "increase_after_saturation"
+      },
+      "local_success_criteria": {
+        "qps_or_latency_change": true
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "connection saturation",
+        "confidence": 0.65
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "active_connections": "increase",
+      "qps": "increase_initially",
+      "latency": "increase_after_saturation"
+    },
+    "local_success_criteria": {
+      "qps_or_latency_change": true
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "connection saturation",
+      "confidence": 0.65
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 16,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [],
+    "fallback_plan": {
+      "baseline_sleep": 0.005,
+      "thread_count": 500
+    },
+    "confidence": 0.65,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {
+            "failure_reason": [
+              "The metrics did not meet the reward or chain success threshold.",
+              "The expected increase in lock waits and blocked transactions was not significant enough.",
+              "The slow SQL task did not sufficiently degrade query performance metrics."
+            ],
+            "suggested_changes": [
+              "Increase the duration of the lock hold to amplify lock contention effects.",
+              "Adjust the SQL query in the slow SQL task to target a more critical table or index.",
+              "Increase the thread count or repeat frequency in the slow SQL task to enhance pressure."
+            ],
+            "task_parameter_updates": {
+              "record_lock": {
+                "inputs": {
+                  "hold_seconds": 30
+                }
+              },
+              "missing_index": {
+                "inputs": {
+                  "thread_count": 10,
+                  "repeat": 50
+                }
+              }
+            },
+            "agent_specific_feedback": {
+              "lock_conflict": [
+                "Consider using a more aggressive lock strategy to increase contention.",
+                "Evaluate the lock duration and predicate to ensure maximum impact."
+              ],
+              "slow_sql": [
+                "Reassess the SQL query to ensure it targets a high-impact area.",
+                "Increase workload intensity to better simulate missing index effects."
+              ]
+            },
+            "risk_warning": [
+              "Increasing lock duration may lead to higher risk of deadlocks.",
+              "Enhancing SQL workload pressure could result in significant query latency spikes."
+            ],
+            "memory_update": [
+              "Record the impact of increased lock duration on contention metrics.",
+              "Log the effects of higher thread count and repeat frequency on SQL performance."
+            ],
+            "raw_text": "{\n  \"failure_reason\": [\n    \"The metrics did not meet the reward or chain success threshold.\",\n    \"The expected increase in lock waits and blocked transactions was not significant enough.\",\n    \"The slow SQL task did not sufficiently degrade query performance metrics.\"\n  ],\n  \"suggested_changes\": [\n    \"Increase the duration of the lock hold to amplify lock contention effects.\",\n    \"Adjust the SQL query in the slow SQL task to target a more critical table or index.\",\n    \"Increase the thread count or repeat frequency in the slow SQL task to enhance pressure.\"\n  ],\n  \"task_parameter_updates\": {\n    \"record_lock\": {\n      \"inputs\": {\n        \"hold_seconds\": 30\n      }\n    },\n    \"missing_index\": {\n      \"inputs\": {\n        \"thread_count\": 10,\n        \"repeat\": 50\n      }\n    }\n  },\n  \"agent_specific_feedback\": {\n    \"lock_conflict\": [\n      \"Consider using a more aggressive lock strategy to increase contention.\",\n      \"Evaluate the lock duration and predicate to ensure maximum impact.\"\n    ],\n    \"slow_sql\": [\n      \"Reassess the SQL query to ensure it targets a high-impact area.\",\n      \"Increase workload intensity to better simulate missing index effects.\"\n    ]\n  },\n  \"risk_warning\": [\n    \"Increasing lock duration may lead to higher risk of deadlocks.\",\n    \"Enhancing SQL workload pressure could result in significant query latency spikes.\"\n  ],\n  \"memory_update\": [\n    \"Record the impact of increased lock duration on contention metrics.\",\n    \"Log the effects of higher thread count and repeat frequency on SQL performance.\"\n  ]\n}"
+          },
+          "short_term_rounds": 3,
+          "long_term_items": 8,
+          "effective_parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "baseline_sleep": 0.044,
+            "baseline_threads": 80
+          }
+        },
+        "decision": "Use reflexion overrides for overall_workload before planner defaults when present.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.041277166999862,
+            "successful_transactions": 207,
+            "failed_transactions": 0,
+            "qps": 17.190867474365675,
+            "avg_latency_ms": 10.46861096615584,
+            "p95_latency_ms": 21.42249999997148,
+            "p99_latency_ms": 23.058708000462502,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "baseline_tpcc_probe"
+          },
+          "after_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 19.66664258399942,
+            "successful_transactions": 26,
+            "failed_transactions": 0,
+            "qps": 1.322035517193633,
+            "avg_latency_ms": 709.6160641154851,
+            "p95_latency_ms": 11.204375000488653,
+            "p99_latency_ms": 18289.38054199989,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "after_anomaly_probe"
+          },
+          "evaluation": {
+            "baseline_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.041277166999862,
+              "successful_transactions": 207,
+              "failed_transactions": 0,
+              "qps": 17.190867474365675,
+              "avg_latency_ms": 10.46861096615584,
+              "p95_latency_ms": 21.42249999997148,
+              "p99_latency_ms": 23.058708000462502,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "baseline_tpcc_probe"
+            },
+            "after_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 19.66664258399942,
+              "successful_transactions": 26,
+              "failed_transactions": 0,
+              "qps": 1.322035517193633,
+              "avg_latency_ms": 709.6160641154851,
+              "p95_latency_ms": 11.204375000488653,
+              "p99_latency_ms": 18289.38054199989,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "after_anomaly_probe"
+            },
+            "target_anomaly_scores": {
+              "record_lock": 0.4,
+              "missing_index": 0.8
+            },
+            "reward": {
+              "performance_score": 1.0,
+              "target_anomaly_score": 0.6000000000000001,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.8,
+              "success": false
+            },
+            "chain_events": [
+              {
+                "node": "traffic_surge",
+                "order": 0,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "connections_up",
+                "order": 1,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "lock_contention",
+                "order": 2,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "slow_query",
+                "order": 3,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "qps_drop",
+                "order": 4,
+                "score": 1.0,
+                "observed": true
+              }
+            ],
+            "success": false,
+            "reason": "metrics did not meet reward or chain success threshold"
+          }
+        },
+        "decision": "Adjust overall_workload candidates when prior metrics show weak degradation.",
+        "candidate_id": "overall_workload:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate workload ramp-up candidates using planner parameters and reflexion.",
+        "action": "generate_traffic_candidates",
+        "observation": {
+          "feedback": "the metrics did not meet the reward or chain success threshold. the expected increase in lock waits and blocked transactions was not significant enough. the slow sql task did not sufficiently degrade query performance metrics. increase the duration of the lock hold to amplify lock contention effects. adjust the sql query in the slow sql task to target a more critical table or index. increase the thread count or repeat frequency in the slow sql task to enhance pressure. increasing lock duration may lead to higher risk of deadlocks. enhancing sql workload pressure could result in significant query latency spikes. record the impact of increased lock duration on contention metrics. log the effects of higher thread count and repeat frequency on sql performance. attempt scored 0.8420000000000001; stronger overlap or concurrency may be needed. attempt scored 0.44554302475185487; stronger overlap or concurrency may be needed. record the impact of increased lock duration on contention metrics. log the effects of higher thread count and repeat frequency on sql performance. record the impact of increased lock duration on contention metrics. log the effects of higher thread count and repeat frequency on sql performance. record the impact of increased lock duration on contention metrics. log the effects of higher thread count and repeat frequency on sql performance.",
+          "candidate": {
+            "mode": "overall_workload",
+            "sleep_time": 0.005,
+            "thread_count": 500,
+            "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+            "database": "dbmags_tpcc_base_run_20260529075944",
+            "duration_seconds": 20
+          }
+        },
+        "decision": "Increase threads or lower sleep when reflexion says traffic pressure was insufficient.",
+        "candidate_id": "traffic:overall_workload",
+        "score": null,
+        "adjustments": {
+          "thread_count": 500,
+          "sleep_time": 0.005
+        }
+      },
+      {
+        "thought": "Validate connection safety before finalizing traffic surge settings.",
+        "action": "runtime_probe",
+        "observation": {
+          "max_connections": 0,
+          "thread_count": 500
+        },
+        "decision": "Finalize ramp-up profile within configured connection safety bounds.",
+        "candidate_id": "traffic:overall_workload",
+        "score": 0.65,
+        "adjustments": {}
+      }
+    ]
+  },
+  {
+    "agent_name": "slow_sql",
+    "subgoal": "missing_index",
+    "local_hypothesis": "missing_index SQL should increase scan work or latency.",
+    "task_spec": {
+      "task_id": "slow-sql-missing-index",
+      "agent_type": "slow_sql",
+      "anomaly_type": "missing_index",
+      "title": "Slow SQL: missing_index",
+      "task_role": "background_anomaly",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260529075944",
+        "anomaly_subtype": "missing_index",
+        "source_agent": "slow_sql",
+        "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+        "duration_seconds": 16,
+        "background_duration_seconds": 20,
+        "inputs": {
+          "thread_count": 10,
+          "repeat": 50
+        }
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "single_sql",
+          "sleep_time": 0.005,
+          "thread_count": 8,
+          "repeat": 30,
+          "description": "Background slow SQL pressure for missing_index.",
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+          "database": "dbmags_tpcc_base_run_20260529075944",
+          "duration_seconds": 20
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+              ]
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected missing_index from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "query_latency": "increase",
+        "rows_examined": "increase",
+        "slow_query_count": "increase"
+      },
+      "local_success_criteria": {
+        "explain_validated": true,
+        "latency_direction": "increase"
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "long-running query pressure",
+        "confidence": 0.7
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "query_latency": "increase",
+      "rows_examined": "increase",
+      "slow_query_count": "increase"
+    },
+    "local_success_criteria": {
+      "explain_validated": true,
+      "latency_direction": "increase"
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "long-running query pressure",
+      "confidence": 0.7
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 16,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [],
+    "fallback_plan": {
+      "template_sql_available": true
+    },
+    "confidence": 0.7,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {
+            "failure_reason": [
+              "The metrics did not meet the reward or chain success threshold.",
+              "The expected increase in lock waits and blocked transactions was not significant enough.",
+              "The slow SQL task did not sufficiently degrade query performance metrics."
+            ],
+            "suggested_changes": [
+              "Increase the duration of the lock hold to amplify lock contention effects.",
+              "Adjust the SQL query in the slow SQL task to target a more critical table or index.",
+              "Increase the thread count or repeat frequency in the slow SQL task to enhance pressure."
+            ],
+            "task_parameter_updates": {
+              "record_lock": {
+                "inputs": {
+                  "hold_seconds": 30
+                }
+              },
+              "missing_index": {
+                "inputs": {
+                  "thread_count": 10,
+                  "repeat": 50
+                }
+              }
+            },
+            "agent_specific_feedback": {
+              "lock_conflict": [
+                "Consider using a more aggressive lock strategy to increase contention.",
+                "Evaluate the lock duration and predicate to ensure maximum impact."
+              ],
+              "slow_sql": [
+                "Reassess the SQL query to ensure it targets a high-impact area.",
+                "Increase workload intensity to better simulate missing index effects."
+              ]
+            },
+            "risk_warning": [
+              "Increasing lock duration may lead to higher risk of deadlocks.",
+              "Enhancing SQL workload pressure could result in significant query latency spikes."
+            ],
+            "memory_update": [
+              "Record the impact of increased lock duration on contention metrics.",
+              "Log the effects of higher thread count and repeat frequency on SQL performance."
+            ],
+            "raw_text": "{\n  \"failure_reason\": [\n    \"The metrics did not meet the reward or chain success threshold.\",\n    \"The expected increase in lock waits and blocked transactions was not significant enough.\",\n    \"The slow SQL task did not sufficiently degrade query performance metrics.\"\n  ],\n  \"suggested_changes\": [\n    \"Increase the duration of the lock hold to amplify lock contention effects.\",\n    \"Adjust the SQL query in the slow SQL task to target a more critical table or index.\",\n    \"Increase the thread count or repeat frequency in the slow SQL task to enhance pressure.\"\n  ],\n  \"task_parameter_updates\": {\n    \"record_lock\": {\n      \"inputs\": {\n        \"hold_seconds\": 30\n      }\n    },\n    \"missing_index\": {\n      \"inputs\": {\n        \"thread_count\": 10,\n        \"repeat\": 50\n      }\n    }\n  },\n  \"agent_specific_feedback\": {\n    \"lock_conflict\": [\n      \"Consider using a more aggressive lock strategy to increase contention.\",\n      \"Evaluate the lock duration and predicate to ensure maximum impact.\"\n    ],\n    \"slow_sql\": [\n      \"Reassess the SQL query to ensure it targets a high-impact area.\",\n      \"Increase workload intensity to better simulate missing index effects.\"\n    ]\n  },\n  \"risk_warning\": [\n    \"Increasing lock duration may lead to higher risk of deadlocks.\",\n    \"Enhancing SQL workload pressure could result in significant query latency spikes.\"\n  ],\n  \"memory_update\": [\n    \"Record the impact of increased lock duration on contention metrics.\",\n    \"Log the effects of higher thread count and repeat frequency on SQL performance.\"\n  ]\n}"
+          },
+          "short_term_rounds": 3,
+          "long_term_items": 8,
+          "effective_parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "inputs": {
+              "thread_count": 10,
+              "repeat": 50
+            }
+          }
+        },
+        "decision": "Use reflexion overrides for missing_index before planner defaults when present.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {
+          "inputs": {
+            "thread_count": 10,
+            "repeat": 50
+          }
+        }
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.041277166999862,
+            "successful_transactions": 207,
+            "failed_transactions": 0,
+            "qps": 17.190867474365675,
+            "avg_latency_ms": 10.46861096615584,
+            "p95_latency_ms": 21.42249999997148,
+            "p99_latency_ms": 23.058708000462502,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "baseline_tpcc_probe"
+          },
+          "after_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 19.66664258399942,
+            "successful_transactions": 26,
+            "failed_transactions": 0,
+            "qps": 1.322035517193633,
+            "avg_latency_ms": 709.6160641154851,
+            "p95_latency_ms": 11.204375000488653,
+            "p99_latency_ms": 18289.38054199989,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "after_anomaly_probe"
+          },
+          "evaluation": {
+            "baseline_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.041277166999862,
+              "successful_transactions": 207,
+              "failed_transactions": 0,
+              "qps": 17.190867474365675,
+              "avg_latency_ms": 10.46861096615584,
+              "p95_latency_ms": 21.42249999997148,
+              "p99_latency_ms": 23.058708000462502,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "baseline_tpcc_probe"
+            },
+            "after_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 19.66664258399942,
+              "successful_transactions": 26,
+              "failed_transactions": 0,
+              "qps": 1.322035517193633,
+              "avg_latency_ms": 709.6160641154851,
+              "p95_latency_ms": 11.204375000488653,
+              "p99_latency_ms": 18289.38054199989,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "after_anomaly_probe"
+            },
+            "target_anomaly_scores": {
+              "record_lock": 0.4,
+              "missing_index": 0.8
+            },
+            "reward": {
+              "performance_score": 1.0,
+              "target_anomaly_score": 0.6000000000000001,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.8,
+              "success": false
+            },
+            "chain_events": [
+              {
+                "node": "traffic_surge",
+                "order": 0,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "connections_up",
+                "order": 1,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "lock_contention",
+                "order": 2,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "slow_query",
+                "order": 3,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "qps_drop",
+                "order": 4,
+                "score": 1.0,
+                "observed": true
+              }
+            ],
+            "success": false,
+            "reason": "metrics did not meet reward or chain success threshold"
+          }
+        },
+        "decision": "Adjust missing_index candidates when prior metrics show weak degradation.",
+        "candidate_id": "missing_index:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate multiple SQL candidates and prioritize reflexion-provided SQL or target table.",
+        "action": "generate_slow_sql_candidates",
+        "observation": {
+          "candidate_count": 4,
+          "target_table": null
+        },
+        "decision": "Validate candidates with static checks and EXPLAIN before selecting.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Candidate SQL should have an EXPLAIN plan consistent with slow-query pressure.",
+        "action": "explain_probe",
+        "observation": {
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+          "explain": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+              ]
+            ]
+          }
+        },
+        "decision": "Accept candidate if EXPLAIN validates; otherwise revise to the next candidate.",
+        "candidate_id": "slow_sql:missing_index",
+        "score": 1.0,
+        "adjustments": {}
+      },
+      {
+        "thought": "Select the highest-confidence EXPLAIN-validated slow SQL candidate.",
+        "action": "select_final_task_spec",
+        "observation": {
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+          "parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "inputs": {
+              "thread_count": 10,
+              "repeat": 50
+            }
+          }
+        },
+        "decision": "Finalize slow SQL TaskSpec with reflexion-adjusted pressure settings.",
+        "candidate_id": "slow_sql:missing_index:final",
+        "score": 0.7,
+        "adjustments": {
+          "background_duration_seconds": 20
+        }
+      }
+    ]
+  },
+  {
+    "agent_name": "resource_bottleneck",
+    "subgoal": "cpu",
+    "local_hypothesis": "cpu pressure should reduce probe capacity or increase latency.",
+    "task_spec": {
+      "task_id": "resource-cpu",
+      "agent_type": "resource_bottleneck",
+      "anomaly_type": "cpu",
+      "title": "Resource bottleneck: cpu",
+      "task_role": "resource_injection",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260529075944",
+        "anomaly_subtype": "cpu",
+        "source_agent": "resource_bottleneck",
+        "duration_seconds": 16,
+        "intensity": "high",
+        "background_duration_seconds": 20
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "shell",
+          "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+          "database": "dbmags_tpcc_base_run_20260529075944",
+          "duration_seconds": 16,
+          "intensity": "high"
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected cpu from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "cpu_pressure": "increase",
+        "query_latency": "increase"
+      },
+      "local_success_criteria": {
+        "chaosblade_uid": "present",
+        "qps": "decrease_or_latency_increase"
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "host resource contention",
+        "confidence": 0.65
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "cpu_pressure": "increase",
+      "query_latency": "increase"
+    },
+    "local_success_criteria": {
+      "chaosblade_uid": "present",
+      "qps": "decrease_or_latency_increase"
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "host resource contention",
+      "confidence": 0.65
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 16,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [],
+    "fallback_plan": {
+      "chaosblade": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload"
+    },
+    "confidence": 0.65,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {
+            "failure_reason": [
+              "The metrics did not meet the reward or chain success threshold.",
+              "The expected increase in lock waits and blocked transactions was not significant enough.",
+              "The slow SQL task did not sufficiently degrade query performance metrics."
+            ],
+            "suggested_changes": [
+              "Increase the duration of the lock hold to amplify lock contention effects.",
+              "Adjust the SQL query in the slow SQL task to target a more critical table or index.",
+              "Increase the thread count or repeat frequency in the slow SQL task to enhance pressure."
+            ],
+            "task_parameter_updates": {
+              "record_lock": {
+                "inputs": {
+                  "hold_seconds": 30
+                }
+              },
+              "missing_index": {
+                "inputs": {
+                  "thread_count": 10,
+                  "repeat": 50
+                }
+              }
+            },
+            "agent_specific_feedback": {
+              "lock_conflict": [
+                "Consider using a more aggressive lock strategy to increase contention.",
+                "Evaluate the lock duration and predicate to ensure maximum impact."
+              ],
+              "slow_sql": [
+                "Reassess the SQL query to ensure it targets a high-impact area.",
+                "Increase workload intensity to better simulate missing index effects."
+              ]
+            },
+            "risk_warning": [
+              "Increasing lock duration may lead to higher risk of deadlocks.",
+              "Enhancing SQL workload pressure could result in significant query latency spikes."
+            ],
+            "memory_update": [
+              "Record the impact of increased lock duration on contention metrics.",
+              "Log the effects of higher thread count and repeat frequency on SQL performance."
+            ],
+            "raw_text": "{\n  \"failure_reason\": [\n    \"The metrics did not meet the reward or chain success threshold.\",\n    \"The expected increase in lock waits and blocked transactions was not significant enough.\",\n    \"The slow SQL task did not sufficiently degrade query performance metrics.\"\n  ],\n  \"suggested_changes\": [\n    \"Increase the duration of the lock hold to amplify lock contention effects.\",\n    \"Adjust the SQL query in the slow SQL task to target a more critical table or index.\",\n    \"Increase the thread count or repeat frequency in the slow SQL task to enhance pressure.\"\n  ],\n  \"task_parameter_updates\": {\n    \"record_lock\": {\n      \"inputs\": {\n        \"hold_seconds\": 30\n      }\n    },\n    \"missing_index\": {\n      \"inputs\": {\n        \"thread_count\": 10,\n        \"repeat\": 50\n      }\n    }\n  },\n  \"agent_specific_feedback\": {\n    \"lock_conflict\": [\n      \"Consider using a more aggressive lock strategy to increase contention.\",\n      \"Evaluate the lock duration and predicate to ensure maximum impact.\"\n    ],\n    \"slow_sql\": [\n      \"Reassess the SQL query to ensure it targets a high-impact area.\",\n      \"Increase workload intensity to better simulate missing index effects.\"\n    ]\n  },\n  \"risk_warning\": [\n    \"Increasing lock duration may lead to higher risk of deadlocks.\",\n    \"Enhancing SQL workload pressure could result in significant query latency spikes.\"\n  ],\n  \"memory_update\": [\n    \"Record the impact of increased lock duration on contention metrics.\",\n    \"Log the effects of higher thread count and repeat frequency on SQL performance.\"\n  ]\n}"
+          },
+          "short_term_rounds": 3,
+          "long_term_items": 8,
+          "effective_parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20
+          }
+        },
+        "decision": "Use reflexion overrides for cpu before planner defaults when present.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.041277166999862,
+            "successful_transactions": 207,
+            "failed_transactions": 0,
+            "qps": 17.190867474365675,
+            "avg_latency_ms": 10.46861096615584,
+            "p95_latency_ms": 21.42249999997148,
+            "p99_latency_ms": 23.058708000462502,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "baseline_tpcc_probe"
+          },
+          "after_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 19.66664258399942,
+            "successful_transactions": 26,
+            "failed_transactions": 0,
+            "qps": 1.322035517193633,
+            "avg_latency_ms": 709.6160641154851,
+            "p95_latency_ms": 11.204375000488653,
+            "p99_latency_ms": 18289.38054199989,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "after_anomaly_probe"
+          },
+          "evaluation": {
+            "baseline_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.041277166999862,
+              "successful_transactions": 207,
+              "failed_transactions": 0,
+              "qps": 17.190867474365675,
+              "avg_latency_ms": 10.46861096615584,
+              "p95_latency_ms": 21.42249999997148,
+              "p99_latency_ms": 23.058708000462502,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "baseline_tpcc_probe"
+            },
+            "after_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 19.66664258399942,
+              "successful_transactions": 26,
+              "failed_transactions": 0,
+              "qps": 1.322035517193633,
+              "avg_latency_ms": 709.6160641154851,
+              "p95_latency_ms": 11.204375000488653,
+              "p99_latency_ms": 18289.38054199989,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "after_anomaly_probe"
+            },
+            "target_anomaly_scores": {
+              "record_lock": 0.4,
+              "missing_index": 0.8
+            },
+            "reward": {
+              "performance_score": 1.0,
+              "target_anomaly_score": 0.6000000000000001,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.8,
+              "success": false
+            },
+            "chain_events": [
+              {
+                "node": "traffic_surge",
+                "order": 0,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "connections_up",
+                "order": 1,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "lock_contention",
+                "order": 2,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "slow_query",
+                "order": 3,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "qps_drop",
+                "order": 4,
+                "score": 1.0,
+                "observed": true
+              }
+            ],
+            "success": false,
+            "reason": "metrics did not meet reward or chain success threshold"
+          }
+        },
+        "decision": "Adjust cpu candidates when prior metrics show weak degradation.",
+        "candidate_id": "cpu:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate resource pressure candidate from OS snapshot and reflexion.",
+        "action": "generate_resource_candidates",
+        "observation": {
+          "os_metrics": {},
+          "requested_resource": "cpu"
+        },
+        "decision": "Choose high intensity for 16s.",
+        "candidate_id": "resource:cpu",
+        "score": null,
+        "adjustments": {
+          "intensity": "high",
+          "duration_seconds": 16
+        }
+      },
+      {
+        "thought": "Validate current resource headroom before finalizing the pressure task.",
+        "action": "runtime_probe",
+        "observation": {
+          "cpu_percent": 0.0,
+          "os_metrics": {}
+        },
+        "decision": "Downgrade intensity if host resources are already near the boundary; otherwise keep stronger pressure.",
+        "candidate_id": "resource:cpu",
+        "score": 0.75,
+        "adjustments": {}
+      }
+    ]
+  },
+  {
+    "agent_name": "database_backup",
+    "subgoal": "database_table_backup",
+    "local_hypothesis": "Backing up orders should create stronger overlap with TPCC probe pressure.",
+    "task_spec": {
+      "task_id": "backup-orders",
+      "agent_type": "database_backup",
+      "anomaly_type": "database_table_backup",
+      "title": "Backup table orders into orders_backup_agent.",
+      "task_role": "backup_job",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260529075944",
+        "anomaly_subtype": "database_table_backup",
+        "source_agent": "database_backup",
+        "source_table": "orders",
+        "backup_table": "orders_backup_agent",
+        "background_duration_seconds": 20,
+        "concurrent_with_probe": true,
+        "duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260529075944"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+          "database": "dbmags_tpcc_base_run_20260529075944"
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "react_trace",
+          "result": {
+            "steps": [
+              {
+                "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+                "action": "read_reflection_memory",
+                "observation": {
+                  "latest_reflection": {
+                    "failure_reason": [
+                      "The metrics did not meet the reward or chain success threshold.",
+                      "The expected increase in lock waits and blocked transactions was not significant enough.",
+                      "The slow SQL task did not sufficiently degrade query performance metrics."
+                    ],
+                    "suggested_changes": [
+                      "Increase the duration of the lock hold to amplify lock contention effects.",
+                      "Adjust the SQL query in the slow SQL task to target a more critical table or index.",
+                      "Increase the thread count or repeat frequency in the slow SQL task to enhance pressure."
+                    ],
+                    "task_parameter_updates": {
+                      "record_lock": {
+                        "inputs": {
+                          "hold_seconds": 30
+                        }
+                      },
+                      "missing_index": {
+                        "inputs": {
+                          "thread_count": 10,
+                          "repeat": 50
+                        }
+                      }
+                    },
+                    "agent_specific_feedback": {
+                      "lock_conflict": [
+                        "Consider using a more aggressive lock strategy to increase contention.",
+                        "Evaluate the lock duration and predicate to ensure maximum impact."
+                      ],
+                      "slow_sql": [
+                        "Reassess the SQL query to ensure it targets a high-impact area.",
+                        "Increase workload intensity to better simulate missing index effects."
+                      ]
+                    },
+                    "risk_warning": [
+                      "Increasing lock duration may lead to higher risk of deadlocks.",
+                      "Enhancing SQL workload pressure could result in significant query latency spikes."
+                    ],
+                    "memory_update": [
+                      "Record the impact of increased lock duration on contention metrics.",
+                      "Log the effects of higher thread count and repeat frequency on SQL performance."
+                    ],
+                    "raw_text": "{\n  \"failure_reason\": [\n    \"The metrics did not meet the reward or chain success threshold.\",\n    \"The expected increase in lock waits and blocked transactions was not significant enough.\",\n    \"The slow SQL task did not sufficiently degrade query performance metrics.\"\n  ],\n  \"suggested_changes\": [\n    \"Increase the duration of the lock hold to amplify lock contention effects.\",\n    \"Adjust the SQL query in the slow SQL task to target a more critical table or index.\",\n    \"Increase the thread count or repeat frequency in the slow SQL task to enhance pressure.\"\n  ],\n  \"task_parameter_updates\": {\n    \"record_lock\": {\n      \"inputs\": {\n        \"hold_seconds\": 30\n      }\n    },\n    \"missing_index\": {\n      \"inputs\": {\n        \"thread_count\": 10,\n        \"repeat\": 50\n      }\n    }\n  },\n  \"agent_specific_feedback\": {\n    \"lock_conflict\": [\n      \"Consider using a more aggressive lock strategy to increase contention.\",\n      \"Evaluate the lock duration and predicate to ensure maximum impact.\"\n    ],\n    \"slow_sql\": [\n      \"Reassess the SQL query to ensure it targets a high-impact area.\",\n      \"Increase workload intensity to better simulate missing index effects.\"\n    ]\n  },\n  \"risk_warning\": [\n    \"Increasing lock duration may lead to higher risk of deadlocks.\",\n    \"Enhancing SQL workload pressure could result in significant query latency spikes.\"\n  ],\n  \"memory_update\": [\n    \"Record the impact of increased lock duration on contention metrics.\",\n    \"Log the effects of higher thread count and repeat frequency on SQL performance.\"\n  ]\n}"
+                  },
+                  "short_term_rounds": 3,
+                  "long_term_items": 8,
+                  "effective_parameters": {
+                    "duration_seconds": 16,
+                    "background_duration_seconds": 20,
+                    "source_table": "orders"
+                  }
+                },
+                "decision": "Use reflexion overrides for database_table_backup before planner defaults when present.",
+                "candidate_id": "",
+                "score": null,
+                "adjustments": {}
+              },
+              {
+                "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+                "action": "metric_sample_probe",
+                "observation": {
+                  "baseline_metrics": {
+                    "executed": true,
+                    "database": "dbmags_tpcc_base_run_20260529075724",
+                    "duration_seconds": 12.0,
+                    "elapsed_seconds": 12.041277166999862,
+                    "successful_transactions": 207,
+                    "failed_transactions": 0,
+                    "qps": 17.190867474365675,
+                    "avg_latency_ms": 10.46861096615584,
+                    "p95_latency_ms": 21.42249999997148,
+                    "p99_latency_ms": 23.058708000462502,
+                    "single_sql_mean_ms": 0.0,
+                    "thread_count": 40,
+                    "sql": "",
+                    "probe_sql": "",
+                    "db_evidence": {},
+                    "comparison_mode": "baseline_tpcc_probe"
+                  },
+                  "after_metrics": {
+                    "executed": true,
+                    "database": "dbmags_tpcc_base_run_20260529075724",
+                    "duration_seconds": 12.0,
+                    "elapsed_seconds": 19.66664258399942,
+                    "successful_transactions": 26,
+                    "failed_transactions": 0,
+                    "qps": 1.322035517193633,
+                    "avg_latency_ms": 709.6160641154851,
+                    "p95_latency_ms": 11.204375000488653,
+                    "p99_latency_ms": 18289.38054199989,
+                    "single_sql_mean_ms": 0.0,
+                    "thread_count": 40,
+                    "sql": "",
+                    "probe_sql": "",
+                    "db_evidence": {},
+                    "comparison_mode": "after_anomaly_probe"
+                  },
+                  "evaluation": {
+                    "baseline_metrics": {
+                      "executed": true,
+                      "database": "dbmags_tpcc_base_run_20260529075724",
+                      "duration_seconds": 12.0,
+                      "elapsed_seconds": 12.041277166999862,
+                      "successful_transactions": 207,
+                      "failed_transactions": 0,
+                      "qps": 17.190867474365675,
+                      "avg_latency_ms": 10.46861096615584,
+                      "p95_latency_ms": 21.42249999997148,
+                      "p99_latency_ms": 23.058708000462502,
+                      "single_sql_mean_ms": 0.0,
+                      "thread_count": 40,
+                      "sql": "",
+                      "probe_sql": "",
+                      "db_evidence": {},
+                      "comparison_mode": "baseline_tpcc_probe"
+                    },
+                    "after_metrics": {
+                      "executed": true,
+                      "database": "dbmags_tpcc_base_run_20260529075724",
+                      "duration_seconds": 12.0,
+                      "elapsed_seconds": 19.66664258399942,
+                      "successful_transactions": 26,
+                      "failed_transactions": 0,
+                      "qps": 1.322035517193633,
+                      "avg_latency_ms": 709.6160641154851,
+                      "p95_latency_ms": 11.204375000488653,
+                      "p99_latency_ms": 18289.38054199989,
+                      "single_sql_mean_ms": 0.0,
+                      "thread_count": 40,
+                      "sql": "",
+                      "probe_sql": "",
+                      "db_evidence": {},
+                      "comparison_mode": "after_anomaly_probe"
+                    },
+                    "target_anomaly_scores": {
+                      "record_lock": 0.4,
+                      "missing_index": 0.8
+                    },
+                    "reward": {
+                      "performance_score": 1.0,
+                      "target_anomaly_score": 0.6000000000000001,
+                      "causal_order_score": 0.8,
+                      "stability_score": 0.6,
+                      "safety_penalty": 0.0,
+                      "final_score": 0.8,
+                      "success": false
+                    },
+                    "chain_events": [
+                      {
+                        "node": "traffic_surge",
+                        "order": 0,
+                        "score": 1.0,
+                        "observed": true
+                      },
+                      {
+                        "node": "connections_up",
+                        "order": 1,
+                        "score": 1.0,
+                        "observed": true
+                      },
+                      {
+                        "node": "lock_contention",
+                        "order": 2,
+                        "score": 1.0,
+                        "observed": true
+                      },
+                      {
+                        "node": "slow_query",
+                        "order": 3,
+                        "score": 1.0,
+                        "observed": true
+                      },
+                      {
+                        "node": "qps_drop",
+                        "order": 4,
+                        "score": 1.0,
+                        "observed": true
+                      }
+                    ],
+                    "success": false,
+                    "reason": "metrics did not meet reward or chain success threshold"
+                  }
+                },
+                "decision": "Adjust database_table_backup candidates when prior metrics show weak degradation.",
+                "candidate_id": "database_table_backup:metric-sample",
+                "score": null,
+                "adjustments": {}
+              },
+              {
+                "thought": "Generate candidate backup targets from reflection and table statistics.",
+                "action": "generate_backup_candidates",
+                "observation": {
+                  "reflection": {
+                    "failure_reason": [
+                      "The metrics did not meet the reward or chain success threshold.",
+                      "The expected increase in lock waits and blocked transactions was not significant enough.",
+                      "The slow SQL task did not sufficiently degrade query performance metrics."
+                    ],
+                    "suggested_changes": [
+                      "Increase the duration of the lock hold to amplify lock contention effects.",
+                      "Adjust the SQL query in the slow SQL task to target a more critical table or index.",
+                      "Increase the thread count or repeat frequency in the slow SQL task to enhance pressure."
+                    ],
+                    "task_parameter_updates": {
+                      "record_lock": {
+                        "inputs": {
+                          "hold_seconds": 30
+                        }
+                      },
+                      "missing_index": {
+                        "inputs": {
+                          "thread_count": 10,
+                          "repeat": 50
+                        }
+                      }
+                    },
+                    "agent_specific_feedback": {
+                      "lock_conflict": [
+                        "Consider using a more aggressive lock strategy to increase contention.",
+                        "Evaluate the lock duration and predicate to ensure maximum impact."
+                      ],
+                      "slow_sql": [
+                        "Reassess the SQL query to ensure it targets a high-impact area.",
+                        "Increase workload intensity to better simulate missing index effects."
+                      ]
+                    },
+                    "risk_warning": [
+                      "Increasing lock duration may lead to higher risk of deadlocks.",
+                      "Enhancing SQL workload pressure could result in significant query latency spikes."
+                    ],
+                    "memory_update": [
+                      "Record the impact of increased lock duration on contention metrics.",
+                      "Log the effects of higher thread count and repeat frequency on SQL performance."
+                    ],
+                    "raw_text": "{\n  \"failure_reason\": [\n    \"The metrics did not meet the reward or chain success threshold.\",\n    \"The expected increase in lock waits and blocked transactions was not significant enough.\",\n    \"The slow SQL task did not sufficiently degrade query performance metrics.\"\n  ],\n  \"suggested_changes\": [\n    \"Increase the duration of the lock hold to amplify lock contention effects.\",\n    \"Adjust the SQL query in the slow SQL task to target a more critical table or index.\",\n    \"Increase the thread count or repeat frequency in the slow SQL task to enhance pressure.\"\n  ],\n  \"task_parameter_updates\": {\n    \"record_lock\": {\n      \"inputs\": {\n        \"hold_seconds\": 30\n      }\n    },\n    \"missing_index\": {\n      \"inputs\": {\n        \"thread_count\": 10,\n        \"repeat\": 50\n      }\n    }\n  },\n  \"agent_specific_feedback\": {\n    \"lock_conflict\": [\n      \"Consider using a more aggressive lock strategy to increase contention.\",\n      \"Evaluate the lock duration and predicate to ensure maximum impact.\"\n    ],\n    \"slow_sql\": [\n      \"Reassess the SQL query to ensure it targets a high-impact area.\",\n      \"Increase workload intensity to better simulate missing index effects.\"\n    ]\n  },\n  \"risk_warning\": [\n    \"Increasing lock duration may lead to higher risk of deadlocks.\",\n    \"Enhancing SQL workload pressure could result in significant query latency spikes.\"\n  ],\n  \"memory_update\": [\n    \"Record the impact of increased lock duration on contention metrics.\",\n    \"Log the effects of higher thread count and repeat frequency on SQL performance.\"\n  ]\n}"
+                  },
+                  "largest_tables": [
+                    "order_line",
+                    "stock",
+                    "orders"
+                  ]
+                },
+                "decision": "Candidate source table is orders.",
+                "candidate_id": "backup:orders",
+                "score": null,
+                "adjustments": {
+                  "source_table": "orders"
+                }
+              },
+              {
+                "thought": "Validate that the backup candidate is reversible and likely to overlap with probe pressure.",
+                "action": "inspect_table_stats",
+                "observation": {
+                  "table_row_counts": {
+                    "agent_group_by_support": 4491080,
+                    "agent_implicit_conversion_support": 149989,
+                    "agent_large_scan_support": 448567,
+                    "agent_order_by_support": 4482155,
+                    "customer": 435729,
+                    "district": 150,
+                    "history": 440216,
+                    "item": 99572,
+                    "new_orders": 135888,
+                    "order_line": 4375522,
+                    "orders": 452581,
+                    "stock": 1430123,
+                    "warehouse": 15
+                  }
+                },
+                "decision": "Select orders as backup source table and attach rollback for the backup table.",
+                "candidate_id": "backup:orders",
+                "score": 452581.0,
+                "adjustments": {}
+              }
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260529075944"
+        }
+      ],
+      "explanation": "Fallback planner selected database_table_backup from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "disk_read_throughput": "increase",
+        "io_wait": "increase",
+        "query_latency": "increase"
+      },
+      "local_success_criteria": {
+        "backup_table_created": true,
+        "source_table": "orders"
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "IO interference or metadata lock",
+        "confidence": 0.72
+      },
+      "cleanup_actions": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260529075944"
+        }
+      ]
+    },
+    "expected_metrics": {
+      "disk_read_throughput": "increase",
+      "io_wait": "increase",
+      "query_latency": "increase"
+    },
+    "local_success_criteria": {
+      "backup_table_created": true,
+      "source_table": "orders"
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "IO interference or metadata lock",
+      "confidence": 0.72
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 16,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [
+      {
+        "kind": "sql",
+        "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+        "database": "dbmags_tpcc_base_run_20260529075944"
+      }
+    ],
+    "fallback_plan": {
+      "source_table": "orders",
+      "reason": "default TPCC table if memory-guided selection is unavailable"
+    },
+    "confidence": 0.72,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {
+            "failure_reason": [
+              "The metrics did not meet the reward or chain success threshold.",
+              "The expected increase in lock waits and blocked transactions was not significant enough.",
+              "The slow SQL task did not sufficiently degrade query performance metrics."
+            ],
+            "suggested_changes": [
+              "Increase the duration of the lock hold to amplify lock contention effects.",
+              "Adjust the SQL query in the slow SQL task to target a more critical table or index.",
+              "Increase the thread count or repeat frequency in the slow SQL task to enhance pressure."
+            ],
+            "task_parameter_updates": {
+              "record_lock": {
+                "inputs": {
+                  "hold_seconds": 30
+                }
+              },
+              "missing_index": {
+                "inputs": {
+                  "thread_count": 10,
+                  "repeat": 50
+                }
+              }
+            },
+            "agent_specific_feedback": {
+              "lock_conflict": [
+                "Consider using a more aggressive lock strategy to increase contention.",
+                "Evaluate the lock duration and predicate to ensure maximum impact."
+              ],
+              "slow_sql": [
+                "Reassess the SQL query to ensure it targets a high-impact area.",
+                "Increase workload intensity to better simulate missing index effects."
+              ]
+            },
+            "risk_warning": [
+              "Increasing lock duration may lead to higher risk of deadlocks.",
+              "Enhancing SQL workload pressure could result in significant query latency spikes."
+            ],
+            "memory_update": [
+              "Record the impact of increased lock duration on contention metrics.",
+              "Log the effects of higher thread count and repeat frequency on SQL performance."
+            ],
+            "raw_text": "{\n  \"failure_reason\": [\n    \"The metrics did not meet the reward or chain success threshold.\",\n    \"The expected increase in lock waits and blocked transactions was not significant enough.\",\n    \"The slow SQL task did not sufficiently degrade query performance metrics.\"\n  ],\n  \"suggested_changes\": [\n    \"Increase the duration of the lock hold to amplify lock contention effects.\",\n    \"Adjust the SQL query in the slow SQL task to target a more critical table or index.\",\n    \"Increase the thread count or repeat frequency in the slow SQL task to enhance pressure.\"\n  ],\n  \"task_parameter_updates\": {\n    \"record_lock\": {\n      \"inputs\": {\n        \"hold_seconds\": 30\n      }\n    },\n    \"missing_index\": {\n      \"inputs\": {\n        \"thread_count\": 10,\n        \"repeat\": 50\n      }\n    }\n  },\n  \"agent_specific_feedback\": {\n    \"lock_conflict\": [\n      \"Consider using a more aggressive lock strategy to increase contention.\",\n      \"Evaluate the lock duration and predicate to ensure maximum impact.\"\n    ],\n    \"slow_sql\": [\n      \"Reassess the SQL query to ensure it targets a high-impact area.\",\n      \"Increase workload intensity to better simulate missing index effects.\"\n    ]\n  },\n  \"risk_warning\": [\n    \"Increasing lock duration may lead to higher risk of deadlocks.\",\n    \"Enhancing SQL workload pressure could result in significant query latency spikes.\"\n  ],\n  \"memory_update\": [\n    \"Record the impact of increased lock duration on contention metrics.\",\n    \"Log the effects of higher thread count and repeat frequency on SQL performance.\"\n  ]\n}"
+          },
+          "short_term_rounds": 3,
+          "long_term_items": 8,
+          "effective_parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "source_table": "orders"
+          }
+        },
+        "decision": "Use reflexion overrides for database_table_backup before planner defaults when present.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.041277166999862,
+            "successful_transactions": 207,
+            "failed_transactions": 0,
+            "qps": 17.190867474365675,
+            "avg_latency_ms": 10.46861096615584,
+            "p95_latency_ms": 21.42249999997148,
+            "p99_latency_ms": 23.058708000462502,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "baseline_tpcc_probe"
+          },
+          "after_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260529075724",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 19.66664258399942,
+            "successful_transactions": 26,
+            "failed_transactions": 0,
+            "qps": 1.322035517193633,
+            "avg_latency_ms": 709.6160641154851,
+            "p95_latency_ms": 11.204375000488653,
+            "p99_latency_ms": 18289.38054199989,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "after_anomaly_probe"
+          },
+          "evaluation": {
+            "baseline_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.041277166999862,
+              "successful_transactions": 207,
+              "failed_transactions": 0,
+              "qps": 17.190867474365675,
+              "avg_latency_ms": 10.46861096615584,
+              "p95_latency_ms": 21.42249999997148,
+              "p99_latency_ms": 23.058708000462502,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "baseline_tpcc_probe"
+            },
+            "after_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260529075724",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 19.66664258399942,
+              "successful_transactions": 26,
+              "failed_transactions": 0,
+              "qps": 1.322035517193633,
+              "avg_latency_ms": 709.6160641154851,
+              "p95_latency_ms": 11.204375000488653,
+              "p99_latency_ms": 18289.38054199989,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "after_anomaly_probe"
+            },
+            "target_anomaly_scores": {
+              "record_lock": 0.4,
+              "missing_index": 0.8
+            },
+            "reward": {
+              "performance_score": 1.0,
+              "target_anomaly_score": 0.6000000000000001,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.8,
+              "success": false
+            },
+            "chain_events": [
+              {
+                "node": "traffic_surge",
+                "order": 0,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "connections_up",
+                "order": 1,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "lock_contention",
+                "order": 2,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "slow_query",
+                "order": 3,
+                "score": 1.0,
+                "observed": true
+              },
+              {
+                "node": "qps_drop",
+                "order": 4,
+                "score": 1.0,
+                "observed": true
+              }
+            ],
+            "success": false,
+            "reason": "metrics did not meet reward or chain success threshold"
+          }
+        },
+        "decision": "Adjust database_table_backup candidates when prior metrics show weak degradation.",
+        "candidate_id": "database_table_backup:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate candidate backup targets from reflection and table statistics.",
+        "action": "generate_backup_candidates",
+        "observation": {
+          "reflection": {
+            "failure_reason": [
+              "The metrics did not meet the reward or chain success threshold.",
+              "The expected increase in lock waits and blocked transactions was not significant enough.",
+              "The slow SQL task did not sufficiently degrade query performance metrics."
+            ],
+            "suggested_changes": [
+              "Increase the duration of the lock hold to amplify lock contention effects.",
+              "Adjust the SQL query in the slow SQL task to target a more critical table or index.",
+              "Increase the thread count or repeat frequency in the slow SQL task to enhance pressure."
+            ],
+            "task_parameter_updates": {
+              "record_lock": {
+                "inputs": {
+                  "hold_seconds": 30
+                }
+              },
+              "missing_index": {
+                "inputs": {
+                  "thread_count": 10,
+                  "repeat": 50
+                }
+              }
+            },
+            "agent_specific_feedback": {
+              "lock_conflict": [
+                "Consider using a more aggressive lock strategy to increase contention.",
+                "Evaluate the lock duration and predicate to ensure maximum impact."
+              ],
+              "slow_sql": [
+                "Reassess the SQL query to ensure it targets a high-impact area.",
+                "Increase workload intensity to better simulate missing index effects."
+              ]
+            },
+            "risk_warning": [
+              "Increasing lock duration may lead to higher risk of deadlocks.",
+              "Enhancing SQL workload pressure could result in significant query latency spikes."
+            ],
+            "memory_update": [
+              "Record the impact of increased lock duration on contention metrics.",
+              "Log the effects of higher thread count and repeat frequency on SQL performance."
+            ],
+            "raw_text": "{\n  \"failure_reason\": [\n    \"The metrics did not meet the reward or chain success threshold.\",\n    \"The expected increase in lock waits and blocked transactions was not significant enough.\",\n    \"The slow SQL task did not sufficiently degrade query performance metrics.\"\n  ],\n  \"suggested_changes\": [\n    \"Increase the duration of the lock hold to amplify lock contention effects.\",\n    \"Adjust the SQL query in the slow SQL task to target a more critical table or index.\",\n    \"Increase the thread count or repeat frequency in the slow SQL task to enhance pressure.\"\n  ],\n  \"task_parameter_updates\": {\n    \"record_lock\": {\n      \"inputs\": {\n        \"hold_seconds\": 30\n      }\n    },\n    \"missing_index\": {\n      \"inputs\": {\n        \"thread_count\": 10,\n        \"repeat\": 50\n      }\n    }\n  },\n  \"agent_specific_feedback\": {\n    \"lock_conflict\": [\n      \"Consider using a more aggressive lock strategy to increase contention.\",\n      \"Evaluate the lock duration and predicate to ensure maximum impact.\"\n    ],\n    \"slow_sql\": [\n      \"Reassess the SQL query to ensure it targets a high-impact area.\",\n      \"Increase workload intensity to better simulate missing index effects.\"\n    ]\n  },\n  \"risk_warning\": [\n    \"Increasing lock duration may lead to higher risk of deadlocks.\",\n    \"Enhancing SQL workload pressure could result in significant query latency spikes.\"\n  ],\n  \"memory_update\": [\n    \"Record the impact of increased lock duration on contention metrics.\",\n    \"Log the effects of higher thread count and repeat frequency on SQL performance.\"\n  ]\n}"
+          },
+          "largest_tables": [
+            "order_line",
+            "stock",
+            "orders"
+          ]
+        },
+        "decision": "Candidate source table is orders.",
+        "candidate_id": "backup:orders",
+        "score": null,
+        "adjustments": {
+          "source_table": "orders"
+        }
+      },
+      {
+        "thought": "Validate that the backup candidate is reversible and likely to overlap with probe pressure.",
+        "action": "inspect_table_stats",
+        "observation": {
+          "table_row_counts": {
+            "agent_group_by_support": 4491080,
+            "agent_implicit_conversion_support": 149989,
+            "agent_large_scan_support": 448567,
+            "agent_order_by_support": 4482155,
+            "customer": 435729,
+            "district": 150,
+            "history": 440216,
+            "item": 99572,
+            "new_orders": 135888,
+            "order_line": 4375522,
+            "orders": 452581,
+            "stock": 1430123,
+            "warehouse": 15
+          }
+        },
+        "decision": "Select orders as backup source table and attach rollback for the backup table.",
+        "candidate_id": "backup:orders",
+        "score": 452581.0,
+        "adjustments": {}
+      }
+    ]
+  }
+]

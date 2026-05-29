@@ -5,7 +5,7 @@ from typing import List
 
 from agent_runtime.agents.base import BaseTaskAgent
 from agent_runtime.skill_registry import SkillRegistry
-from agent_runtime.types import DBContextSummary, ExperimentRequest, PlannedAnomaly, TaskSpec
+from agent_runtime.types import DBContextSummary, ExperimentRequest, PlannedAnomaly, ReActStep, TaskAgentInput, TaskAgentOutput, TaskSpec
 from agent_runtime.utils import slugify
 
 
@@ -21,45 +21,124 @@ class LockConflictAgent(BaseTaskAgent):
         context: DBContextSummary,
         request: ExperimentRequest,
         planner_tasks: List[PlannedAnomaly] | None = None,
-    ) -> List[TaskSpec]:
+        task_inputs: dict[str, TaskAgentInput] | None = None,
+    ) -> List[TaskAgentOutput]:
         planned = [task for task in (planner_tasks or []) if task.anomaly_subtype in self.supported_subtypes]
         preparer = self.skills.get("prepare_lock_sql_skill")
-        task_specs: List[TaskSpec] = []
+        outputs: List[TaskAgentOutput] = []
         for planned_task in planned:
+            task_input = self._input_for(planned_task.anomaly_subtype, task_inputs)
+            parameters = self._merge_parameters(planned_task, task_input)
+            feedback = self._feedback_text(task_input)
+            react_trace = [
+                self._memory_trace(task_input, planned_task.anomaly_subtype, parameters),
+                self._metric_sample_trace(task_input, planned_task.anomaly_subtype),
+            ]
             column_name = planned_task.parameters.get("column_name", f"agent_meta_lock_{uuid4().hex[:8]}")
+            default_duration = min(max(request.execution_window_seconds, 1), 12)
+            if any(term in feedback for term in ("too short", "holder", "waiter", "non-hot", "weak", "qps")):
+                default_duration = max(default_duration, 20)
+            duration_seconds = self._clamp_int(
+                parameters.get("hold_seconds", parameters.get("background_duration_seconds")),
+                default_duration,
+                1,
+                60,
+            )
             payload = preparer.execute(
                 anomaly_subtype=planned_task.anomaly_subtype,
                 database=planned_task.database,
-                duration_seconds=int(planned_task.parameters.get("background_duration_seconds", min(max(request.execution_window_seconds, 1), 12))),
+                duration_seconds=duration_seconds,
                 column_name=str(column_name),
                 multi_mode=request.mode != "single",
             )
-            task_specs.append(
-                TaskSpec(
-                    task_id=f"lock-{slugify(planned_task.anomaly_subtype)}",
-                    agent_type=self.agent_type,
-                    anomaly_type=planned_task.anomaly_subtype,
-                    title=payload["title"],
-                    task_role="lock_holder",
-                    inputs={
-                        "database": planned_task.database,
-                        "anomaly_subtype": planned_task.anomaly_subtype,
-                        "source_agent": self.agent_type,
-                        "column_name": column_name,
-                        **planned_task.parameters,
-                    },
-                    prechecks=[],
-                    execution_steps=payload["execution_steps"],
-                    validation_steps=[],
-                    rollback_steps=payload["rollback_steps"],
-                    explanation=planned_task.rationale or payload["title"],
-                    expected_metrics={"lock_waits": "increase", "blocked_transactions": "increase", "p95_latency": "increase"},
-                    local_success_criteria={"lock_wait_time_increase_ratio": 2.0, "blocked_transaction_min_count": 1},
-                    risk_assessment={"risk_level": "medium", "main_risk": "deadlock or timeout", "confidence": 0.75},
-                    cleanup_actions=payload["rollback_steps"],
+            target_table = str(parameters.get("target_table", "new_orders"))
+            predicate = str(parameters.get("predicate", "no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10"))
+            payload = self._apply_reflexion_lock_sql(payload, planned_task.anomaly_subtype, target_table, predicate, duration_seconds)
+            react_trace.extend(
+                [
+                    ReActStep(
+                        thought="Generate holder/waiter lock candidate from planner parameters and reflexion.",
+                        action="generate_lock_candidates",
+                        observation={"target_table": target_table, "predicate": predicate, "hold_seconds": duration_seconds},
+                        decision="Use longer holder duration or provided target predicate when reflexion says contention was weak.",
+                        candidate_id=f"lock:{planned_task.anomaly_subtype}",
+                        adjustments={"target_table": target_table, "predicate": predicate, "hold_seconds": duration_seconds},
+                    ),
+                    ReActStep(
+                        thought="Validate lock candidate with schema-level checks before finalizing.",
+                        action="schema_probe",
+                        observation={"available_tables": [table.name for table in context.tables], "target_table": target_table},
+                        decision="Finalize lock TaskSpec if target table is present or fallback lock SQL remains available.",
+                        candidate_id=f"lock:{planned_task.anomaly_subtype}",
+                        score=0.75 if any(table.name == target_table for table in context.tables) else 0.45,
+                    ),
+                ]
+            )
+            task_spec = TaskSpec(
+                task_id=f"lock-{slugify(planned_task.anomaly_subtype)}",
+                agent_type=self.agent_type,
+                anomaly_type=planned_task.anomaly_subtype,
+                title=payload["title"],
+                task_role="lock_holder",
+                inputs={
+                    "database": planned_task.database,
+                    "anomaly_subtype": planned_task.anomaly_subtype,
+                    "source_agent": self.agent_type,
+                    "column_name": column_name,
+                    "target_table": target_table,
+                    "predicate": predicate,
+                    "hold_seconds": duration_seconds,
+                    **parameters,
+                },
+                prechecks=[],
+                execution_steps=payload["execution_steps"],
+                validation_steps=[],
+                rollback_steps=payload["rollback_steps"],
+                explanation=planned_task.rationale or payload["title"],
+                expected_metrics={"lock_waits": "increase", "blocked_transactions": "increase", "p95_latency": "increase"},
+                local_success_criteria={"lock_wait_time_increase_ratio": 2.0, "blocked_transaction_min_count": 1},
+                risk_assessment={"risk_level": "medium", "main_risk": "deadlock or timeout", "confidence": 0.75},
+                cleanup_actions=payload["rollback_steps"],
+            )
+            outputs.append(
+                TaskAgentOutput(
+                    agent_name=self.agent_type,
+                    subgoal=task_input.subgoal,
+                    local_hypothesis=f"{planned_task.anomaly_subtype} should introduce waiting during probe execution.",
+                    task_spec=task_spec,
+                    expected_metrics=task_spec.expected_metrics,
+                    local_success_criteria=task_spec.local_success_criteria,
+                    risk_assessment=task_spec.risk_assessment,
+                    safety_constraints=task_input.constraints,
+                    cleanup_actions=task_spec.cleanup_actions,
+                    fallback_plan={"lock_subtype": planned_task.anomaly_subtype},
+                    confidence=0.75,
+                    react_trace=react_trace,
                 )
             )
-        return task_specs
+        return outputs
+
+    @staticmethod
+    def _apply_reflexion_lock_sql(payload: dict, subtype: str, target_table: str, predicate: str, hold_seconds: int) -> dict:
+        if target_table == "new_orders" and not predicate:
+            return payload
+        execution_steps = []
+        for step in payload.get("execution_steps", []):
+            updated = dict(step)
+            if subtype == "record_lock" and target_table:
+                updated["kind"] = "hold_sql"
+                updated["sql"] = f"SELECT * FROM {target_table} WHERE {predicate} FOR UPDATE"
+            elif subtype == "table_lock" and target_table:
+                updated["kind"] = "hold_sql"
+                updated["sql"] = f"LOCK TABLES {target_table} WRITE"
+            elif subtype == "metadata_lock" and target_table:
+                updated["kind"] = "hold_metadata_lock"
+                updated["sql"] = f"SELECT COUNT(*) FROM {target_table}"
+            updated["hold_seconds"] = hold_seconds
+            execution_steps.append(updated)
+        payload = dict(payload)
+        payload["execution_steps"] = execution_steps
+        return payload
 
     def explain(self, task_spec: TaskSpec) -> str:
         return task_spec.explanation

@@ -1,0 +1,1558 @@
+{
+  "experiment_goal": "Inject a complex multi-anomaly combination on a fresh TPCC clone",
+  "target_anomaly": "",
+  "target_mode": "single_root",
+  "environment": {
+    "database": "dbmags_tpcc_base_run_20260526060506",
+    "dbms": "mysql",
+    "version": "9.6.0",
+    "schema": {
+      "agent_group_by_support": {
+        "row_count": 4491080,
+        "columns": [
+          {
+            "name": "ol_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_quantity",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_amount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": []
+      },
+      "agent_implicit_conversion_support": {
+        "row_count": 149725,
+        "columns": [
+          {
+            "name": "id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "customer_id_varchar",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "customer_id_int",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "amount_text",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY",
+          "idx_customer_id_int",
+          "idx_customer_id_varchar"
+        ]
+      },
+      "agent_large_scan_support": {
+        "row_count": 449223,
+        "columns": [
+          {
+            "name": "c_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_last",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_credit",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_balance",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_delivery_cnt",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": []
+      },
+      "agent_order_by_support": {
+        "row_count": 4482155,
+        "columns": [
+          {
+            "name": "ol_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_quantity",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_amount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_dist_info",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": []
+      },
+      "customer": {
+        "row_count": 433171,
+        "columns": [
+          {
+            "name": "c_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_first",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_middle",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_last",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "c_street_1",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_street_2",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_city",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_state",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_zip",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_phone",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_since",
+            "data_type": "datetime",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_credit",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_credit_lim",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_discount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_balance",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_ytd_payment",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_payment_cnt",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_delivery_cnt",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "c_data",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY",
+          "idx_customer_last"
+        ]
+      },
+      "district": {
+        "row_count": 150,
+        "columns": [
+          {
+            "name": "d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "d_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "d_name",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_street_1",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_street_2",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_city",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_state",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_zip",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_tax",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_ytd",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "d_next_o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "history": {
+        "row_count": 451868,
+        "columns": [
+          {
+            "name": "h_c_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_c_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_c_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "h_date",
+            "data_type": "datetime",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "h_amount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "h_data",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "idx_history_customer",
+          "idx_history_warehouse"
+        ]
+      },
+      "item": {
+        "row_count": 99542,
+        "columns": [
+          {
+            "name": "i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "i_im_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "i_name",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "i_price",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "i_data",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "new_orders": {
+        "row_count": 135888,
+        "columns": [
+          {
+            "name": "no_o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "no_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "no_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "order_line": {
+        "row_count": 4393264,
+        "columns": [
+          {
+            "name": "ol_o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "ol_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "ol_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "ol_number",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "ol_i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_supply_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_delivery_d",
+            "data_type": "datetime",
+            "nullable": true,
+            "indexed": false
+          },
+          {
+            "name": "ol_quantity",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_amount",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "ol_dist_info",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "orders": {
+        "row_count": 451100,
+        "columns": [
+          {
+            "name": "o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_d_id",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_c_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "o_entry_d",
+            "data_type": "datetime",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "o_carrier_id",
+            "data_type": "tinyint",
+            "nullable": true,
+            "indexed": false
+          },
+          {
+            "name": "o_ol_cnt",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "o_all_local",
+            "data_type": "tinyint",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY",
+          "idx_orders_customer"
+        ]
+      },
+      "stock": {
+        "row_count": 1430123,
+        "columns": [
+          {
+            "name": "s_i_id",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "s_w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "s_quantity",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_01",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_02",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_03",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_04",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_05",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_06",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_07",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_08",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_09",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_dist_10",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_ytd",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_order_cnt",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_remote_cnt",
+            "data_type": "int",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "s_data",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      },
+      "warehouse": {
+        "row_count": 15,
+        "columns": [
+          {
+            "name": "w_id",
+            "data_type": "smallint",
+            "nullable": false,
+            "indexed": true
+          },
+          {
+            "name": "w_name",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_street_1",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_street_2",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_city",
+            "data_type": "varchar",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_state",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_zip",
+            "data_type": "char",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_tax",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          },
+          {
+            "name": "w_ytd",
+            "data_type": "decimal",
+            "nullable": false,
+            "indexed": false
+          }
+        ],
+        "indexes": [
+          "PRIMARY"
+        ]
+      }
+    },
+    "index_info": {
+      "agent_group_by_support": [],
+      "agent_implicit_conversion_support": [
+        "PRIMARY",
+        "idx_customer_id_int",
+        "idx_customer_id_varchar"
+      ],
+      "agent_large_scan_support": [],
+      "agent_order_by_support": [],
+      "customer": [
+        "PRIMARY",
+        "idx_customer_last"
+      ],
+      "district": [
+        "PRIMARY"
+      ],
+      "history": [
+        "idx_history_customer",
+        "idx_history_warehouse"
+      ],
+      "item": [
+        "PRIMARY"
+      ],
+      "new_orders": [
+        "PRIMARY"
+      ],
+      "order_line": [
+        "PRIMARY"
+      ],
+      "orders": [
+        "PRIMARY",
+        "idx_orders_customer"
+      ],
+      "stock": [
+        "PRIMARY"
+      ],
+      "warehouse": [
+        "PRIMARY"
+      ]
+    },
+    "table_stats": {
+      "agent_group_by_support": {
+        "row_count": 4491080
+      },
+      "agent_implicit_conversion_support": {
+        "row_count": 149725
+      },
+      "agent_large_scan_support": {
+        "row_count": 449223
+      },
+      "agent_order_by_support": {
+        "row_count": 4482155
+      },
+      "customer": {
+        "row_count": 433171
+      },
+      "district": {
+        "row_count": 150
+      },
+      "history": {
+        "row_count": 451868
+      },
+      "item": {
+        "row_count": 99542
+      },
+      "new_orders": {
+        "row_count": 135888
+      },
+      "order_line": {
+        "row_count": 4393264
+      },
+      "orders": {
+        "row_count": 451100
+      },
+      "stock": {
+        "row_count": 1430123
+      },
+      "warehouse": {
+        "row_count": 15
+      }
+    },
+    "workload_status": {
+      "type": "tpcc",
+      "probe_workload": true
+    },
+    "db_metrics": {
+      "threads_connected": 1,
+      "threads_running": 2,
+      "slow_queries": 147,
+      "innodb_row_lock_waits": 61,
+      "connections": 17674,
+      "max_connections": 151
+    },
+    "os_metrics": {
+      "load_average": [
+        4.33837890625,
+        4.09765625,
+        3.56640625
+      ]
+    },
+    "config": {
+      "risk_level": "medium",
+      "target_mode": "single_root"
+    },
+    "notes": [
+      "os metrics probe unavailable: No module named 'psutil'"
+    ]
+  },
+  "global_plan": {
+    "mode": "single_root",
+    "root_causes_to_inject": [
+      "missing_index",
+      "record_lock",
+      "overall_workload",
+      "database_table_backup",
+      "cpu"
+    ],
+    "effects_to_observe": [
+      "qps_down",
+      "p95_latency_up"
+    ],
+    "task_agents": [
+      "database_backup",
+      "lock_conflict",
+      "resource_bottleneck",
+      "slow_sql",
+      "traffic_surge"
+    ],
+    "task_dependencies": [
+      [
+        "cpu",
+        "record_lock"
+      ],
+      [
+        "record_lock",
+        "missing_index"
+      ],
+      [
+        "missing_index",
+        "database_table_backup"
+      ],
+      [
+        "database_table_backup",
+        "overall_workload"
+      ]
+    ],
+    "evaluation_targets": [
+      "active_connections_up",
+      "lock_wait_time_up",
+      "p95_latency_up",
+      "qps_down",
+      "resource_pressure_up",
+      "slow_query_metric_up"
+    ],
+    "safety_constraints": {
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "rationale": "Chosen subtypes are diverse across allowed categories: slow_sql(missing_index), lock_conflict(record_lock), traffic_surge(overall_workload), database_backup(database_table_backup), and resource_bottleneck(cpu). They interact realistically: CPU/IO pressure and backup amplify the impact of missing indexes, while workload surge increases lock contention visibility and overall tail latency."
+  },
+  "task_dag": {
+    "tasks": {
+      "lock-record-lock": {
+        "task_id": "lock-record-lock",
+        "task_spec": {
+          "task_id": "lock-record-lock",
+          "agent_type": "lock_conflict",
+          "anomaly_type": "record_lock",
+          "title": "Hold a row-level write lock on new_orders.",
+          "task_role": "lock_holder",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "anomaly_subtype": "record_lock",
+            "source_agent": "lock_conflict",
+            "column_name": "agent_meta_lock_e9f369ea",
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "engine_assumption": "InnoDB",
+            "target_table": "stock",
+            "hot_rows_strategy": "single_warehouse_hot_item",
+            "hot_row_selector_sql": "SELECT s_w_id, s_i_id FROM stock WHERE s_w_id = 1 ORDER BY s_i_id LIMIT 1",
+            "blocker_session": {
+              "isolation_level": "REPEATABLE-READ",
+              "autocommit": 0,
+              "sql_sequence": [
+                "USE dbmags_tpcc_base_run_20260526060506",
+                "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+                "START TRANSACTION",
+                "SELECT s_quantity FROM stock WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1) FOR UPDATE",
+                "DO SLEEP(600)"
+              ]
+            },
+            "contender_sessions": {
+              "concurrency": 24,
+              "duration_seconds": 600,
+              "sql_template": "UPDATE stock SET s_quantity = s_quantity - 1 WHERE s_w_id = 1 AND s_i_id = (SELECT MIN(s_i_id) FROM stock WHERE s_w_id = 1)"
+            },
+            "expected_symptoms": [
+              "high lock wait time",
+              "threads waiting for row lock",
+              "increased deadlock/lock wait timeout risk (depending on workload mix)"
+            ]
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "hold_sql",
+              "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+              "database": "dbmags_tpcc_base_run_20260526060506",
+              "hold_seconds": 20
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Fallback planner selected record_lock from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "lock_waits": "increase",
+            "blocked_transactions": "increase",
+            "p95_latency": "increase"
+          },
+          "local_success_criteria": {
+            "lock_wait_time_increase_ratio": 2.0,
+            "blocked_transaction_min_count": 1
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "deadlock or timeout",
+            "confidence": 0.75
+          },
+          "cleanup_actions": []
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      },
+      "traffic-overall-workload": {
+        "task_id": "traffic-overall-workload",
+        "task_spec": {
+          "task_id": "traffic-overall-workload",
+          "agent_type": "traffic_surge",
+          "anomaly_type": "overall_workload",
+          "title": "Traffic surge: overall_workload",
+          "task_role": "background_anomaly",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "anomaly_subtype": "overall_workload",
+            "source_agent": "traffic_surge",
+            "mode": "overall_workload",
+            "sleep_time": 0.005,
+            "thread_count": 500,
+            "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+            "duration_seconds": 20
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "workload_profile",
+              "mode": "overall_workload",
+              "sleep_time": 0.005,
+              "thread_count": 500,
+              "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+              "database": "dbmags_tpcc_base_run_20260526060506",
+              "duration_seconds": 20
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Fallback planner selected overall_workload from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "active_connections": "increase",
+            "qps": "increase_initially",
+            "latency": "increase_after_saturation"
+          },
+          "local_success_criteria": {
+            "qps_or_latency_change": true
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "connection saturation",
+            "confidence": 0.65
+          },
+          "cleanup_actions": []
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      },
+      "slow-sql-missing-index": {
+        "task_id": "slow-sql-missing-index",
+        "task_spec": {
+          "task_id": "slow-sql-missing-index",
+          "agent_type": "slow_sql",
+          "anomaly_type": "missing_index",
+          "title": "Slow SQL: missing_index",
+          "task_role": "background_anomaly",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "anomaly_subtype": "missing_index",
+            "source_agent": "slow_sql",
+            "sql": "SELECT /* missing_index_candidate: range predicate on non-indexed balance */ SQL_NO_CACHE SUM(c_balance) FROM agent_large_scan_support WHERE c_w_id = 1 AND c_d_id = 1 AND c_balance > 0;",
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "target_table": "agent_order_by_support",
+            "slow_query_pattern": "order_by",
+            "query_templates": [
+              "SELECT ol_w_id, ol_d_id, ol_o_id, ol_i_id, ol_quantity, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? AND ol_d_id = ? ORDER BY ol_o_id DESC LIMIT 2000",
+              "SELECT ol_w_id, ol_d_id, ol_o_id, ol_amount FROM agent_order_by_support WHERE ol_w_id = ? ORDER BY ol_o_id DESC LIMIT 5000"
+            ],
+            "expected_missing_index": [
+              "agent_order_by_support(ol_w_id, ol_d_id, ol_o_id)"
+            ],
+            "notes": "Ensure no composite index is created on (ol_w_id, ol_d_id, ol_o_id); allow filesort + large scan to manifest."
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "workload_profile",
+              "mode": "single_sql",
+              "sleep_time": 0.01,
+              "thread_count": 6,
+              "repeat": 25,
+              "description": "Background slow SQL pressure for missing_index.",
+              "sql": "SELECT /* missing_index_candidate: range predicate on non-indexed balance */ SQL_NO_CACHE SUM(c_balance) FROM agent_large_scan_support WHERE c_w_id = 1 AND c_d_id = 1 AND c_balance > 0;",
+              "database": "dbmags_tpcc_base_run_20260526060506",
+              "duration_seconds": 20
+            }
+          ],
+          "validation_steps": [
+            {
+              "kind": "explain",
+              "sql": "SELECT /* missing_index_candidate: range predicate on non-indexed balance */ SQL_NO_CACHE SUM(c_balance) FROM agent_large_scan_support WHERE c_w_id = 1 AND c_d_id = 1 AND c_balance > 0;",
+              "result": {
+                "validated": true,
+                "rows": [
+                  [
+                    "-> Aggregate: sum(agent_large_scan_support.c_balance)  (cost=45704 rows=1)\n    -> Filter: ((agent_large_scan_support.c_d_id = 1) and (agent_large_scan_support.c_w_id = 1) and (agent_large_scan_support.c_balance > 0.00))  (cost=45359 rows=1497)\n        -> Table scan on agent_large_scan_support  (cost=45359 rows=449223)\n"
+                  ]
+                ]
+              }
+            }
+          ],
+          "rollback_steps": [],
+          "explanation": "Fallback planner selected missing_index from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "query_latency": "increase",
+            "rows_examined": "increase",
+            "slow_query_count": "increase"
+          },
+          "local_success_criteria": {
+            "explain_validated": true,
+            "latency_direction": "increase"
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "long-running query pressure",
+            "confidence": 0.7
+          },
+          "cleanup_actions": []
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      },
+      "resource-cpu": {
+        "task_id": "resource-cpu",
+        "task_spec": {
+          "task_id": "resource-cpu",
+          "agent_type": "resource_bottleneck",
+          "anomaly_type": "cpu",
+          "title": "Resource bottleneck: cpu",
+          "task_role": "resource_injection",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "anomaly_subtype": "cpu",
+            "source_agent": "resource_bottleneck",
+            "duration_seconds": 600,
+            "background_duration_seconds": 20,
+            "host_level_stressor": "cpu_burn",
+            "start_offset_seconds": 60,
+            "intensity": {
+              "cores": "80% of available cores",
+              "method": "multi-process tight loop"
+            },
+            "expected_symptoms": [
+              "elevated mysqld CPU run queue latency",
+              "reduced QPS / increased response time variability"
+            ]
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "shell",
+              "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+              "database": "dbmags_tpcc_base_run_20260526060506"
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [],
+          "explanation": "Fallback planner selected cpu from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "cpu_pressure": "increase",
+            "query_latency": "increase"
+          },
+          "local_success_criteria": {
+            "chaosblade_uid": "present",
+            "qps": "decrease_or_latency_increase"
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "host resource contention",
+            "confidence": 0.65
+          },
+          "cleanup_actions": []
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      },
+      "backup-orders": {
+        "task_id": "backup-orders",
+        "task_spec": {
+          "task_id": "backup-orders",
+          "agent_type": "database_backup",
+          "anomaly_type": "database_table_backup",
+          "title": "Backup table orders into orders_backup_agent.",
+          "task_role": "backup_job",
+          "inputs": {
+            "database": "dbmags_tpcc_base_run_20260526060506",
+            "anomaly_subtype": "database_table_backup",
+            "source_agent": "database_backup",
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "source_table": "orders",
+            "backup_method": "logical_single_table_dump",
+            "target_tables": [
+              "order_line"
+            ],
+            "command_template": "mysqldump --single-transaction --quick --skip-lock-tables dbmags_tpcc_base_run_20260526060506 order_line > /tmp/order_line_backup.sql",
+            "start_offset_seconds": 120,
+            "expected_symptoms": [
+              "increased disk IO",
+              "buffer pool churn",
+              "reduced throughput for concurrent workload"
+            ]
+          },
+          "prechecks": [],
+          "execution_steps": [
+            {
+              "kind": "sql",
+              "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+              "database": "dbmags_tpcc_base_run_20260526060506"
+            },
+            {
+              "kind": "sql",
+              "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+              "database": "dbmags_tpcc_base_run_20260526060506"
+            }
+          ],
+          "validation_steps": [],
+          "rollback_steps": [
+            {
+              "kind": "sql",
+              "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+              "database": "dbmags_tpcc_base_run_20260526060506"
+            }
+          ],
+          "explanation": "Fallback planner selected database_table_backup from request constraints.",
+          "dependencies": [],
+          "start_after_sec": 0.0,
+          "start_condition": {},
+          "expected_metrics": {
+            "disk_read_throughput": "increase",
+            "io_wait": "increase",
+            "query_latency": "increase"
+          },
+          "local_success_criteria": {
+            "backup_table_created": true
+          },
+          "risk_assessment": {
+            "risk_level": "medium",
+            "main_risk": "IO interference or metadata lock",
+            "confidence": 0.65
+          },
+          "cleanup_actions": [
+            {
+              "kind": "sql",
+              "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+              "database": "dbmags_tpcc_base_run_20260526060506"
+            }
+          ]
+        },
+        "start_after_sec": 0.0,
+        "start_condition": {}
+      }
+    },
+    "edges": [
+      {
+        "from_task": "resource-cpu",
+        "to_task": "lock-record-lock",
+        "condition": "causal_dependency"
+      },
+      {
+        "from_task": "lock-record-lock",
+        "to_task": "slow-sql-missing-index",
+        "condition": "causal_dependency"
+      },
+      {
+        "from_task": "slow-sql-missing-index",
+        "to_task": "backup-orders",
+        "condition": "causal_dependency"
+      },
+      {
+        "from_task": "backup-orders",
+        "to_task": "traffic-overall-workload",
+        "condition": "causal_dependency"
+      }
+    ],
+    "schedule": {
+      "lock-record-lock": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "lock_holder"
+      },
+      "traffic-overall-workload": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "background_anomaly"
+      },
+      "slow-sql-missing-index": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "background_anomaly"
+      },
+      "resource-cpu": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "resource_injection"
+      },
+      "backup-orders": {
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "task_role": "backup_job"
+      }
+    }
+  },
+  "execution_trace": {
+    "task_status": {
+      "resource-cpu": "completed",
+      "lock-record-lock": "completed",
+      "slow-sql-missing-index": "completed",
+      "backup-orders": "completed",
+      "traffic-overall-workload": "completed"
+    },
+    "stdout": {
+      "resource-cpu": {
+        "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+        "executed": true,
+        "uid": "4875dcfcc12e9f3f",
+        "blade_path": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+        "stdout": "{\"code\":200,\"success\":true,\"result\":\"4875dcfcc12e9f3f\"}"
+      },
+      "lock-record-lock": [
+        {
+          "executed": true,
+          "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+          "database": "dbmags_tpcc_base_run_20260526060100",
+          "hold_seconds": 20.0,
+          "elapsed_seconds": 20.005791458999738,
+          "latency_ms": 20005.791458999738
+        }
+      ],
+      "slow-sql-missing-index": [
+        {
+          "executed": true,
+          "database": "dbmags_tpcc_base_run_20260526060100",
+          "duration_seconds": 20.0,
+          "elapsed_seconds": 20.840832500020042,
+          "successful_transactions": 15,
+          "failed_transactions": 0,
+          "qps": 0.7197409220570039,
+          "avg_latency_ms": 1377.28574439728,
+          "p95_latency_ms": 1461.7884160252288,
+          "p99_latency_ms": 1955.606042058207,
+          "single_sql_mean_ms": 1377.28574439728,
+          "thread_count": 6,
+          "sql": "SELECT /* missing_index: no supporting index on (ol_w_id, ol_i_id) */ SUM(ol_amount) AS total_amount FROM agent_group_by_support WHERE ol_w_id = 1 AND ol_i_id = 12345 GROUP BY ol_w_id, ol_i_id;"
+        }
+      ],
+      "backup-orders": [
+        {
+          "executed": true,
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260526060100",
+          "elapsed_seconds": 0.0185878750635311,
+          "latency_ms": 18.5878750635311,
+          "single_sql_mean_ms": 18.5878750635311
+        },
+        {
+          "executed": true,
+          "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+          "database": "dbmags_tpcc_base_run_20260526060100",
+          "elapsed_seconds": 1.7258670839946717,
+          "latency_ms": 1725.8670839946717,
+          "single_sql_mean_ms": 1725.8670839946717
+        }
+      ],
+      "traffic-overall-workload": [
+        {
+          "executed": true,
+          "database": "dbmags_tpcc_base_run_20260526060100",
+          "duration_seconds": 20.0,
+          "elapsed_seconds": 20.00212412502151,
+          "successful_transactions": 92,
+          "failed_transactions": 0,
+          "qps": 4.599511503126474,
+          "avg_latency_ms": 211.2466702731225,
+          "p95_latency_ms": 37.788207991980016,
+          "p99_latency_ms": 1446.4611670700833,
+          "single_sql_mean_ms": 0.0,
+          "thread_count": 500,
+          "sql": ""
+        }
+      ]
+    },
+    "stderr": {},
+    "errors": {},
+    "cleanup_status": {
+      "resource-cpu": {
+        "cleaned": true,
+        "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+        "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 4875dcfcc12e9f3f"
+      }
+    }
+  },
+  "evaluation": {
+    "baseline_metrics": {
+      "executed": true,
+      "database": "dbmags_tpcc_base_run_20260526060100",
+      "duration_seconds": 12.0,
+      "elapsed_seconds": 12.024586291983724,
+      "successful_transactions": 184,
+      "failed_transactions": 0,
+      "qps": 15.301981750728913,
+      "avg_latency_ms": 17.70453058871562,
+      "p95_latency_ms": 42.08979196846485,
+      "p99_latency_ms": 94.46108294650912,
+      "single_sql_mean_ms": 0.0,
+      "thread_count": 40,
+      "sql": "",
+      "probe_sql": "",
+      "db_evidence": {},
+      "comparison_mode": "baseline_tpcc_probe"
+    },
+    "after_metrics": {
+      "executed": true,
+      "database": "dbmags_tpcc_base_run_20260526060100",
+      "duration_seconds": 12.0,
+      "elapsed_seconds": 19.281310584046878,
+      "successful_transactions": 35,
+      "failed_transactions": 0,
+      "qps": 1.81522930443113,
+      "avg_latency_ms": 503.2389227101313,
+      "p95_latency_ms": 92.45637501589954,
+      "p99_latency_ms": 15829.503374989145,
+      "single_sql_mean_ms": 0.0,
+      "thread_count": 40,
+      "sql": "",
+      "probe_sql": "",
+      "db_evidence": {},
+      "comparison_mode": "after_anomaly_probe"
+    },
+    "target_anomaly_scores": {
+      "record_lock": 0.8,
+      "overall_workload": 0.8,
+      "missing_index": 0.8,
+      "cpu": 1.0,
+      "database_table_backup": 0.7
+    },
+    "reward": {
+      "performance_score": 1.0,
+      "target_anomaly_score": 0.8200000000000001,
+      "causal_order_score": 0.6,
+      "stability_score": 0.6,
+      "safety_penalty": 0.0,
+      "final_score": 0.8260000000000001,
+      "success": false
+    },
+    "chain_events": [],
+    "success": false,
+    "reason": "metrics did not meet reward or chain success threshold"
+  },
+  "reflection": {
+    "failure_reason": [],
+    "suggested_changes": [],
+    "risk_warning": [],
+    "memory_update": [],
+    "raw_text": "{\n  \"summary\": {\n    \"outcome\": \"Reproduction run executed all injections, and it clearly degraded system performance (QPS down, latency up), but it failed the framework's success criteria due to weak/undemonstrated causal chain and missing target-evidence signals (locks/active connections/resource pressure/slow-query metrics not actually validated).\",\n    \"key_observation\": {\n      \"baseline\": {\n        \"qps\": 15.301981750728913,\n        \"avg_latency_ms\": 17.70453058871562,\n        \"p95_latency_ms\": 42.08979196846485,\n        \"p99_latency_ms\": 94.46108294650912\n      },\n      \"after\": {\n        \"qps\": 1.81522930443113,\n        \"avg_latency_ms\": 503.2389227101313,\n        \"p95_latency_ms\": 92.45637501589954,\n        \"p99_latency_ms\": 15829.503374989145\n      },\n      \"delta_interpretation\": \"Workload became unstable/throughput collapsed, but the run did not prove the intended anomaly chain (cpu -> locks -> missing_index -> backup -> workload) or meet chain/reward thresholds.\"\n    }\n  },\n  \"why_failed\": [\n    {\n      \"category\": \"Causal-order / dependency plan not enforced\",\n      \"what_happened\": \"All tasks started at start_after_sec=0.0 with no dependencies, despite the global_plan specifying an order (cpu -> record_lock -> missing_index -> backup -> workload).\",\n      \"evidence\": {\n        \"all_tasks_start_after_sec\": 0.0,\n        \"task_specs_dependencies_empty\": true,\n        \"reward_component\": {\n          \"causal_order_score\": 0.6,\n          \"stability_score\": 0.6,\n          \"final_success\": false\n        }\n      },\n      \"impact\": \"Even if metrics degrade, the evaluator can\u2019t attribute effects to the intended chain; concurrent injections also create non-deterministic interference (hurts stability score).\"\n    },\n    {\n      \"category\": \"Wrong lock technique: likely not creating contention\",\n      \"what_happened\": \"The lock holder runs a single UPDATE and holds the session for 20s, but this does not guarantee other transactions will touch the same rows, so lock_wait_time/blocked_tx may not increase measurably.\",\n      \"evidence\": {\n        \"lock_sql\": \"UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10\",\n        \"no_validation_steps\": true,\n        \"no_db_evidence_collected\": true\n      },\n      \"impact\": \"You expected lock_wait_time_up and active_connections_up, but there is no proof. The TPCC probe workload may rarely update those exact rows, so the lock is effectively invisible.\"\n    },\n    {\n      \"category\": \"Backup injection too small / too fast to create I/O pressure\",\n      \"what_happened\": \"CREATE TABLE AS SELECT * FROM orders finished in ~1.7s; it likely didn\u2019t meaningfully increase io_wait/disk throughput for long enough to affect the 12s after-probe window in a consistent way.\",\n      \"evidence\": {\n        \"backup_step_elapsed_sec\": 1.7258670839946717,\n        \"backup_duration_expected_sec\": 16,\n        \"mismatch\": \"backup task did not actually run for the intended duration; it just ran 2 SQL statements and ended\"\n      },\n      \"impact\": \"The planned 'database_table_backup' part of the chain likely contributed little; chain attribution weak.\"\n    },\n    {\n      \"category\": \"CPU injection not aligned with safety/observability and may not target DB process\",\n      \"what_happened\": \"chaosblade cpu fullload was executed, but there is no measurement that DB CPU reached a target band, nor that load was pinned to DB host/process/cgroup. On some setups it can overload the host in a way that causes extreme p99 spikes but inconsistent causal linkage to DB internals.\",\n      \"evidence\": {\n        \"chaosblade_success\": true,\n        \"uid\": \"4875dcfcc12e9f3f\",\n        \"no_cpu_metrics_collected\": true,\n        \"safety_constraints_declared\": {\n          \"max_cpu_usage\": 90\n        },\n        \"safety_metrics_missing\": \"no evidence CPU stayed <90% or was controlled\"\n      },\n      \"impact\": \"May reduce stability score and make results look like generic host saturation rather than the intended multi-stage DB anomaly chain.\"\n    },\n    {\n      \"category\": \"Workload surge setup is internally inconsistent (500 threads but low achieved QPS)\",\n      \"what_happened\": \"The surge used thread_count=500, sleep_time=0.005, but observed QPS was only ~4.6 with p95 ~37ms and p99 ~1446ms, suggesting client-side bottleneck, connection limits, or immediate server saturation with queuing/backoff.\",\n      \"evidence\": {\n        \"traffic_surge\": {\n          \"thread_count\": 500,\n          \"duration_sec\": 20,\n          \"qps\": 4.599511503126474,\n          \"p95_ms\": 37.788207991980016,\n          \"p99_ms\": 1446.4611670700833\n        }\n      },\n      \"impact\": \"The surge did not clearly demonstrate 'active_connections_up' or predictable 'resource_pressure_up' and can distort measurement windows (client scheduling/connection pool thrash).\"\n    },\n    {\n      \"category\": \"Missing validation for evaluation targets\",\n      \"what_happened\": \"Evaluation targets include active_connections_up, lock_wait_time_up, resource_pressure_up, slow_query_metric_up, but probes collected only TPCC-level QPS/latency; db_evidence is empty and task validations are mostly absent.\",\n      \"evidence\": {\n        \"evaluation_targets\": [\n          \"active_connections_up\",\n          \"lock_wait_time_up\",\n          \"p95_latency_up\",\n          \"qps_down\",\n          \"resource_pressure_up\",\n          \"slow_query_metric_up\"\n        ],\n        \"baseline_probe_db_evidence\": {},\n        \"after_probe_db_evidence\": {},\n        \"lock_task_validation_steps\": [],\n        \"cpu_task_validation_steps\": [],\n        \"backup_task_validation_steps\": []\n      },\n      \"impact\": \"The system may have actually met some targets, but the scoring harness can\u2019t confirm them, so success remains false.\"\n    },\n    {\n      \"category\": \"Measurement window mismatch / concurrency overlap\",\n      \"what_happened\": \"Each injection ran ~20s, but the 'after' probe ran for 12s and itself took 19.28s elapsed, suggesting delays/queuing; without controlled phase separation (warmup/steady-state), results are unstable and chain events aren't captured cleanly.\",\n      \"evidence\": {\n        \"after_probe\": {\n          \"duration_seconds\": 12,\n          \"elapsed_seconds\": 19.281310584046878\n        }\n      },\n      \"impact\": \"Hurts stability score; also makes it hard to attribute which anomaly caused which effect.\"\n    }\n  ],\n  \"concrete_changes\": {\n    \"orchestration\": [\n      {\n        \"change\": \"Enforce the intended dependency chain with explicit scheduling offsets and dependency fields (do not start everything at t=0).\",\n        \"example\": {\n          \"cpu\": { \"start_after_sec\": 0, \"duration_sec\": 40 },\n          \"record_lock\": { \"start_after_sec\": 10, \"duration_sec\": 40, \"depends_on\": [\"cpu\"] },\n          \"missing_index\": { \"start_after_sec\": 20, \"duration_sec\": 40, \"depends_on\": [\"record_lock\"] },\n          \"backup\": { \"start_after_sec\": 30, \"duration_sec\": 40, \"depends_on\": [\"missing_index\"] },\n          \"workload_surge\": { \"start_after_sec\": 40, \"duration_sec\": 40, \"depends_on\": [\"backup\"] }\n        },\n        \"expected_effect\": \"Improves causal_order_score and stability by producing a clearer temporal sequence.\"\n      },\n      {\n        \"change\": \"Add phase separation: baseline (30s) -> inject (60s) -> after (30s) with fixed overlap rules.\",\n        \"expected_effect\": \"Reduces variance; ensures after-probe captures steady-state anomaly, not ramp-up.\"\n      }\n    ],\n    \"lock_conflict\": [\n      {\n        \"change\": \"Make lock contention deterministic by locking a specific hot row that the TPCC workload will also touch, or by adding a paired 'blocker' workload that targets the same key.\",\n        \"example_sql_option_A_mysql\": [\n          \"BEGIN;\",\n          \"SELECT no_w_id,no_d_id,no_o_id FROM new_orders WHERE no_w_id=1 AND no_d_id=1 ORDER BY no_o_id DESC LIMIT 1 FOR UPDATE;\",\n          \"/* keep transaction open for 60s */\"\n        ],\n        \"example_sql_option_B\": \"Pick a single primary-key row in a frequently updated table (e.g., stock) and UPDATE it in an open transaction; configure the traffic generator to update that same row repeatedly.\",\n        \"validation_to_add\": [\n          \"SHOW ENGINE INNODB STATUS (lock waits section)\",\n          \"SELECT * FROM performance_schema.data_lock_waits (or equivalent)\",\n          \"Metric: lock_wait_time_ms must increase >2x vs baseline\"\n        ],\n        \"expected_effect\": \"Actually produces lock_wait_time_up and blocked transactions rather than a lock that nobody contends on.\"\n      }\n    ],\n    \"missing_index\": [\n      {\n        \"change\": \"Increase pressure from the scan query: raise threads and ensure it runs continuously during the after-probe window; optionally add ORDER BY to force sort/temporary table behavior.\",\n        \"example\": {\n          \"thread_count\": 24,\n          \"sleep_time\": 0,\n          \"duration_seconds\": 60,\n          \"sql_variants\": [\n            \"SELECT SUM(ol_amount) FROM agent_group_by_support WHERE ol_w_id=1 AND ol_i_id=12345 GROUP BY ol_w_id,ol_i_id\",\n            \"SELECT /* force extra work */ ol_w_id,ol_i_id,SUM(ol_amount) FROM agent_group_by_support WHERE ol_w_id=1 GROUP BY ol_w_id,ol_i_id ORDER BY SUM(ol_amount) DESC LIMIT 50\"\n          ]\n        },\n        \"validation_to_add\": [\n          \"Capture EXPLAIN + Rows_examined from session status\",\n          \"Slow log / performance_schema events_statements_summary_by_digest delta\"\n        ],\n        \"expected_effect\": \"Makes slow_query_metric_up measurable and links latency degradation to the intended missing-index scan.\"\n      }\n    ],\n    \"database_backup\": [\n      {\n        \"change\": \"Make the backup actually long-running and I/O heavy: copy a larger table, add ORDER BY to force sort, or run repeated chunked copies in a loop for N seconds.\",\n        \"example_sql\": [\n          \"CREATE TABLE orders_backup_agent LIKE orders;\",\n          \"INSERT INTO orders_backup_agent SELECT * FROM orders ORDER BY o_entry_d;\",\n          \"/* repeat INSERT ... LIMIT/OFFSET chunks for 60s */\"\n        ],\n        \"alternative\": \"Use logical dump (mysqldump) or physical backup tool in a way that sustains I/O for the injection duration (while respecting safety max_cpu/max_conn).\",\n        \"validation_to_add\": [\n          \"Track handler read counts / innodb_data_read / innodb_buffer_pool_reads\",\n          \"OS iostat or DB status variables for io_wait\"\n        ],\n        \"expected_effect\": \"Produces sustained I/O contention so the 'backup' stage meaningfully contributes to p95/p99 and QPS down.\"\n      }\n    ],\n    \"cpu_bottleneck\": [\n      {\n        \"change\": \"Constrain CPU fault injection to the DB process or container and cap at a target (e.g., 70-85%) rather than full host fullload.\",\n        \"example\": {\n          \"chaosblade\": [\n            \"blade create cpu load --cpu-percent 80 --timeout 600\",\n            \"or target by pid/container if supported: --pid <mysqld_pid> / --container-id <id>\"\n          ]\n        },\n        \"validation_to_add\": [\n          \"Collect CPU usage (process + host) every 5s\",\n          \"Abort if >90% for >10s to honor safety_constraints\"\n        ],\n        \"expected_effect\": \"Better stability and clearer attribution; avoids turning the experiment into generic host meltdown.\"\n      }\n    ],\n    \"traffic_surge\": [\n      {\n        \"change\": \"Reduce concurrency to what the DB can actually service and explicitly manage connection limits; aim for increased active connections but not client thrash.\",\n        \"example\": {\n          \"thread_count\": 100,\n          \"ramp_up_seconds\": 20,\n          \"duration_seconds\": 60,\n          \"connection_pool_max\": \"<= 0.8 * max_connections\"\n        },\n        \"validation_to_add\": [\n          \"Active connections sampled from DB (Threads_connected / pg_stat_activity)\",\n          \"Queueing indicator (Threads_running / wait events)\"\n        ],\n        \"expected_effect\": \"Measurable active_connections_up and resource_pressure_up without collapsing client-side scheduling.\"\n      }\n    ],\n    \"scoring_and_evidence\": [\n      {\n        \"change\": \"Populate db_evidence for baseline and after probes with the exact evaluation targets (connections, lock waits, slow queries, CPU/IO).\",\n        \"example_evidence_keys\": [\n          \"threads_connected\",\n          \"threads_running\",\n          \"innodb_row_lock_time\",\n          \"innodb_row_lock_waits\",\n          \"slow_queries\",\n          \"top_digests_by_latency\",\n          \"cpu_user_pct\",\n          \"io_util_pct\"\n        ],\n        \"expected_effect\": \"Turns 'observed degradation' into 'verified target metrics met', increasing reward target_anomaly_score confidence and overall success likelihood.\"\n      }\n    ]\n  },\n  \"most_likely_root_reason_for_success_false\": [\n    \"Causal chain not enforced (everything started simultaneously), reducing causal_order_score and stability_score.\",\n    \"Missing validation/evidence for non-latency targets (locks/connections/resource pressure/slow-query metric), so the harness could not confirm the intended anomaly reproduction even though QPS/latency changed.\"\n  ]\n}"
+  },
+  "cleanup": [
+    {
+      "task_id": "resource-cpu",
+      "cleanup": {
+        "cleaned": true,
+        "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+        "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 4875dcfcc12e9f3f"
+      }
+    }
+  ],
+  "summary": {
+    "success": false,
+    "reward": {
+      "performance_score": 1.0,
+      "target_anomaly_score": 0.8200000000000001,
+      "causal_order_score": 0.6,
+      "stability_score": 0.6,
+      "safety_penalty": 0.0,
+      "final_score": 0.8260000000000001,
+      "success": false
+    },
+    "reason": "metrics did not meet reward or chain success threshold"
+  }
+}

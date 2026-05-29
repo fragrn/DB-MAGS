@@ -1,0 +1,330 @@
+[
+  {
+    "agent_name": "lock_conflict",
+    "subgoal": "record_lock",
+    "local_hypothesis": "record_lock should introduce waiting during probe execution.",
+    "task_spec": {
+      "task_id": "lock-record-lock",
+      "agent_type": "lock_conflict",
+      "anomaly_type": "record_lock",
+      "title": "Hold a row-level write lock on new_orders.",
+      "task_role": "lock_holder",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260529075250",
+        "anomaly_subtype": "record_lock",
+        "source_agent": "lock_conflict",
+        "column_name": "agent_meta_lock_f37102ea",
+        "target_table": "new_orders",
+        "predicate": "no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+        "hold_seconds": 16,
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "hold_sql",
+          "sql": "SELECT * FROM new_orders WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10 FOR UPDATE",
+          "database": "dbmags_tpcc_base_run_20260529075250",
+          "hold_seconds": 16
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected record_lock from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "lock_waits": "increase",
+        "blocked_transactions": "increase",
+        "p95_latency": "increase"
+      },
+      "local_success_criteria": {
+        "lock_wait_time_increase_ratio": 2.0,
+        "blocked_transaction_min_count": 1
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "deadlock or timeout",
+        "confidence": 0.75
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "lock_waits": "increase",
+      "blocked_transactions": "increase",
+      "p95_latency": "increase"
+    },
+    "local_success_criteria": {
+      "lock_wait_time_increase_ratio": 2.0,
+      "blocked_transaction_min_count": 1
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "deadlock or timeout",
+      "confidence": 0.75
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 12,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [],
+    "fallback_plan": {
+      "lock_subtype": "record_lock"
+    },
+    "confidence": 0.75,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {},
+          "short_term_rounds": 0,
+          "long_term_items": 2,
+          "effective_parameters": {
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          }
+        },
+        "decision": "Use reflexion overrides for record_lock before planner defaults when present.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {},
+          "after_metrics": {},
+          "evaluation": {}
+        },
+        "decision": "Adjust record_lock candidates when prior metrics show weak degradation.",
+        "candidate_id": "record_lock:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate holder/waiter lock candidate from planner parameters and reflexion.",
+        "action": "generate_lock_candidates",
+        "observation": {
+          "target_table": "new_orders",
+          "predicate": "no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+          "hold_seconds": 16
+        },
+        "decision": "Use longer holder duration or provided target predicate when reflexion says contention was weak.",
+        "candidate_id": "lock:record_lock",
+        "score": null,
+        "adjustments": {
+          "target_table": "new_orders",
+          "predicate": "no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+          "hold_seconds": 16
+        }
+      },
+      {
+        "thought": "Validate lock candidate with schema-level checks before finalizing.",
+        "action": "schema_probe",
+        "observation": {
+          "available_tables": [
+            "agent_group_by_support",
+            "agent_implicit_conversion_support",
+            "agent_large_scan_support",
+            "agent_order_by_support",
+            "customer",
+            "district",
+            "history",
+            "item",
+            "new_orders",
+            "order_line",
+            "orders",
+            "stock",
+            "warehouse"
+          ],
+          "target_table": "new_orders"
+        },
+        "decision": "Finalize lock TaskSpec if target table is present or fallback lock SQL remains available.",
+        "candidate_id": "lock:record_lock",
+        "score": 0.75,
+        "adjustments": {}
+      }
+    ]
+  },
+  {
+    "agent_name": "slow_sql",
+    "subgoal": "missing_index",
+    "local_hypothesis": "missing_index SQL should increase scan work or latency.",
+    "task_spec": {
+      "task_id": "slow-sql-missing-index",
+      "agent_type": "slow_sql",
+      "anomaly_type": "missing_index",
+      "title": "Slow SQL: missing_index",
+      "task_role": "background_anomaly",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260529075250",
+        "anomaly_subtype": "missing_index",
+        "source_agent": "slow_sql",
+        "sql": "SELECT ol_w_id, ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_w_id, ol_i_id;",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "single_sql",
+          "sleep_time": 0.01,
+          "thread_count": 6,
+          "repeat": 25,
+          "description": "Background slow SQL pressure for missing_index.",
+          "sql": "SELECT ol_w_id, ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_w_id, ol_i_id;",
+          "database": "dbmags_tpcc_base_run_20260529075250",
+          "duration_seconds": 16
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT ol_w_id, ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_w_id, ol_i_id;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Table scan on <temporary>\n    -> Aggregate using temporary table\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+              ]
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected missing_index from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "query_latency": "increase",
+        "rows_examined": "increase",
+        "slow_query_count": "increase"
+      },
+      "local_success_criteria": {
+        "explain_validated": true,
+        "latency_direction": "increase"
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "long-running query pressure",
+        "confidence": 0.7
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "query_latency": "increase",
+      "rows_examined": "increase",
+      "slow_query_count": "increase"
+    },
+    "local_success_criteria": {
+      "explain_validated": true,
+      "latency_direction": "increase"
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "long-running query pressure",
+      "confidence": 0.7
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 12,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [],
+    "fallback_plan": {
+      "template_sql_available": true
+    },
+    "confidence": 0.7,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {},
+          "short_term_rounds": 0,
+          "long_term_items": 2,
+          "effective_parameters": {
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          }
+        },
+        "decision": "Use reflexion overrides for missing_index before planner defaults when present.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {},
+          "after_metrics": {},
+          "evaluation": {}
+        },
+        "decision": "Adjust missing_index candidates when prior metrics show weak degradation.",
+        "candidate_id": "missing_index:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate multiple SQL candidates and prioritize reflexion-provided SQL or target table.",
+        "action": "generate_slow_sql_candidates",
+        "observation": {
+          "candidate_count": 15,
+          "target_table": null
+        },
+        "decision": "Validate candidates with static checks and EXPLAIN before selecting.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Candidate SQL should have an EXPLAIN plan consistent with slow-query pressure.",
+        "action": "explain_probe",
+        "observation": {
+          "sql": "SELECT ol_w_id, ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_w_id, ol_i_id;",
+          "explain": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Table scan on <temporary>\n    -> Aggregate using temporary table\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+              ]
+            ]
+          }
+        },
+        "decision": "Accept candidate if EXPLAIN validates; otherwise revise to the next candidate.",
+        "candidate_id": "slow_sql:missing_index",
+        "score": 1.0,
+        "adjustments": {}
+      },
+      {
+        "thought": "Select the highest-confidence EXPLAIN-validated slow SQL candidate.",
+        "action": "select_final_task_spec",
+        "observation": {
+          "sql": "SELECT ol_w_id, ol_i_id, SUM(ol_amount) FROM agent_group_by_support GROUP BY ol_w_id, ol_i_id;",
+          "parameters": {
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          }
+        },
+        "decision": "Finalize slow SQL TaskSpec with reflexion-adjusted pressure settings.",
+        "candidate_id": "slow_sql:missing_index:final",
+        "score": 0.7,
+        "adjustments": {
+          "background_duration_seconds": 16
+        }
+      }
+    ]
+  }
+]

@@ -1,0 +1,70 @@
+{
+  "user_goal": "Inject a complex multi-anomaly combination on a fresh TPCC clone",
+  "target_anomaly": "",
+  "target_mode": "single_root",
+  "target_chain": [],
+  "target_subgraph": {},
+  "workload_config": {
+    "type": "tpcc",
+    "probe_workload": true
+  },
+  "max_retry_rounds": 5,
+  "safety_constraints": {
+    "max_duration_sec": 300,
+    "max_connection_usage_ratio": 0.8,
+    "max_cpu_usage": 90
+  },
+  "target_database": "dbmags_tpcc_base_run_20260526060100",
+  "allowed_anomalies": [
+    "missing_index",
+    "record_lock",
+    "cpu",
+    "database_table_backup",
+    "overall_workload"
+  ],
+  "allowed_subtypes": [
+    "missing_index",
+    "record_lock",
+    "cpu",
+    "database_table_backup",
+    "overall_workload"
+  ],
+  "anomaly_categories": [],
+  "execution_window_seconds": 16,
+  "risk_level": "medium",
+  "require_confirmation": false,
+  "execution_mode": "sequential",
+  "database_topology": "base_and_copy",
+  "user_constraints": {
+    "reflections": [
+      {
+        "failure_reason": [],
+        "suggested_changes": [],
+        "evaluation_reason": "metrics did not meet reward or chain success threshold",
+        "memory_items": [
+          {
+            "dbms": "mysql",
+            "workload": "tpcc",
+            "anomaly_type": "missing_index,cpu,record_lock,overall_workload,database_table_backup",
+            "context": "causal_chain",
+            "lesson": "Attempt scored 0.8420000000000001; stronger overlap or concurrency may be needed.",
+            "evidence": {
+              "performance_score": 1.0,
+              "target_anomaly_score": 0.74,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.8420000000000001,
+              "success": false
+            },
+            "timestamp": "2026-05-21T09:39:05.378747+00:00"
+          }
+        ]
+      }
+    ]
+  },
+  "mode": "multi_auto",
+  "test_enabled": true,
+  "fresh_database_per_run": true,
+  "keep_database": false
+}

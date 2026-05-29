@@ -1,0 +1,383 @@
+[
+  {
+    "agent_name": "lock_conflict",
+    "subgoal": "metadata_lock",
+    "local_hypothesis": "Fallback planner selected metadata_lock from request constraints.",
+    "task_spec": {
+      "task_id": "lock-metadata-lock",
+      "agent_type": "lock_conflict",
+      "anomaly_type": "metadata_lock",
+      "title": "Hold a metadata lock on new_orders via a long transaction.",
+      "task_role": "lock_holder",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260526055721",
+        "anomaly_subtype": "metadata_lock",
+        "source_agent": "lock_conflict",
+        "column_name": "agent_meta_lock_367cca93",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16,
+        "category": "lock_conflict",
+        "intensity": "high",
+        "sessions": [
+          {
+            "name": "mdl_holder",
+            "connection": {
+              "autocommit": 0,
+              "isolation_level": "REPEATABLE-READ"
+            },
+            "steps": [
+              {
+                "sql": "USE `dbmags_tpcc_base_run_20260526055721`"
+              },
+              {
+                "sql": "LOCK TABLES `orders` WRITE"
+              },
+              {
+                "sql": "SELECT SLEEP(480)"
+              },
+              {
+                "sql": "UNLOCK TABLES"
+              },
+              {
+                "sql": "COMMIT"
+              }
+            ]
+          },
+          {
+            "name": "ddl_waiter",
+            "connection": {
+              "autocommit": 1
+            },
+            "start_after_seconds": 10,
+            "steps": [
+              {
+                "sql": "USE `dbmags_tpcc_base_run_20260526055721`"
+              },
+              {
+                "sql": "ALTER TABLE `orders` ADD COLUMN `agent_mdl_probe` INT NULL"
+              }
+            ]
+          }
+        ]
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "hold_metadata_lock",
+          "sql": "SELECT COUNT(*) FROM new_orders WHERE no_w_id = 1",
+          "database": "dbmags_tpcc_base_run_20260526055721",
+          "hold_seconds": 16
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected metadata_lock from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "lock_waits": "increase",
+        "blocked_transactions": "increase",
+        "p95_latency": "increase"
+      },
+      "local_success_criteria": {
+        "lock_wait_time_increase_ratio": 2.0,
+        "blocked_transaction_min_count": 1
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "deadlock or timeout",
+        "confidence": 0.75
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "lock_waits": "increase",
+      "blocked_transactions": "increase",
+      "p95_latency": "increase"
+    },
+    "local_success_criteria": {
+      "lock_wait_time_increase_ratio": 2.0,
+      "blocked_transaction_min_count": 1
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "deadlock or timeout",
+      "confidence": 0.75
+    },
+    "safety_constraints": {},
+    "cleanup_actions": [],
+    "fallback_plan": {},
+    "confidence": 0.75,
+    "react_trace": []
+  },
+  {
+    "agent_name": "traffic_surge",
+    "subgoal": "overall_workload",
+    "local_hypothesis": "Fallback planner selected overall_workload from request constraints.",
+    "task_spec": {
+      "task_id": "traffic-overall-workload",
+      "agent_type": "traffic_surge",
+      "anomaly_type": "overall_workload",
+      "title": "Traffic surge: overall_workload",
+      "task_role": "background_anomaly",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260526055721",
+        "anomaly_subtype": "overall_workload",
+        "source_agent": "traffic_surge",
+        "mode": "overall_workload",
+        "sleep_time": 0.005,
+        "thread_count": 500,
+        "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+        "duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "overall_workload",
+          "sleep_time": 0.005,
+          "thread_count": 500,
+          "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+          "database": "dbmags_tpcc_base_run_20260526055721",
+          "duration_seconds": 16
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected overall_workload from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "active_connections": "increase",
+        "qps": "increase_initially",
+        "latency": "increase_after_saturation"
+      },
+      "local_success_criteria": {
+        "qps_or_latency_change": true
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "connection saturation",
+        "confidence": 0.65
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "active_connections": "increase",
+      "qps": "increase_initially",
+      "latency": "increase_after_saturation"
+    },
+    "local_success_criteria": {
+      "qps_or_latency_change": true
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "connection saturation",
+      "confidence": 0.65
+    },
+    "safety_constraints": {},
+    "cleanup_actions": [],
+    "fallback_plan": {},
+    "confidence": 0.65,
+    "react_trace": []
+  },
+  {
+    "agent_name": "resource_bottleneck",
+    "subgoal": "io",
+    "local_hypothesis": "Fallback planner selected io from request constraints.",
+    "task_spec": {
+      "task_id": "resource-io",
+      "agent_type": "resource_bottleneck",
+      "anomaly_type": "io",
+      "title": "Resource bottleneck: io",
+      "task_role": "resource_injection",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260526055721",
+        "anomaly_subtype": "io",
+        "source_agent": "resource_bottleneck",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16,
+        "category": "resource_bottleneck",
+        "intensity": "medium_high",
+        "innodb_stress": {
+          "concurrency": 12,
+          "duration_seconds": 780,
+          "transactions": [
+            {
+              "name": "hot_stock_updates",
+              "weight": 4,
+              "sql": "UPDATE stock\nSET s_quantity = IF(s_quantity > 10, s_quantity - 1, s_quantity + 10)\nWHERE s_w_id = 1 AND s_i_id = (1 + (CONNECTION_ID() % 100000))"
+            },
+            {
+              "name": "history_inserts",
+              "weight": 3,
+              "sql": "INSERT INTO history (h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, h_date, h_amount, h_data)\nSELECT (1 + (CONNECTION_ID() % 3000)) AS h_c_id,\n       (1 + (CONNECTION_ID() % 10)) AS h_c_d_id,\n       1 AS h_c_w_id,\n       (1 + (CONNECTION_ID() % 10)) AS h_d_id,\n       1 AS h_w_id,\n       NOW(),\n       1.00,\n       REPEAT('x', 64)"
+            },
+            {
+              "name": "order_line_point_reads",
+              "weight": 3,
+              "sql": "SELECT ol_amount, ol_quantity\nFROM order_line\nWHERE ol_w_id = 1 AND ol_d_id = 1 AND ol_o_id = (1 + (CONNECTION_ID() % 300000))\nLIMIT 10"
+            }
+          ]
+        }
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "shell",
+          "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create disk burn --read --path /home",
+          "database": "dbmags_tpcc_base_run_20260526055721"
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected io from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "io_pressure": "increase",
+        "query_latency": "increase"
+      },
+      "local_success_criteria": {
+        "chaosblade_uid": "present",
+        "qps": "decrease_or_latency_increase"
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "host resource contention",
+        "confidence": 0.65
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "io_pressure": "increase",
+      "query_latency": "increase"
+    },
+    "local_success_criteria": {
+      "chaosblade_uid": "present",
+      "qps": "decrease_or_latency_increase"
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "host resource contention",
+      "confidence": 0.65
+    },
+    "safety_constraints": {},
+    "cleanup_actions": [],
+    "fallback_plan": {},
+    "confidence": 0.65,
+    "react_trace": []
+  },
+  {
+    "agent_name": "database_backup",
+    "subgoal": "database_table_backup",
+    "local_hypothesis": "Fallback planner selected database_table_backup from request constraints.",
+    "task_spec": {
+      "task_id": "backup-orders",
+      "agent_type": "database_backup",
+      "anomaly_type": "database_table_backup",
+      "title": "Backup table orders into orders_backup_agent.",
+      "task_role": "backup_job",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260526055721",
+        "anomaly_subtype": "database_table_backup",
+        "source_agent": "database_backup",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16,
+        "source_table": "orders",
+        "category": "database_backup",
+        "intensity": "medium",
+        "strategy": "logical_table_dump",
+        "start_after_seconds": 60,
+        "duration_limit_seconds": 540,
+        "tables": [
+          "orders",
+          "order_line",
+          "stock"
+        ],
+        "options": {
+          "single_transaction": true,
+          "skip_lock_tables": true,
+          "quick": true,
+          "add_drop_table": false
+        },
+        "output": {
+          "type": "local_path",
+          "path": "/tmp/tpcc_multi_anomaly_dump.sql"
+        }
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260526055721"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+          "database": "dbmags_tpcc_base_run_20260526055721"
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260526055721"
+        }
+      ],
+      "explanation": "Fallback planner selected database_table_backup from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "disk_read_throughput": "increase",
+        "io_wait": "increase",
+        "query_latency": "increase"
+      },
+      "local_success_criteria": {
+        "backup_table_created": true
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "IO interference or metadata lock",
+        "confidence": 0.65
+      },
+      "cleanup_actions": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260526055721"
+        }
+      ]
+    },
+    "expected_metrics": {
+      "disk_read_throughput": "increase",
+      "io_wait": "increase",
+      "query_latency": "increase"
+    },
+    "local_success_criteria": {
+      "backup_table_created": true
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "IO interference or metadata lock",
+      "confidence": 0.65
+    },
+    "safety_constraints": {},
+    "cleanup_actions": [
+      {
+        "kind": "sql",
+        "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+        "database": "dbmags_tpcc_base_run_20260526055721"
+      }
+    ],
+    "fallback_plan": {},
+    "confidence": 0.65,
+    "react_trace": []
+  }
+]

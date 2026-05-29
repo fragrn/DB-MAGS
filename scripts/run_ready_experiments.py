@@ -32,7 +32,7 @@ from agent_runtime.verifier import ProbeProfile, ProbeWorkloadVerifier
 from agent_runtime.skills.chaosblade import ChaosBladeInjectionSkill
 from agent_runtime.skills.injection_bridge import RunInjectionSkill
 from agent_runtime.skills.sql_explain import ExplainSQLSkill
-from agent_runtime.types import ExperimentRequest, TaskSpec
+from agent_runtime.types import ExperimentRequest, PlanningMemoryContext, TaskSpec
 
 
 CATEGORY_ORDER = [
@@ -1194,12 +1194,20 @@ def run_composite_or_single(args) -> int:
     max_rounds = args.max_retry_rounds if args.test else 1
     reflection = None
     evaluation = None
+    short_term_trace: list[dict[str, Any]] = []
 
     for round_index in range(1, max_rounds + 1):
         fresh_db = create_fresh_experiment_database(args.db_base)
         request = build_request_for_mode(args, fresh_db)
+        long_term_memory = memory.load_recent()
         if reflection and evaluation:
-            request = components.planner.replan_from_reflection(request, reflection, evaluation, memory.load_recent())
+            request = components.planner.replan_from_reflection(request, reflection, evaluation, long_term_memory)
+        memory_context = PlanningMemoryContext(
+            short_term_trace=short_term_trace,
+            long_term_memory=long_term_memory,
+            latest_reflection=to_jsonable(reflection) if reflection else {},
+        )
+        request.user_constraints["planning_memory"] = to_jsonable(memory_context)
         context = components.planner.gather_context(request)
         environment_snapshot = inspector.inspect(request, context)
         response = components.planner.plan(request, context)
@@ -1211,6 +1219,7 @@ def run_composite_or_single(args) -> int:
         round_dir = out_dir / f"round_{round_index}"
         round_dir.mkdir(parents=True, exist_ok=True)
         (round_dir / "request.json").write_text(json.dumps(to_jsonable(request), ensure_ascii=True, indent=2))
+        (round_dir / "memory_context.json").write_text(json.dumps(to_jsonable(memory_context), ensure_ascii=True, indent=2))
         (round_dir / "environment_snapshot.json").write_text(json.dumps(to_jsonable(environment_snapshot), ensure_ascii=True, indent=2))
         (round_dir / "plan.json").write_text(json.dumps(to_jsonable(response), ensure_ascii=True, indent=2))
 
@@ -1224,9 +1233,11 @@ def run_composite_or_single(args) -> int:
             break
 
         tasks = response.plan.tasks
-        task_agent_outputs = dag_builder.task_agent_outputs(tasks)
+        task_agent_inputs = response.plan.task_agent_inputs
+        task_agent_outputs = response.plan.task_agent_outputs or dag_builder.task_agent_outputs(tasks)
         task_dag = dag_builder.build(tasks, response.planner_decision)
         safety = safety_checker.check(task_dag, environment_snapshot, request)
+        (round_dir / "task_agent_inputs.json").write_text(json.dumps(to_jsonable(task_agent_inputs), ensure_ascii=True, indent=2))
         (round_dir / "task_agent_outputs.json").write_text(json.dumps(to_jsonable(task_agent_outputs), ensure_ascii=True, indent=2))
         (round_dir / "task_dag.json").write_text(json.dumps(to_jsonable(task_dag), ensure_ascii=True, indent=2))
         (round_dir / "safety_check.json").write_text(json.dumps(to_jsonable(safety), ensure_ascii=True, indent=2))
@@ -1310,6 +1321,18 @@ def run_composite_or_single(args) -> int:
             )
         else:
             reflection = None
+        short_term_trace.append(
+            {
+                "round": round_index,
+                "request": to_jsonable(request),
+                "planner_decision": to_jsonable(response.planner_decision),
+                "task_agent_outputs": to_jsonable(task_agent_outputs),
+                "baseline_metrics": baseline,
+                "after_metrics": post,
+                "evaluation": to_jsonable(evaluation),
+                "reflection": to_jsonable(reflection) if reflection else {},
+            }
+        )
 
         result = {
             "status": "completed",

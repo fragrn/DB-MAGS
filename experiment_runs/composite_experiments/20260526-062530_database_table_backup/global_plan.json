@@ -1,0 +1,24 @@
+{
+  "mode": "single_root",
+  "root_causes_to_inject": [
+    "database_table_backup"
+  ],
+  "effects_to_observe": [
+    "qps_down",
+    "p95_latency_up"
+  ],
+  "task_agents": [
+    "database_backup"
+  ],
+  "task_dependencies": [],
+  "evaluation_targets": [
+    "p95_latency_up",
+    "qps_down"
+  ],
+  "safety_constraints": {
+    "max_duration_sec": 300,
+    "max_connection_usage_ratio": 0.8,
+    "max_cpu_usage": 90
+  },
+  "rationale": "The database_table_backup anomaly was selected as it aligns with the allowed categories and subtypes. The 'order_line' table was chosen due to its high row count, ensuring a noticeable impact within the medium-risk level."
+}

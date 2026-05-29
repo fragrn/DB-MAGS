@@ -1,0 +1,38 @@
+{
+  "task_status": {
+    "lock-record-lock": "completed",
+    "slow-sql-missing-index": "completed"
+  },
+  "stdout": {
+    "lock-record-lock": [
+      {
+        "executed": true,
+        "sql": "SELECT * FROM new_orders WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10 FOR UPDATE",
+        "database": "dbmags_tpcc_base_run_20260529075513",
+        "hold_seconds": 20.0,
+        "elapsed_seconds": 20.014474458999757,
+        "latency_ms": 20014.474458999757
+      }
+    ],
+    "slow-sql-missing-index": [
+      {
+        "executed": true,
+        "database": "dbmags_tpcc_base_run_20260529075513",
+        "duration_seconds": 20.0,
+        "elapsed_seconds": 20.32573066600071,
+        "successful_transactions": 15,
+        "failed_transactions": 0,
+        "qps": 0.7379808503066916,
+        "avg_latency_ms": 1348.9116639333588,
+        "p95_latency_ms": 1370.956708000449,
+        "p99_latency_ms": 1380.6581250000818,
+        "single_sql_mean_ms": 1348.9116639333588,
+        "thread_count": 8,
+        "sql": "SELECT ol_w_id, ol_i_id, ol_quantity, ol_amount FROM agent_group_by_support WHERE ol_w_id = 1 AND ol_i_id = 100;"
+      }
+    ]
+  },
+  "stderr": {},
+  "errors": {},
+  "cleanup_status": {}
+}

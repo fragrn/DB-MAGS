@@ -1,0 +1,239 @@
+{
+  "plan": {
+    "summary": "{'goal': 'Inject a single anomaly on a fresh TPCC clone', 'mode': 'single', 'risk_level': 'medium', 'execution_window_seconds': 16, 'chosen_category': 'database_backup', 'chosen_subtype': 'database_table_backup'}",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4375522, indexes=1); stock(rows=1430123, indexes=1); history(rows=452419, indexes=2)",
+    "tasks": [
+      {
+        "task_id": "backup-orders",
+        "agent_type": "database_backup",
+        "anomaly_type": "database_table_backup",
+        "title": "Backup table orders into orders_backup_agent.",
+        "task_role": "backup_job",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526061529",
+          "anomaly_subtype": "database_table_backup",
+          "source_agent": "database_backup"
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526061529"
+          },
+          {
+            "kind": "sql",
+            "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+            "database": "dbmags_tpcc_base_run_20260526061529"
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526061529"
+          }
+        ],
+        "explanation": "[\"Only allowed subtype is database_table_backup, so select it.\", \"Chose large table order_line (~4.38M rows) to ensure observable impact within a short (16s) window at medium risk.\", \"Runs on base DB per provided rules; does not require additional anomaly concurrency in single mode.\"]",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "disk_read_throughput": "increase",
+          "io_wait": "increase",
+          "query_latency": "increase"
+        },
+        "local_success_criteria": {
+          "backup_table_created": true
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "IO interference or metadata lock",
+          "confidence": 0.65
+        },
+        "cleanup_actions": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526061529"
+          }
+        ]
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "database_table_backup"
+      ],
+      "task_assignments": {
+        "database_table_backup": "database_backup"
+      },
+      "database_mapping": {
+        "database_table_backup": "dbmags_tpcc_base_run_20260526061529"
+      },
+      "task_parameters": {
+        "database_table_backup": {}
+      },
+      "expected_signals": [
+        "{'scope': 'mysql_status', 'signals': ['Com_select', 'Bytes_sent', 'Bytes_received', 'Handler_read_rnd_next'], 'expectation': 'Increase during dump window due to full table read and result streaming.'}",
+        "{'scope': 'performance_schema', 'signals': ['events_statements_summary_by_digest', 'table_io_waits_summary_by_table'], 'expectation': 'Elevated reads on order_line; dump statement appears as large SELECT-like activity.'}",
+        "{'scope': 'workload_impact', 'signals': ['avg_query_latency', 'throughput'], 'expectation': 'Moderate transient slowdown from I/O + buffer pressure while scanning order_line.'}"
+      ],
+      "cleanup_strategy": [
+        "{'action': 'delete_backup_file', 'path_template': '/tmp/${database}_order_line_${ts}.sql'}"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "database_table_backup",
+          "category": "database_backup",
+          "source_agent": "database_backup",
+          "database": "dbmags_tpcc_base_run_20260526061529",
+          "parameters": {},
+          "rationale": "[\"Only allowed subtype is database_table_backup, so select it.\", \"Chose large table order_line (~4.38M rows) to ensure observable impact within a short (16s) window at medium risk.\", \"Runs on base DB per provided rules; does not require additional anomaly concurrency in single mode.\"]",
+          "expected_signals": [
+            "{'scope': 'mysql_status', 'signals': ['Com_select', 'Bytes_sent', 'Bytes_received', 'Handler_read_rnd_next'], 'expectation': 'Increase during dump window due to full table read and result streaming.'}",
+            "{'scope': 'performance_schema', 'signals': ['events_statements_summary_by_digest', 'table_io_waits_summary_by_table'], 'expectation': 'Elevated reads on order_line; dump statement appears as large SELECT-like activity.'}",
+            "{'scope': 'workload_impact', 'signals': ['avg_query_latency', 'throughput'], 'expectation': 'Moderate transient slowdown from I/O + buffer pressure while scanning order_line.'}"
+          ],
+          "cleanup_strategy": [
+            "{'action': 'delete_backup_file', 'path_template': '/tmp/${database}_order_line_${ts}.sql'}"
+          ]
+        }
+      ],
+      "llm_summary": "{'goal': 'Inject a single anomaly on a fresh TPCC clone', 'mode': 'single', 'risk_level': 'medium', 'execution_window_seconds': 16, 'chosen_category': 'database_backup', 'chosen_subtype': 'database_table_backup'}",
+      "selection_mode": "single",
+      "execution_database": "dbmags_tpcc_base_run_20260526061529",
+      "activation_order": [
+        "database_table_backup"
+      ],
+      "cleanup_order": [
+        "database_table_backup"
+      ],
+      "composite_experiment_name": "database_table_backup",
+      "selection_rationale": "[\"Only allowed subtype is database_table_backup, so select it.\", \"Chose large table order_line (~4.38M rows) to ensure observable impact within a short (16s) window at medium risk.\", \"Runs on base DB per provided rules; does not require additional anomaly concurrency in single mode.\"]",
+      "llm_used": true,
+      "llm_error": "",
+      "llm_error_type": "",
+      "llm_transport": "chat_completions",
+      "global_plan": {
+        "mode": "single_root",
+        "root_causes_to_inject": [
+          "database_table_backup"
+        ],
+        "effects_to_observe": [
+          "qps_down",
+          "p95_latency_up"
+        ],
+        "task_agents": [
+          "database_backup"
+        ],
+        "task_dependencies": [],
+        "evaluation_targets": [
+          "p95_latency_up",
+          "qps_down"
+        ],
+        "safety_constraints": {
+          "max_duration_sec": 300,
+          "max_connection_usage_ratio": 0.8,
+          "max_cpu_usage": 90
+        },
+        "rationale": "[\"Only allowed subtype is database_table_backup, so select it.\", \"Chose large table order_line (~4.38M rows) to ensure observable impact within a short (16s) window at medium risk.\", \"Runs on base DB per provided rules; does not require additional anomaly concurrency in single mode.\"]"
+      }
+    },
+    "expected_signals": [
+      "{'scope': 'mysql_status', 'signals': ['Com_select', 'Bytes_sent', 'Bytes_received', 'Handler_read_rnd_next'], 'expectation': 'Increase during dump window due to full table read and result streaming.'}",
+      "{'scope': 'performance_schema', 'signals': ['events_statements_summary_by_digest', 'table_io_waits_summary_by_table'], 'expectation': 'Elevated reads on order_line; dump statement appears as large SELECT-like activity.'}",
+      "{'scope': 'workload_impact', 'signals': ['avg_query_latency', 'throughput'], 'expectation': 'Moderate transient slowdown from I/O + buffer pressure while scanning order_line.'}"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "{'action': 'delete_backup_file', 'path_template': '/tmp/${database}_order_line_${ts}.sql'}"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "database_table_backup"
+    ],
+    "task_assignments": {
+      "database_table_backup": "database_backup"
+    },
+    "database_mapping": {
+      "database_table_backup": "dbmags_tpcc_base_run_20260526061529"
+    },
+    "task_parameters": {
+      "database_table_backup": {}
+    },
+    "expected_signals": [
+      "{'scope': 'mysql_status', 'signals': ['Com_select', 'Bytes_sent', 'Bytes_received', 'Handler_read_rnd_next'], 'expectation': 'Increase during dump window due to full table read and result streaming.'}",
+      "{'scope': 'performance_schema', 'signals': ['events_statements_summary_by_digest', 'table_io_waits_summary_by_table'], 'expectation': 'Elevated reads on order_line; dump statement appears as large SELECT-like activity.'}",
+      "{'scope': 'workload_impact', 'signals': ['avg_query_latency', 'throughput'], 'expectation': 'Moderate transient slowdown from I/O + buffer pressure while scanning order_line.'}"
+    ],
+    "cleanup_strategy": [
+      "{'action': 'delete_backup_file', 'path_template': '/tmp/${database}_order_line_${ts}.sql'}"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "database_table_backup",
+        "category": "database_backup",
+        "source_agent": "database_backup",
+        "database": "dbmags_tpcc_base_run_20260526061529",
+        "parameters": {},
+        "rationale": "[\"Only allowed subtype is database_table_backup, so select it.\", \"Chose large table order_line (~4.38M rows) to ensure observable impact within a short (16s) window at medium risk.\", \"Runs on base DB per provided rules; does not require additional anomaly concurrency in single mode.\"]",
+        "expected_signals": [
+          "{'scope': 'mysql_status', 'signals': ['Com_select', 'Bytes_sent', 'Bytes_received', 'Handler_read_rnd_next'], 'expectation': 'Increase during dump window due to full table read and result streaming.'}",
+          "{'scope': 'performance_schema', 'signals': ['events_statements_summary_by_digest', 'table_io_waits_summary_by_table'], 'expectation': 'Elevated reads on order_line; dump statement appears as large SELECT-like activity.'}",
+          "{'scope': 'workload_impact', 'signals': ['avg_query_latency', 'throughput'], 'expectation': 'Moderate transient slowdown from I/O + buffer pressure while scanning order_line.'}"
+        ],
+        "cleanup_strategy": [
+          "{'action': 'delete_backup_file', 'path_template': '/tmp/${database}_order_line_${ts}.sql'}"
+        ]
+      }
+    ],
+    "llm_summary": "{'goal': 'Inject a single anomaly on a fresh TPCC clone', 'mode': 'single', 'risk_level': 'medium', 'execution_window_seconds': 16, 'chosen_category': 'database_backup', 'chosen_subtype': 'database_table_backup'}",
+    "selection_mode": "single",
+    "execution_database": "dbmags_tpcc_base_run_20260526061529",
+    "activation_order": [
+      "database_table_backup"
+    ],
+    "cleanup_order": [
+      "database_table_backup"
+    ],
+    "composite_experiment_name": "database_table_backup",
+    "selection_rationale": "[\"Only allowed subtype is database_table_backup, so select it.\", \"Chose large table order_line (~4.38M rows) to ensure observable impact within a short (16s) window at medium risk.\", \"Runs on base DB per provided rules; does not require additional anomaly concurrency in single mode.\"]",
+    "llm_used": true,
+    "llm_error": "",
+    "llm_error_type": "",
+    "llm_transport": "chat_completions",
+    "global_plan": {
+      "mode": "single_root",
+      "root_causes_to_inject": [
+        "database_table_backup"
+      ],
+      "effects_to_observe": [
+        "qps_down",
+        "p95_latency_up"
+      ],
+      "task_agents": [
+        "database_backup"
+      ],
+      "task_dependencies": [],
+      "evaluation_targets": [
+        "p95_latency_up",
+        "qps_down"
+      ],
+      "safety_constraints": {
+        "max_duration_sec": 300,
+        "max_connection_usage_ratio": 0.8,
+        "max_cpu_usage": 90
+      },
+      "rationale": "[\"Only allowed subtype is database_table_backup, so select it.\", \"Chose large table order_line (~4.38M rows) to ensure observable impact within a short (16s) window at medium risk.\", \"Runs on base DB per provided rules; does not require additional anomaly concurrency in single mode.\"]"
+    }
+  },
+  "follow_up_questions": [],
+  "reasoning": "Planner produced a structured anomaly plan."
+}

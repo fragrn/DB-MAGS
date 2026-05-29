@@ -1,0 +1,72 @@
+{
+  "task_status": {
+    "resource-io": "completed",
+    "lock-metadata-lock": "completed",
+    "backup-orders": "completed",
+    "traffic-overall-workload": "completed"
+  },
+  "stdout": {
+    "resource-io": {
+      "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create disk burn --read --path /home",
+      "executed": true,
+      "uid": "8eed6eae4e892d3a",
+      "blade_path": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+      "stdout": "{\"code\":200,\"success\":true,\"result\":\"8eed6eae4e892d3a\"}"
+    },
+    "lock-metadata-lock": [
+      {
+        "executed": true,
+        "sql": "SELECT COUNT(*) FROM new_orders WHERE no_w_id = 1",
+        "database": "dbmags_tpcc_base_run_20260526055721",
+        "hold_seconds": 16.0,
+        "elapsed_seconds": 16.01011820801068,
+        "latency_ms": 16010.118208010681,
+        "single_sql_mean_ms": 16010.118208010681
+      }
+    ],
+    "backup-orders": [
+      {
+        "executed": true,
+        "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+        "database": "dbmags_tpcc_base_run_20260526055721",
+        "elapsed_seconds": 0.03329512500204146,
+        "latency_ms": 33.29512500204146,
+        "single_sql_mean_ms": 33.29512500204146
+      },
+      {
+        "executed": true,
+        "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+        "database": "dbmags_tpcc_base_run_20260526055721",
+        "elapsed_seconds": 1.7974853749619797,
+        "latency_ms": 1797.4853749619797,
+        "single_sql_mean_ms": 1797.4853749619797
+      }
+    ],
+    "traffic-overall-workload": [
+      {
+        "executed": true,
+        "database": "dbmags_tpcc_base_run_20260526055721",
+        "duration_seconds": 16.0,
+        "elapsed_seconds": 16.00181074999273,
+        "successful_transactions": 1037,
+        "failed_transactions": 0,
+        "qps": 64.80516587789737,
+        "avg_latency_ms": 9.237778627222966,
+        "p95_latency_ms": 17.93179102241993,
+        "p99_latency_ms": 29.320125002413988,
+        "single_sql_mean_ms": 0.0,
+        "thread_count": 500,
+        "sql": ""
+      }
+    ]
+  },
+  "stderr": {},
+  "errors": {},
+  "cleanup_status": {
+    "resource-io": {
+      "cleaned": true,
+      "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"disk\",\"action\":\"burn\",\"flags\":{\"path\":\"/home\",\"read\":\"true\"},\"ActionProcessHang\":false}}",
+      "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 8eed6eae4e892d3a"
+    }
+  }
+}

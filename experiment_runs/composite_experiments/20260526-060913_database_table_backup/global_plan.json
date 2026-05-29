@@ -1,0 +1,24 @@
+{
+  "mode": "single_root",
+  "root_causes_to_inject": [
+    "database_table_backup"
+  ],
+  "effects_to_observe": [
+    "qps_down",
+    "p95_latency_up"
+  ],
+  "task_agents": [
+    "database_backup"
+  ],
+  "task_dependencies": [],
+  "evaluation_targets": [
+    "p95_latency_up",
+    "qps_down"
+  ],
+  "safety_constraints": {
+    "max_duration_sec": 300,
+    "max_connection_usage_ratio": 0.8,
+    "max_cpu_usage": 90
+  },
+  "rationale": "[\"Only allowed category/subtype is database_backup/database_table_backup.\", \"order_line is among the largest tables (~4.39M rows), making a short-window backup impactful enough for a medium-risk single anomaly.\", \"Backup executed on base DB per provided rules (lock_and_backup_use_copy_db=false).\"]"
+}

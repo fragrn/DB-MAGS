@@ -91,6 +91,9 @@ class ReActStep:
     action: str
     observation: Dict[str, Any] = field(default_factory=dict)
     decision: str = ""
+    candidate_id: str = ""
+    score: Optional[float] = None
+    adjustments: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -128,6 +131,13 @@ class TaskAgentInput:
     constraints: Dict[str, Any] = field(default_factory=dict)
     expected_effect: List[str] = field(default_factory=list)
     memory: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class PlanningMemoryContext:
+    short_term_trace: List[Dict[str, Any]] = field(default_factory=list)
+    long_term_memory: List[Dict[str, Any]] = field(default_factory=list)
+    latest_reflection: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -202,6 +212,8 @@ class EvaluationResult:
 class ReflectionResult:
     failure_reason: List[str] = field(default_factory=list)
     suggested_changes: List[str] = field(default_factory=list)
+    task_parameter_updates: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    agent_specific_feedback: Dict[str, List[str]] = field(default_factory=dict)
     risk_warning: List[str] = field(default_factory=list)
     memory_update: List[str] = field(default_factory=list)
     raw_text: str = ""
@@ -258,6 +270,8 @@ class ExperimentPlan:
     summary: str
     db_context_summary: str
     tasks: List[TaskSpec] = field(default_factory=list)
+    task_agent_inputs: List[TaskAgentInput] = field(default_factory=list)
+    task_agent_outputs: List[TaskAgentOutput] = field(default_factory=list)
     planner_decision: Optional[PlannerDecision] = None
     expected_signals: List[str] = field(default_factory=list)
     safety_checks: List[str] = field(default_factory=list)

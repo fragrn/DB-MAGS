@@ -1,0 +1,50 @@
+{
+  "mode": "causal_chain",
+  "root_causes_to_inject": [
+    "metadata_lock"
+  ],
+  "effects_to_observe": [
+    "traffic_surge",
+    "connections_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "task_agents": [
+    "database_backup",
+    "lock_conflict",
+    "resource_bottleneck",
+    "slow_sql"
+  ],
+  "task_dependencies": [
+    [
+      "traffic_surge",
+      "connections_up"
+    ],
+    [
+      "connections_up",
+      "lock_contention"
+    ],
+    [
+      "lock_contention",
+      "slow_query"
+    ],
+    [
+      "slow_query",
+      "qps_drop"
+    ]
+  ],
+  "evaluation_targets": [
+    "traffic_surge",
+    "connections_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "safety_constraints": {
+    "max_duration_sec": 300,
+    "max_connection_usage_ratio": 0.8,
+    "max_cpu_usage": 90
+  },
+  "rationale": "{\"diversity\": \"Combines lock_conflict (metadata_lock), slow_sql (large_table_scan), resource_bottleneck (cpu), and database_backup (database_table_backup).\", \"tpcc_fit\": \"Uses high-row-count support tables for scan/sort pressure and core TPCC tables (order_line, stock) for MDL and backup overlap.\", \"expected_causal_interactions\": [\"Large scans increase buffer churn and temp table activity, amplifying CPU and backup overhead.\", \"CPU pressure slows query completion, prolonging MDL holding time and increasing DDL wait duration.\", \"Backup reads overlap with scan workload, compounding latency and increasing queueing in the server.\"]}"
+}

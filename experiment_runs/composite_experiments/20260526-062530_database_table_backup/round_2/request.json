@@ -1,0 +1,64 @@
+{
+  "user_goal": "Inject a single anomaly on a fresh TPCC clone",
+  "target_anomaly": "",
+  "target_mode": "single_root",
+  "target_chain": [],
+  "target_subgraph": {},
+  "workload_config": {
+    "type": "tpcc",
+    "probe_workload": true
+  },
+  "max_retry_rounds": 5,
+  "safety_constraints": {
+    "max_duration_sec": 300,
+    "max_connection_usage_ratio": 0.8,
+    "max_cpu_usage": 90
+  },
+  "target_database": "dbmags_tpcc_base_run_20260526062607",
+  "allowed_anomalies": [
+    "database_table_backup"
+  ],
+  "allowed_subtypes": [
+    "database_table_backup"
+  ],
+  "anomaly_categories": [],
+  "execution_window_seconds": 16,
+  "risk_level": "medium",
+  "require_confirmation": false,
+  "execution_mode": "sequential",
+  "database_topology": "base_and_copy",
+  "user_constraints": {
+    "reflections": [
+      {
+        "failure_reason": [],
+        "suggested_changes": [
+          "{'execution_steps': [{'change': \"Modify the SQL query in the 'CREATE TABLE' step to explicitly target the 'order_line' table instead of the 'orders' table.\", 'reason': \"The task specification indicates that the 'order_line' table was chosen for its high row count, but the SQL query targets the 'orders' table, which may have diluted the intended impact.\"}], 'task_spec': [{'change': \"Increase the 'execution_window_seconds' parameter from 12 to 30 seconds.\", 'reason': 'A longer execution window would allow more time for the anomaly to manifest and for its effects to be observed in the metrics.'}], 'evaluation_targets': [{'change': \"Adjust the evaluation thresholds for 'qps_down' and 'p95_latency_up' to better align with the expected impact of the anomaly.\", 'reason': 'The current thresholds may be too strict, preventing the anomaly from being recognized as successful even when it has a measurable impact.'}], 'safety_constraints': [{'change': \"Add a constraint to monitor and limit 'IO wait' during the anomaly execution.\", 'reason': \"The risk assessment identified 'IO interference or metadata lock' as the main risk, but no safety constraints were defined to mitigate this risk.\"}]}"
+        ],
+        "evaluation_reason": "metrics did not meet reward or chain success threshold",
+        "memory_items": [
+          {
+            "dbms": "mysql",
+            "workload": "tpcc",
+            "anomaly_type": "missing_index,cpu,record_lock,overall_workload,database_table_backup",
+            "context": "causal_chain",
+            "lesson": "Attempt scored 0.8420000000000001; stronger overlap or concurrency may be needed.",
+            "evidence": {
+              "performance_score": 1.0,
+              "target_anomaly_score": 0.74,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.8420000000000001,
+              "success": false
+            },
+            "timestamp": "2026-05-21T09:39:05.378747+00:00"
+          }
+        ]
+      }
+    ]
+  },
+  "mode": "single",
+  "test_enabled": true,
+  "fresh_database_per_run": true,
+  "keep_database": false
+}

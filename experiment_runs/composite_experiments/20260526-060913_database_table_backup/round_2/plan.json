@@ -1,0 +1,237 @@
+{
+  "plan": {
+    "summary": "{'goal': 'Inject a single anomaly on a fresh TPCC clone', 'mode': 'single', 'risk_level': 'medium', 'execution_window_seconds': 16, 'selected_category': 'database_backup'}",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4393264, indexes=1); stock(rows=1430123, indexes=1); history(rows=452419, indexes=2)",
+    "tasks": [
+      {
+        "task_id": "backup-orders",
+        "agent_type": "database_backup",
+        "anomaly_type": "database_table_backup",
+        "title": "Backup table orders into orders_backup_agent.",
+        "task_role": "backup_job",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526061009",
+          "anomaly_subtype": "database_table_backup",
+          "source_agent": "database_backup"
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526061009"
+          },
+          {
+            "kind": "sql",
+            "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+            "database": "dbmags_tpcc_base_run_20260526061009"
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526061009"
+          }
+        ],
+        "explanation": "[\"Only allowed category/subtype: database_backup/database_table_backup\", \"Chose large table 'order_line' (\\u22484.39M rows) to produce noticeable backup-induced contention within a short window\", \"Configured lock_tables=true to increase anomaly visibility at medium risk while remaining non-destructive\"]",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "disk_read_throughput": "increase",
+          "io_wait": "increase",
+          "query_latency": "increase"
+        },
+        "local_success_criteria": {
+          "backup_table_created": true
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "IO interference or metadata lock",
+          "confidence": 0.65
+        },
+        "cleanup_actions": [
+          {
+            "kind": "sql",
+            "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+            "database": "dbmags_tpcc_base_run_20260526061009"
+          }
+        ]
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "database_table_backup"
+      ],
+      "task_assignments": {
+        "database_table_backup": "database_backup"
+      },
+      "database_mapping": {
+        "database_table_backup": "dbmags_tpcc_base_run_20260526061009"
+      },
+      "task_parameters": {
+        "database_table_backup": {}
+      },
+      "expected_signals": [
+        "Increased disk read/write and filesystem throughput during backup window",
+        "Higher MySQL 'Threads_running' and query latency while table locks are held",
+        "Performance Schema / SHOW PROCESSLIST shows mysqldump session in 'Sending data' or locked states",
+        "Potential lock waits for transactions touching order_line while backup holds locks"
+      ],
+      "cleanup_strategy": [],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "database_table_backup",
+          "category": "database_backup",
+          "source_agent": "database_backup",
+          "database": "dbmags_tpcc_base_run_20260526061009",
+          "parameters": {},
+          "rationale": "[\"Only allowed category/subtype: database_backup/database_table_backup\", \"Chose large table 'order_line' (\\u22484.39M rows) to produce noticeable backup-induced contention within a short window\", \"Configured lock_tables=true to increase anomaly visibility at medium risk while remaining non-destructive\"]",
+          "expected_signals": [
+            "Increased disk read/write and filesystem throughput during backup window",
+            "Higher MySQL 'Threads_running' and query latency while table locks are held",
+            "Performance Schema / SHOW PROCESSLIST shows mysqldump session in 'Sending data' or locked states",
+            "Potential lock waits for transactions touching order_line while backup holds locks"
+          ],
+          "cleanup_strategy": []
+        }
+      ],
+      "llm_summary": "{'goal': 'Inject a single anomaly on a fresh TPCC clone', 'mode': 'single', 'risk_level': 'medium', 'execution_window_seconds': 16, 'selected_category': 'database_backup'}",
+      "selection_mode": "single",
+      "execution_database": "dbmags_tpcc_base_run_20260526061009",
+      "activation_order": [
+        "database_table_backup"
+      ],
+      "cleanup_order": [
+        "database_table_backup"
+      ],
+      "composite_experiment_name": "database_table_backup",
+      "selection_rationale": "[\"Only allowed category/subtype: database_backup/database_table_backup\", \"Chose large table 'order_line' (\\u22484.39M rows) to produce noticeable backup-induced contention within a short window\", \"Configured lock_tables=true to increase anomaly visibility at medium risk while remaining non-destructive\"]",
+      "llm_used": true,
+      "llm_error": "",
+      "llm_error_type": "",
+      "llm_transport": "chat_completions",
+      "global_plan": {
+        "mode": "single_root",
+        "root_causes_to_inject": [
+          "database_table_backup"
+        ],
+        "effects_to_observe": [
+          "qps_down",
+          "p95_latency_up"
+        ],
+        "task_agents": [
+          "database_backup"
+        ],
+        "task_dependencies": [],
+        "evaluation_targets": [
+          "p95_latency_up",
+          "qps_down"
+        ],
+        "safety_constraints": {
+          "max_duration_sec": 300,
+          "max_connection_usage_ratio": 0.8,
+          "max_cpu_usage": 90
+        },
+        "rationale": "[\"Only allowed category/subtype: database_backup/database_table_backup\", \"Chose large table 'order_line' (\\u22484.39M rows) to produce noticeable backup-induced contention within a short window\", \"Configured lock_tables=true to increase anomaly visibility at medium risk while remaining non-destructive\"]"
+      }
+    },
+    "expected_signals": [
+      "Increased disk read/write and filesystem throughput during backup window",
+      "Higher MySQL 'Threads_running' and query latency while table locks are held",
+      "Performance Schema / SHOW PROCESSLIST shows mysqldump session in 'Sending data' or locked states",
+      "Potential lock waits for transactions touching order_line while backup holds locks"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "Run per-task rollback steps.",
+      "Collect execution artifacts and validation evidence."
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "database_table_backup"
+    ],
+    "task_assignments": {
+      "database_table_backup": "database_backup"
+    },
+    "database_mapping": {
+      "database_table_backup": "dbmags_tpcc_base_run_20260526061009"
+    },
+    "task_parameters": {
+      "database_table_backup": {}
+    },
+    "expected_signals": [
+      "Increased disk read/write and filesystem throughput during backup window",
+      "Higher MySQL 'Threads_running' and query latency while table locks are held",
+      "Performance Schema / SHOW PROCESSLIST shows mysqldump session in 'Sending data' or locked states",
+      "Potential lock waits for transactions touching order_line while backup holds locks"
+    ],
+    "cleanup_strategy": [],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "database_table_backup",
+        "category": "database_backup",
+        "source_agent": "database_backup",
+        "database": "dbmags_tpcc_base_run_20260526061009",
+        "parameters": {},
+        "rationale": "[\"Only allowed category/subtype: database_backup/database_table_backup\", \"Chose large table 'order_line' (\\u22484.39M rows) to produce noticeable backup-induced contention within a short window\", \"Configured lock_tables=true to increase anomaly visibility at medium risk while remaining non-destructive\"]",
+        "expected_signals": [
+          "Increased disk read/write and filesystem throughput during backup window",
+          "Higher MySQL 'Threads_running' and query latency while table locks are held",
+          "Performance Schema / SHOW PROCESSLIST shows mysqldump session in 'Sending data' or locked states",
+          "Potential lock waits for transactions touching order_line while backup holds locks"
+        ],
+        "cleanup_strategy": []
+      }
+    ],
+    "llm_summary": "{'goal': 'Inject a single anomaly on a fresh TPCC clone', 'mode': 'single', 'risk_level': 'medium', 'execution_window_seconds': 16, 'selected_category': 'database_backup'}",
+    "selection_mode": "single",
+    "execution_database": "dbmags_tpcc_base_run_20260526061009",
+    "activation_order": [
+      "database_table_backup"
+    ],
+    "cleanup_order": [
+      "database_table_backup"
+    ],
+    "composite_experiment_name": "database_table_backup",
+    "selection_rationale": "[\"Only allowed category/subtype: database_backup/database_table_backup\", \"Chose large table 'order_line' (\\u22484.39M rows) to produce noticeable backup-induced contention within a short window\", \"Configured lock_tables=true to increase anomaly visibility at medium risk while remaining non-destructive\"]",
+    "llm_used": true,
+    "llm_error": "",
+    "llm_error_type": "",
+    "llm_transport": "chat_completions",
+    "global_plan": {
+      "mode": "single_root",
+      "root_causes_to_inject": [
+        "database_table_backup"
+      ],
+      "effects_to_observe": [
+        "qps_down",
+        "p95_latency_up"
+      ],
+      "task_agents": [
+        "database_backup"
+      ],
+      "task_dependencies": [],
+      "evaluation_targets": [
+        "p95_latency_up",
+        "qps_down"
+      ],
+      "safety_constraints": {
+        "max_duration_sec": 300,
+        "max_connection_usage_ratio": 0.8,
+        "max_cpu_usage": 90
+      },
+      "rationale": "[\"Only allowed category/subtype: database_backup/database_table_backup\", \"Chose large table 'order_line' (\\u22484.39M rows) to produce noticeable backup-induced contention within a short window\", \"Configured lock_tables=true to increase anomaly visibility at medium risk while remaining non-destructive\"]"
+    }
+  },
+  "follow_up_questions": [],
+  "reasoning": "Planner produced a structured anomaly plan."
+}

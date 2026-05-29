@@ -1,0 +1,72 @@
+{
+  "task_status": {
+    "resource-cpu": "completed",
+    "lock-metadata-lock": "completed",
+    "slow-sql-large-table-scan": "completed",
+    "backup-orders": "completed"
+  },
+  "stdout": {
+    "resource-cpu": {
+      "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+      "executed": true,
+      "uid": "0cf553cc1036e10d",
+      "blade_path": ".tools/chaosblade-1.8.0-darwin_arm64/blade",
+      "stdout": "{\"code\":200,\"success\":true,\"result\":\"0cf553cc1036e10d\"}"
+    },
+    "lock-metadata-lock": [
+      {
+        "executed": true,
+        "sql": "SELECT COUNT(*) FROM new_orders",
+        "database": "dbmags_tpcc_base_run_20260529083843",
+        "hold_seconds": 16.0,
+        "elapsed_seconds": 16.075878291001573,
+        "latency_ms": 16075.878291001573,
+        "single_sql_mean_ms": 16075.878291001573
+      }
+    ],
+    "slow-sql-large-table-scan": [
+      {
+        "executed": true,
+        "database": "dbmags_tpcc_base_run_20260529083843",
+        "duration_seconds": 16.0,
+        "elapsed_seconds": 16.219337790998907,
+        "successful_transactions": 24,
+        "failed_transactions": 0,
+        "qps": 1.4797151591058826,
+        "avg_latency_ms": 663.5355310833498,
+        "p95_latency_ms": 692.8174999993644,
+        "p99_latency_ms": 694.6555409995199,
+        "single_sql_mean_ms": 663.5355310833498,
+        "thread_count": 6,
+        "sql": "SELECT * FROM agent_large_scan_support WHERE c_last LIKE '%BAR%';"
+      }
+    ],
+    "backup-orders": [
+      {
+        "executed": true,
+        "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+        "database": "dbmags_tpcc_base_run_20260529083843",
+        "elapsed_seconds": 0.007461416998921777,
+        "latency_ms": 7.461416998921777,
+        "single_sql_mean_ms": 7.461416998921777
+      },
+      {
+        "executed": true,
+        "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+        "database": "dbmags_tpcc_base_run_20260529083843",
+        "elapsed_seconds": 2.4948080840003968,
+        "latency_ms": 2494.808084000397,
+        "single_sql_mean_ms": 2494.808084000397
+      }
+    ]
+  },
+  "stderr": {},
+  "errors": {},
+  "cleanup_status": {
+    "resource-cpu": {
+      "cleaned": true,
+      "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+      "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade destroy 0cf553cc1036e10d"
+    }
+  }
+}

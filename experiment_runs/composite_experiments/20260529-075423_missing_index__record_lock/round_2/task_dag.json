@@ -1,0 +1,151 @@
+{
+  "tasks": {
+    "lock-record-lock": {
+      "task_id": "lock-record-lock",
+      "task_spec": {
+        "task_id": "lock-record-lock",
+        "agent_type": "lock_conflict",
+        "anomaly_type": "record_lock",
+        "title": "Hold a row-level write lock on new_orders.",
+        "task_role": "lock_holder",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260529075513",
+          "anomaly_subtype": "record_lock",
+          "source_agent": "lock_conflict",
+          "column_name": "agent_meta_lock_d54df538",
+          "target_table": "new_orders",
+          "predicate": "no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+          "hold_seconds": 20,
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "inputs": {
+            "hold_seconds": 30
+          }
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "hold_sql",
+            "sql": "SELECT * FROM new_orders WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10 FOR UPDATE",
+            "database": "dbmags_tpcc_base_run_20260529075513",
+            "hold_seconds": 20
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected record_lock from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "lock_waits": "increase",
+          "blocked_transactions": "increase",
+          "p95_latency": "increase"
+        },
+        "local_success_criteria": {
+          "lock_wait_time_increase_ratio": 2.0,
+          "blocked_transaction_min_count": 1
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "deadlock or timeout",
+          "confidence": 0.75
+        },
+        "cleanup_actions": []
+      },
+      "start_after_sec": 0.0,
+      "start_condition": {}
+    },
+    "slow-sql-missing-index": {
+      "task_id": "slow-sql-missing-index",
+      "task_spec": {
+        "task_id": "slow-sql-missing-index",
+        "agent_type": "slow_sql",
+        "anomaly_type": "missing_index",
+        "title": "Slow SQL: missing_index",
+        "task_role": "background_anomaly",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260529075513",
+          "anomaly_subtype": "missing_index",
+          "source_agent": "slow_sql",
+          "sql": "SELECT ol_w_id, ol_i_id, ol_quantity, ol_amount FROM agent_group_by_support WHERE ol_w_id = 1 AND ol_i_id = 100;",
+          "duration_seconds": 16,
+          "background_duration_seconds": 20,
+          "inputs": {
+            "thread_count": 10,
+            "repeat": 50
+          }
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "single_sql",
+            "sleep_time": 0.005,
+            "thread_count": 8,
+            "repeat": 30,
+            "description": "Background slow SQL pressure for missing_index.",
+            "sql": "SELECT ol_w_id, ol_i_id, ol_quantity, ol_amount FROM agent_group_by_support WHERE ol_w_id = 1 AND ol_i_id = 100;",
+            "database": "dbmags_tpcc_base_run_20260529075513",
+            "duration_seconds": 20
+          }
+        ],
+        "validation_steps": [
+          {
+            "kind": "explain",
+            "sql": "SELECT ol_w_id, ol_i_id, ol_quantity, ol_amount FROM agent_group_by_support WHERE ol_w_id = 1 AND ol_i_id = 100;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Filter: ((agent_group_by_support.ol_i_id = 100) and (agent_group_by_support.ol_w_id = 1))  (cost=459328 rows=44911)\n    -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+                ]
+              ]
+            }
+          }
+        ],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected missing_index from request constraints.",
+        "dependencies": [],
+        "start_after_sec": 0.0,
+        "start_condition": {},
+        "expected_metrics": {
+          "query_latency": "increase",
+          "rows_examined": "increase",
+          "slow_query_count": "increase"
+        },
+        "local_success_criteria": {
+          "explain_validated": true,
+          "latency_direction": "increase"
+        },
+        "risk_assessment": {
+          "risk_level": "medium",
+          "main_risk": "long-running query pressure",
+          "confidence": 0.7
+        },
+        "cleanup_actions": []
+      },
+      "start_after_sec": 0.0,
+      "start_condition": {}
+    }
+  },
+  "edges": [
+    {
+      "from_task": "lock-record-lock",
+      "to_task": "slow-sql-missing-index",
+      "condition": "activation_order"
+    }
+  ],
+  "schedule": {
+    "lock-record-lock": {
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "task_role": "lock_holder"
+    },
+    "slow-sql-missing-index": {
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "task_role": "background_anomaly"
+    }
+  }
+}

@@ -1,0 +1,110 @@
+{
+  "status": "completed",
+  "selection_mode": "multi_auto",
+  "execution_database": "dbmags_tpcc_base_run_20260529083843",
+  "activated_tasks": [
+    {
+      "task_id": "resource-cpu",
+      "anomaly_type": "cpu",
+      "task_role": "resource_injection",
+      "resource_injection": {
+        "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+        "executed": true,
+        "uid": "0cf553cc1036e10d",
+        "blade_path": ".tools/chaosblade-1.8.0-darwin_arm64/blade",
+        "stdout": "{\"code\":200,\"success\":true,\"result\":\"0cf553cc1036e10d\"}"
+      }
+    },
+    {
+      "task_id": "lock-metadata-lock",
+      "anomaly_type": "metadata_lock",
+      "task_role": "lock_holder",
+      "resource_injection": {}
+    },
+    {
+      "task_id": "slow-sql-large-table-scan",
+      "anomaly_type": "large_table_scan",
+      "task_role": "background_anomaly",
+      "resource_injection": {}
+    },
+    {
+      "task_id": "backup-orders",
+      "anomaly_type": "database_table_backup",
+      "task_role": "backup_job",
+      "resource_injection": {}
+    }
+  ],
+  "cleanup": [
+    {
+      "task_id": "resource-cpu",
+      "cleanup": {
+        "cleaned": true,
+        "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+        "command": ".tools/chaosblade-1.8.0-darwin_arm64/blade destroy 0cf553cc1036e10d"
+      }
+    }
+  ],
+  "comparison": {
+    "baseline": {
+      "executed": true,
+      "database": "dbmags_tpcc_base_run_20260529083843",
+      "duration_seconds": 12.0,
+      "elapsed_seconds": 12.011789207999755,
+      "successful_transactions": 201,
+      "failed_transactions": 0,
+      "qps": 16.73356038134066,
+      "avg_latency_ms": 12.412011403067657,
+      "p95_latency_ms": 25.860042000203975,
+      "p99_latency_ms": 55.46295900057885,
+      "single_sql_mean_ms": 0.0,
+      "thread_count": 40,
+      "sql": "",
+      "probe_sql": "",
+      "db_evidence": {},
+      "comparison_mode": "baseline_tpcc_probe"
+    },
+    "post": {
+      "executed": true,
+      "database": "dbmags_tpcc_base_run_20260529083843",
+      "duration_seconds": 12.0,
+      "elapsed_seconds": 12.023671500001,
+      "successful_transactions": 171,
+      "failed_transactions": 0,
+      "qps": 14.221945434885324,
+      "avg_latency_ms": 22.46334798244214,
+      "p95_latency_ms": 24.751707998802885,
+      "p99_latency_ms": 45.63824999968347,
+      "single_sql_mean_ms": 0.0,
+      "thread_count": 40,
+      "sql": "",
+      "probe_sql": "",
+      "db_evidence": {},
+      "comparison_mode": "after_anomaly_probe"
+    },
+    "delta": {
+      "qps_ratio": 0.8499055258284424,
+      "p95_ratio": 0.9571410595005087,
+      "failure_delta": 0
+    },
+    "anomaly_confirmed": true,
+    "confirmation_reason": "post TPCC probe shows lower throughput or higher latency under combined anomalies",
+    "requested_subtypes": [
+      "metadata_lock",
+      "large_table_scan",
+      "cpu",
+      "database_table_backup"
+    ],
+    "selection_mode": "multi_auto",
+    "execution_database": "dbmags_tpcc_base_run_20260529083843",
+    "reward": {
+      "performance_score": 0.3001889483431152,
+      "target_anomaly_score": 0.7250000000000001,
+      "causal_order_score": 0.8,
+      "stability_score": 0.6,
+      "safety_penalty": 0.0,
+      "final_score": 0.5575755793372461,
+      "success": false
+    },
+    "evaluation_success": false
+  }
+}
