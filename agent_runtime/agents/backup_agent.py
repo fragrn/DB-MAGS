@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import List
 
 from agent_runtime.agents.base import BaseTaskAgent
@@ -24,13 +25,23 @@ class BackupAgent(BaseTaskAgent):
     ) -> List[TaskAgentOutput]:
         planned = [task for task in (planner_tasks or []) if task.anomaly_subtype in self.supported_subtypes]
         preparer = self.skills.get("prepare_backup_task_skill")
+        generator = self.skills.get("generate_sql_candidate_skill")
         outputs: List[TaskAgentOutput] = []
         for planned_task in planned:
             task_input = self._input_for(planned_task.anomaly_subtype, task_inputs)
             parameters = self._merge_parameters(planned_task, task_input)
-            react_trace = self._react_trace(context, task_input, parameters, planned_task.anomaly_subtype)
-            source_table = str(parameters.get("source_table") or self._choose_source_table(context, task_input))
-            backup_table = str(parameters.get("backup_table", f"{source_table}_backup_agent"))
+            candidates = generator.execute_structured(
+                agent_name=self.agent_type,
+                anomaly_type=planned_task.anomaly_subtype,
+                subgoal=task_input.subgoal,
+                db_context=context,
+                task_input=task_input,
+                constraints={"sql_constraints": ["Suggest source_table and backup_table for a rollback-safe backup interference task."]},
+                candidate_count=4,
+            )
+            source_table = str(parameters.get("source_table") or self._source_table_from_candidates(candidates) or self._choose_source_table(context, task_input))
+            backup_table = str(parameters.get("backup_table") or self._backup_table_from_candidates(candidates) or f"{source_table}_backup_agent")
+            react_trace = self._react_trace(context, task_input, parameters, planned_task.anomaly_subtype, candidates, source_table)
             payload = preparer.execute(database=planned_task.database, source_table=source_table, backup_table=backup_table)
             feedback = self._feedback_text(task_input)
             default_duration = request.execution_window_seconds
@@ -94,14 +105,31 @@ class BackupAgent(BaseTaskAgent):
                 return largest[0].name
         return "orders"
 
-    def _react_trace(self, context: DBContextSummary, task_input: TaskAgentInput, parameters: dict, subtype: str) -> list[ReActStep]:
+    def _react_trace(
+        self,
+        context: DBContextSummary,
+        task_input: TaskAgentInput,
+        parameters: dict,
+        subtype: str,
+        candidates: list[dict],
+        selected: str,
+    ) -> list[ReActStep]:
         table_stats = {table.name: table.row_count for table in context.tables}
         latest_reflection = task_input.memory.get("latest_reflection", {}) if isinstance(task_input.memory, dict) else {}
-        selected = parameters.get("source_table") or BackupAgent._choose_source_table(context, task_input)
         largest = [table.name for table in self._largest_tables(context)[:3]]
         return [
             self._memory_trace(task_input, subtype, parameters),
             self._metric_sample_trace(task_input, subtype),
+            ReActStep(
+                thought="Ask the backup-specific LLM prompt to propose diverse source/backup table candidates.",
+                action="generate_sql_candidates_with_llm",
+                observation={
+                    "candidate_count": len(candidates),
+                    "candidates": candidates,
+                    "used_static_fallback": any(item.get("source") == "static_fallback" for item in candidates if isinstance(item, dict)),
+                },
+                decision="Use LLM only to choose backup strategy; final SQL is regenerated locally for rollback safety.",
+            ),
             ReActStep(
                 thought="Generate candidate backup targets from reflection and table statistics.",
                 action="generate_backup_candidates",
@@ -119,6 +147,36 @@ class BackupAgent(BaseTaskAgent):
                 score=float(table_stats.get(str(selected), 0) or 0),
             ),
         ]
+
+    @staticmethod
+    def _source_table_from_candidates(candidates: list[dict]) -> str:
+        for candidate in candidates:
+            metadata = candidate.get("metadata", {}) if isinstance(candidate, dict) else {}
+            for key in ("source_table", "table"):
+                if isinstance(metadata, dict) and metadata.get(key):
+                    return str(metadata[key])
+                if isinstance(candidate, dict) and candidate.get(key):
+                    return str(candidate[key])
+            sql = str(candidate.get("sql", "")) if isinstance(candidate, dict) else ""
+            match = re.search(r"\bfrom\s+([a-zA-Z0-9_\.]+)", sql, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).split(".")[-1]
+        return ""
+
+    @staticmethod
+    def _backup_table_from_candidates(candidates: list[dict]) -> str:
+        for candidate in candidates:
+            metadata = candidate.get("metadata", {}) if isinstance(candidate, dict) else {}
+            for key in ("backup_table", "target_table"):
+                if isinstance(metadata, dict) and metadata.get(key):
+                    return str(metadata[key])
+                if isinstance(candidate, dict) and candidate.get(key):
+                    return str(candidate[key])
+            sql = str(candidate.get("sql", "")) if isinstance(candidate, dict) else ""
+            match = re.search(r"create\s+table\s+([a-zA-Z0-9_\.]+)", sql, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).split(".")[-1]
+        return ""
 
     def explain(self, task_spec: TaskSpec) -> str:
         return task_spec.explanation

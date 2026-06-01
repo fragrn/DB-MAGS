@@ -25,6 +25,9 @@ class TrafficSurgeAgent(BaseTaskAgent):
         planned = [task for task in (planner_tasks or []) if task.anomaly_subtype in self.supported_subtypes]
         tuning_skill = self.skills.get("workload_tuning_skill")
         sql_generator = self.skills.get("generate_sql_candidate_skill")
+        validator = self.skills.get("validate_sql_skill")
+        explainer = self.skills.get("explain_sql_skill")
+        allowed_tables = [table.name for table in context.tables]
         outputs: List[TaskAgentOutput] = []
         for planned_task in planned:
             task_input = self._input_for(planned_task.anomaly_subtype, task_inputs)
@@ -46,9 +49,56 @@ class TrafficSurgeAgent(BaseTaskAgent):
                 tuning["thread_count"] = self._clamp_int(parameters.get("thread_count"), int(tuning.get("thread_count", 80)), 1, 800)
                 tuning["sleep_time"] = self._clamp_float(parameters.get("sleep_time"), float(tuning.get("sleep_time", 0.005)), 0.001, 1.0)
             if planned_task.anomaly_subtype == "single_sql":
-                candidates = sql_generator.execute("missing_index", context)
-                if candidates:
-                    tuning["sql"] = candidates[0]
+                candidates = sql_generator.execute_structured(
+                    agent_name=self.agent_type,
+                    anomaly_type=planned_task.anomaly_subtype,
+                    subgoal=task_input.subgoal,
+                    db_context=context,
+                    task_input=task_input,
+                    constraints={"sql_constraints": ["Traffic SQL must be safe for high-frequency concurrent execution."]},
+                    candidate_count=4,
+                )
+                react_trace.append(
+                    ReActStep(
+                        thought="Generate a high-frequency SQL candidate with the task-specific LLM prompt.",
+                        action="generate_sql_candidates_with_llm",
+                        observation={
+                            "candidate_count": len(candidates),
+                            "candidates": candidates,
+                            "used_static_fallback": any(item.get("source") == "static_fallback" for item in candidates if isinstance(item, dict)),
+                        },
+                        decision="Use the first validated high-frequency candidate for single_sql traffic pressure.",
+                    )
+                )
+                for candidate in candidates:
+                    sql = candidate.get("sql", "") if isinstance(candidate, dict) else str(candidate)
+                    validation = validator.execute(sql=sql, allowed_tables=allowed_tables, anomaly_type=planned_task.anomaly_subtype)
+                    react_trace.append(
+                        ReActStep(
+                            thought="Traffic single_sql candidates must pass safety validation before high-frequency execution.",
+                            action="validate_sql_safety",
+                            observation={"candidate": candidate, "validation": validation},
+                            decision="Reject unsafe traffic SQL or continue to EXPLAIN.",
+                            candidate_id=f"traffic:{planned_task.anomaly_subtype}:sql",
+                            score=0.5 if validation.get("valid") else 0.0,
+                        )
+                    )
+                    if not validation.get("valid"):
+                        continue
+                    explain = explainer.execute(validation["sql"], database=planned_task.database)
+                    react_trace.append(
+                        ReActStep(
+                            thought="Traffic SQL should be explainable and safe to repeat.",
+                            action="explain_or_probe_candidate",
+                            observation={"sql": validation["sql"], "explain": explain},
+                            decision="Select this SQL if EXPLAIN succeeds.",
+                            candidate_id=f"traffic:{planned_task.anomaly_subtype}:sql",
+                            score=0.8 if explain.get("validated") else 0.2,
+                        )
+                    )
+                    if explain.get("validated"):
+                        tuning["sql"] = validation["sql"]
+                        break
             tuning["database"] = planned_task.database
             tuning["duration_seconds"] = self._clamp_int(
                 parameters.get("background_duration_seconds", parameters.get("duration_seconds")),

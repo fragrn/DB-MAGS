@@ -80,26 +80,40 @@ class SlowSQLAgent(BaseTaskAgent):
                     )
                 )
             else:
-                generated = generator.execute(planned_task.anomaly_subtype, context)
+                generated = generator.execute_structured(
+                    agent_name=self.agent_type,
+                    anomaly_type=planned_task.anomaly_subtype,
+                    subgoal=task_input.subgoal,
+                    db_context=context,
+                    task_input=task_input,
+                    constraints={"sql_constraints": ["Slow SQL candidates must be safe to run repeatedly in a test workload."]},
+                    candidate_count=6,
+                )
                 candidates = []
                 if parameters.get("sql"):
-                    candidates.append(str(parameters["sql"]))
+                    candidates.append({"sql": str(parameters["sql"]), "source": "planner_or_reflexion", "purpose": "provided by planner/reflexion"})
                 target_table = parameters.get("target_table")
                 if target_table:
-                    candidates.append(f"SELECT COUNT(*) FROM {target_table}")
+                    candidates.append({"sql": f"SELECT COUNT(*) FROM {target_table}", "source": "derived_from_reflexion", "purpose": "target table from reflexion"})
                 candidates.extend(generated)
                 react_trace.append(
                     ReActStep(
                         thought="Generate multiple SQL candidates and prioritize reflexion-provided SQL or target table.",
-                        action="generate_slow_sql_candidates",
-                        observation={"candidate_count": len(candidates), "target_table": target_table},
+                        action="generate_sql_candidates_with_llm",
+                        observation={
+                            "candidate_count": len(candidates),
+                            "target_table": target_table,
+                            "candidates": candidates,
+                            "used_static_fallback": any(item.get("source") == "static_fallback" for item in candidates if isinstance(item, dict)),
+                        },
                         decision="Validate candidates with static checks and EXPLAIN before selecting.",
                     )
                 )
                 selected_sql = ""
                 for candidate in candidates[:6]:
+                    candidate_sql = candidate.get("sql", "") if isinstance(candidate, dict) else str(candidate)
                     validation = validator.execute(
-                        sql=candidate,
+                        sql=candidate_sql,
                         allowed_tables=allowed_tables
                         + [
                             "agent_order_by_support",
@@ -114,8 +128,8 @@ class SlowSQLAgent(BaseTaskAgent):
                         react_trace.append(
                             ReActStep(
                                 thought="Candidate SQL must pass static safety and table allow-list checks.",
-                                action="dry_run_validate_sql",
-                                observation={"sql": candidate, "validation": validation},
+                                action="validate_sql_safety",
+                                observation={"candidate": candidate, "validation": validation},
                                 decision="Reject candidate and continue to the next option.",
                                 candidate_id=f"slow_sql:{planned_task.anomaly_subtype}",
                                 score=0.0,
@@ -124,13 +138,13 @@ class SlowSQLAgent(BaseTaskAgent):
                         continue
                     explain = explainer.execute(validation["sql"], database=planned_task.database)
                     react_trace.append(
-                        ReActStep(
-                            thought="Candidate SQL should have an EXPLAIN plan consistent with slow-query pressure.",
-                            action="explain_probe",
-                            observation={"sql": validation["sql"], "explain": explain},
-                            decision="Accept candidate if EXPLAIN validates; otherwise revise to the next candidate.",
-                            candidate_id=f"slow_sql:{planned_task.anomaly_subtype}",
-                            score=1.0 if explain.get("validated") else 0.2,
+                            ReActStep(
+                                thought="Candidate SQL should have an EXPLAIN plan consistent with slow-query pressure.",
+                                action="explain_or_probe_candidate",
+                                observation={"candidate": candidate, "sql": validation["sql"], "explain": explain},
+                                decision="Accept candidate if EXPLAIN validates; otherwise revise to the next candidate.",
+                                candidate_id=f"slow_sql:{planned_task.anomaly_subtype}",
+                                score=1.0 if explain.get("validated") else 0.2,
                         )
                     )
                     if explain.get("validated"):

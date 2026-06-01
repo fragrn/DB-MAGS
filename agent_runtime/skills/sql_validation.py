@@ -16,6 +16,10 @@ class ValidateSQLSkill(Skill):
         errors = []
         if contains_dangerous_sql(stripped):
             errors.append("contains dangerous keyword")
+        if lowered.startswith("update") and " where " not in lowered:
+            errors.append("UPDATE without WHERE is not allowed")
+        if any(schema in lowered for schema in ("mysql.", "information_schema.", "performance_schema.", "sys.")):
+            errors.append("system schema references are not allowed")
         if not any(lowered.startswith(prefix) for prefix in ("select", "update", "lock", "alter", "explain")):
             errors.append("statement type is not on the allow-list")
         referenced_tables = re.findall(r"(?:from|join|update|table|lock tables)\s+([a-zA-Z0-9_\.]+)", lowered)

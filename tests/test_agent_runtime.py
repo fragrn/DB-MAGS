@@ -15,6 +15,8 @@ from agent_runtime.llm import ResponsesAPIClient
 from agent_runtime.reflection import SelfReflectionAgent
 from agent_runtime.skills.injection_bridge import RunInjectionSkill
 from agent_runtime.skills.prepare_backup_task import PrepareBackupTaskSkill
+from agent_runtime.skills.sql_generation import GenerateSQLCandidateSkill
+from agent_runtime.skills.sql_validation import ValidateSQLSkill
 from agent_runtime.agents.backup_agent import BackupAgent
 from agent_runtime.agents.lock_conflict_agent import LockConflictAgent
 from agent_runtime.agents.resource_bottleneck_agent import ResourceBottleneckAgent
@@ -28,6 +30,7 @@ from agent_runtime.skills.base import Skill
 from scripts.run_ready_experiments import compare_metrics
 from agent_runtime.types import (
     DBContextSummary,
+    DBColumnProfile,
     DBTableProfile,
     ExperimentPlan,
     ExperimentRequest,
@@ -81,6 +84,15 @@ class FakeSQLCandidateSkill(Skill):
 
     def execute(self, anomaly_type, db_context):
         return ["SELECT COUNT(*) FROM orders"]
+
+    def execute_structured(self, agent_name, anomaly_type, subgoal, db_context, task_input=None, constraints=None, candidate_count=5):
+        if agent_name == "lock_conflict":
+            return [{"sql": "SELECT * FROM new_orders WHERE no_w_id = 1 FOR UPDATE", "source": "llm", "purpose": "hold row lock"}]
+        if agent_name == "traffic_surge":
+            return [{"sql": "SELECT COUNT(*) FROM orders", "source": "llm", "purpose": "high-frequency read"}]
+        if agent_name == "database_backup":
+            return [{"sql": "CREATE TABLE order_line_backup_agent AS SELECT * FROM order_line", "source": "llm", "source_table": "order_line", "backup_table": "order_line_backup_agent"}]
+        return [{"sql": "SELECT COUNT(*) FROM orders", "source": "llm", "purpose": "slow scan"}]
 
 
 class FakeValidateSQLSkill(Skill):
@@ -292,6 +304,66 @@ class ReflectionTests(unittest.TestCase):
         self.assertIn("backup too short", reflection.failure_reason)
 
 
+class SQLGenerationSkillTests(unittest.TestCase):
+    def test_task_sql_prompt_includes_schema_reflection_and_short_term_trace(self):
+        captured = {}
+
+        class FakeLLMResult:
+            used_fallback = False
+            text = json.dumps(
+                {
+                    "candidates": [
+                        {
+                            "sql": "SELECT COUNT(*) FROM orders WHERE o_c_id > 1000",
+                            "purpose": "missing-index filter",
+                            "expected_effect": "rows examined increases",
+                        }
+                    ]
+                }
+            )
+
+        class FakeLLM:
+            def available(self):
+                return True
+
+            def generate_json(self, system, user, temperature):
+                captured["prompt"] = json.loads(user)
+                return FakeLLMResult()
+
+        llm = FakeLLM()
+        skill = GenerateSQLCandidateSkill(llm, temperature=0.4)
+        context = DBContextSummary(
+            database="db1",
+            tables=[DBTableProfile(name="orders", row_count=1000, columns=[DBColumnProfile(name="o_c_id", data_type="int", nullable=False, indexed=False)])],
+        )
+        task_input = TaskAgentInput(
+            subgoal="missing_index",
+            global_context={"target_chain": ["slow_query", "qps_drop"]},
+            memory={"latest_reflection": {"failure_reason": ["previous SQL was weak"]}, "short_term_trace": [{"round": 1, "evaluation": {"success": False}}]},
+        )
+        candidates = skill.execute_structured("slow_sql", "missing_index", "missing_index", context, task_input=task_input)
+        self.assertEqual(candidates[0]["sql"], "SELECT COUNT(*) FROM orders WHERE o_c_id > 1000")
+        self.assertEqual(captured["prompt"]["agent_name"], "slow_sql")
+        self.assertIn("previous SQL was weak", json.dumps(captured["prompt"]["latest_reflection"]))
+        self.assertEqual(captured["prompt"]["tables"][0]["table"], "orders")
+        self.assertTrue(captured["prompt"]["short_term_trace_summary"])
+
+    def test_llm_unavailable_uses_marked_emergency_fallback(self):
+        llm = type("LLM", (), {"available": lambda self: False})()
+        skill = GenerateSQLCandidateSkill(llm, temperature=0.4)
+        context = DBContextSummary(database="db1", tables=[DBTableProfile(name="orders", row_count=1000)])
+        candidates = skill.execute_structured("slow_sql", "missing_index", "missing_index", context)
+        self.assertTrue(candidates)
+        self.assertEqual(candidates[0]["source"], "static_fallback")
+        self.assertTrue(candidates[0]["metadata"]["used_static_fallback"])
+
+    def test_validate_sql_rejects_dangerous_generated_sql(self):
+        validator = ValidateSQLSkill()
+        result = validator.execute("UPDATE orders SET o_c_id = 1", allowed_tables=["orders"], anomaly_type="missing_index")
+        self.assertFalse(result["valid"])
+        self.assertIn("UPDATE without WHERE is not allowed", result["errors"])
+
+
 class TaskAgentTests(unittest.TestCase):
     def _context(self):
         return DBContextSummary(
@@ -321,7 +393,7 @@ class TaskAgentTests(unittest.TestCase):
         self.assertEqual(output.react_trace[0].action, "read_reflection_memory")
 
     def test_backup_agent_uses_reflection_source_table_in_task_spec(self):
-        agent = BackupAgent(SkillRegistry([PrepareBackupTaskSkill()]))
+        agent = BackupAgent(SkillRegistry([PrepareBackupTaskSkill(), FakeSQLCandidateSkill()]))
         context = self._context()
         planned = PlannedAnomaly(
             anomaly_subtype="database_table_backup",
@@ -386,7 +458,7 @@ class TaskAgentTests(unittest.TestCase):
         self.assertReadsReflection(outputs[0])
 
     def test_lock_agent_uses_reflection_to_increase_hold_seconds(self):
-        agent = LockConflictAgent(SkillRegistry([FakeLockSQLSkill()]))
+        agent = LockConflictAgent(SkillRegistry([FakeLockSQLSkill(), FakeSQLCandidateSkill(), FakeValidateSQLSkill()]))
         planned = PlannedAnomaly(
             anomaly_subtype="record_lock",
             category="lock_conflict",
@@ -412,7 +484,7 @@ class TaskAgentTests(unittest.TestCase):
         self.assertReadsReflection(outputs[0])
 
     def test_traffic_agent_uses_reflection_to_raise_pressure(self):
-        agent = TrafficSurgeAgent(SkillRegistry([FakeWorkloadTuningSkill(), FakeSQLCandidateSkill()]))
+        agent = TrafficSurgeAgent(SkillRegistry([FakeWorkloadTuningSkill(), FakeSQLCandidateSkill(), FakeValidateSQLSkill(), FakeExplainSQLSkill()]))
         planned = PlannedAnomaly(
             anomaly_subtype="overall_workload",
             category="traffic_surge",
