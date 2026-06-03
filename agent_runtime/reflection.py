@@ -5,12 +5,14 @@ from dataclasses import asdict
 from typing import Any
 
 from agent_runtime.llm import ResponsesAPIClient
+from agent_runtime.prompting import PromptTemplateLoader
 from agent_runtime.types import EvaluationResult, ReflectionResult
 
 
 class SelfReflectionAgent:
     def __init__(self, llm_client: ResponsesAPIClient):
         self.llm_client = llm_client
+        self.prompt_loader = PromptTemplateLoader()
 
     def reflect(self, payload: dict) -> ReflectionResult:
         evaluation = payload.get("evaluation_result")
@@ -19,14 +21,14 @@ class SelfReflectionAgent:
         else:
             evaluation_payload = evaluation or {}
         if self.llm_client.available():
+            prompt_payload = {**payload, "evaluation_result": evaluation_payload}
+            system_prompt, user_prompt = self.prompt_loader.render_chat_prompt(
+                "reflexion/failure_analysis.md",
+                {"CONTEXT_JSON": json.dumps(prompt_payload, ensure_ascii=True, default=str)},
+            )
             result = self.llm_client.generate_json(
-                (
-                    "Return JSON only. Analyze why a database anomaly reproduction attempt failed. "
-                    "Use this schema: failure_reason: string[], suggested_changes: string[], "
-                    "task_parameter_updates: object keyed by anomaly subtype, agent_specific_feedback: object keyed by agent name, "
-                    "risk_warning: string[], memory_update: string[]. Make task_parameter_updates directly executable."
-                ),
-                json.dumps({**payload, "evaluation_result": evaluation_payload}, ensure_ascii=True, default=str),
+                system_prompt,
+                user_prompt,
                 0.0,
             )
             if not result.used_fallback and result.text:

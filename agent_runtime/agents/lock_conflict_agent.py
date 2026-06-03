@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from uuid import uuid4
 from typing import List
 
 from agent_runtime.agents.base import BaseTaskAgent
@@ -24,7 +23,6 @@ class LockConflictAgent(BaseTaskAgent):
         task_inputs: dict[str, TaskAgentInput] | None = None,
     ) -> List[TaskAgentOutput]:
         planned = [task for task in (planner_tasks or []) if task.anomaly_subtype in self.supported_subtypes]
-        preparer = self.skills.get("prepare_lock_sql_skill")
         generator = self.skills.get("generate_sql_candidate_skill")
         validator = self.skills.get("validate_sql_skill")
         allowed_tables = [table.name for table in context.tables]
@@ -37,7 +35,7 @@ class LockConflictAgent(BaseTaskAgent):
                 self._memory_trace(task_input, planned_task.anomaly_subtype, parameters),
                 self._metric_sample_trace(task_input, planned_task.anomaly_subtype),
             ]
-            column_name = planned_task.parameters.get("column_name", f"agent_meta_lock_{uuid4().hex[:8]}")
+            column_name = planned_task.parameters.get("column_name", "")
             default_duration = min(max(request.execution_window_seconds, 1), 12)
             if any(term in feedback for term in ("too short", "holder", "waiter", "non-hot", "weak", "qps")):
                 default_duration = max(default_duration, 20)
@@ -47,15 +45,8 @@ class LockConflictAgent(BaseTaskAgent):
                 1,
                 60,
             )
-            payload = preparer.execute(
-                anomaly_subtype=planned_task.anomaly_subtype,
-                database=planned_task.database,
-                duration_seconds=duration_seconds,
-                column_name=str(column_name),
-                multi_mode=request.mode != "single",
-            )
-            target_table = str(parameters.get("target_table", "new_orders"))
-            predicate = str(parameters.get("predicate", "no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10"))
+            target_table = str(parameters.get("target_table", ""))
+            predicate = str(parameters.get("predicate", ""))
             candidates = generator.execute_structured(
                 agent_name=self.agent_type,
                 anomaly_type=planned_task.anomaly_subtype,
@@ -73,7 +64,6 @@ class LockConflictAgent(BaseTaskAgent):
                     observation={
                         "candidate_count": len(candidates),
                         "candidates": candidates,
-                        "used_static_fallback": any(item.get("source") == "static_fallback" for item in candidates if isinstance(item, dict)),
                     },
                     decision="Validate candidate lock SQL before replacing the default holder SQL.",
                 )
@@ -95,21 +85,26 @@ class LockConflictAgent(BaseTaskAgent):
                 if lock_valid:
                     selected_sql = str(validation["sql"])
                     break
-            payload = self._apply_reflexion_lock_sql(
-                payload,
-                planned_task.anomaly_subtype,
-                target_table,
-                predicate,
-                duration_seconds,
-                selected_sql=selected_sql,
-            )
+            if not selected_sql:
+                react_trace.append(
+                    ReActStep(
+                        thought="No generated lock SQL candidate passed validation.",
+                        action="revise_candidate_if_needed",
+                        observation={"candidate_count": len(candidates)},
+                        decision="Skip this lock task because no hard-coded SQL fallback is allowed.",
+                        candidate_id=f"lock:{planned_task.anomaly_subtype}:none",
+                        score=0.0,
+                    )
+                )
+                continue
+            payload = self._lock_payload_from_sql(planned_task.anomaly_subtype, planned_task.database, selected_sql, duration_seconds)
             react_trace.extend(
                 [
                     ReActStep(
                         thought="Generate holder/waiter lock candidate from planner parameters and reflexion.",
                         action="generate_lock_candidates",
-                        observation={"target_table": target_table, "predicate": predicate, "hold_seconds": duration_seconds},
-                        decision="Use longer holder duration or provided target predicate when reflexion says contention was weak.",
+                        observation={"target_table": target_table, "predicate": predicate, "hold_seconds": duration_seconds, "selected_sql": selected_sql},
+                        decision="Use the validated LLM-generated SQL as the lock holder task.",
                         candidate_id=f"lock:{planned_task.anomaly_subtype}",
                         adjustments={"target_table": target_table, "predicate": predicate, "hold_seconds": duration_seconds},
                     ),
@@ -117,9 +112,9 @@ class LockConflictAgent(BaseTaskAgent):
                         thought="Validate lock candidate with schema-level checks before finalizing.",
                         action="schema_probe",
                         observation={"available_tables": [table.name for table in context.tables], "target_table": target_table},
-                        decision="Finalize lock TaskSpec if target table is present or fallback lock SQL remains available.",
+                        decision="Finalize lock TaskSpec from the validated generated SQL.",
                         candidate_id=f"lock:{planned_task.anomaly_subtype}",
-                        score=0.75 if any(table.name == target_table for table in context.tables) else 0.45,
+                        score=0.75,
                     ),
                 ]
             )
@@ -168,29 +163,18 @@ class LockConflictAgent(BaseTaskAgent):
         return outputs
 
     @staticmethod
-    def _apply_reflexion_lock_sql(payload: dict, subtype: str, target_table: str, predicate: str, hold_seconds: int, selected_sql: str = "") -> dict:
-        if target_table == "new_orders" and not predicate:
-            return payload
-        execution_steps = []
-        for step in payload.get("execution_steps", []):
-            updated = dict(step)
-            if selected_sql:
-                updated["kind"] = "hold_sql" if not selected_sql.lower().startswith("alter") else "sql"
-                updated["sql"] = selected_sql
-            elif subtype == "record_lock" and target_table:
-                updated["kind"] = "hold_sql"
-                updated["sql"] = f"SELECT * FROM {target_table} WHERE {predicate} FOR UPDATE"
-            elif subtype == "table_lock" and target_table:
-                updated["kind"] = "hold_sql"
-                updated["sql"] = f"LOCK TABLES {target_table} WRITE"
-            elif subtype == "metadata_lock" and target_table:
-                updated["kind"] = "hold_metadata_lock"
-                updated["sql"] = f"SELECT COUNT(*) FROM {target_table}"
-            updated["hold_seconds"] = hold_seconds
-            execution_steps.append(updated)
-        payload = dict(payload)
-        payload["execution_steps"] = execution_steps
-        return payload
+    @staticmethod
+    def _lock_payload_from_sql(subtype: str, database: str, selected_sql: str, hold_seconds: int) -> dict:
+        lowered = selected_sql.lower().strip()
+        kind = "hold_metadata_lock" if subtype == "metadata_lock" and lowered.startswith("select") else "hold_sql"
+        if lowered.startswith("alter"):
+            kind = "sql"
+        rollback_steps = [{"kind": "sql", "sql": "UNLOCK TABLES", "database": database}] if lowered.startswith("lock tables") else []
+        return {
+            "title": f"Generated lock SQL for {subtype}.",
+            "execution_steps": [{"kind": kind, "sql": selected_sql, "database": database, "hold_seconds": hold_seconds}],
+            "rollback_steps": rollback_steps,
+        }
 
     @staticmethod
     def _lock_sql_matches(subtype: str, sql: object) -> bool:

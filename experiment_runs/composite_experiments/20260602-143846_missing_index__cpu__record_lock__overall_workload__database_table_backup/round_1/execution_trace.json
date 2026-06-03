@@ -1,0 +1,60 @@
+{
+  "task_status": {
+    "resource-cpu": "completed",
+    "backup-orders": "completed",
+    "traffic-overall-workload": "completed"
+  },
+  "stdout": {
+    "resource-cpu": {
+      "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+      "executed": true,
+      "uid": "7432576893efa1c0",
+      "blade_path": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade",
+      "stdout": "{\"code\":200,\"success\":true,\"result\":\"7432576893efa1c0\"}"
+    },
+    "backup-orders": [
+      {
+        "executed": true,
+        "sql": "DROP TABLE IF EXISTS orders_backup_agent",
+        "database": "dbmags_tpcc_base_run_20260602143240",
+        "elapsed_seconds": 0.009526292007649317,
+        "latency_ms": 9.526292007649317,
+        "single_sql_mean_ms": 9.526292007649317
+      },
+      {
+        "executed": true,
+        "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+        "database": "dbmags_tpcc_base_run_20260602143240",
+        "elapsed_seconds": 1.7837782919959864,
+        "latency_ms": 1783.7782919959864,
+        "single_sql_mean_ms": 1783.7782919959864
+      }
+    ],
+    "traffic-overall-workload": [
+      {
+        "executed": true,
+        "database": "dbmags_tpcc_base_run_20260602143240",
+        "duration_seconds": 16.0,
+        "elapsed_seconds": 16.00982458300132,
+        "successful_transactions": 1733,
+        "failed_transactions": 1,
+        "qps": 108.24603299151946,
+        "avg_latency_ms": 6.098203072723524,
+        "p95_latency_ms": 11.262833999353461,
+        "p99_latency_ms": 15.347207998274826,
+        "single_sql_mean_ms": 0.0,
+        "thread_count": 580,
+        "sql": ""
+      }
+    ]
+  },
+  "stderr": {},
+  "errors": {},
+  "cleanup_status": {
+    "resource-cpu": {
+      "cleaned": true,
+      "stdout": "{\"code\":200,\"success\":true,\"result\":{\"target\":\"cpu\",\"action\":\"fullload\",\"ActionProcessHang\":false}}",
+      "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade destroy 7432576893efa1c0"
+    }
+  }
+}

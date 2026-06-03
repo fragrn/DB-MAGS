@@ -65,11 +65,20 @@ class TrafficSurgeAgent(BaseTaskAgent):
                         observation={
                             "candidate_count": len(candidates),
                             "candidates": candidates,
-                            "used_static_fallback": any(item.get("source") == "static_fallback" for item in candidates if isinstance(item, dict)),
                         },
                         decision="Use the first validated high-frequency candidate for single_sql traffic pressure.",
                     )
                 )
+                if not candidates:
+                    react_trace.append(
+                        ReActStep(
+                            thought="No LLM SQL candidates were returned for single_sql traffic.",
+                            action="revise_candidate_if_needed",
+                            observation={"candidate_count": 0},
+                            decision="Continue with workload profile only; no hard-coded SQL fallback is used.",
+                            score=0.0,
+                        )
+                    )
                 for candidate in candidates:
                     sql = candidate.get("sql", "") if isinstance(candidate, dict) else str(candidate)
                     validation = validator.execute(sql=sql, allowed_tables=allowed_tables, anomaly_type=planned_task.anomaly_subtype)

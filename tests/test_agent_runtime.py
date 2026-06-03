@@ -12,6 +12,7 @@ from agent_runtime.conversation import CLIConversationOrchestrator
 from agent_runtime.executor import TaskExecutor
 from agent_runtime.experiment_validation import AgentValidationRunner
 from agent_runtime.llm import ResponsesAPIClient
+from agent_runtime.prompting import PromptTemplateLoader, REQUIRED_PROMPT_SECTIONS
 from agent_runtime.reflection import SelfReflectionAgent
 from agent_runtime.skills.injection_bridge import RunInjectionSkill
 from agent_runtime.skills.prepare_backup_task import PrepareBackupTaskSkill
@@ -122,17 +123,6 @@ class FakeExcessiveIndexSkill(Skill):
 
     def execute(self, database, support_table="agent_excessive_index"):
         return {"setup_steps": [], "rollback_steps": [], "query": "SELECT COUNT(*) FROM agent_excessive_index"}
-
-
-class FakeLockSQLSkill(Skill):
-    name = "prepare_lock_sql_skill"
-
-    def execute(self, anomaly_subtype, database, duration_seconds=5, column_name="agent_meta_lock_run", multi_mode=False):
-        return {
-            "title": "lock",
-            "execution_steps": [{"kind": "hold_sql", "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1", "database": database, "hold_seconds": duration_seconds}],
-            "rollback_steps": [],
-        }
 
 
 class FakeChaosBladeSkill(Skill):
@@ -289,6 +279,43 @@ class PlannerTests(unittest.TestCase):
         replanned = planner.replan_from_reflection(request, reflection, evaluation, [])
         self.assertEqual(replanned.user_constraints["task_parameter_overrides"]["database_table_backup"]["source_table"], "order_line")
 
+    def test_planner_replan_uses_external_replan_prompt(self):
+        captured = {}
+
+        class FakeLLMResult:
+            used_fallback = False
+            transport_used = "chat_completions"
+            error_type = ""
+            error_message = ""
+            text = json.dumps({"selected_anomalies": ["missing_index"], "task_parameters": {"missing_index": {"subgoal": "stronger slow SQL"}}, "summary": "ok"})
+
+        class FakeLLM:
+            def available(self):
+                return True
+
+            def generate_json(self, system, user, temperature):
+                captured["system"] = system
+                captured["user"] = user
+                return FakeLLMResult()
+
+        planner = GlobalPlannerAgent(
+            config=type("Config", (), {"default_database": "tpcc10_test", "planner_temperature": 0.0})(),
+            skills=SkillRegistry([DummySkill(payload={"tables": []}, name="build_planner_context_skill")]),
+            task_agents=[],
+        )
+        planner.llm_client = FakeLLM()
+        request = ExperimentRequest(
+            user_goal="slow",
+            target_database="db1",
+            allowed_subtypes=["missing_index"],
+            user_constraints={"reflections": [{"failure_reason": ["weak slow query"]}]},
+        )
+        context = DBContextSummary(database="db1", tables=[DBTableProfile(name="orders", row_count=1000)])
+        response = planner.plan(request, context)
+        self.assertEqual(response.planner_decision.task_parameters["missing_index"]["subgoal"], "stronger slow SQL")
+        self.assertIn("reflection-aware replanning", captured["system"])
+        self.assertIn("weak slow query", captured["user"])
+
 
 class ReflectionTests(unittest.TestCase):
     def test_reflection_parses_nested_fenced_json_updates(self):
@@ -302,6 +329,57 @@ class ReflectionTests(unittest.TestCase):
         reflection = SelfReflectionAgent(llm).reflect({"evaluation_result": {"reward": {"final_score": 0.2}}})
         self.assertEqual(reflection.task_parameter_updates["database_table_backup"]["source_table"], "order_line")
         self.assertIn("backup too short", reflection.failure_reason)
+
+    def test_reflection_uses_external_prompt(self):
+        captured = {}
+
+        class FakeLLMResult:
+            used_fallback = False
+            text = json.dumps({"failure_reason": ["weak"], "suggested_changes": ["increase"], "memory_update": ["lesson"]})
+
+        class FakeLLM:
+            def available(self):
+                return True
+
+            def generate_json(self, system, user, temperature):
+                captured["system"] = system
+                captured["user"] = user
+                return FakeLLMResult()
+
+        reflection = SelfReflectionAgent(FakeLLM()).reflect({"evaluation_result": {"reward": {"final_score": 0.2}}})
+        self.assertEqual(reflection.failure_reason, ["weak"])
+        self.assertIn("SelfReflectionAgent", captured["system"])
+        self.assertIn('"final_score": 0.2', captured["user"])
+
+
+class PromptTemplateTests(unittest.TestCase):
+    def test_all_agent_prompts_include_standard_sections(self):
+        loader = PromptTemplateLoader()
+        prompt_paths = [
+            "planner/global_plan.md",
+            "planner/auto_multi.md",
+            "planner/replan.md",
+            "task_agents/slow_sql.md",
+            "task_agents/lock_conflict.md",
+            "task_agents/traffic_surge.md",
+            "task_agents/database_backup.md",
+            "task_agents/resource_bottleneck.md",
+            "reflexion/failure_analysis.md",
+        ]
+        for prompt_path in prompt_paths:
+            with self.subTest(prompt_path=prompt_path):
+                self.assertEqual(loader.validate_required_sections(prompt_path), [])
+
+    def test_prompt_loader_renders_chat_prompt(self):
+        loader = PromptTemplateLoader()
+        system, user = loader.render_chat_prompt(
+            "task_agents/slow_sql.md",
+            {"CONTEXT_JSON": '{"agent_name":"slow_sql"}', "RETURN_SCHEMA_JSON": '{"candidates":[]}'},
+        )
+        self.assertIn("SlowSQLAgent", system)
+        self.assertNotIn("# System Role", user)
+        self.assertIn('"agent_name":"slow_sql"', user)
+        self.assertIn('"candidates":[]', user)
 
 
 class SQLGenerationSkillTests(unittest.TestCase):
@@ -327,7 +405,8 @@ class SQLGenerationSkillTests(unittest.TestCase):
                 return True
 
             def generate_json(self, system, user, temperature):
-                captured["prompt"] = json.loads(user)
+                captured["system"] = system
+                captured["user"] = user
                 return FakeLLMResult()
 
         llm = FakeLLM()
@@ -343,19 +422,18 @@ class SQLGenerationSkillTests(unittest.TestCase):
         )
         candidates = skill.execute_structured("slow_sql", "missing_index", "missing_index", context, task_input=task_input)
         self.assertEqual(candidates[0]["sql"], "SELECT COUNT(*) FROM orders WHERE o_c_id > 1000")
-        self.assertEqual(captured["prompt"]["agent_name"], "slow_sql")
-        self.assertIn("previous SQL was weak", json.dumps(captured["prompt"]["latest_reflection"]))
-        self.assertEqual(captured["prompt"]["tables"][0]["table"], "orders")
-        self.assertTrue(captured["prompt"]["short_term_trace_summary"])
+        self.assertIn("SlowSQLAgent", captured["system"])
+        self.assertIn('"agent_name": "slow_sql"', captured["user"])
+        self.assertIn("previous SQL was weak", captured["user"])
+        self.assertIn('"table": "orders"', captured["user"])
+        self.assertIn('"short_term_trace_summary"', captured["user"])
 
-    def test_llm_unavailable_uses_marked_emergency_fallback(self):
+    def test_llm_unavailable_returns_no_static_sql_candidates(self):
         llm = type("LLM", (), {"available": lambda self: False})()
         skill = GenerateSQLCandidateSkill(llm, temperature=0.4)
         context = DBContextSummary(database="db1", tables=[DBTableProfile(name="orders", row_count=1000)])
         candidates = skill.execute_structured("slow_sql", "missing_index", "missing_index", context)
-        self.assertTrue(candidates)
-        self.assertEqual(candidates[0]["source"], "static_fallback")
-        self.assertTrue(candidates[0]["metadata"]["used_static_fallback"])
+        self.assertEqual(candidates, [])
 
     def test_validate_sql_rejects_dangerous_generated_sql(self):
         validator = ValidateSQLSkill()
@@ -458,7 +536,7 @@ class TaskAgentTests(unittest.TestCase):
         self.assertReadsReflection(outputs[0])
 
     def test_lock_agent_uses_reflection_to_increase_hold_seconds(self):
-        agent = LockConflictAgent(SkillRegistry([FakeLockSQLSkill(), FakeSQLCandidateSkill(), FakeValidateSQLSkill()]))
+        agent = LockConflictAgent(SkillRegistry([FakeSQLCandidateSkill(), FakeValidateSQLSkill()]))
         planned = PlannedAnomaly(
             anomaly_subtype="record_lock",
             category="lock_conflict",

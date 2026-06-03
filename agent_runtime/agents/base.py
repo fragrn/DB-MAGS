@@ -78,7 +78,7 @@ class BaseTaskAgent(ABC):
                 "long_term_items": len(task_input.memory.get("long_term_memory", [])) if isinstance(task_input.memory, dict) else 0,
                 "effective_parameters": parameters,
             },
-            decision=f"Use reflexion overrides for {subtype} before planner defaults when present.",
+            decision=f"Use reflexion and memory as planning context for {subtype} alongside the GlobalPlanner subgoal.",
             adjustments=self._reflection_updates(task_input, subtype),
         )
 

@@ -104,11 +104,20 @@ class SlowSQLAgent(BaseTaskAgent):
                             "candidate_count": len(candidates),
                             "target_table": target_table,
                             "candidates": candidates,
-                            "used_static_fallback": any(item.get("source") == "static_fallback" for item in candidates if isinstance(item, dict)),
                         },
                         decision="Validate candidates with static checks and EXPLAIN before selecting.",
                     )
                 )
+                if not candidates:
+                    react_trace.append(
+                        ReActStep(
+                            thought="The task agent cannot synthesize a SQL task without LLM candidates or explicit reflexion SQL.",
+                            action="revise_candidate_if_needed",
+                            observation={"candidate_count": 0},
+                            decision="Skip this slow SQL task and surface no-candidate evidence in react_trace.",
+                            score=0.0,
+                        )
+                    )
                 selected_sql = ""
                 for candidate in candidates[:6]:
                     candidate_sql = candidate.get("sql", "") if isinstance(candidate, dict) else str(candidate)

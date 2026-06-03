@@ -24,8 +24,8 @@ from agent_runtime.skills.metrics import CleanupSkill, CollectMetricsSkill
 from agent_runtime.skills.prepare_backup_task import PrepareBackupTaskSkill
 from agent_runtime.skills.prepare_excessive_index import PrepareExcessiveIndexSkill
 from agent_runtime.skills.prepare_implicit_conversion_support import PrepareImplicitConversionSupportSkill
-from agent_runtime.skills.prepare_lock_sql import PrepareLockSQLSkill
 from agent_runtime.skills.prepare_sortscan_support import PrepareSortScanSupportSkill
+from agent_runtime.skills.resource_generation import GenerateResourceCandidateSkill
 from agent_runtime.skills.schema_inspection import InspectSchemaSkill
 from agent_runtime.skills.sql_explain import ExplainSQLSkill
 from agent_runtime.skills.sql_generation import GenerateSQLCandidateSkill
@@ -52,11 +52,11 @@ def build_components(config: RuntimeConfig | None = None) -> RuntimeComponents:
             InspectDistributionSkill(),
             BuildPlannerContextSkill(),
             GenerateSQLCandidateSkill(llm_client=llm_client, temperature=config.sql_temperature),
+            GenerateResourceCandidateSkill(llm_client=llm_client, temperature=config.sql_temperature),
             ValidateSQLSkill(),
             ExplainSQLSkill(),
             ChaosBladeInjectionSkill(),
             WorkloadTuningSkill(),
-            PrepareLockSQLSkill(),
             PrepareBackupTaskSkill(),
             PrepareExcessiveIndexSkill(),
             PrepareSortScanSupportSkill(),

@@ -1,0 +1,1290 @@
+[
+  {
+    "agent_name": "traffic_surge",
+    "subgoal": "overall_workload",
+    "local_hypothesis": "overall_workload should increase workload pressure during post probe.",
+    "task_spec": {
+      "task_id": "traffic-overall-workload",
+      "agent_type": "traffic_surge",
+      "anomaly_type": "overall_workload",
+      "title": "Traffic surge: overall_workload",
+      "task_role": "background_anomaly",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260602144021",
+        "anomaly_subtype": "overall_workload",
+        "source_agent": "traffic_surge",
+        "mode": "overall_workload",
+        "sleep_time": 0.0025,
+        "thread_count": 580,
+        "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+        "duration_seconds": 16,
+        "background_duration_seconds": 20,
+        "baseline_sleep": 0.044,
+        "baseline_threads": 80
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "overall_workload",
+          "sleep_time": 0.0025,
+          "thread_count": 580,
+          "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+          "database": "dbmags_tpcc_base_run_20260602144021",
+          "duration_seconds": 20
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected overall_workload from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "active_connections": "increase",
+        "qps": "increase_initially",
+        "latency": "increase_after_saturation"
+      },
+      "local_success_criteria": {
+        "qps_or_latency_change": true
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "connection saturation",
+        "confidence": 0.65
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "active_connections": "increase",
+      "qps": "increase_initially",
+      "latency": "increase_after_saturation"
+    },
+    "local_success_criteria": {
+      "qps_or_latency_change": true
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "connection saturation",
+      "confidence": 0.65
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 16,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [],
+    "fallback_plan": {
+      "baseline_sleep": 0.0025,
+      "thread_count": 580
+    },
+    "confidence": 0.65,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {
+            "failure_reason": [
+              "reward score below threshold"
+            ],
+            "suggested_changes": [
+              "increase background workload intensity",
+              "extend anomaly overlap with the probe window",
+              "prefer lock and resource anomalies when QPS degradation is weak"
+            ],
+            "task_parameter_updates": {},
+            "agent_specific_feedback": {},
+            "risk_warning": [],
+            "memory_update": [
+              "Attempt scored 0.38000000000000006; stronger overlap or concurrency may be needed."
+            ],
+            "raw_text": "fallback reflection"
+          },
+          "short_term_rounds": 1,
+          "long_term_items": 16,
+          "effective_parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "baseline_sleep": 0.044,
+            "baseline_threads": 80
+          }
+        },
+        "decision": "Use reflexion and memory as planning context for overall_workload alongside the GlobalPlanner subgoal.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260602143240",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.022385624994058,
+            "successful_transactions": 191,
+            "failed_transactions": 0,
+            "qps": 15.887029908849259,
+            "avg_latency_ms": 15.435619958349093,
+            "p95_latency_ms": 27.502541008288972,
+            "p99_latency_ms": 140.9694589965511,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "baseline_tpcc_probe"
+          },
+          "after_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260602143240",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.05001641700801,
+            "successful_transactions": 198,
+            "failed_transactions": 2,
+            "qps": 16.43151288329638,
+            "avg_latency_ms": 11.954848321038298,
+            "p95_latency_ms": 14.031582992174663,
+            "p99_latency_ms": 17.777208995539695,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "after_anomaly_probe"
+          },
+          "evaluation": {
+            "baseline_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260602143240",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.022385624994058,
+              "successful_transactions": 191,
+              "failed_transactions": 0,
+              "qps": 15.887029908849259,
+              "avg_latency_ms": 15.435619958349093,
+              "p95_latency_ms": 27.502541008288972,
+              "p99_latency_ms": 140.9694589965511,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "baseline_tpcc_probe"
+            },
+            "after_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260602143240",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.05001641700801,
+              "successful_transactions": 198,
+              "failed_transactions": 2,
+              "qps": 16.43151288329638,
+              "avg_latency_ms": 11.954848321038298,
+              "p95_latency_ms": 14.031582992174663,
+              "p99_latency_ms": 17.777208995539695,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "after_anomaly_probe"
+            },
+            "target_anomaly_scores": {
+              "overall_workload": 0.5,
+              "cpu": 0.4,
+              "database_table_backup": 0.7
+            },
+            "reward": {
+              "performance_score": 0.0,
+              "target_anomaly_score": 0.5333333333333333,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.38000000000000006,
+              "success": false
+            },
+            "chain_events": [
+              {
+                "node": "traffic_surge",
+                "order": 0,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "connections_up",
+                "order": 1,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "lock_contention",
+                "order": 2,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "slow_query",
+                "order": 3,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "qps_drop",
+                "order": 4,
+                "score": 0.0,
+                "observed": false
+              }
+            ],
+            "success": false,
+            "reason": "metrics did not meet reward or chain success threshold"
+          }
+        },
+        "decision": "Adjust overall_workload candidates when prior metrics show weak degradation.",
+        "candidate_id": "overall_workload:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate workload ramp-up candidates using planner parameters and reflexion.",
+        "action": "generate_traffic_candidates",
+        "observation": {
+          "feedback": "reward score below threshold increase background workload intensity extend anomaly overlap with the probe window prefer lock and resource anomalies when qps degradation is weak attempt scored 0.38000000000000006; stronger overlap or concurrency may be needed. attempt scored 0.8420000000000001; stronger overlap or concurrency may be needed. attempt scored 0.44554302475185487; stronger overlap or concurrency may be needed. record the impact of increased lock duration on contention metrics. log the effects of higher thread count and repeat frequency on sql performance. record the impact of increased lock duration on contention metrics. log the effects of higher thread count and repeat frequency on sql performance. record the impact of increased lock duration on contention metrics. log the effects of higher thread count and repeat frequency on sql performance. record the impact of increased lock duration on contention metrics. log the effects of higher thread count and repeat frequency on sql performance. attempt scored 0.8420000000000001; stronger overlap or concurrency may be needed. causal-chain failures often stem from missing prerequisite injections (traffic_surge/connections_up). do not evaluate chain nodes unless corresponding tasks exist. mdl contention requires a paired waiter (typically ddl) plus evidence collection from performance_schema; a lone long select is insufficient. backup anomalies must target the largest tables and last longer than the probe window to produce measurable effects. host-level cpu chaos injection must be verified to run on the db host/container; otherwise prefer in-db cpu-burning queries. attempt scored 0.38000000000000006; stronger overlap or concurrency may be needed.",
+          "candidate": {
+            "mode": "overall_workload",
+            "sleep_time": 0.0025,
+            "thread_count": 580,
+            "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+            "database": "dbmags_tpcc_base_run_20260602144021",
+            "duration_seconds": 20
+          }
+        },
+        "decision": "Increase threads or lower sleep when reflexion says traffic pressure was insufficient.",
+        "candidate_id": "traffic:overall_workload",
+        "score": null,
+        "adjustments": {
+          "thread_count": 580,
+          "sleep_time": 0.0025
+        }
+      },
+      {
+        "thought": "Validate connection safety before finalizing traffic surge settings.",
+        "action": "runtime_probe",
+        "observation": {
+          "max_connections": 0,
+          "thread_count": 580
+        },
+        "decision": "Finalize ramp-up profile within configured connection safety bounds.",
+        "candidate_id": "traffic:overall_workload",
+        "score": 0.65,
+        "adjustments": {}
+      }
+    ]
+  },
+  {
+    "agent_name": "resource_bottleneck",
+    "subgoal": "cpu",
+    "local_hypothesis": "cpu pressure should reduce probe capacity or increase latency.",
+    "task_spec": {
+      "task_id": "resource-cpu",
+      "agent_type": "resource_bottleneck",
+      "anomaly_type": "cpu",
+      "title": "Resource bottleneck: cpu",
+      "task_role": "resource_injection",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260602144021",
+        "anomaly_subtype": "cpu",
+        "source_agent": "resource_bottleneck",
+        "duration_seconds": 16,
+        "intensity": "high",
+        "background_duration_seconds": 20
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "shell",
+          "command": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload",
+          "database": "dbmags_tpcc_base_run_20260602144021",
+          "duration_seconds": 16,
+          "intensity": "high"
+        }
+      ],
+      "validation_steps": [],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected cpu from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "cpu_pressure": "increase",
+        "query_latency": "increase"
+      },
+      "local_success_criteria": {
+        "chaosblade_uid": "present",
+        "qps": "decrease_or_latency_increase"
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "host resource contention",
+        "confidence": 0.65
+      },
+      "cleanup_actions": []
+    },
+    "expected_metrics": {
+      "cpu_pressure": "increase",
+      "query_latency": "increase"
+    },
+    "local_success_criteria": {
+      "chaosblade_uid": "present",
+      "qps": "decrease_or_latency_increase"
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "host resource contention",
+      "confidence": 0.65
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 16,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [],
+    "fallback_plan": {
+      "chaosblade": "/Users/neo/.codex/worktrees/df9a/DB-MAGS/.tools/chaosblade-1.8.0-darwin_arm64/blade create cpu fullload"
+    },
+    "confidence": 0.65,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {
+            "failure_reason": [
+              "reward score below threshold"
+            ],
+            "suggested_changes": [
+              "increase background workload intensity",
+              "extend anomaly overlap with the probe window",
+              "prefer lock and resource anomalies when QPS degradation is weak"
+            ],
+            "task_parameter_updates": {},
+            "agent_specific_feedback": {},
+            "risk_warning": [],
+            "memory_update": [
+              "Attempt scored 0.38000000000000006; stronger overlap or concurrency may be needed."
+            ],
+            "raw_text": "fallback reflection"
+          },
+          "short_term_rounds": 1,
+          "long_term_items": 16,
+          "effective_parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20
+          }
+        },
+        "decision": "Use reflexion and memory as planning context for cpu alongside the GlobalPlanner subgoal.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260602143240",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.022385624994058,
+            "successful_transactions": 191,
+            "failed_transactions": 0,
+            "qps": 15.887029908849259,
+            "avg_latency_ms": 15.435619958349093,
+            "p95_latency_ms": 27.502541008288972,
+            "p99_latency_ms": 140.9694589965511,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "baseline_tpcc_probe"
+          },
+          "after_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260602143240",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.05001641700801,
+            "successful_transactions": 198,
+            "failed_transactions": 2,
+            "qps": 16.43151288329638,
+            "avg_latency_ms": 11.954848321038298,
+            "p95_latency_ms": 14.031582992174663,
+            "p99_latency_ms": 17.777208995539695,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "after_anomaly_probe"
+          },
+          "evaluation": {
+            "baseline_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260602143240",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.022385624994058,
+              "successful_transactions": 191,
+              "failed_transactions": 0,
+              "qps": 15.887029908849259,
+              "avg_latency_ms": 15.435619958349093,
+              "p95_latency_ms": 27.502541008288972,
+              "p99_latency_ms": 140.9694589965511,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "baseline_tpcc_probe"
+            },
+            "after_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260602143240",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.05001641700801,
+              "successful_transactions": 198,
+              "failed_transactions": 2,
+              "qps": 16.43151288329638,
+              "avg_latency_ms": 11.954848321038298,
+              "p95_latency_ms": 14.031582992174663,
+              "p99_latency_ms": 17.777208995539695,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "after_anomaly_probe"
+            },
+            "target_anomaly_scores": {
+              "overall_workload": 0.5,
+              "cpu": 0.4,
+              "database_table_backup": 0.7
+            },
+            "reward": {
+              "performance_score": 0.0,
+              "target_anomaly_score": 0.5333333333333333,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.38000000000000006,
+              "success": false
+            },
+            "chain_events": [
+              {
+                "node": "traffic_surge",
+                "order": 0,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "connections_up",
+                "order": 1,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "lock_contention",
+                "order": 2,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "slow_query",
+                "order": 3,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "qps_drop",
+                "order": 4,
+                "score": 0.0,
+                "observed": false
+              }
+            ],
+            "success": false,
+            "reason": "metrics did not meet reward or chain success threshold"
+          }
+        },
+        "decision": "Adjust cpu candidates when prior metrics show weak degradation.",
+        "candidate_id": "cpu:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate resource pressure candidate from the resource-specific prompt, OS snapshot, and reflexion.",
+        "action": "generate_resource_candidates",
+        "observation": {
+          "os_metrics": {},
+          "requested_resource": "cpu",
+          "llm_candidates": [
+            {
+              "resource_type": "cpu",
+              "intensity": "high",
+              "duration_seconds": 16,
+              "purpose": "Escalate CPU pressure and extend overlap with the probe window; prior attempt showed weak degradation and OS headroom is unknown. 16s aligns better with the 20s background to strengthen causality while capping load near the 90% safety limit.",
+              "expected_effect": "Sustained CPU saturation around 85\u201390% across cores, increased Threads_running, noticeable p95/p99 latency rise, and moderate QPS reduction.",
+              "risk": "medium",
+              "validation_hint": "Verify chaos runs on the DB host/container (ChaosBlade UID present). Observe total CPU >85% during the 16s window, mysqld user CPU% and run queue increases; confirm p95/99 latency and Threads_running rise without exceeding the 90% CPU cap.",
+              "source": "llm"
+            },
+            {
+              "resource_type": "cpu",
+              "intensity": "medium",
+              "duration_seconds": 20,
+              "purpose": "Increase overlap and duration for a safer sustained load; useful when prior impact was weak but we want controlled risk with clear observation across the 20s background window.",
+              "expected_effect": "Total CPU rises to ~70\u201385%, mild-to-moderate QPS drop, increased p95 latency and scheduler delay for mysqld.",
+              "risk": "low",
+              "validation_hint": "Confirm sustained >70% total CPU for most of the 20s window on the DB host/container. Check that TPCC p95 latency increases (e.g., 10\u201330%) and Threads_running rises while staying within the 90% CPU cap.",
+              "source": "llm"
+            },
+            {
+              "resource_type": "cpu",
+              "intensity": "high",
+              "duration_seconds": 20,
+              "purpose": "Maximize overlap and intensity to overcome previously weak degradation, while staying under the 90% CPU safety ceiling.",
+              "expected_effect": "Near-cap CPU saturation (~90%) across cores for most of the 20s window, pronounced QPS reduction, elevated p95/99 latency, possible increase in lock waits due to scheduler contention.",
+              "risk": "high",
+              "validation_hint": "Ensure injection targets the DB host/container and the node remains responsive. Observe total CPU approaching but not exceeding 90%, load average near core count, and substantial p95/99 latency rise; be prepared to abort if responsiveness degrades.",
+              "source": "llm"
+            },
+            {
+              "resource_type": "cpu",
+              "intensity": "low",
+              "duration_seconds": 16,
+              "purpose": "Safety fallback when pre-injection OS headroom is limited or other anomalies already create pressure; confirms injection path with minimal risk before escalation.",
+              "expected_effect": "Small increase in total CPU (e.g., +10\u201320%), slight p95 latency uptick, negligible QPS impact.",
+              "risk": "low",
+              "validation_hint": "Verify ChaosBlade UID and that the process runs on the DB host/container. Confirm a measurable CPU uptick and minor p95 increase; if effect is weak and headroom allows, escalate to a higher-intensity candidate.",
+              "source": "llm"
+            }
+          ]
+        },
+        "decision": "Choose high intensity for 16s.",
+        "candidate_id": "resource:cpu",
+        "score": null,
+        "adjustments": {
+          "intensity": "high",
+          "duration_seconds": 16
+        }
+      },
+      {
+        "thought": "Validate current resource headroom before finalizing the pressure task.",
+        "action": "runtime_probe",
+        "observation": {
+          "cpu_percent": 0.0,
+          "os_metrics": {}
+        },
+        "decision": "Downgrade intensity if host resources are already near the boundary; otherwise keep stronger pressure.",
+        "candidate_id": "resource:cpu",
+        "score": 0.75,
+        "adjustments": {}
+      }
+    ]
+  },
+  {
+    "agent_name": "database_backup",
+    "subgoal": "database_table_backup",
+    "local_hypothesis": "Backing up orders should create stronger overlap with TPCC probe pressure.",
+    "task_spec": {
+      "task_id": "backup-orders",
+      "agent_type": "database_backup",
+      "anomaly_type": "database_table_backup",
+      "title": "Backup table orders into order_line_backup_agent.",
+      "task_role": "backup_job",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260602144021",
+        "anomaly_subtype": "database_table_backup",
+        "source_agent": "database_backup",
+        "source_table": "orders",
+        "backup_table": "order_line_backup_agent",
+        "background_duration_seconds": 20,
+        "concurrent_with_probe": true,
+        "duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS order_line_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260602144021"
+        },
+        {
+          "kind": "sql",
+          "sql": "CREATE TABLE order_line_backup_agent AS SELECT * FROM orders",
+          "database": "dbmags_tpcc_base_run_20260602144021"
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "react_trace",
+          "result": {
+            "steps": [
+              {
+                "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+                "action": "read_reflection_memory",
+                "observation": {
+                  "latest_reflection": {
+                    "failure_reason": [
+                      "reward score below threshold"
+                    ],
+                    "suggested_changes": [
+                      "increase background workload intensity",
+                      "extend anomaly overlap with the probe window",
+                      "prefer lock and resource anomalies when QPS degradation is weak"
+                    ],
+                    "task_parameter_updates": {},
+                    "agent_specific_feedback": {},
+                    "risk_warning": [],
+                    "memory_update": [
+                      "Attempt scored 0.38000000000000006; stronger overlap or concurrency may be needed."
+                    ],
+                    "raw_text": "fallback reflection"
+                  },
+                  "short_term_rounds": 1,
+                  "long_term_items": 16,
+                  "effective_parameters": {
+                    "duration_seconds": 16,
+                    "background_duration_seconds": 20,
+                    "source_table": "orders"
+                  }
+                },
+                "decision": "Use reflexion and memory as planning context for database_table_backup alongside the GlobalPlanner subgoal.",
+                "candidate_id": "",
+                "score": null,
+                "adjustments": {}
+              },
+              {
+                "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+                "action": "metric_sample_probe",
+                "observation": {
+                  "baseline_metrics": {
+                    "executed": true,
+                    "database": "dbmags_tpcc_base_run_20260602143240",
+                    "duration_seconds": 12.0,
+                    "elapsed_seconds": 12.022385624994058,
+                    "successful_transactions": 191,
+                    "failed_transactions": 0,
+                    "qps": 15.887029908849259,
+                    "avg_latency_ms": 15.435619958349093,
+                    "p95_latency_ms": 27.502541008288972,
+                    "p99_latency_ms": 140.9694589965511,
+                    "single_sql_mean_ms": 0.0,
+                    "thread_count": 40,
+                    "sql": "",
+                    "probe_sql": "",
+                    "db_evidence": {},
+                    "comparison_mode": "baseline_tpcc_probe"
+                  },
+                  "after_metrics": {
+                    "executed": true,
+                    "database": "dbmags_tpcc_base_run_20260602143240",
+                    "duration_seconds": 12.0,
+                    "elapsed_seconds": 12.05001641700801,
+                    "successful_transactions": 198,
+                    "failed_transactions": 2,
+                    "qps": 16.43151288329638,
+                    "avg_latency_ms": 11.954848321038298,
+                    "p95_latency_ms": 14.031582992174663,
+                    "p99_latency_ms": 17.777208995539695,
+                    "single_sql_mean_ms": 0.0,
+                    "thread_count": 40,
+                    "sql": "",
+                    "probe_sql": "",
+                    "db_evidence": {},
+                    "comparison_mode": "after_anomaly_probe"
+                  },
+                  "evaluation": {
+                    "baseline_metrics": {
+                      "executed": true,
+                      "database": "dbmags_tpcc_base_run_20260602143240",
+                      "duration_seconds": 12.0,
+                      "elapsed_seconds": 12.022385624994058,
+                      "successful_transactions": 191,
+                      "failed_transactions": 0,
+                      "qps": 15.887029908849259,
+                      "avg_latency_ms": 15.435619958349093,
+                      "p95_latency_ms": 27.502541008288972,
+                      "p99_latency_ms": 140.9694589965511,
+                      "single_sql_mean_ms": 0.0,
+                      "thread_count": 40,
+                      "sql": "",
+                      "probe_sql": "",
+                      "db_evidence": {},
+                      "comparison_mode": "baseline_tpcc_probe"
+                    },
+                    "after_metrics": {
+                      "executed": true,
+                      "database": "dbmags_tpcc_base_run_20260602143240",
+                      "duration_seconds": 12.0,
+                      "elapsed_seconds": 12.05001641700801,
+                      "successful_transactions": 198,
+                      "failed_transactions": 2,
+                      "qps": 16.43151288329638,
+                      "avg_latency_ms": 11.954848321038298,
+                      "p95_latency_ms": 14.031582992174663,
+                      "p99_latency_ms": 17.777208995539695,
+                      "single_sql_mean_ms": 0.0,
+                      "thread_count": 40,
+                      "sql": "",
+                      "probe_sql": "",
+                      "db_evidence": {},
+                      "comparison_mode": "after_anomaly_probe"
+                    },
+                    "target_anomaly_scores": {
+                      "overall_workload": 0.5,
+                      "cpu": 0.4,
+                      "database_table_backup": 0.7
+                    },
+                    "reward": {
+                      "performance_score": 0.0,
+                      "target_anomaly_score": 0.5333333333333333,
+                      "causal_order_score": 0.8,
+                      "stability_score": 0.6,
+                      "safety_penalty": 0.0,
+                      "final_score": 0.38000000000000006,
+                      "success": false
+                    },
+                    "chain_events": [
+                      {
+                        "node": "traffic_surge",
+                        "order": 0,
+                        "score": 0.0,
+                        "observed": false
+                      },
+                      {
+                        "node": "connections_up",
+                        "order": 1,
+                        "score": 0.0,
+                        "observed": false
+                      },
+                      {
+                        "node": "lock_contention",
+                        "order": 2,
+                        "score": 0.0,
+                        "observed": false
+                      },
+                      {
+                        "node": "slow_query",
+                        "order": 3,
+                        "score": 0.0,
+                        "observed": false
+                      },
+                      {
+                        "node": "qps_drop",
+                        "order": 4,
+                        "score": 0.0,
+                        "observed": false
+                      }
+                    ],
+                    "success": false,
+                    "reason": "metrics did not meet reward or chain success threshold"
+                  }
+                },
+                "decision": "Adjust database_table_backup candidates when prior metrics show weak degradation.",
+                "candidate_id": "database_table_backup:metric-sample",
+                "score": null,
+                "adjustments": {}
+              },
+              {
+                "thought": "Ask the backup-specific LLM prompt to propose diverse source/backup table candidates.",
+                "action": "generate_sql_candidates_with_llm",
+                "observation": {
+                  "candidate_count": 4,
+                  "candidates": [
+                    {
+                      "sql": "CREATE TABLE order_line_backup_agent AS SELECT * FROM order_line",
+                      "purpose": "Copy the largest business table to maximize sustained disk IO and overlap with the probe window, addressing prior weak interference from smaller backups.",
+                      "expected_effect": "Significant increase in disk read throughput and buffer pool churn; elevated io_wait and query latency; potential temporary QPS drop during the full table scan.",
+                      "risk": "high",
+                      "required_transaction_mode": "autocommit",
+                      "validation_hint": "Run EXPLAIN SELECT * FROM order_line; expect a full table scan (type=ALL) with ~4,393,264 rows. Observe performance_schema.table_io_waits_summary_by_table for spikes in rows_read and sys.schema_table_statistics for increased reads. Verify COUNT(*) equality between source and backup after completion.",
+                      "source": "llm",
+                      "metadata": {
+                        "source_table": "order_line",
+                        "backup_table": "order_line_backup_agent"
+                      }
+                    },
+                    {
+                      "sql": "CREATE TABLE stock_backup_agent AS SELECT * FROM stock",
+                      "purpose": "Backup a large, heavily accessed inventory table to create sustained IO pressure with good overlap and lower risk than the absolute largest table.",
+                      "expected_effect": "Increase in disk read throughput and buffer pool evictions; moderate rise in query latency and Threads_running; possible write amplification due to creating the backup table.",
+                      "risk": "medium",
+                      "required_transaction_mode": "autocommit",
+                      "validation_hint": "Run EXPLAIN SELECT * FROM stock; expect type=ALL with ~1,430,123 rows. Monitor performance_schema.table_io_waits_summary_by_table for read wait increases and confirm backup row count matches the source.",
+                      "source": "llm",
+                      "metadata": {
+                        "source_table": "stock",
+                        "backup_table": "stock_backup_agent"
+                      }
+                    },
+                    {
+                      "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+                      "purpose": "Copy the central transactional table used by TPCC to ensure interference aligns with active probe queries, improving causal overlap.",
+                      "expected_effect": "Sustained read IO and buffer pool activity; modest increase in query latency and potential QPS dip during the copy.",
+                      "risk": "medium",
+                      "required_transaction_mode": "autocommit",
+                      "validation_hint": "Run EXPLAIN SELECT * FROM orders; expect type=ALL with ~451,841 rows. Check sys.schema_table_statistics for increased rows_read and verify backup row count equals source.",
+                      "source": "llm",
+                      "metadata": {
+                        "source_table": "orders",
+                        "backup_table": "orders_backup_agent"
+                      }
+                    },
+                    {
+                      "sql": "CREATE TABLE history_backup_agent AS SELECT * FROM history",
+                      "purpose": "Copy a moderately large table with text columns to add IO and serialization pressure, contributing to observable latency changes while remaining rollback-safe.",
+                      "expected_effect": "Increase in disk read throughput and potential additional write load due to wider rows; measurable rise in p95/p99 latency.",
+                      "risk": "medium",
+                      "required_transaction_mode": "autocommit",
+                      "validation_hint": "Run EXPLAIN SELECT * FROM history; expect type=ALL with ~451,134 rows. Observe performance_schema.table_io_waits_summary_by_table for heightened read waits and confirm backup row count parity with the source.",
+                      "source": "llm",
+                      "metadata": {
+                        "source_table": "history",
+                        "backup_table": "history_backup_agent"
+                      }
+                    }
+                  ]
+                },
+                "decision": "Use LLM only to choose backup strategy; final SQL is regenerated locally for rollback safety.",
+                "candidate_id": "",
+                "score": null,
+                "adjustments": {}
+              },
+              {
+                "thought": "Generate candidate backup targets from reflection and table statistics.",
+                "action": "generate_backup_candidates",
+                "observation": {
+                  "reflection": {
+                    "failure_reason": [
+                      "reward score below threshold"
+                    ],
+                    "suggested_changes": [
+                      "increase background workload intensity",
+                      "extend anomaly overlap with the probe window",
+                      "prefer lock and resource anomalies when QPS degradation is weak"
+                    ],
+                    "task_parameter_updates": {},
+                    "agent_specific_feedback": {},
+                    "risk_warning": [],
+                    "memory_update": [
+                      "Attempt scored 0.38000000000000006; stronger overlap or concurrency may be needed."
+                    ],
+                    "raw_text": "fallback reflection"
+                  },
+                  "largest_tables": [
+                    "order_line",
+                    "stock",
+                    "orders"
+                  ]
+                },
+                "decision": "Candidate source table is orders.",
+                "candidate_id": "backup:orders",
+                "score": null,
+                "adjustments": {
+                  "source_table": "orders"
+                }
+              },
+              {
+                "thought": "Validate that the backup candidate is reversible and likely to overlap with probe pressure.",
+                "action": "inspect_table_stats",
+                "observation": {
+                  "table_row_counts": {
+                    "agent_group_by_support": 4491080,
+                    "agent_implicit_conversion_support": 146407,
+                    "agent_large_scan_support": 448731,
+                    "agent_order_by_support": 4482155,
+                    "customer": 431466,
+                    "district": 150,
+                    "history": 451134,
+                    "item": 99601,
+                    "new_orders": 131761,
+                    "order_line": 4393264,
+                    "orders": 451841,
+                    "stock": 1430123,
+                    "warehouse": 15
+                  }
+                },
+                "decision": "Select orders as backup source table and attach rollback for the backup table.",
+                "candidate_id": "backup:orders",
+                "score": 451841.0,
+                "adjustments": {}
+              }
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS order_line_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260602144021"
+        }
+      ],
+      "explanation": "Fallback planner selected database_table_backup from request constraints.",
+      "dependencies": [],
+      "start_after_sec": 0.0,
+      "start_condition": {},
+      "expected_metrics": {
+        "disk_read_throughput": "increase",
+        "io_wait": "increase",
+        "query_latency": "increase"
+      },
+      "local_success_criteria": {
+        "backup_table_created": true,
+        "source_table": "orders"
+      },
+      "risk_assessment": {
+        "risk_level": "medium",
+        "main_risk": "IO interference or metadata lock",
+        "confidence": 0.72
+      },
+      "cleanup_actions": [
+        {
+          "kind": "sql",
+          "sql": "DROP TABLE IF EXISTS order_line_backup_agent",
+          "database": "dbmags_tpcc_base_run_20260602144021"
+        }
+      ]
+    },
+    "expected_metrics": {
+      "disk_read_throughput": "increase",
+      "io_wait": "increase",
+      "query_latency": "increase"
+    },
+    "local_success_criteria": {
+      "backup_table_created": true,
+      "source_table": "orders"
+    },
+    "risk_assessment": {
+      "risk_level": "medium",
+      "main_risk": "IO interference or metadata lock",
+      "confidence": 0.72
+    },
+    "safety_constraints": {
+      "risk_level": "medium",
+      "execution_window_seconds": 16,
+      "max_duration_sec": 300,
+      "max_connection_usage_ratio": 0.8,
+      "max_cpu_usage": 90
+    },
+    "cleanup_actions": [
+      {
+        "kind": "sql",
+        "sql": "DROP TABLE IF EXISTS order_line_backup_agent",
+        "database": "dbmags_tpcc_base_run_20260602144021"
+      }
+    ],
+    "fallback_plan": {
+      "source_table": "orders",
+      "reason": "default TPCC table if memory-guided selection is unavailable"
+    },
+    "confidence": 0.72,
+    "react_trace": [
+      {
+        "thought": "Need to incorporate reflexion and memory before generating task candidates.",
+        "action": "read_reflection_memory",
+        "observation": {
+          "latest_reflection": {
+            "failure_reason": [
+              "reward score below threshold"
+            ],
+            "suggested_changes": [
+              "increase background workload intensity",
+              "extend anomaly overlap with the probe window",
+              "prefer lock and resource anomalies when QPS degradation is weak"
+            ],
+            "task_parameter_updates": {},
+            "agent_specific_feedback": {},
+            "risk_warning": [],
+            "memory_update": [
+              "Attempt scored 0.38000000000000006; stronger overlap or concurrency may be needed."
+            ],
+            "raw_text": "fallback reflection"
+          },
+          "short_term_rounds": 1,
+          "long_term_items": 16,
+          "effective_parameters": {
+            "duration_seconds": 16,
+            "background_duration_seconds": 20,
+            "source_table": "orders"
+          }
+        },
+        "decision": "Use reflexion and memory as planning context for database_table_backup alongside the GlobalPlanner subgoal.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Use the latest episode metrics as a low-risk planning-time sample.",
+        "action": "metric_sample_probe",
+        "observation": {
+          "baseline_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260602143240",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.022385624994058,
+            "successful_transactions": 191,
+            "failed_transactions": 0,
+            "qps": 15.887029908849259,
+            "avg_latency_ms": 15.435619958349093,
+            "p95_latency_ms": 27.502541008288972,
+            "p99_latency_ms": 140.9694589965511,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "baseline_tpcc_probe"
+          },
+          "after_metrics": {
+            "executed": true,
+            "database": "dbmags_tpcc_base_run_20260602143240",
+            "duration_seconds": 12.0,
+            "elapsed_seconds": 12.05001641700801,
+            "successful_transactions": 198,
+            "failed_transactions": 2,
+            "qps": 16.43151288329638,
+            "avg_latency_ms": 11.954848321038298,
+            "p95_latency_ms": 14.031582992174663,
+            "p99_latency_ms": 17.777208995539695,
+            "single_sql_mean_ms": 0.0,
+            "thread_count": 40,
+            "sql": "",
+            "probe_sql": "",
+            "db_evidence": {},
+            "comparison_mode": "after_anomaly_probe"
+          },
+          "evaluation": {
+            "baseline_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260602143240",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.022385624994058,
+              "successful_transactions": 191,
+              "failed_transactions": 0,
+              "qps": 15.887029908849259,
+              "avg_latency_ms": 15.435619958349093,
+              "p95_latency_ms": 27.502541008288972,
+              "p99_latency_ms": 140.9694589965511,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "baseline_tpcc_probe"
+            },
+            "after_metrics": {
+              "executed": true,
+              "database": "dbmags_tpcc_base_run_20260602143240",
+              "duration_seconds": 12.0,
+              "elapsed_seconds": 12.05001641700801,
+              "successful_transactions": 198,
+              "failed_transactions": 2,
+              "qps": 16.43151288329638,
+              "avg_latency_ms": 11.954848321038298,
+              "p95_latency_ms": 14.031582992174663,
+              "p99_latency_ms": 17.777208995539695,
+              "single_sql_mean_ms": 0.0,
+              "thread_count": 40,
+              "sql": "",
+              "probe_sql": "",
+              "db_evidence": {},
+              "comparison_mode": "after_anomaly_probe"
+            },
+            "target_anomaly_scores": {
+              "overall_workload": 0.5,
+              "cpu": 0.4,
+              "database_table_backup": 0.7
+            },
+            "reward": {
+              "performance_score": 0.0,
+              "target_anomaly_score": 0.5333333333333333,
+              "causal_order_score": 0.8,
+              "stability_score": 0.6,
+              "safety_penalty": 0.0,
+              "final_score": 0.38000000000000006,
+              "success": false
+            },
+            "chain_events": [
+              {
+                "node": "traffic_surge",
+                "order": 0,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "connections_up",
+                "order": 1,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "lock_contention",
+                "order": 2,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "slow_query",
+                "order": 3,
+                "score": 0.0,
+                "observed": false
+              },
+              {
+                "node": "qps_drop",
+                "order": 4,
+                "score": 0.0,
+                "observed": false
+              }
+            ],
+            "success": false,
+            "reason": "metrics did not meet reward or chain success threshold"
+          }
+        },
+        "decision": "Adjust database_table_backup candidates when prior metrics show weak degradation.",
+        "candidate_id": "database_table_backup:metric-sample",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Ask the backup-specific LLM prompt to propose diverse source/backup table candidates.",
+        "action": "generate_sql_candidates_with_llm",
+        "observation": {
+          "candidate_count": 4,
+          "candidates": [
+            {
+              "sql": "CREATE TABLE order_line_backup_agent AS SELECT * FROM order_line",
+              "purpose": "Copy the largest business table to maximize sustained disk IO and overlap with the probe window, addressing prior weak interference from smaller backups.",
+              "expected_effect": "Significant increase in disk read throughput and buffer pool churn; elevated io_wait and query latency; potential temporary QPS drop during the full table scan.",
+              "risk": "high",
+              "required_transaction_mode": "autocommit",
+              "validation_hint": "Run EXPLAIN SELECT * FROM order_line; expect a full table scan (type=ALL) with ~4,393,264 rows. Observe performance_schema.table_io_waits_summary_by_table for spikes in rows_read and sys.schema_table_statistics for increased reads. Verify COUNT(*) equality between source and backup after completion.",
+              "source": "llm",
+              "metadata": {
+                "source_table": "order_line",
+                "backup_table": "order_line_backup_agent"
+              }
+            },
+            {
+              "sql": "CREATE TABLE stock_backup_agent AS SELECT * FROM stock",
+              "purpose": "Backup a large, heavily accessed inventory table to create sustained IO pressure with good overlap and lower risk than the absolute largest table.",
+              "expected_effect": "Increase in disk read throughput and buffer pool evictions; moderate rise in query latency and Threads_running; possible write amplification due to creating the backup table.",
+              "risk": "medium",
+              "required_transaction_mode": "autocommit",
+              "validation_hint": "Run EXPLAIN SELECT * FROM stock; expect type=ALL with ~1,430,123 rows. Monitor performance_schema.table_io_waits_summary_by_table for read wait increases and confirm backup row count matches the source.",
+              "source": "llm",
+              "metadata": {
+                "source_table": "stock",
+                "backup_table": "stock_backup_agent"
+              }
+            },
+            {
+              "sql": "CREATE TABLE orders_backup_agent AS SELECT * FROM orders",
+              "purpose": "Copy the central transactional table used by TPCC to ensure interference aligns with active probe queries, improving causal overlap.",
+              "expected_effect": "Sustained read IO and buffer pool activity; modest increase in query latency and potential QPS dip during the copy.",
+              "risk": "medium",
+              "required_transaction_mode": "autocommit",
+              "validation_hint": "Run EXPLAIN SELECT * FROM orders; expect type=ALL with ~451,841 rows. Check sys.schema_table_statistics for increased rows_read and verify backup row count equals source.",
+              "source": "llm",
+              "metadata": {
+                "source_table": "orders",
+                "backup_table": "orders_backup_agent"
+              }
+            },
+            {
+              "sql": "CREATE TABLE history_backup_agent AS SELECT * FROM history",
+              "purpose": "Copy a moderately large table with text columns to add IO and serialization pressure, contributing to observable latency changes while remaining rollback-safe.",
+              "expected_effect": "Increase in disk read throughput and potential additional write load due to wider rows; measurable rise in p95/p99 latency.",
+              "risk": "medium",
+              "required_transaction_mode": "autocommit",
+              "validation_hint": "Run EXPLAIN SELECT * FROM history; expect type=ALL with ~451,134 rows. Observe performance_schema.table_io_waits_summary_by_table for heightened read waits and confirm backup row count parity with the source.",
+              "source": "llm",
+              "metadata": {
+                "source_table": "history",
+                "backup_table": "history_backup_agent"
+              }
+            }
+          ]
+        },
+        "decision": "Use LLM only to choose backup strategy; final SQL is regenerated locally for rollback safety.",
+        "candidate_id": "",
+        "score": null,
+        "adjustments": {}
+      },
+      {
+        "thought": "Generate candidate backup targets from reflection and table statistics.",
+        "action": "generate_backup_candidates",
+        "observation": {
+          "reflection": {
+            "failure_reason": [
+              "reward score below threshold"
+            ],
+            "suggested_changes": [
+              "increase background workload intensity",
+              "extend anomaly overlap with the probe window",
+              "prefer lock and resource anomalies when QPS degradation is weak"
+            ],
+            "task_parameter_updates": {},
+            "agent_specific_feedback": {},
+            "risk_warning": [],
+            "memory_update": [
+              "Attempt scored 0.38000000000000006; stronger overlap or concurrency may be needed."
+            ],
+            "raw_text": "fallback reflection"
+          },
+          "largest_tables": [
+            "order_line",
+            "stock",
+            "orders"
+          ]
+        },
+        "decision": "Candidate source table is orders.",
+        "candidate_id": "backup:orders",
+        "score": null,
+        "adjustments": {
+          "source_table": "orders"
+        }
+      },
+      {
+        "thought": "Validate that the backup candidate is reversible and likely to overlap with probe pressure.",
+        "action": "inspect_table_stats",
+        "observation": {
+          "table_row_counts": {
+            "agent_group_by_support": 4491080,
+            "agent_implicit_conversion_support": 146407,
+            "agent_large_scan_support": 448731,
+            "agent_order_by_support": 4482155,
+            "customer": 431466,
+            "district": 150,
+            "history": 451134,
+            "item": 99601,
+            "new_orders": 131761,
+            "order_line": 4393264,
+            "orders": 451841,
+            "stock": 1430123,
+            "warehouse": 15
+          }
+        },
+        "decision": "Select orders as backup source table and attach rollback for the backup table.",
+        "candidate_id": "backup:orders",
+        "score": 451841.0,
+        "adjustments": {}
+      }
+    ]
+  }
+]

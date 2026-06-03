@@ -39,7 +39,38 @@ class BackupAgent(BaseTaskAgent):
                 constraints={"sql_constraints": ["Suggest source_table and backup_table for a rollback-safe backup interference task."]},
                 candidate_count=4,
             )
-            source_table = str(parameters.get("source_table") or self._source_table_from_candidates(candidates) or self._choose_source_table(context, task_input))
+            source_table = str(parameters.get("source_table") or self._source_table_from_candidates(candidates))
+            if not source_table:
+                react_trace = self._react_trace(context, task_input, parameters, planned_task.anomaly_subtype, candidates, "")
+                react_trace.append(
+                    ReActStep(
+                        thought="No LLM backup candidate produced a usable source table.",
+                        action="revise_candidate_if_needed",
+                        observation={"candidate_count": len(candidates)},
+                        decision="Skip this backup task because no hard-coded source table fallback is allowed.",
+                        score=0.0,
+                    )
+                )
+                outputs.append(
+                    TaskAgentOutput(
+                        agent_name=self.agent_type,
+                        subgoal=task_input.subgoal,
+                        local_hypothesis="No backup SQL task was generated because LLM did not provide a safe source table.",
+                        task_spec=TaskSpec(
+                            task_id="backup-no-candidate",
+                            agent_type=self.agent_type,
+                            anomaly_type=planned_task.anomaly_subtype,
+                            title="No backup candidate generated",
+                            task_role="planning_failed",
+                            inputs={"database": planned_task.database, "anomaly_subtype": planned_task.anomaly_subtype},
+                            explanation="LLM did not return a usable backup source table.",
+                        ),
+                        fallback_plan={},
+                        confidence=0.0,
+                        react_trace=react_trace,
+                    )
+                )
+                continue
             backup_table = str(parameters.get("backup_table") or self._backup_table_from_candidates(candidates) or f"{source_table}_backup_agent")
             react_trace = self._react_trace(context, task_input, parameters, planned_task.anomaly_subtype, candidates, source_table)
             payload = preparer.execute(database=planned_task.database, source_table=source_table, backup_table=backup_table)
@@ -126,7 +157,6 @@ class BackupAgent(BaseTaskAgent):
                 observation={
                     "candidate_count": len(candidates),
                     "candidates": candidates,
-                    "used_static_fallback": any(item.get("source") == "static_fallback" for item in candidates if isinstance(item, dict)),
                 },
                 decision="Use LLM only to choose backup strategy; final SQL is regenerated locally for rollback safety.",
             ),

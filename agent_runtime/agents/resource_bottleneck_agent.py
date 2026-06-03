@@ -34,13 +34,25 @@ class ResourceBottleneckAgent(BaseTaskAgent):
             cpu_percent = float(os_metrics.get("cpu_percent", 0) or 0) if isinstance(os_metrics, dict) else 0.0
             intensity = str(parameters.get("intensity") or ("medium" if cpu_percent > 75 else "high" if feedback else "default"))
             duration = self._clamp_int(parameters.get("duration_seconds", parameters.get("background_duration_seconds")), default_duration, 1, 60)
+            llm_resource_candidates = []
+            if "generate_resource_candidate_skill" in self.skills.list_names():
+                llm_resource_candidates = self.skills.get("generate_resource_candidate_skill").execute(
+                    anomaly_type=planned_task.anomaly_subtype,
+                    task_input=task_input,
+                    os_metrics=os_metrics if isinstance(os_metrics, dict) else {},
+                    parameters=parameters,
+                )
+            if llm_resource_candidates:
+                chosen = llm_resource_candidates[0]
+                intensity = str(chosen.get("intensity") or intensity)
+                duration = self._clamp_int(chosen.get("duration_seconds"), duration, 1, 60)
             react_trace = [
                 self._memory_trace(task_input, planned_task.anomaly_subtype, parameters),
                 self._metric_sample_trace(task_input, planned_task.anomaly_subtype),
                 ReActStep(
-                    thought="Generate resource pressure candidate from OS snapshot and reflexion.",
+                    thought="Generate resource pressure candidate from the resource-specific prompt, OS snapshot, and reflexion.",
                     action="generate_resource_candidates",
-                    observation={"os_metrics": os_metrics, "requested_resource": planned_task.anomaly_subtype},
+                    observation={"os_metrics": os_metrics, "requested_resource": planned_task.anomaly_subtype, "llm_candidates": llm_resource_candidates},
                     decision=f"Choose {intensity} intensity for {duration}s.",
                     candidate_id=f"resource:{planned_task.anomaly_subtype}",
                     adjustments={"intensity": intensity, "duration_seconds": duration},

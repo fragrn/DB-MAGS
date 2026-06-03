@@ -8,6 +8,7 @@ from typing import Dict, List, Sequence
 from agent_runtime.agents.base import BaseTaskAgent
 from agent_runtime.config import RuntimeConfig
 from agent_runtime.llm import ResponsesAPIClient
+from agent_runtime.prompting import PromptTemplateLoader
 from agent_runtime.skill_registry import SkillRegistry
 from agent_runtime.types import (
     DBContextSummary,
@@ -80,6 +81,7 @@ class GlobalPlannerAgent:
         self.task_agents = list(task_agents)
         self.task_agent_map = {agent.agent_type: agent for agent in self.task_agents}
         self.llm_client = ResponsesAPIClient(config)
+        self.prompt_loader = PromptTemplateLoader()
         self.last_llm_result = None
 
     def gather_context(self, request: ExperimentRequest) -> DBContextSummary:
@@ -223,51 +225,50 @@ class GlobalPlannerAgent:
         return self._fallback_planner_decision(request)
 
     def _llm_planner_decision(self, request: ExperimentRequest, planner_context: Dict[str, object]) -> PlannerDecision | None:
-        system_prompt = (
-            "You are a MySQL anomaly planner. Return JSON only. Choose anomaly subtypes from the allow-list, "
-            "assign each subtype to the correct task agent, pick the execution database, and provide concise parameters."
-        )
-        user_prompt = json.dumps(
-            {
-                "request": {
-                    "goal": request.user_goal,
-                    "mode": self._effective_mode(request),
-                    "risk_level": request.risk_level,
-                    "execution_window_seconds": request.execution_window_seconds,
-                    "allowed_categories": self._normalize_categories(request),
-                    "allowed_subtypes": self._normalize_subtypes(request),
-                    "database_topology": request.database_topology,
-                    "user_constraints": request.user_constraints,
-                    "planning_memory": request.user_constraints.get("planning_memory", {}),
-                },
-                "agent_catalog": CATEGORY_TO_SUBTYPES,
-                "task_agent_map": SUBTYPE_TO_AGENT,
-                "planner_context": planner_context,
-                "reflection_memory_rules": {
-                    "task_parameters_must_include_reflection_updates": True,
-                    "backup_supported_parameters": ["source_table", "backup_table", "concurrent_with_probe", "background_duration_seconds"],
-                    "slow_sql_supported_parameters": ["target_table", "sql", "background_threads", "background_sleep"],
-                    "lock_supported_parameters": ["target_table", "predicate", "hold_seconds", "background_duration_seconds"],
-                    "traffic_supported_parameters": ["thread_count", "sleep_time", "duration_seconds"],
-                    "resource_supported_parameters": ["resource_type", "duration_seconds", "intensity"],
-                },
-                "rules": {
-                    "lock_and_backup_use_copy_db": False,
-                    "single_sql_and_overall_workload_use_base_db": True,
-                    "multi_auto_min_items": 2,
-                    "return_keys": [
-                        "summary",
-                        "selected_anomalies",
-                        "task_assignments",
-                        "database_mapping",
-                        "task_parameters",
-                        "expected_signals",
-                        "cleanup_strategy",
-                        "selection_rationale",
-                    ],
-                },
+        prompt_payload = {
+            "request": {
+                "goal": request.user_goal,
+                "mode": self._effective_mode(request),
+                "risk_level": request.risk_level,
+                "execution_window_seconds": request.execution_window_seconds,
+                "allowed_categories": self._normalize_categories(request),
+                "allowed_subtypes": self._normalize_subtypes(request),
+                "database_topology": request.database_topology,
+                "user_constraints": request.user_constraints,
+                "planning_memory": request.user_constraints.get("planning_memory", {}),
             },
-            ensure_ascii=True,
+            "agent_catalog": CATEGORY_TO_SUBTYPES,
+            "task_agent_map": SUBTYPE_TO_AGENT,
+            "planner_context": planner_context,
+            "reflection_memory_rules": {
+                "reflection_is_shared_context_for_global_and_task_agents": True,
+                "planner_outputs_subgoals_not_final_sql": True,
+                "backup_supported_parameters": ["source_table", "backup_table", "concurrent_with_probe", "background_duration_seconds"],
+                "slow_sql_supported_parameters": ["target_table", "sql", "background_threads", "background_sleep"],
+                "lock_supported_parameters": ["target_table", "predicate", "hold_seconds", "background_duration_seconds"],
+                "traffic_supported_parameters": ["thread_count", "sleep_time", "duration_seconds"],
+                "resource_supported_parameters": ["resource_type", "duration_seconds", "intensity"],
+            },
+            "rules": {
+                "lock_and_backup_use_copy_db": False,
+                "single_sql_and_overall_workload_use_base_db": True,
+                "multi_auto_min_items": 2,
+                "return_keys": [
+                    "summary",
+                    "selected_anomalies",
+                    "task_assignments",
+                    "database_mapping",
+                    "task_parameters",
+                    "expected_signals",
+                    "cleanup_strategy",
+                    "selection_rationale",
+                ],
+            },
+        }
+        template = "planner/replan.md" if request.user_constraints.get("reflections") else "planner/global_plan.md"
+        system_prompt, user_prompt = self.prompt_loader.render_chat_prompt(
+            template,
+            {"CONTEXT_JSON": json.dumps(prompt_payload, ensure_ascii=True)},
         )
         result = self.llm_client.generate_json(system_prompt, user_prompt, self.config.planner_temperature)
         self.last_llm_result = result
@@ -337,24 +338,21 @@ class GlobalPlannerAgent:
 
     def _auto_multi_planner_decision(self, request: ExperimentRequest, planner_context: Dict[str, object]) -> PlannerDecision | None:
         if self.llm_client.available():
-            system_prompt = (
-                "You design complex multi-anomaly MySQL experiments. Return JSON only. "
-                "Pick a diverse set of at least 2 anomaly subtypes from the allow-list. "
-                "selected_anomalies must be a JSON array of subtype strings (e.g. missing_index, record_lock), "
-                "not objects."
-            )
-            user_prompt = json.dumps(
-                {
-                    "goal": request.user_goal,
-                    "mode": self._effective_mode(request),
-                    "allowed_categories": self._normalize_categories(request) or list(CATEGORY_TO_SUBTYPES),
-                    "allowed_subtypes": self._normalize_subtypes(request) or sorted(SUBTYPE_TO_AGENT),
-                    "planner_context": planner_context,
-                    "planning_memory": request.user_constraints.get("planning_memory", {}),
-                    "task_agent_map": SUBTYPE_TO_AGENT,
-                    "return_keys": ["selected_anomalies", "task_parameters", "summary", "selection_rationale"],
-                },
-                ensure_ascii=True,
+            prompt_payload = {
+                "goal": request.user_goal,
+                "mode": self._effective_mode(request),
+                "allowed_categories": self._normalize_categories(request) or list(CATEGORY_TO_SUBTYPES),
+                "allowed_subtypes": self._normalize_subtypes(request) or sorted(SUBTYPE_TO_AGENT),
+                "planner_context": planner_context,
+                "planning_memory": request.user_constraints.get("planning_memory", {}),
+                "reflections": request.user_constraints.get("reflections", []),
+                "task_agent_map": SUBTYPE_TO_AGENT,
+                "return_keys": ["selected_anomalies", "task_parameters", "summary", "selection_rationale"],
+            }
+            template = "planner/replan.md" if request.user_constraints.get("reflections") else "planner/auto_multi.md"
+            system_prompt, user_prompt = self.prompt_loader.render_chat_prompt(
+                template,
+                {"CONTEXT_JSON": json.dumps(prompt_payload, ensure_ascii=True)},
             )
             result = self.llm_client.generate_json(system_prompt, user_prompt, self.config.planner_temperature)
             self.last_llm_result = result
