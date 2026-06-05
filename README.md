@@ -28,3 +28,32 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 
   python Case_make/Case_make_multi.py -d 150 -t 60 -x 55 -i 'lock--->slow+lock+slow' -k 'record_lock+missing_index' -s 0.044 -c 7 -e 7 -n 10
 
+(3) **PostgreSQL dead tuples propagation experiment**
+
+- startup experiment
+
+  python3 experiments/postgres_dead_tuples_chain/run_chain.py
+
+- experiment directory
+
+  experiments/postgres_dead_tuples_chain/
+
+(4) **Causal graph agent experiment framework**
+
+- list chains
+
+  python3 experiments/causal_graph_agent/run_agent.py --list-chains
+
+- run the validated PostgreSQL optimizer chain
+
+  python3 experiments/causal_graph_agent/run_agent.py --chain dead_tuples_to_temp_io --max-tuning-rounds 3
+
+- show sanitized `.env` configuration
+
+  python3 experiments/causal_graph_agent/run_agent.py --show-config
+
+- check `.env` MySQL / LLM connectivity
+
+  python3 experiments/causal_graph_agent/run_agent.py --check-db
+
+  python3 experiments/causal_graph_agent/run_agent.py --check-llm

@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: dbmags-pg-dead-tuples-chain
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dbmags_pg_chain
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "55432:5432"
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+      - pg_data:/var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - track_io_timing=on
+      - -c
+      - log_temp_files=0
+      - -c
+      - work_mem=${DBMAGS_PG_WORK_MEM:-1MB}
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - max_parallel_workers_per_gather=0
+      - -c
+      - log_min_duration_statement=0
+      - -c
+      - autovacuum=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dbmags_pg_chain"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  pg_data:

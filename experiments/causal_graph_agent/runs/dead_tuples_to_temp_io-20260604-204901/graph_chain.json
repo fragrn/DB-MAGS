@@ -1,0 +1,24 @@
+{
+  "chain_id": "dead_tuples_to_temp_io",
+  "chain": {
+    "name": "PostgreSQL optimizer spill chain",
+    "db": "postgres",
+    "nodes": [
+      "dead_tuples",
+      "stale_statistics",
+      "poor_plan",
+      "sort_hash_spill",
+      "temp_io_workfile_write"
+    ],
+    "root_injector": "dead_tuples_injector",
+    "status": "ready",
+    "default_params": {
+      "baseline_runs": 3,
+      "inject_batch_size": 120000,
+      "delete_ratio": 0.25,
+      "query_runs": 4,
+      "sample_interval_sec": 2,
+      "work_mem_profile": "1MB"
+    }
+  }
+}

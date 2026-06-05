@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: dbmags-benchbase-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "55433:5432"
+    volumes:
+      - benchbase_pg_data:/var/lib/postgresql/data
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - track_io_timing=on
+      - -c
+      - log_temp_files=0
+      - -c
+      - work_mem=${DBMAGS_BENCHBASE_PG_WORK_MEM:-4MB}
+      - -c
+      - maintenance_work_mem=${DBMAGS_BENCHBASE_PG_MAINTENANCE_WORK_MEM:-128MB}
+      - -c
+      - shared_buffers=${DBMAGS_BENCHBASE_PG_SHARED_BUFFERS:-512MB}
+      - -c
+      - max_connections=${DBMAGS_BENCHBASE_PG_MAX_CONNECTIONS:-300}
+      - -c
+      - max_parallel_workers_per_gather=${DBMAGS_BENCHBASE_PG_MAX_PARALLEL_WORKERS_PER_GATHER:-2}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  benchbase_pg_data:

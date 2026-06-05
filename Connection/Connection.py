@@ -1,19 +1,26 @@
 import pymysql
 from sshtunnel import SSHTunnelForwarder
 
+try:
+    from experiments.causal_graph_agent.config import MySQLConfig
+except Exception:
+    MySQLConfig = None
+
 
 class Database:
     def __init__(self):
+        cfg = MySQLConfig.from_env() if MySQLConfig is not None else None
         # 服务器连接配置
-        self.server_address = '113.31.103.14'
-        self.server_password = 'Meituan312'
-        self.server_username = 'root'
+        self.server_address = cfg.server_address if cfg and cfg.server_address else '113.31.103.14'
+        self.server_password = cfg.server_password if cfg and cfg.server_password else 'Meituan312'
+        self.server_username = cfg.server_username if cfg and cfg.server_username else 'root'
 
         # mysql数据连接配置
-        self.mysql_user = 'root'
-        self.mysql_password = 'Meituan312'
-        self.mysql_db = 'tpcc10_test'
-        self.mysql_host = '127.0.0.1'
+        self.mysql_user = cfg.user if cfg else 'root'
+        self.mysql_password = cfg.password if cfg else 'Meituan312'
+        self.mysql_db = cfg.database if cfg else 'tpcc10_test'
+        self.mysql_host = cfg.host if cfg else '127.0.0.1'
+        self.mysql_port = cfg.port if cfg else 3306
 
     def connection(self):
         # 连接至服务器
@@ -45,7 +52,7 @@ class Database:
         return conn, cur
 
     def connection1(self):
-        conn = pymysql.connect(host='113.31.103.14', port=3306, user=self.mysql_user,
+        conn = pymysql.connect(host=self.mysql_host, port=self.mysql_port, user=self.mysql_user,
                                passwd=self.mysql_password,
                                 # charset='utf8')
                                db=self.mysql_db, charset='utf8')
@@ -53,7 +60,7 @@ class Database:
         return conn, cur
 
     def connection2(self):
-        conn = pymysql.connect(host='113.31.103.14', port=3306, user=self.mysql_user,
+        conn = pymysql.connect(host=self.mysql_host, port=self.mysql_port, user=self.mysql_user,
                                passwd=self.mysql_password,
                                 # charset='utf8')
                                db=self.mysql_db, charset='utf8')

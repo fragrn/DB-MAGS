@@ -1,0 +1,269 @@
+{
+  "nodes": {
+    "traffic_surge": {
+      "name": "Traffic Surge",
+      "db": "mysql_or_postgres",
+      "observable": ["qps", "request_rate"],
+      "verifier": "traffic_surge_verifier"
+    },
+    "threads_concurrency_up": {
+      "name": "Threads / Concurrency Up",
+      "db": "mysql_or_postgres",
+      "observable": ["active_sessions", "threads_running", "connections"],
+      "verifier": "concurrency_verifier"
+    },
+    "resource_bottleneck": {
+      "name": "Resource Bottleneck (CPU / IO / Mem / Net / Disk)",
+      "db": "system",
+      "observable": ["cpu_pct", "io_util", "memory_pct", "disk_io"],
+      "verifier": "resource_bottleneck_verifier"
+    },
+    "missing_index": {
+      "name": "Missing Index",
+      "db": "mysql_or_postgres",
+      "observable": ["seq_scan", "rows_examined", "plan_scan_type"],
+      "verifier": "missing_index_verifier"
+    },
+    "excessive_index": {
+      "name": "Excessive Index",
+      "db": "mysql_or_postgres",
+      "observable": ["write_latency", "index_count", "buffer_dirty_pages"],
+      "verifier": "excessive_index_verifier"
+    },
+    "improper_sql_writing": {
+      "name": "Improper SQL Writing",
+      "db": "mysql_or_postgres",
+      "observable": ["non_sargable_predicate", "rows_examined", "execution_time"],
+      "verifier": "improper_sql_verifier"
+    },
+    "slow_query": {
+      "name": "Slow Query",
+      "db": "mysql_or_postgres",
+      "observable": ["latency_p95", "slow_query_count", "execution_time"],
+      "verifier": "slow_query_verifier"
+    },
+    "timeout_lock_wait_deadlock": {
+      "name": "Timeout / Lock Wait / Deadlock",
+      "db": "mysql_or_postgres",
+      "observable": ["timeout_count", "lock_wait_count", "deadlock_count"],
+      "verifier": "timeout_lock_wait_verifier"
+    },
+    "hot_update_long_tx": {
+      "name": "Hot Update / Long Tx",
+      "db": "mysql_or_postgres",
+      "observable": ["open_transaction_age", "hot_row_updates"],
+      "verifier": "long_tx_verifier"
+    },
+    "lock_contention": {
+      "name": "Lock Contention",
+      "db": "mysql_or_postgres",
+      "observable": ["blocked_sessions", "lock_wait_time", "pg_locks", "processlist"],
+      "verifier": "lock_contention_verifier"
+    },
+    "backup_vacuum_analyze": {
+      "name": "Backup / Vacuum / Analyze",
+      "db": "mysql_or_postgres",
+      "observable": ["maintenance_command", "maintenance_duration"],
+      "verifier": "maintenance_job_verifier"
+    },
+    "maintenance_conflict": {
+      "name": "Maintenance Conflict",
+      "db": "mysql_or_postgres",
+      "observable": ["blocked_sessions", "metadata_lock", "ddl_waits"],
+      "verifier": "maintenance_conflict_verifier"
+    },
+    "dead_tuples": {
+      "name": "Dead Tuples / Vacuum Lag / Table Bloat",
+      "db": "postgres",
+      "observable": ["pg_stat_user_tables.n_dead_tup", "pg_total_relation_size"],
+      "verifier": "dead_tuples_verifier"
+    },
+    "stale_statistics": {
+      "name": "Stale Statistics",
+      "db": "postgres",
+      "observable": ["last_analyze", "plan_rows_vs_actual_rows"],
+      "verifier": "stale_statistics_verifier"
+    },
+    "poor_plan": {
+      "name": "Poor Plan / Join-Agg Choice",
+      "db": "postgres",
+      "observable": ["execution_time", "join_or_agg_changed", "misestimate_factor"],
+      "verifier": "poor_plan_verifier"
+    },
+    "sort_hash_spill": {
+      "name": "Sort/Hash Spill",
+      "db": "postgres",
+      "observable": ["sort_spill_nodes", "hash_spill_nodes", "temp_blocks"],
+      "verifier": "spill_verifier"
+    },
+    "temp_io_workfile_write": {
+      "name": "Temp IO / Workfile / tempdb Write Up",
+      "db": "postgres",
+      "observable": ["temp_files", "temp_bytes", "log_temp_files"],
+      "verifier": "temp_io_verifier"
+    }
+  },
+  "edges": [
+    {
+      "source": "dead_tuples",
+      "target": "stale_statistics",
+      "status": "ready",
+      "difficulty": "easy",
+      "required_injector": "dead_tuples_injector",
+      "required_observers": ["pg_table_stats_observer", "explain_observer"]
+    },
+    {
+      "source": "stale_statistics",
+      "target": "poor_plan",
+      "status": "ready",
+      "difficulty": "easy",
+      "required_injector": "dead_tuples_injector",
+      "required_observers": ["explain_observer"]
+    },
+    {
+      "source": "poor_plan",
+      "target": "sort_hash_spill",
+      "status": "ready",
+      "difficulty": "easy",
+      "required_injector": "dead_tuples_injector",
+      "required_observers": ["explain_observer", "temp_file_observer"]
+    },
+    {
+      "source": "sort_hash_spill",
+      "target": "temp_io_workfile_write",
+      "status": "ready",
+      "difficulty": "easy",
+      "required_injector": "dead_tuples_injector",
+      "required_observers": ["temp_file_observer"]
+    },
+    {
+      "source": "missing_index",
+      "target": "slow_query",
+      "status": "planned",
+      "difficulty": "easy",
+      "required_injector": "missing_index_injector",
+      "required_observers": ["latency_observer", "explain_observer"]
+    },
+    {
+      "source": "slow_query",
+      "target": "timeout_lock_wait_deadlock",
+      "status": "planned",
+      "difficulty": "medium",
+      "required_injector": "missing_index_injector",
+      "required_observers": ["latency_observer", "lock_observer"]
+    },
+    {
+      "source": "traffic_surge",
+      "target": "threads_concurrency_up",
+      "status": "planned",
+      "difficulty": "easy",
+      "required_injector": "traffic_surge_injector",
+      "required_observers": ["connection_observer"]
+    },
+    {
+      "source": "threads_concurrency_up",
+      "target": "resource_bottleneck",
+      "status": "planned",
+      "difficulty": "medium",
+      "required_injector": "traffic_surge_injector",
+      "required_observers": ["resource_observer", "connection_observer"]
+    },
+    {
+      "source": "resource_bottleneck",
+      "target": "slow_query",
+      "status": "planned",
+      "difficulty": "medium",
+      "required_injector": "traffic_surge_injector",
+      "required_observers": ["latency_observer", "resource_observer"]
+    },
+    {
+      "source": "hot_update_long_tx",
+      "target": "lock_contention",
+      "status": "planned",
+      "difficulty": "easy",
+      "required_injector": "long_tx_injector",
+      "required_observers": ["lock_observer"]
+    },
+    {
+      "source": "lock_contention",
+      "target": "slow_query",
+      "status": "planned",
+      "difficulty": "easy",
+      "required_injector": "long_tx_injector",
+      "required_observers": ["lock_observer", "latency_observer"]
+    },
+    {
+      "source": "backup_vacuum_analyze",
+      "target": "maintenance_conflict",
+      "status": "planned",
+      "difficulty": "medium",
+      "required_injector": "maintenance_injector",
+      "required_observers": ["lock_observer"]
+    },
+    {
+      "source": "maintenance_conflict",
+      "target": "lock_contention",
+      "status": "planned",
+      "difficulty": "medium",
+      "required_injector": "maintenance_injector",
+      "required_observers": ["lock_observer", "latency_observer"]
+    }
+  ],
+  "chains": {
+    "dead_tuples_to_temp_io": {
+      "name": "PostgreSQL optimizer spill chain",
+      "db": "postgres",
+      "nodes": ["dead_tuples", "stale_statistics", "poor_plan", "sort_hash_spill", "temp_io_workfile_write"],
+      "root_injector": "dead_tuples_injector",
+      "status": "ready",
+      "default_params": {
+        "baseline_runs": 3,
+        "inject_batch_size": 120000,
+        "delete_ratio": 0.25,
+        "query_runs": 4,
+        "sample_interval_sec": 2,
+        "work_mem_profile": "1MB"
+      }
+    },
+    "missing_index_to_timeout": {
+      "name": "Missing index slow query chain",
+      "db": "mysql_or_postgres",
+      "nodes": ["missing_index", "slow_query", "timeout_lock_wait_deadlock"],
+      "root_injector": "missing_index_injector",
+      "status": "planned",
+      "default_params": {"concurrency": 50, "query_runs": 5}
+    },
+    "traffic_to_slow_query": {
+      "name": "Traffic surge resource chain",
+      "db": "mysql_or_postgres",
+      "nodes": ["traffic_surge", "threads_concurrency_up", "resource_bottleneck", "slow_query"],
+      "root_injector": "traffic_surge_injector",
+      "status": "planned",
+      "default_params": {"concurrency": 100, "query_runs": 5}
+    },
+    "long_tx_to_timeout": {
+      "name": "Long transaction lock chain",
+      "db": "mysql_or_postgres",
+      "nodes": ["hot_update_long_tx", "lock_contention", "slow_query", "timeout_lock_wait_deadlock"],
+      "root_injector": "long_tx_injector",
+      "status": "planned",
+      "default_params": {"lock_hold_seconds": 30, "concurrency": 20}
+    },
+    "maintenance_to_slow_query": {
+      "name": "Maintenance conflict chain",
+      "db": "mysql_or_postgres",
+      "nodes": ["backup_vacuum_analyze", "maintenance_conflict", "lock_contention", "slow_query"],
+      "root_injector": "maintenance_injector",
+      "status": "planned",
+      "default_params": {"query_runs": 5, "concurrency": 20}
+    },
+    "slow_query_hub": {
+      "name": "Slow query convergence subgraph",
+      "db": "mysql_or_postgres",
+      "nodes": ["missing_index", "excessive_index", "improper_sql_writing", "slow_query", "timeout_lock_wait_deadlock"],
+      "root_injector": "missing_index_injector",
+      "status": "planned",
+      "default_params": {"query_runs": 5, "concurrency": 50}
+    }
+  }
+}
