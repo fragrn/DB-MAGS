@@ -1,0 +1,377 @@
+{
+  "plan": {
+    "summary": "Prepare 3 task(s) for record_lock, overall_workload, missing_index against dbmags_tpcc_base_run_20260526054719 with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4393264, indexes=1); stock(rows=1430123, indexes=1); orders(rows=452296, indexes=2)",
+    "tasks": [
+      {
+        "task_id": "lock-record-lock",
+        "agent_type": "lock_conflict",
+        "anomaly_type": "record_lock",
+        "title": "Hold a row-level write lock on new_orders.",
+        "task_role": "lock_holder",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526054719",
+          "anomaly_subtype": "record_lock",
+          "source_agent": "lock_conflict",
+          "column_name": "agent_meta_lock_611997b4",
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "hold_sql",
+            "sql": "UPDATE new_orders SET no_o_id = no_o_id + 0 WHERE no_w_id = 1 AND no_d_id = 1 AND no_o_id > 10",
+            "database": "dbmags_tpcc_base_run_20260526054719",
+            "hold_seconds": 16
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected record_lock from request constraints."
+      },
+      {
+        "task_id": "traffic-overall-workload",
+        "agent_type": "traffic_surge",
+        "anomaly_type": "overall_workload",
+        "title": "Traffic surge: overall_workload",
+        "task_role": "background_anomaly",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526054719",
+          "anomaly_subtype": "overall_workload",
+          "source_agent": "traffic_surge",
+          "mode": "overall_workload",
+          "sleep_time": 0.005,
+          "thread_count": 500,
+          "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+          "duration_seconds": 16
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "overall_workload",
+            "sleep_time": 0.005,
+            "thread_count": 500,
+            "description": "Increase overall workload by reducing sleep time and raising concurrency.",
+            "database": "dbmags_tpcc_base_run_20260526054719",
+            "duration_seconds": 16
+          }
+        ],
+        "validation_steps": [],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected overall_workload from request constraints."
+      },
+      {
+        "task_id": "slow-sql-missing-index",
+        "agent_type": "slow_sql",
+        "anomaly_type": "missing_index",
+        "title": "Slow SQL: missing_index",
+        "task_role": "background_anomaly",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526054719",
+          "anomaly_subtype": "missing_index",
+          "source_agent": "slow_sql",
+          "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "single_sql",
+            "sleep_time": 0.01,
+            "thread_count": 6,
+            "repeat": 25,
+            "description": "Background slow SQL pressure for missing_index.",
+            "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+            "database": "dbmags_tpcc_base_run_20260526054719",
+            "duration_seconds": 16
+          }
+        ],
+        "validation_steps": [
+          {
+            "kind": "explain",
+            "sql": "SELECT COUNT(*) FROM agent_group_by_support WHERE ol_w_id > 1000;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Aggregate: count(0)  (cost=804231 rows=1)\n    -> Filter: (agent_group_by_support.ol_w_id > 1000)  (cost=459328 rows=1.5e+6)\n        -> Table scan on agent_group_by_support  (cost=459328 rows=4.49e+6)\n"
+                ]
+              ]
+            }
+          }
+        ],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected missing_index from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "overall_workload",
+        "record_lock",
+        "missing_index"
+      ],
+      "task_assignments": {
+        "overall_workload": "traffic_surge",
+        "record_lock": "lock_conflict",
+        "missing_index": "slow_sql"
+      },
+      "database_mapping": {
+        "overall_workload": "dbmags_tpcc_base_run_20260526054719",
+        "record_lock": "dbmags_tpcc_base_run_20260526054719",
+        "missing_index": "dbmags_tpcc_base_run_20260526054719"
+      },
+      "task_parameters": {
+        "overall_workload": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16,
+          "baseline_sleep": 0.044,
+          "baseline_threads": 80
+        },
+        "record_lock": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "missing_index": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        }
+      },
+      "expected_signals": [
+        "full scan or skip scan",
+        "latency increase",
+        "qps increase",
+        "row lock wait",
+        "transaction blocking"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "overall_workload",
+          "category": "traffic_surge",
+          "source_agent": "traffic_surge",
+          "database": "dbmags_tpcc_base_run_20260526054719",
+          "parameters": {
+            "duration_seconds": 12,
+            "background_duration_seconds": 16,
+            "baseline_sleep": 0.044,
+            "baseline_threads": 80
+          },
+          "rationale": "Fallback planner selected overall_workload from request constraints.",
+          "expected_signals": [
+            "qps increase",
+            "latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        },
+        {
+          "anomaly_subtype": "record_lock",
+          "category": "lock_conflict",
+          "source_agent": "lock_conflict",
+          "database": "dbmags_tpcc_base_run_20260526054719",
+          "parameters": {
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "rationale": "Fallback planner selected record_lock from request constraints.",
+          "expected_signals": [
+            "row lock wait",
+            "transaction blocking"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        },
+        {
+          "anomaly_subtype": "missing_index",
+          "category": "slow_sql",
+          "source_agent": "slow_sql",
+          "database": "dbmags_tpcc_base_run_20260526054719",
+          "parameters": {
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "rationale": "Fallback planner selected missing_index from request constraints.",
+          "expected_signals": [
+            "full scan or skip scan",
+            "latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": "",
+      "selection_mode": "multi_manual",
+      "execution_database": "dbmags_tpcc_base_run_20260526054719",
+      "activation_order": [
+        "record_lock",
+        "missing_index",
+        "overall_workload"
+      ],
+      "cleanup_order": [
+        "overall_workload",
+        "missing_index",
+        "record_lock"
+      ],
+      "composite_experiment_name": "overall_workload__record_lock__missing_index",
+      "selection_rationale": "Fallback planner selected requested anomaly set.",
+      "llm_used": false,
+      "llm_error": "",
+      "llm_error_type": ""
+    },
+    "expected_signals": [
+      "full scan or skip scan",
+      "latency increase",
+      "qps increase",
+      "row lock wait",
+      "transaction blocking"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "overall_workload",
+      "record_lock",
+      "missing_index"
+    ],
+    "task_assignments": {
+      "overall_workload": "traffic_surge",
+      "record_lock": "lock_conflict",
+      "missing_index": "slow_sql"
+    },
+    "database_mapping": {
+      "overall_workload": "dbmags_tpcc_base_run_20260526054719",
+      "record_lock": "dbmags_tpcc_base_run_20260526054719",
+      "missing_index": "dbmags_tpcc_base_run_20260526054719"
+    },
+    "task_parameters": {
+      "overall_workload": {
+        "duration_seconds": 12,
+        "background_duration_seconds": 16,
+        "baseline_sleep": 0.044,
+        "baseline_threads": 80
+      },
+      "record_lock": {
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      },
+      "missing_index": {
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      }
+    },
+    "expected_signals": [
+      "full scan or skip scan",
+      "latency increase",
+      "qps increase",
+      "row lock wait",
+      "transaction blocking"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "overall_workload",
+        "category": "traffic_surge",
+        "source_agent": "traffic_surge",
+        "database": "dbmags_tpcc_base_run_20260526054719",
+        "parameters": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16,
+          "baseline_sleep": 0.044,
+          "baseline_threads": 80
+        },
+        "rationale": "Fallback planner selected overall_workload from request constraints.",
+        "expected_signals": [
+          "qps increase",
+          "latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      },
+      {
+        "anomaly_subtype": "record_lock",
+        "category": "lock_conflict",
+        "source_agent": "lock_conflict",
+        "database": "dbmags_tpcc_base_run_20260526054719",
+        "parameters": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "rationale": "Fallback planner selected record_lock from request constraints.",
+        "expected_signals": [
+          "row lock wait",
+          "transaction blocking"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      },
+      {
+        "anomaly_subtype": "missing_index",
+        "category": "slow_sql",
+        "source_agent": "slow_sql",
+        "database": "dbmags_tpcc_base_run_20260526054719",
+        "parameters": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "rationale": "Fallback planner selected missing_index from request constraints.",
+        "expected_signals": [
+          "full scan or skip scan",
+          "latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": "",
+    "selection_mode": "multi_manual",
+    "execution_database": "dbmags_tpcc_base_run_20260526054719",
+    "activation_order": [
+      "record_lock",
+      "missing_index",
+      "overall_workload"
+    ],
+    "cleanup_order": [
+      "overall_workload",
+      "missing_index",
+      "record_lock"
+    ],
+    "composite_experiment_name": "overall_workload__record_lock__missing_index",
+    "selection_rationale": "Fallback planner selected requested anomaly set.",
+    "llm_used": false,
+    "llm_error": "",
+    "llm_error_type": ""
+  },
+  "follow_up_questions": [],
+  "reasoning": "Planner produced a structured anomaly plan."
+}

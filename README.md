@@ -18,7 +18,7 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 
   http://127.0.0.1:8050/
 
-(2) **Conversational Multi-Agent CLI (V1)**
+(2) **MySQL Anomaly Propagation CLI**
 
 - optional environment variables
 
@@ -30,21 +30,27 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 
   Database connection variables are documented in `.env.example` with the `DBMAGS_*` prefix.
 
-- start the CLI planner
+- inspect the MySQL/OS environment
 
-  `python3 agent_cli.py "Plan a missing-index and cpu contention experiment" --db tpcc10_test --anomalies missing_index,cpu`
+  `python3 agent_cli.py inspect --db dbmags_tpcc_base`
 
-- interactive commands inside the CLI
+- build a plan without injection
 
-  `show plan`
+  `python3 agent_cli.py plan --request tests/fixtures_causal_chain_request.json --output experiment_runs/example/global_plan.json`
 
-  `revise reduce the risk and keep only missing_index`
+- build a plan from a DBA natural-language incident description
 
-  `confirm`
+  `python3 agent_cli.py plan --request tests/fixtures_dba_description_request.json --output experiment_runs/example/dba_description_plan.json`
 
-  `cancel`
+- run a full experiment with safety check, evaluation, reflection, cleanup, and report output
 
-- create and use the conda runtime
+  `python3 agent_cli.py run --request tests/fixtures_causal_chain_request.json --output-root experiment_runs`
+
+- cleanup a previous run
+
+  `python3 agent_cli.py cleanup --run-id <run-id>`
+
+- create and use the conda runtime when running against a real MySQL instance
 
   `conda activate dbmags-hierarchy-agent`
 
@@ -52,13 +58,7 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 
   `conda run -n dbmags-hierarchy-agent python scripts/check_local_db.py`
 
-- agent validation experiments
-
-  `conda run -n dbmags-hierarchy-agent python scripts/run_agent_validation.py --db tpcc10_test`
-
-- Chinese architecture and usage guide
-
-  `docs/agent_runtime_cn.md`
+- LLM planning uses the Chat Completions endpoint `${OPENAI_BASE_URL}/chat/completions`; if the API is unavailable or returns invalid JSON, DB-MAGS falls back to deterministic planning rules.
 
 (3) **Reproducing Database Performance Anomalies via Python Command**
 
@@ -69,4 +69,3 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 - multiple anomaly
 
   python Case_make/Case_make_multi.py -d 150 -t 60 -x 55 -i 'lock--->slow+lock+slow' -k 'record_lock+missing_index' -s 0.044 -c 7 -e 7 -n 10
-

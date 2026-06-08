@@ -1,0 +1,69 @@
+{
+  "tasks": {
+    "traffic_surge_tpcc_10W_v3": {
+      "task_id": "traffic_surge_tpcc_10W_v3",
+      "task_type": "traffic_surge",
+      "actions": [
+        {
+          "kind": "workload_ramp",
+          "database": "tpcc_10W",
+          "ramp_stages": {
+            "stages": [
+              {
+                "connections": 50,
+                "duration_sec": 20
+              },
+              {
+                "connections": 100,
+                "duration_sec": 25
+              },
+              {
+                "connections": 140,
+                "duration_sec": 25
+              }
+            ],
+            "hold_sec": 40
+          },
+          "duration_sec": 110,
+          "sql": "SELECT 1"
+        }
+      ],
+      "expected_metrics": {
+        "threads_connected_ratio": ">=1.5",
+        "threads_running_ratio": ">=1.5"
+      },
+      "success_criteria": {
+        "threads_connected_ratio": ">=1.5"
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "traffic_surge",
+        "target_connections": 140,
+        "ramp_stages": {
+          "stages": [
+            {
+              "connections": 50,
+              "duration_sec": 20
+            },
+            {
+              "connections": 100,
+              "duration_sec": 25
+            },
+            {
+              "connections": 140,
+              "duration_sec": 25
+            }
+          ],
+          "hold_sec": 40
+        }
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "traffic_surge_tpcc_10W_v3": 0.0
+  }
+}

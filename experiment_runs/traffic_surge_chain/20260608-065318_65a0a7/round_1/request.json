@@ -1,0 +1,27 @@
+{
+  "target_anomaly": "traffic_surge_to_qps_drop_on_tpcc",
+  "target_database": "tpcc_10W",
+  "dba_description": "Reproduce a MySQL anomaly propagation chain on a TPCC workload database. The user fixed the path and injection node; the planner must only generate TaskSpec for traffic_surge.",
+  "target_path": [
+    "traffic_surge",
+    "threads_concurrency_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "traffic_surge"
+  ],
+  "target_chain": [
+    "traffic_surge",
+    "threads_concurrency_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "max_duration_sec": 120,
+  "max_retry_rounds": 1,
+  "risk_level": "medium",
+  "allowed_anomalies": [],
+  "safety_overrides": {}
+}

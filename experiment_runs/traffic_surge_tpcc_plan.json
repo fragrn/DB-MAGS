@@ -1,0 +1,1241 @@
+{
+  "tasks": {
+    "traffic_surge_1": {
+      "task_id": "traffic_surge_1",
+      "task_type": "traffic_surge",
+      "actions": [
+        {
+          "kind": "workload_ramp",
+          "database": "tpcc_10W",
+          "ramp_stages": [
+            {
+              "connections": 30,
+              "duration_sec": 20
+            },
+            {
+              "connections": 60,
+              "duration_sec": 20
+            },
+            {
+              "connections": 100,
+              "duration_sec": 40
+            }
+          ],
+          "duration_sec": 90,
+          "sql": "SELECT 1"
+        }
+      ],
+      "expected_metrics": {
+        "threads_connected_ratio": ">=1.5",
+        "threads_running_ratio": ">=1.5"
+      },
+      "success_criteria": {
+        "threads_connected_ratio": ">=1.5"
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "traffic_surge",
+        "target_connections": 100,
+        "ramp_stages": [
+          {
+            "connections": 30,
+            "duration_sec": 20
+          },
+          {
+            "connections": 60,
+            "duration_sec": 20
+          },
+          {
+            "connections": 100,
+            "duration_sec": 40
+          }
+        ]
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "traffic_surge_1": 0.0
+  },
+  "snapshot": {
+    "database": "tpcc_10W",
+    "schema": {
+      "database": "tpcc_10W",
+      "tables": {
+        "customer": {
+          "columns": [
+            {
+              "name": "c_w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "c_d_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "c_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "c_discount",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(4,4)",
+              "default": null
+            },
+            {
+              "name": "c_credit",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(2)",
+              "default": null
+            },
+            {
+              "name": "c_last",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(16)",
+              "default": null
+            },
+            {
+              "name": "c_first",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(16)",
+              "default": null
+            },
+            {
+              "name": "c_credit_lim",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(12,2)",
+              "default": null
+            },
+            {
+              "name": "c_balance",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(12,2)",
+              "default": null
+            },
+            {
+              "name": "c_ytd_payment",
+              "type": "float",
+              "nullable": false,
+              "key": "",
+              "column_type": "float",
+              "default": null
+            },
+            {
+              "name": "c_payment_cnt",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "c_delivery_cnt",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "c_street_1",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(20)",
+              "default": null
+            },
+            {
+              "name": "c_street_2",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(20)",
+              "default": null
+            },
+            {
+              "name": "c_city",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(20)",
+              "default": null
+            },
+            {
+              "name": "c_state",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(2)",
+              "default": null
+            },
+            {
+              "name": "c_zip",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(9)",
+              "default": null
+            },
+            {
+              "name": "c_phone",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(16)",
+              "default": null
+            },
+            {
+              "name": "c_since",
+              "type": "timestamp",
+              "nullable": false,
+              "key": "",
+              "column_type": "timestamp",
+              "default": "CURRENT_TIMESTAMP"
+            },
+            {
+              "name": "c_middle",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(2)",
+              "default": null
+            },
+            {
+              "name": "c_data",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(500)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "idx_customer_name",
+              "column": "c_w_id",
+              "non_unique": true,
+              "seq": 1
+            },
+            {
+              "index_name": "idx_customer_name",
+              "column": "c_d_id",
+              "non_unique": true,
+              "seq": 2
+            },
+            {
+              "index_name": "idx_customer_name",
+              "column": "c_last",
+              "non_unique": true,
+              "seq": 3
+            },
+            {
+              "index_name": "idx_customer_name",
+              "column": "c_first",
+              "non_unique": true,
+              "seq": 4
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "c_w_id",
+              "non_unique": false,
+              "seq": 1
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "c_d_id",
+              "non_unique": false,
+              "seq": 2
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "c_id",
+              "non_unique": false,
+              "seq": 3
+            }
+          ]
+        },
+        "district": {
+          "columns": [
+            {
+              "name": "d_w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "d_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "d_ytd",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(12,2)",
+              "default": null
+            },
+            {
+              "name": "d_tax",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(4,4)",
+              "default": null
+            },
+            {
+              "name": "d_next_o_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "d_name",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(10)",
+              "default": null
+            },
+            {
+              "name": "d_street_1",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(20)",
+              "default": null
+            },
+            {
+              "name": "d_street_2",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(20)",
+              "default": null
+            },
+            {
+              "name": "d_city",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(20)",
+              "default": null
+            },
+            {
+              "name": "d_state",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(2)",
+              "default": null
+            },
+            {
+              "name": "d_zip",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(9)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "d_w_id",
+              "non_unique": false,
+              "seq": 1
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "d_id",
+              "non_unique": false,
+              "seq": 2
+            }
+          ]
+        },
+        "history": {
+          "columns": [
+            {
+              "name": "h_c_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "h_c_d_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "h_c_w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "MUL",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "h_d_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "h_w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "MUL",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "h_date",
+              "type": "timestamp",
+              "nullable": false,
+              "key": "",
+              "column_type": "timestamp",
+              "default": "CURRENT_TIMESTAMP"
+            },
+            {
+              "name": "h_amount",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(6,2)",
+              "default": null
+            },
+            {
+              "name": "h_data",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(24)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "h_c_w_id",
+              "column": "h_c_w_id",
+              "non_unique": true,
+              "seq": 1
+            },
+            {
+              "index_name": "h_c_w_id",
+              "column": "h_c_d_id",
+              "non_unique": true,
+              "seq": 2
+            },
+            {
+              "index_name": "h_c_w_id",
+              "column": "h_c_id",
+              "non_unique": true,
+              "seq": 3
+            },
+            {
+              "index_name": "h_w_id",
+              "column": "h_w_id",
+              "non_unique": true,
+              "seq": 1
+            },
+            {
+              "index_name": "h_w_id",
+              "column": "h_d_id",
+              "non_unique": true,
+              "seq": 2
+            }
+          ]
+        },
+        "item": {
+          "columns": [
+            {
+              "name": "i_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "i_name",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(24)",
+              "default": null
+            },
+            {
+              "name": "i_price",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(5,2)",
+              "default": null
+            },
+            {
+              "name": "i_data",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(50)",
+              "default": null
+            },
+            {
+              "name": "i_im_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "i_id",
+              "non_unique": false,
+              "seq": 1
+            }
+          ]
+        },
+        "new_order": {
+          "columns": [
+            {
+              "name": "no_w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "no_d_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "no_o_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "no_w_id",
+              "non_unique": false,
+              "seq": 1
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "no_d_id",
+              "non_unique": false,
+              "seq": 2
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "no_o_id",
+              "non_unique": false,
+              "seq": 3
+            }
+          ]
+        },
+        "oorder": {
+          "columns": [
+            {
+              "name": "o_w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "o_d_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "o_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "o_c_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "o_carrier_id",
+              "type": "int",
+              "nullable": true,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "o_ol_cnt",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "o_all_local",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "o_entry_d",
+              "type": "timestamp",
+              "nullable": false,
+              "key": "",
+              "column_type": "timestamp",
+              "default": "CURRENT_TIMESTAMP"
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "o_w_id",
+              "column": "o_w_id",
+              "non_unique": false,
+              "seq": 1
+            },
+            {
+              "index_name": "o_w_id",
+              "column": "o_d_id",
+              "non_unique": false,
+              "seq": 2
+            },
+            {
+              "index_name": "o_w_id",
+              "column": "o_c_id",
+              "non_unique": false,
+              "seq": 3
+            },
+            {
+              "index_name": "o_w_id",
+              "column": "o_id",
+              "non_unique": false,
+              "seq": 4
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "o_w_id",
+              "non_unique": false,
+              "seq": 1
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "o_d_id",
+              "non_unique": false,
+              "seq": 2
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "o_id",
+              "non_unique": false,
+              "seq": 3
+            }
+          ]
+        },
+        "order_line": {
+          "columns": [
+            {
+              "name": "ol_w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "ol_d_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "ol_o_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "ol_number",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "ol_i_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "ol_delivery_d",
+              "type": "timestamp",
+              "nullable": true,
+              "key": "",
+              "column_type": "timestamp",
+              "default": null
+            },
+            {
+              "name": "ol_amount",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(6,2)",
+              "default": null
+            },
+            {
+              "name": "ol_supply_w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "MUL",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "ol_quantity",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "ol_dist_info",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "ol_supply_w_id",
+              "column": "ol_supply_w_id",
+              "non_unique": true,
+              "seq": 1
+            },
+            {
+              "index_name": "ol_supply_w_id",
+              "column": "ol_i_id",
+              "non_unique": true,
+              "seq": 2
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "ol_w_id",
+              "non_unique": false,
+              "seq": 1
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "ol_d_id",
+              "non_unique": false,
+              "seq": 2
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "ol_o_id",
+              "non_unique": false,
+              "seq": 3
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "ol_number",
+              "non_unique": false,
+              "seq": 4
+            }
+          ]
+        },
+        "stock": {
+          "columns": [
+            {
+              "name": "s_w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "s_i_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "s_quantity",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "s_ytd",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(8,2)",
+              "default": null
+            },
+            {
+              "name": "s_order_cnt",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "s_remote_cnt",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "s_data",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(50)",
+              "default": null
+            },
+            {
+              "name": "s_dist_01",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            },
+            {
+              "name": "s_dist_02",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            },
+            {
+              "name": "s_dist_03",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            },
+            {
+              "name": "s_dist_04",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            },
+            {
+              "name": "s_dist_05",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            },
+            {
+              "name": "s_dist_06",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            },
+            {
+              "name": "s_dist_07",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            },
+            {
+              "name": "s_dist_08",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            },
+            {
+              "name": "s_dist_09",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            },
+            {
+              "name": "s_dist_10",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(24)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "s_w_id",
+              "non_unique": false,
+              "seq": 1
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "s_i_id",
+              "non_unique": false,
+              "seq": 2
+            },
+            {
+              "index_name": "s_i_id",
+              "column": "s_i_id",
+              "non_unique": true,
+              "seq": 1
+            }
+          ]
+        },
+        "warehouse": {
+          "columns": [
+            {
+              "name": "w_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int",
+              "default": null
+            },
+            {
+              "name": "w_ytd",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(12,2)",
+              "default": null
+            },
+            {
+              "name": "w_tax",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(4,4)",
+              "default": null
+            },
+            {
+              "name": "w_name",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(10)",
+              "default": null
+            },
+            {
+              "name": "w_street_1",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(20)",
+              "default": null
+            },
+            {
+              "name": "w_street_2",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(20)",
+              "default": null
+            },
+            {
+              "name": "w_city",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(20)",
+              "default": null
+            },
+            {
+              "name": "w_state",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(2)",
+              "default": null
+            },
+            {
+              "name": "w_zip",
+              "type": "char",
+              "nullable": false,
+              "key": "",
+              "column_type": "char(9)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "w_id",
+              "non_unique": false,
+              "seq": 1
+            }
+          ]
+        }
+      }
+    },
+    "db_metrics": {
+      "Aborted_connects": "0",
+      "Com_delete": "2850",
+      "Com_insert": "52596",
+      "Com_select": "102379",
+      "Com_update": "50978",
+      "Created_tmp_disk_tables": "2",
+      "Innodb_row_lock_time": "154100",
+      "Innodb_row_lock_time_avg": "4164",
+      "Innodb_row_lock_waits": "37",
+      "Max_used_connections": "5",
+      "Slow_queries": "46",
+      "Sort_merge_passes": "0",
+      "Threads_connected": "1",
+      "Threads_running": "2",
+      "innodb_lock_wait_timeout": "50",
+      "max_connections": 151,
+      "wait_timeout": "28800",
+      "processlist": [
+        {
+          "Id": 5,
+          "User": "event_scheduler",
+          "Host": "localhost",
+          "db": null,
+          "Command": "Daemon",
+          "Time": 866146,
+          "State": "Waiting on empty queue",
+          "Info": null
+        },
+        {
+          "Id": 7378,
+          "User": "root",
+          "Host": "localhost:56502",
+          "db": "tpcc_10w",
+          "Command": "Query",
+          "Time": 0,
+          "State": "init",
+          "Info": "SHOW FULL PROCESSLIST"
+        }
+      ]
+    },
+    "workload_status": {
+      "qps": 0.0,
+      "tps": 0.0,
+      "interval_sec": 3.0
+    },
+    "os_metrics": {
+      "platform": "Darwin",
+      "load_average": {
+        "1m": 2.57,
+        "5m": 2.58,
+        "15m": 2.81
+      },
+      "cpu_usage": {
+        "user_pct": 8.37,
+        "sys_pct": 13.0,
+        "idle_pct": 78.61,
+        "usage_ratio": 0.214
+      },
+      "memory": {
+        "total_kb": 2108196,
+        "active_kb": 1291300,
+        "wired_kb": 792188,
+        "free_kb": 24708,
+        "usage_ratio": 0.9883
+      },
+      "disk": {
+        "total_bytes": 494384795648,
+        "used_bytes": 368236474368,
+        "free_bytes": 126148321280,
+        "usage_ratio": 0.7448
+      },
+      "disk_io": {},
+      "network": {},
+      "file_descriptors": {
+        "open_fds": -1
+      }
+    },
+    "db_version": "9.6.0",
+    "max_connections": 151,
+    "react_trace": [
+      {
+        "round": 1,
+        "thought": "Environment snapshot collected. Schema has 9 tables. DB version: 9.6.0. Max connections: 151.",
+        "action": "probe_full_snapshot",
+        "observe": "Tables: ['customer', 'district', 'history', 'item', 'new_order']",
+        "decision": "",
+        "timestamp": "2026-06-08T06:47:30+00:00"
+      },
+      {
+        "round": 2,
+        "thought": "LLM requested planning tool",
+        "action": "probe_full_snapshot",
+        "observe": "{\"truncated\": true, \"preview\": \"{\\\"database\\\": \\\"tpcc_10W\\\", \\\"db_version\\\": \\\"9.6.0\\\", \\\"schema\\\": {\\\"customer\\\": {\\\"columns\\\": [{\\\"name\\\": \\\"c_w_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_d_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_discount\\\", \\\"type\\\": \\\"decimal\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"decimal(4,4)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_credit\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_last\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(16)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_first\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(16)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_credit_lim\\\", \\\"type\\\": \\\"decimal\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"decimal(12,2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_balance\\\", \\\"type\\\": \\\"decimal\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"decimal(12,2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_ytd_payment\\\", \\\"type\\\": \\\"float\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"float\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_payment_cnt\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_delivery_cnt\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_street_1\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(20)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_street_2\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(20)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_city\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(20)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_state\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_zip\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(9)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_phone\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(16)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_since\\\", \\\"type\\\": \\\"timestamp\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"timestamp\\\", \\\"default\\\": \\\"CURRENT_TIMESTAMP\\\"}, {\\\"name\\\": \\\"c_middle\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_data\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(500)\\\", \\\"default\\\": null}], \\\"indexes\\\": [{\\\"index_name\\\": \\\"idx_customer_name\\\", \\\"column\\\": \\\"c_w_id\\\", \\\"non_unique\\\": true, \\\"seq\\\": 1}, {\\\"index_name\\\": \\\"idx_customer_name\\\", \\\"column\\\": \\\"c_d_id\\\", \\\"non_unique\\\": true, \\\"seq\\\": 2}, {\\\"index_name\\\": \\\"idx_customer_name\\\", \\\"column\\\": \\\"c_last\\\", \\\"non_unique\\\": true, \\\"seq\\\": 3}, {\\\"index_name\\\": \\\"idx_customer_name\\\", \\\"column\\\": \\\"c_first\\\", \\\"non_unique\\\": true, \\\"seq\\\": 4}, {\\\"index_name\\\": \\\"PRIMARY\\\", \\\"column\\\": \\\"c_w_id\\\", \\\"non_unique\\\": false, \\\"seq\\\": 1}, {\\\"index_name\\\": \\\"PRIMARY\\\", \\\"column\\\": \\\"c_d_id\\\", \\\"non_unique\\\": false, \\\"seq\\\": 2}, {\\\"index_name\\\": \\\"PRIMARY\\\", \\\"column\\\": \\\"c_id\\\", \\\"non_unique\\\": false, \\\"seq\\\": 3}]}, \\\"district\\\": {\\\"columns\\\": [{\\\"name\\\": \\\"d_w_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"d_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"d_ytd\\\", \\\"type\\\": \\\"decimal\\\", \\\"nullable\\\": false, \\\"key\\\"",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      },
+      {
+        "round": 3,
+        "thought": "LLM requested planning tool",
+        "action": "read_memory",
+        "observe": "[]",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      },
+      {
+        "round": 4,
+        "thought": "LLM requested planning tool",
+        "action": "build_traffic_task",
+        "observe": "{\"task_id\": \"traffic_surge_1\", \"task_type\": \"traffic_surge\", \"actions\": [{\"kind\": \"workload_ramp\", \"database\": \"tpcc_10W\", \"ramp_stages\": [{\"connections\": 30, \"duration_sec\": 20}, {\"connections\": 60, \"duration_sec\": 20}, {\"connections\": 100, \"duration_sec\": 40}], \"duration_sec\": 90, \"sql\": \"SELECT 1\"}], \"expected_metrics\": {\"threads_connected_ratio\": \">=1.5\", \"threads_running_ratio\": \">=1.5\"}, \"success_criteria\": {\"threads_connected_ratio\": \">=1.5\"}, \"risk_assessment\": \"medium\", \"metadata\": {\"root_cause\": \"traffic_surge\", \"target_connections\": 100, \"ramp_stages\": [{\"connections\": 30, \"duration_sec\": 20}, {\"connections\": 60, \"duration_sec\": 20}, {\"connections\": 100, \"duration_sec\": 40}]}}",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      },
+      {
+        "round": 5,
+        "thought": "LLM requested planning tool",
+        "action": "build_task_dag",
+        "observe": "{\"tasks\": {\"traffic_surge_1\": {\"task_id\": \"traffic_surge_1\", \"task_type\": \"traffic_surge\", \"actions\": [{\"kind\": \"workload_ramp\", \"database\": \"tpcc_10W\", \"ramp_stages\": [{\"connections\": 30, \"duration_sec\": 20}, {\"connections\": 60, \"duration_sec\": 20}, {\"connections\": 100, \"duration_sec\": 40}], \"duration_sec\": 90, \"sql\": \"SELECT 1\"}], \"expected_metrics\": {\"threads_connected_ratio\": \">=1.5\", \"threads_running_ratio\": \">=1.5\"}, \"success_criteria\": {\"threads_connected_ratio\": \">=1.5\"}, \"risk_assessment\": \"medium\", \"metadata\": {\"root_cause\": \"traffic_surge\", \"target_connections\": 100, \"ramp_stages\": [{\"connections\": 30, \"duration_sec\": 20}, {\"connections\": 60, \"duration_sec\": 20}, {\"connections\": 100, \"duration_sec\": 40}]}}}, \"edges\": [], \"schedule\": {\"traffic_surge_1\": 0.0}}",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      },
+      {
+        "round": 6,
+        "thought": "LLM requested planning tool",
+        "action": "probe_db_metrics",
+        "observe": "{\"Aborted_connects\": \"0\", \"Com_delete\": \"2850\", \"Com_insert\": \"52596\", \"Com_select\": \"102383\", \"Com_update\": \"50978\", \"Created_tmp_disk_tables\": \"2\", \"Innodb_row_lock_time\": \"154100\", \"Innodb_row_lock_time_avg\": \"4164\", \"Innodb_row_lock_waits\": \"37\", \"Max_used_connections\": \"5\", \"Slow_queries\": \"46\", \"Sort_merge_passes\": \"0\", \"Threads_connected\": \"1\", \"Threads_running\": \"2\", \"innodb_lock_wait_timeout\": \"50\", \"max_connections\": 151, \"wait_timeout\": \"28800\", \"processlist\": [{\"Id\": 5, \"User\": \"event_scheduler\", \"Host\": \"localhost\", \"db\": null, \"Command\": \"Daemon\", \"Time\": 866221, \"State\": \"Waiting on empty queue\", \"Info\": null}, {\"Id\": 7388, \"User\": \"root\", \"Host\": \"localhost:56756\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"init\", \"Info\": \"SHOW FULL PROCESSLIST\"}]}",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      },
+      {
+        "round": 7,
+        "thought": "LLM requested planning tool",
+        "action": "probe_os_metrics",
+        "observe": "{\"platform\": \"Darwin\", \"load_average\": {\"1m\": 2.59, \"5m\": 2.56, \"15m\": 2.78}, \"cpu_usage\": {\"user_pct\": 9.6, \"sys_pct\": 13.1, \"idle_pct\": 77.82, \"usage_ratio\": 0.227}, \"memory\": {\"total_kb\": 2073184, \"active_kb\": 1272448, \"wired_kb\": 781016, \"free_kb\": 19720, \"usage_ratio\": 0.9905}, \"disk\": {\"total_bytes\": 494384795648, \"used_bytes\": 368237744128, \"free_bytes\": 126147051520, \"usage_ratio\": 0.7448}, \"disk_io\": {}, \"network\": {}, \"file_descriptors\": {\"open_fds\": -1}}",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      },
+      {
+        "round": 8,
+        "thought": "LLM requested planning tool",
+        "action": "check_safety",
+        "observe": "{\"approved\": true, \"reasons\": [], \"warnings\": []}",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      },
+      {
+        "round": 9,
+        "thought": "LLM returned final plan JSON",
+        "action": "final_answer",
+        "observe": "{\"step\": 7, \"tool\": \"final_answer\", \"content\": \"{\\n  \\\"target_path\\\": [\\\"traffic_surge\\\", \\\"threads_concurrency_up\\\", \\\"lock_contention\\\", \\\"slow_query\\\", \\\"qps_drop\\\"],\\n  \\\"injected_nodes\\\": [\\\"traffic_surge\\\"],\\n  \\\"task_specs\\\": [\\n    {\\n      \\\"task_id\\\": \\\"traffic_surge_1\\\",\\n      \\\"task_type\\\": \\\"traffic_surge\\\",\\n      \\\"actions\\\": [\\n        {\\n          \\\"kind\\\": \\\"workload_ramp\\\",\\n          \\\"database\\\": \\\"tpcc_10W\\\",\\n          \\\"ramp_stages\\\": [\\n            {\\\"connections\\\": 30, \\\"duration_sec\\\": 20},\\n            {\\\"connections\\\": 60, \\\"duration_sec\\\": 20},\\n            {\\\"connections\\\": 100, \\\"duration_sec\\\": 40}\\n          ],\\n          \\\"duration_sec\\\": 90,\\n          \\\"sql\\\": \\\"SELECT 1\\\"\\n        }\\n      ],\\n      \\\"expected_metrics\\\": {\\\"threads_connected_ratio\\\": \\\">=1.5\\\", \\\"threads_running_ratio\\\": \\\">=1.5\\\"},\\n      \\\"success_criteria\\\": {\\\"threads_connected_ratio\\\": \\\">=1.5\\\"},\\n      \\\"risk_assessment\\\": \\\"medium\\\",\\n      \\\"metadata\\\": {\\n        \\\"root_cause\\\": \\\"traffic_surge\\\",\\n        \\\"target_connections\\\": 100,\\n        \\\"ramp_stages\\\": [\\n          {\\\"connections\\\": 30, \\\"duration_sec\\\": 20},\\n          {\\\"connections\\\": 60, \\\"duration_sec\\\": 20},\\n          {\\\"connections\\\": 100, \\\"duration_sec\\\": 40}\\n        ]\\n      }\\n    }\\n  ],\\n  \\\"dependencies\\\": [],\\n  \\\"dag\\\": {\\n    \\\"tasks\\\": {\\n      \\\"traffic_surge_1\\\": {\\n        \\\"task_id\\\": \\\"traffic_surge_1\\\",\\n        \\\"task_type\\\": \\\"traffic_surge\\\",\\n        \\\"actions\\\": [\\n          {\\n            \\\"kind\\\": \\\"workload_ramp\\\",\\n            \\\"database\\\": \\\"tpcc_10W\\\",\\n            \\\"ramp_stages\\\": [\\n              {\\\"connections\\\": 30, \\\"duration_sec\\\": 20},\\n              {\\\"connections\\\": 60, \\\"duration_sec\\\": 20},\\n              {\\\"connections\\\": 100, \\\"duration_sec\\\": 40}\\n            ],\\n            \\\"duration_sec\\\": 90,\\n            \\\"sql\\\": \\\"SELECT 1\\\"\\n          }\\n        ],\\n        \\\"expected_metrics\\\": {\\\"threads_connected_ratio\\\": \\\">=1.5\\\", \\\"threads_running_ratio\\\": \\\">=1.5\\\"},\\n        \\\"success_criteria\\\": {\\\"threads_connected_ratio\\\": \\\">=1.5\\\"},\\n        \\\"risk_assessment\\\": \\\"medium\\\",\\n        \\\"metadata\\\": {\\n          \\\"root_cause\\\": \\\"traffic_surge\\\",\\n          \\\"target_connections\\\": 100,\\n          \\\"ramp_stages\\\": [\\n   \"}",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      },
+      {
+        "round": 10,
+        "thought": "ReAct generated 1 TaskSpecs for injected nodes ['traffic_surge']",
+        "action": "final_plan_validation",
+        "observe": "{\"task_ids\": [\"traffic_surge_1\"]}",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      },
+      {
+        "round": 11,
+        "thought": "DAG built with 1 tasks and 0 edges",
+        "action": "build_task_dag",
+        "observe": "Task IDs: ['traffic_surge_1']",
+        "decision": "",
+        "timestamp": "2026-06-08T06:49:09+00:00"
+      }
+    ]
+  }
+}

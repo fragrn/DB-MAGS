@@ -1,0 +1,49 @@
+{
+  "tasks": [
+    {
+      "task_id": "slow-sql-missing-index",
+      "agent_type": "slow_sql",
+      "anomaly_type": "missing_index",
+      "title": "Slow SQL: missing_index",
+      "task_role": "background_anomaly",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260526040235",
+        "anomaly_subtype": "missing_index",
+        "source_agent": "slow_sql",
+        "sql": "SELECT COUNT(*) FROM order_line WHERE ol_i_id = 12345;",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "single_sql",
+          "sleep_time": 0.01,
+          "thread_count": 6,
+          "repeat": 25,
+          "description": "Background slow SQL pressure for missing_index.",
+          "sql": "SELECT COUNT(*) FROM order_line WHERE ol_i_id = 12345;",
+          "database": "dbmags_tpcc_base_run_20260526040235",
+          "duration_seconds": 16
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT COUNT(*) FROM order_line WHERE ol_i_id = 12345;",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=558138 rows=1)\n    -> Filter: (order_line.ol_i_id = 12345)  (cost=457319 rows=437552)\n        -> Table scan on order_line  (cost=457319 rows=4.38e+6)\n"
+              ]
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected missing_index from request constraints."
+    }
+  ]
+}

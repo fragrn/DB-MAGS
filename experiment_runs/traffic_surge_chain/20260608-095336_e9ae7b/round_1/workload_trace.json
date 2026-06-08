@@ -1,0 +1,2292 @@
+{
+  "config": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 30.0,
+    "baseline_sec": 30.0,
+    "injection_observe_sec": 60.0,
+    "recovery_sec": 30.0,
+    "sample_interval_sec": 5.0,
+    "terminals": 16
+  },
+  "events": [
+    {
+      "event": "start_workload",
+      "timestamp": 1780912421.489748,
+      "pid": 27781,
+      "command": [
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-jar",
+        "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/.tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+        "-b",
+        "tpcc",
+        "-c",
+        "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml",
+        "--create=false",
+        "--load=false",
+        "--execute=true"
+      ],
+      "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+    },
+    {
+      "event": "warmup",
+      "timestamp": 1780912421.490326,
+      "duration_sec": 30.0
+    },
+    {
+      "event": "stop_workload",
+      "timestamp": 1780912883.013876,
+      "running_before_stop": false,
+      "exit_code": 1
+    }
+  ],
+  "samples": [
+    {
+      "phase": "baseline",
+      "index": 0,
+      "timestamp": 1780912461.9453719,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102407",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877357,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7542,
+            "User": "root",
+            "Host": "localhost:60216",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.92,
+          "5m": 3.06,
+          "15m": 3.08
+        },
+        "cpu_usage": {
+          "user_pct": 8.64,
+          "sys_pct": 13.7,
+          "idle_pct": 78.28,
+          "usage_ratio": 0.223
+        },
+        "memory": {
+          "total_kb": 2199380,
+          "active_kb": 1423116,
+          "wired_kb": 664100,
+          "free_kb": 112164,
+          "usage_ratio": 0.949
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369606381568,
+          "free_bytes": 124778414080,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 42.717,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "baseline",
+      "index": 1,
+      "timestamp": 1780912469.271738,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102407",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877365,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7545,
+            "User": "root",
+            "Host": "localhost:60231",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.84,
+          "5m": 3.04,
+          "15m": 3.08
+        },
+        "cpu_usage": {
+          "user_pct": 8.87,
+          "sys_pct": 12.16,
+          "idle_pct": 78.95,
+          "usage_ratio": 0.21
+        },
+        "memory": {
+          "total_kb": 2210192,
+          "active_kb": 1422964,
+          "wired_kb": 675500,
+          "free_kb": 111728,
+          "usage_ratio": 0.9494
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369609609216,
+          "free_bytes": 124775186432,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 49.972,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "baseline",
+      "index": 2,
+      "timestamp": 1780912476.5189939,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102407",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877372,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7548,
+            "User": "root",
+            "Host": "localhost:60245",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.79,
+          "5m": 3.03,
+          "15m": 3.07
+        },
+        "cpu_usage": {
+          "user_pct": 7.94,
+          "sys_pct": 11.34,
+          "idle_pct": 80.7,
+          "usage_ratio": 0.193
+        },
+        "memory": {
+          "total_kb": 2203260,
+          "active_kb": 1439388,
+          "wired_kb": 691516,
+          "free_kb": 72356,
+          "usage_ratio": 0.9672
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369609609216,
+          "free_bytes": 124775186432,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 57.227,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "baseline",
+      "index": 3,
+      "timestamp": 1780912483.771441,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102407",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877379,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7551,
+            "User": "root",
+            "Host": "localhost:60264",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.97,
+          "5m": 3.06,
+          "15m": 3.08
+        },
+        "cpu_usage": {
+          "user_pct": 6.69,
+          "sys_pct": 11.53,
+          "idle_pct": 81.77,
+          "usage_ratio": 0.182
+        },
+        "memory": {
+          "total_kb": 2190184,
+          "active_kb": 1455156,
+          "wired_kb": 684516,
+          "free_kb": 50512,
+          "usage_ratio": 0.9769
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369609609216,
+          "free_bytes": 124775186432,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 64.502,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "baseline",
+      "index": 4,
+      "timestamp": 1780912491.040904,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102407",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877387,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7554,
+            "User": "root",
+            "Host": "localhost:60286",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 3.05,
+          "5m": 3.07,
+          "15m": 3.09
+        },
+        "cpu_usage": {
+          "user_pct": 14.46,
+          "sys_pct": 11.93,
+          "idle_pct": 73.59,
+          "usage_ratio": 0.264
+        },
+        "memory": {
+          "total_kb": 2186880,
+          "active_kb": 1472828,
+          "wired_kb": 690384,
+          "free_kb": 23668,
+          "usage_ratio": 0.9892
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369609609216,
+          "free_bytes": 124775186432,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 71.779,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "baseline",
+      "index": 5,
+      "timestamp": 1780912498.32204,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102407",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877394,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7557,
+            "User": "root",
+            "Host": "localhost:60309",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.73,
+          "5m": 3.01,
+          "15m": 3.06
+        },
+        "cpu_usage": {
+          "user_pct": 9.81,
+          "sys_pct": 11.95,
+          "idle_pct": 78.23,
+          "usage_ratio": 0.218
+        },
+        "memory": {
+          "total_kb": 2201284,
+          "active_kb": 1470608,
+          "wired_kb": 703592,
+          "free_kb": 27084,
+          "usage_ratio": 0.9877
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369608548352,
+          "free_bytes": 124776247296,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 79.035,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 0,
+      "timestamp": 1780912696.166316,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877592,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7568,
+            "User": "root",
+            "Host": "localhost:61081",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.3,
+          "5m": 2.8,
+          "15m": 2.97
+        },
+        "cpu_usage": {
+          "user_pct": 16.77,
+          "sys_pct": 14.57,
+          "idle_pct": 68.65,
+          "usage_ratio": 0.313
+        },
+        "memory": {
+          "total_kb": 2187072,
+          "active_kb": 1432768,
+          "wired_kb": 685196,
+          "free_kb": 69108,
+          "usage_ratio": 0.9684
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369602527232,
+          "free_bytes": 124782268416,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 276.93,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 1,
+      "timestamp": 1780912703.47101,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877599,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7571,
+            "User": "root",
+            "Host": "localhost:61105",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.1,
+          "5m": 2.74,
+          "15m": 2.95
+        },
+        "cpu_usage": {
+          "user_pct": 7.86,
+          "sys_pct": 10.94,
+          "idle_pct": 81.18,
+          "usage_ratio": 0.188
+        },
+        "memory": {
+          "total_kb": 2192544,
+          "active_kb": 1438204,
+          "wired_kb": 664928,
+          "free_kb": 89412,
+          "usage_ratio": 0.9592
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369602502656,
+          "free_bytes": 124782292992,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 284.144,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 2,
+      "timestamp": 1780912710.687525,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877606,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7574,
+            "User": "root",
+            "Host": "localhost:61113",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.1,
+          "5m": 2.73,
+          "15m": 2.94
+        },
+        "cpu_usage": {
+          "user_pct": 11.67,
+          "sys_pct": 13.18,
+          "idle_pct": 75.14,
+          "usage_ratio": 0.249
+        },
+        "memory": {
+          "total_kb": 2193108,
+          "active_kb": 1504296,
+          "wired_kb": 669324,
+          "free_kb": 19488,
+          "usage_ratio": 0.9911
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369604161536,
+          "free_bytes": 124780634112,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 291.373,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 3,
+      "timestamp": 1780912717.918735,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877613,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7577,
+            "User": "root",
+            "Host": "localhost:61166",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.0,
+          "5m": 2.69,
+          "15m": 2.92
+        },
+        "cpu_usage": {
+          "user_pct": 10.8,
+          "sys_pct": 12.2,
+          "idle_pct": 77.89,
+          "usage_ratio": 0.23
+        },
+        "memory": {
+          "total_kb": 2209416,
+          "active_kb": 1495080,
+          "wired_kb": 691600,
+          "free_kb": 22736,
+          "usage_ratio": 0.9897
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369604218880,
+          "free_bytes": 124780576768,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 298.606,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 4,
+      "timestamp": 1780912725.154479,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877621,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7580,
+            "User": "root",
+            "Host": "localhost:61190",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 1.92,
+          "5m": 2.66,
+          "15m": 2.91
+        },
+        "cpu_usage": {
+          "user_pct": 5.6,
+          "sys_pct": 10.71,
+          "idle_pct": 83.67,
+          "usage_ratio": 0.163
+        },
+        "memory": {
+          "total_kb": 2217448,
+          "active_kb": 1495868,
+          "wired_kb": 664188,
+          "free_kb": 57392,
+          "usage_ratio": 0.9741
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369604218880,
+          "free_bytes": 124780576768,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 305.904,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 5,
+      "timestamp": 1780912732.45716,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877628,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7583,
+            "User": "root",
+            "Host": "localhost:61204",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 1.92,
+          "5m": 2.64,
+          "15m": 2.9
+        },
+        "cpu_usage": {
+          "user_pct": 5.21,
+          "sys_pct": 10.57,
+          "idle_pct": 84.21,
+          "usage_ratio": 0.158
+        },
+        "memory": {
+          "total_kb": 2225704,
+          "active_kb": 1500240,
+          "wired_kb": 661908,
+          "free_kb": 63556,
+          "usage_ratio": 0.9714
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369604157440,
+          "free_bytes": 124780638208,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 313.199,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 6,
+      "timestamp": 1780912739.749878,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877635,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7586,
+            "User": "root",
+            "Host": "localhost:61231",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 1.85,
+          "5m": 2.61,
+          "15m": 2.89
+        },
+        "cpu_usage": {
+          "user_pct": 13.24,
+          "sys_pct": 17.82,
+          "idle_pct": 68.93,
+          "usage_ratio": 0.311
+        },
+        "memory": {
+          "total_kb": 2198472,
+          "active_kb": 1513572,
+          "wired_kb": 669724,
+          "free_kb": 15176,
+          "usage_ratio": 0.9931
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369604300800,
+          "free_bytes": 124780494848,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 320.584,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 7,
+      "timestamp": 1780912747.161074,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877643,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7589,
+            "User": "root",
+            "Host": "localhost:61243",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 1.78,
+          "5m": 2.58,
+          "15m": 2.88
+        },
+        "cpu_usage": {
+          "user_pct": 13.77,
+          "sys_pct": 12.24,
+          "idle_pct": 73.98,
+          "usage_ratio": 0.26
+        },
+        "memory": {
+          "total_kb": 2173272,
+          "active_kb": 1478008,
+          "wired_kb": 662188,
+          "free_kb": 33076,
+          "usage_ratio": 0.9848
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369604300800,
+          "free_bytes": 124780494848,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 327.967,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 8,
+      "timestamp": 1780912754.519247,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877650,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7592,
+            "User": "root",
+            "Host": "localhost:61267",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 1.8,
+          "5m": 2.56,
+          "15m": 2.87
+        },
+        "cpu_usage": {
+          "user_pct": 5.58,
+          "sys_pct": 10.57,
+          "idle_pct": 83.84,
+          "usage_ratio": 0.161
+        },
+        "memory": {
+          "total_kb": 2176924,
+          "active_kb": 1473992,
+          "wired_kb": 662596,
+          "free_kb": 40336,
+          "usage_ratio": 0.9815
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369604288512,
+          "free_bytes": 124780507136,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 335.262,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 9,
+      "timestamp": 1780912761.806335,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877657,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7595,
+            "User": "root",
+            "Host": "localhost:61285",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 1.74,
+          "5m": 2.54,
+          "15m": 2.86
+        },
+        "cpu_usage": {
+          "user_pct": 8.21,
+          "sys_pct": 11.3,
+          "idle_pct": 80.47,
+          "usage_ratio": 0.195
+        },
+        "memory": {
+          "total_kb": 2170280,
+          "active_kb": 1481772,
+          "wired_kb": 662116,
+          "free_kb": 26392,
+          "usage_ratio": 0.9878
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369604554752,
+          "free_bytes": 124780240896,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 342.551,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 10,
+      "timestamp": 1780912769.1007528,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877665,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7598,
+            "User": "root",
+            "Host": "localhost:61300",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 1.85,
+          "5m": 2.54,
+          "15m": 2.85
+        },
+        "cpu_usage": {
+          "user_pct": 15.9,
+          "sys_pct": 12.4,
+          "idle_pct": 72.5,
+          "usage_ratio": 0.283
+        },
+        "memory": {
+          "total_kb": 2202740,
+          "active_kb": 1484420,
+          "wired_kb": 701228,
+          "free_kb": 17092,
+          "usage_ratio": 0.9922
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369605627904,
+          "free_bytes": 124779167744,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 349.871,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 11,
+      "timestamp": 1780912776.414081,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877672,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7601,
+            "User": "root",
+            "Host": "localhost:61350",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.1,
+          "5m": 2.58,
+          "15m": 2.86
+        },
+        "cpu_usage": {
+          "user_pct": 8.1,
+          "sys_pct": 11.44,
+          "idle_pct": 80.45,
+          "usage_ratio": 0.195
+        },
+        "memory": {
+          "total_kb": 2174560,
+          "active_kb": 1483196,
+          "wired_kb": 669296,
+          "free_kb": 22068,
+          "usage_ratio": 0.9899
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369605484544,
+          "free_bytes": 124779311104,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 357.141,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "recovery",
+      "index": 0,
+      "timestamp": 1780912783.69361,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877679,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7604,
+            "User": "root",
+            "Host": "localhost:61363",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.01,
+          "5m": 2.54,
+          "15m": 2.85
+        },
+        "cpu_usage": {
+          "user_pct": 10.2,
+          "sys_pct": 14.87,
+          "idle_pct": 75.1,
+          "usage_ratio": 0.251
+        },
+        "memory": {
+          "total_kb": 2139996,
+          "active_kb": 1362432,
+          "wired_kb": 681472,
+          "free_kb": 96092,
+          "usage_ratio": 0.9551
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369605984256,
+          "free_bytes": 124778811392,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 364.387,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "recovery",
+      "index": 1,
+      "timestamp": 1780912790.934381,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877686,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7607,
+            "User": "root",
+            "Host": "localhost:61388",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.17,
+          "5m": 2.56,
+          "15m": 2.85
+        },
+        "cpu_usage": {
+          "user_pct": 9.16,
+          "sys_pct": 11.57,
+          "idle_pct": 79.25,
+          "usage_ratio": 0.207
+        },
+        "memory": {
+          "total_kb": 2178512,
+          "active_kb": 1384504,
+          "wired_kb": 681116,
+          "free_kb": 112892,
+          "usage_ratio": 0.9482
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369605988352,
+          "free_bytes": 124778807296,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 371.669,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "recovery",
+      "index": 2,
+      "timestamp": 1780912798.2149298,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877694,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7610,
+            "User": "root",
+            "Host": "localhost:61402",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.14,
+          "5m": 2.55,
+          "15m": 2.84
+        },
+        "cpu_usage": {
+          "user_pct": 7.25,
+          "sys_pct": 10.87,
+          "idle_pct": 81.86,
+          "usage_ratio": 0.181
+        },
+        "memory": {
+          "total_kb": 2184264,
+          "active_kb": 1398396,
+          "wired_kb": 680188,
+          "free_kb": 105680,
+          "usage_ratio": 0.9516
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369604927488,
+          "free_bytes": 124779868160,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 378.938,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "recovery",
+      "index": 3,
+      "timestamp": 1780912805.48545,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877701,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7613,
+            "User": "root",
+            "Host": "localhost:61413",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.05,
+          "5m": 2.52,
+          "15m": 2.83
+        },
+        "cpu_usage": {
+          "user_pct": 7.55,
+          "sys_pct": 10.84,
+          "idle_pct": 81.59,
+          "usage_ratio": 0.184
+        },
+        "memory": {
+          "total_kb": 2189440,
+          "active_kb": 1402356,
+          "wired_kb": 685184,
+          "free_kb": 101900,
+          "usage_ratio": 0.9535
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369605533696,
+          "free_bytes": 124779261952,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 386.21,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "recovery",
+      "index": 4,
+      "timestamp": 1780912812.747894,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877708,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7616,
+            "User": "root",
+            "Host": "localhost:61430",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.2,
+          "5m": 2.54,
+          "15m": 2.83
+        },
+        "cpu_usage": {
+          "user_pct": 10.61,
+          "sys_pct": 12.48,
+          "idle_pct": 76.89,
+          "usage_ratio": 0.231
+        },
+        "memory": {
+          "total_kb": 2173480,
+          "active_kb": 1421612,
+          "wired_kb": 659252,
+          "free_kb": 92616,
+          "usage_ratio": 0.9574
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369605578752,
+          "free_bytes": 124779216896,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 393.452,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "recovery",
+      "index": 5,
+      "timestamp": 1780912819.9959419,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "2850",
+        "Com_insert": "52596",
+        "Com_select": "102411",
+        "Com_update": "50978",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "154100",
+        "Innodb_row_lock_time_avg": "4164",
+        "Innodb_row_lock_waits": "37",
+        "Max_used_connections": "60",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 877715,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 7619,
+            "User": "root",
+            "Host": "localhost:61465",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 0.0,
+        "tps": 0.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.42,
+          "5m": 2.58,
+          "15m": 2.85
+        },
+        "cpu_usage": {
+          "user_pct": 14.69,
+          "sys_pct": 11.65,
+          "idle_pct": 73.65,
+          "usage_ratio": 0.263
+        },
+        "memory": {
+          "total_kb": 2185312,
+          "active_kb": 1506200,
+          "wired_kb": 659680,
+          "free_kb": 19432,
+          "usage_ratio": 0.9911
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369605718016,
+          "free_bytes": 124779077632,
+          "usage_ratio": 0.7476
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 27781,
+        "running": false,
+        "start_time": 1780912421.489748,
+        "elapsed_sec": 400.765,
+        "exit_code": 1,
+        "stdout_tail": "",
+        "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+        "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    }
+  ],
+  "status": {
+    "pid": 27781,
+    "running": false,
+    "start_time": 1780912421.489748,
+    "elapsed_sec": 461.524,
+    "exit_code": 1,
+    "stdout_tail": "",
+    "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+    "runtime_config_path": "experiment_runs/traffic_surge_chain/20260608-095336_e9ae7b/round_1/runtime_local_tpcc_10W_config.xml"
+  }
+}

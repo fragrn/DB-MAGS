@@ -1,0 +1,189 @@
+{
+  "plan": {
+    "summary": "Prepare 1 task(s) for missing_index against dbmags_tpcc_base_run_20260526040235 with risk level medium.",
+    "db_context_summary": "agent_group_by_support(rows=4491080, indexes=0); agent_order_by_support(rows=4482155, indexes=0); order_line(rows=4375522, indexes=1); stock(rows=1430123, indexes=1); history(rows=450951, indexes=2)",
+    "tasks": [
+      {
+        "task_id": "slow-sql-missing-index",
+        "agent_type": "slow_sql",
+        "anomaly_type": "missing_index",
+        "title": "Slow SQL: missing_index",
+        "task_role": "background_anomaly",
+        "inputs": {
+          "database": "dbmags_tpcc_base_run_20260526040235",
+          "anomaly_subtype": "missing_index",
+          "source_agent": "slow_sql",
+          "sql": "SELECT COUNT(*) FROM order_line WHERE ol_i_id = 12345;",
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "prechecks": [],
+        "execution_steps": [
+          {
+            "kind": "workload_profile",
+            "mode": "single_sql",
+            "sleep_time": 0.01,
+            "thread_count": 6,
+            "repeat": 25,
+            "description": "Background slow SQL pressure for missing_index.",
+            "sql": "SELECT COUNT(*) FROM order_line WHERE ol_i_id = 12345;",
+            "database": "dbmags_tpcc_base_run_20260526040235",
+            "duration_seconds": 16
+          }
+        ],
+        "validation_steps": [
+          {
+            "kind": "explain",
+            "sql": "SELECT COUNT(*) FROM order_line WHERE ol_i_id = 12345;",
+            "result": {
+              "validated": true,
+              "rows": [
+                [
+                  "-> Aggregate: count(0)  (cost=558138 rows=1)\n    -> Filter: (order_line.ol_i_id = 12345)  (cost=457319 rows=437552)\n        -> Table scan on order_line  (cost=457319 rows=4.38e+6)\n"
+                ]
+              ]
+            }
+          }
+        ],
+        "rollback_steps": [],
+        "explanation": "Fallback planner selected missing_index from request constraints."
+      }
+    ],
+    "planner_decision": {
+      "selected_anomalies": [
+        "missing_index"
+      ],
+      "task_assignments": {
+        "missing_index": "slow_sql"
+      },
+      "database_mapping": {
+        "missing_index": "dbmags_tpcc_base_run_20260526040235"
+      },
+      "task_parameters": {
+        "missing_index": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        }
+      },
+      "expected_signals": [
+        "full scan or skip scan",
+        "latency increase"
+      ],
+      "cleanup_strategy": [
+        "run rollback steps",
+        "collect metrics"
+      ],
+      "planned_tasks": [
+        {
+          "anomaly_subtype": "missing_index",
+          "category": "slow_sql",
+          "source_agent": "slow_sql",
+          "database": "dbmags_tpcc_base_run_20260526040235",
+          "parameters": {
+            "duration_seconds": 12,
+            "background_duration_seconds": 16
+          },
+          "rationale": "Fallback planner selected missing_index from request constraints.",
+          "expected_signals": [
+            "full scan or skip scan",
+            "latency increase"
+          ],
+          "cleanup_strategy": [
+            "run rollback steps",
+            "collect metrics"
+          ]
+        }
+      ],
+      "llm_summary": "",
+      "selection_mode": "multi_manual",
+      "execution_database": "dbmags_tpcc_base_run_20260526040235",
+      "activation_order": [
+        "missing_index"
+      ],
+      "cleanup_order": [
+        "missing_index"
+      ],
+      "composite_experiment_name": "missing_index",
+      "selection_rationale": "Fallback planner selected requested anomaly set.",
+      "llm_used": false,
+      "llm_error": "Planner LLM path fell back: TimeoutError('The read operation timed out')",
+      "llm_error_type": "timeout"
+    },
+    "expected_signals": [
+      "full scan or skip scan",
+      "latency increase"
+    ],
+    "safety_checks": [
+      "No task executes before explicit user confirmation when confirmation is enabled.",
+      "SQL tasks pass static validation and EXPLAIN before execution.",
+      "Task failures are isolated and cleanup is attempted per task."
+    ],
+    "cleanup_plan": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "missing_information": []
+  },
+  "planner_decision": {
+    "selected_anomalies": [
+      "missing_index"
+    ],
+    "task_assignments": {
+      "missing_index": "slow_sql"
+    },
+    "database_mapping": {
+      "missing_index": "dbmags_tpcc_base_run_20260526040235"
+    },
+    "task_parameters": {
+      "missing_index": {
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      }
+    },
+    "expected_signals": [
+      "full scan or skip scan",
+      "latency increase"
+    ],
+    "cleanup_strategy": [
+      "run rollback steps",
+      "collect metrics"
+    ],
+    "planned_tasks": [
+      {
+        "anomaly_subtype": "missing_index",
+        "category": "slow_sql",
+        "source_agent": "slow_sql",
+        "database": "dbmags_tpcc_base_run_20260526040235",
+        "parameters": {
+          "duration_seconds": 12,
+          "background_duration_seconds": 16
+        },
+        "rationale": "Fallback planner selected missing_index from request constraints.",
+        "expected_signals": [
+          "full scan or skip scan",
+          "latency increase"
+        ],
+        "cleanup_strategy": [
+          "run rollback steps",
+          "collect metrics"
+        ]
+      }
+    ],
+    "llm_summary": "",
+    "selection_mode": "multi_manual",
+    "execution_database": "dbmags_tpcc_base_run_20260526040235",
+    "activation_order": [
+      "missing_index"
+    ],
+    "cleanup_order": [
+      "missing_index"
+    ],
+    "composite_experiment_name": "missing_index",
+    "selection_rationale": "Fallback planner selected requested anomaly set.",
+    "llm_used": false,
+    "llm_error": "Planner LLM path fell back: TimeoutError('The read operation timed out')",
+    "llm_error_type": "timeout"
+  },
+  "follow_up_questions": [],
+  "reasoning": "Planner produced a structured anomaly plan."
+}

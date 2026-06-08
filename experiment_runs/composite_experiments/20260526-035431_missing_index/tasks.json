@@ -1,0 +1,49 @@
+{
+  "tasks": [
+    {
+      "task_id": "slow-sql-missing-index",
+      "agent_type": "slow_sql",
+      "anomaly_type": "missing_index",
+      "title": "Slow SQL: missing_index",
+      "task_role": "background_anomaly",
+      "inputs": {
+        "database": "dbmags_tpcc_base_run_20260526035120",
+        "anomaly_subtype": "missing_index",
+        "source_agent": "slow_sql",
+        "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last = 'SMITH';",
+        "duration_seconds": 12,
+        "background_duration_seconds": 16
+      },
+      "prechecks": [],
+      "execution_steps": [
+        {
+          "kind": "workload_profile",
+          "mode": "single_sql",
+          "sleep_time": 0.01,
+          "thread_count": 6,
+          "repeat": 25,
+          "description": "Background slow SQL pressure for missing_index.",
+          "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last = 'SMITH';",
+          "database": "dbmags_tpcc_base_run_20260526035120",
+          "duration_seconds": 16
+        }
+      ],
+      "validation_steps": [
+        {
+          "kind": "explain",
+          "sql": "SELECT COUNT(*) FROM agent_large_scan_support WHERE c_last = 'SMITH';",
+          "result": {
+            "validated": true,
+            "rows": [
+              [
+                "-> Aggregate: count(0)  (cost=55690 rows=1)\n    -> Filter: (agent_large_scan_support.c_last = 'SMITH')  (cost=45343 rows=44906)\n        -> Table scan on agent_large_scan_support  (cost=45343 rows=449059)\n"
+              ]
+            ]
+          }
+        }
+      ],
+      "rollback_steps": [],
+      "explanation": "Fallback planner selected missing_index from request constraints."
+    }
+  ]
+}
