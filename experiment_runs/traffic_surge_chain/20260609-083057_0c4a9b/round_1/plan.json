@@ -1,0 +1,171 @@
+{
+  "target_path": [
+    "traffic_surge",
+    "threads_concurrency_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "traffic_surge"
+  ],
+  "task_specs": [
+    {
+      "task_id": "traffic_traffic_surge",
+      "task_type": "traffic_surge",
+      "actions": [
+        {
+          "kind": "workload_ramp",
+          "database": "tpcc_10W",
+          "ramp_stages": [
+            {
+              "at_sec": 0,
+              "connections": 25
+            },
+            {
+              "at_sec": 20,
+              "connections": 50
+            },
+            {
+              "at_sec": 40,
+              "connections": 75
+            }
+          ],
+          "duration_sec": 60,
+          "sql": "SELECT 1"
+        }
+      ],
+      "expected_metrics": {
+        "threads_connected_ratio": ">=1.5",
+        "threads_running_ratio": ">=1.5"
+      },
+      "success_criteria": {
+        "threads_connected_ratio": ">=1.5"
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "traffic_surge",
+        "target_connections": 75,
+        "ramp_stages": [
+          {
+            "at_sec": 0,
+            "connections": 25
+          },
+          {
+            "at_sec": 20,
+            "connections": 50
+          },
+          {
+            "at_sec": 40,
+            "connections": 75
+          }
+        ]
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "traffic_traffic_surge": {
+        "task_id": "traffic_traffic_surge",
+        "task_type": "traffic_surge",
+        "actions": [
+          {
+            "kind": "workload_ramp",
+            "database": "tpcc_10W",
+            "ramp_stages": [
+              {
+                "at_sec": 0,
+                "connections": 25
+              },
+              {
+                "at_sec": 20,
+                "connections": 50
+              },
+              {
+                "at_sec": 40,
+                "connections": 75
+              }
+            ],
+            "duration_sec": 60,
+            "sql": "SELECT 1"
+          }
+        ],
+        "expected_metrics": {
+          "threads_connected_ratio": ">=1.5",
+          "threads_running_ratio": ">=1.5"
+        },
+        "success_criteria": {
+          "threads_connected_ratio": ">=1.5"
+        },
+        "risk_assessment": "medium",
+        "metadata": {
+          "root_cause": "traffic_surge",
+          "target_connections": 75,
+          "ramp_stages": [
+            {
+              "at_sec": 0,
+              "connections": 25
+            },
+            {
+              "at_sec": 20,
+              "connections": 50
+            },
+            {
+              "at_sec": 40,
+              "connections": 75
+            }
+          ]
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "traffic_traffic_surge": 0.0
+    }
+  },
+  "reasoning": "fallback_rule_planner",
+  "safety_check": {},
+  "react_trace": [
+    {
+      "round": 1,
+      "thought": "Environment snapshot collected. Schema has 9 tables. DB version: 9.6.0. Max connections: 151.",
+      "action": "probe_full_snapshot",
+      "observe": "Tables: ['customer', 'district', 'history', 'item', 'new_order']",
+      "decision": "",
+      "timestamp": "2026-06-09T08:31:28+00:00"
+    },
+    {
+      "round": 2,
+      "thought": "LLM requested planning tool",
+      "action": "probe_full_snapshot",
+      "observe": "{\"truncated\": true, \"preview\": \"{\\\"database\\\": \\\"tpcc_10W\\\", \\\"db_version\\\": \\\"9.6.0\\\", \\\"schema\\\": {\\\"customer\\\": {\\\"columns\\\": [{\\\"name\\\": \\\"c_w_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_d_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_discount\\\", \\\"type\\\": \\\"decimal\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"decimal(4,4)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_credit\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_last\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(16)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_first\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(16)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_credit_lim\\\", \\\"type\\\": \\\"decimal\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"decimal(12,2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_balance\\\", \\\"type\\\": \\\"decimal\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"decimal(12,2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_ytd_payment\\\", \\\"type\\\": \\\"float\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"float\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_payment_cnt\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_delivery_cnt\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_street_1\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(20)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_street_2\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(20)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_city\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(20)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_state\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_zip\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(9)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_phone\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(16)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_since\\\", \\\"type\\\": \\\"timestamp\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"timestamp\\\", \\\"default\\\": \\\"CURRENT_TIMESTAMP\\\"}, {\\\"name\\\": \\\"c_middle\\\", \\\"type\\\": \\\"char\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"char(2)\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"c_data\\\", \\\"type\\\": \\\"varchar\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"\\\", \\\"column_type\\\": \\\"varchar(500)\\\", \\\"default\\\": null}], \\\"indexes\\\": [{\\\"index_name\\\": \\\"idx_customer_name\\\", \\\"column\\\": \\\"c_w_id\\\", \\\"non_unique\\\": true, \\\"seq\\\": 1}, {\\\"index_name\\\": \\\"idx_customer_name\\\", \\\"column\\\": \\\"c_d_id\\\", \\\"non_unique\\\": true, \\\"seq\\\": 2}, {\\\"index_name\\\": \\\"idx_customer_name\\\", \\\"column\\\": \\\"c_last\\\", \\\"non_unique\\\": true, \\\"seq\\\": 3}, {\\\"index_name\\\": \\\"idx_customer_name\\\", \\\"column\\\": \\\"c_first\\\", \\\"non_unique\\\": true, \\\"seq\\\": 4}, {\\\"index_name\\\": \\\"PRIMARY\\\", \\\"column\\\": \\\"c_w_id\\\", \\\"non_unique\\\": false, \\\"seq\\\": 1}, {\\\"index_name\\\": \\\"PRIMARY\\\", \\\"column\\\": \\\"c_d_id\\\", \\\"non_unique\\\": false, \\\"seq\\\": 2}, {\\\"index_name\\\": \\\"PRIMARY\\\", \\\"column\\\": \\\"c_id\\\", \\\"non_unique\\\": false, \\\"seq\\\": 3}]}, \\\"district\\\": {\\\"columns\\\": [{\\\"name\\\": \\\"d_w_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"d_id\\\", \\\"type\\\": \\\"int\\\", \\\"nullable\\\": false, \\\"key\\\": \\\"PRI\\\", \\\"column_type\\\": \\\"int\\\", \\\"default\\\": null}, {\\\"name\\\": \\\"d_ytd\\\", \\\"type\\\": \\\"decimal\\\", \\\"nullable\\\": false, \\\"key\\\"",
+      "decision": "",
+      "timestamp": "2026-06-09T08:33:13+00:00"
+    },
+    {
+      "round": 3,
+      "thought": "LLM requested planning tool",
+      "action": "read_memory",
+      "observe": "[]",
+      "decision": "",
+      "timestamp": "2026-06-09T08:33:13+00:00"
+    },
+    {
+      "round": 4,
+      "thought": "Tool loop failed: The read operation timed out",
+      "action": "fallback_rule_planner",
+      "observe": "",
+      "decision": "",
+      "timestamp": "2026-06-09T08:33:13+00:00"
+    },
+    {
+      "round": 5,
+      "thought": "DAG built with 1 tasks and 0 edges",
+      "action": "build_task_dag",
+      "observe": "Task IDs: ['traffic_traffic_surge']",
+      "decision": "",
+      "timestamp": "2026-06-09T08:33:13+00:00"
+    }
+  ]
+}

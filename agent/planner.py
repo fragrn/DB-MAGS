@@ -22,6 +22,21 @@ from agent.types import (
 from agent import tools as tool_registry
 
 
+class PlannerFallbackError(RuntimeError):
+    """Raised when planning would need to fall back to rule-based TaskSpecs."""
+
+    def __init__(
+        self,
+        reason: str,
+        trace: list[dict[str, Any]] | None = None,
+        context: dict[str, Any] | None = None,
+    ):
+        super().__init__(reason)
+        self.reason = reason
+        self.trace = trace or []
+        self.context = context or {}
+
+
 # ---------------------------------------------------------------------------
 # System prompt — the core knowledge injected into the global planner
 # ---------------------------------------------------------------------------
@@ -42,7 +57,7 @@ Never call execution or memory-writing tools.
 The graph has three node layers:
 
 ### Injectable nodes (can be actively triggered)
-- traffic_surge        → increase concurrent sessions
+- traffic_surge        → extra BenchBase burst workload matching the current background benchmark
 - missing_index        → SQL on unindexed columns causing index miss
 - improper_sql         → poorly shaped SQL (SELECT *, weak predicates, functions on columns)
 - long_tx             → transaction holding locks for long duration
@@ -73,7 +88,8 @@ The graph has three node layers:
 
 ## Tool Usage Rules
 
-You MUST call probe_full_snapshot before generating any TaskSpec.
+Use the provided runtime snapshot and baseline context first.
+Only call probe_full_snapshot or other probe tools when the provided context is insufficient.
 You SHOULD call read_memory before choosing task parameters.
 You SHOULD call explain_sql for SQL workload candidates before finalizing them.
 You MUST call one TaskSpec builder tool for each user-specified injected node.
@@ -90,7 +106,8 @@ You MUST call build_task_dag and check_safety before returning the final answer.
 
 ### TaskSpec builder tools (replace SpecialistAgents)
 - build_slow_sql_task(config, database, task_id, root_cause, table, column, predicate, sort_column, pattern, limit, concurrency, duration_sec)
-- build_traffic_task(config, database, task_id, target_connections, ramp_stages, duration_sec)
+- get_benchbase_workload_defaults(benchmark, config_path, database, terminals, rate, duration_sec) -> current BenchBase defaults and constraints
+- build_traffic_task(config, profile, task_id)
 - build_lock_task(config, database, task_id, table, key_column, holder_concurrency, waiter_concurrency, hold_sec, lock_type)
 - build_chaos_task(config, task_id, resource_type, duration_sec, intensity)
 - build_backup_task(config, database, task_id, table, tool)
@@ -104,11 +121,26 @@ You MUST call build_task_dag and check_safety before returning the final answer.
 
 ## Planning Process
 
-Step 1 — Inspect: Call probe_full_snapshot.
+Step 1 — Inspect: Use the provided runtime snapshot. Call probe tools only if extra evidence is needed.
 Step 2 — Memory check: Call read_memory. Incorporate reflection context if provided.
 Step 3 — TaskSpec generation: Generate TaskSpecs only for injected_nodes. Prefer large/hot tables and safe parameters.
 Step 4 — DAG construction: Call build_task_dag with dependencies only between generated TaskSpecs.
 Step 5 — Safety check: Call check_safety.
+
+## Traffic Surge Profile Policy
+
+If injected_nodes contains traffic_surge:
+- You MUST use the background workload benchmark from request.workload.benchmark.
+- You MUST call get_benchbase_workload_defaults using the background workload config before build_traffic_task.
+- You MUST generate a TrafficSurgeProfile and pass it to build_traffic_task(profile=...).
+- TrafficSurgeProfile may contain ONLY:
+  benchmark, database, config_path, terminals, rate, duration_sec, transaction_mix, mix_template, rationale.
+- It MUST NOT contain SQL, queries, lock-holder behavior, slow SQL, custom actions, extra tasks, or ramp stages.
+- TrafficSurgeProfile benchmark/database/config_path must match the background workload configuration.
+- transaction_mix keys must be legal transaction names for that benchmark.
+- On the initial round with no reflection, use the default_transaction_mix, default_rate, default_terminals, and default_duration_sec returned by the defaults tool, except where the user request explicitly overrides duration/terminals.
+- After reflection, the LLM may adjust terminals, rate, duration_sec, and transaction_mix based on evaluation feedback.
+- rationale must explain why the transaction mix, terminals, rate, and duration support the requested propagation path.
 
 ## Slow SQL Diversity Policy
 
@@ -260,24 +292,57 @@ class GlobalPlanner:
     ) -> tuple[list[dict[str, Any]], list[list[str]], dict[str, Any], dict[str, Any]]:
         """Use native tool-calling to generate TaskSpecs for injected nodes."""
         if not self.config.planner_enabled or not self.config.openai_api_key:
-            task_specs = self._generate_task_specs_fallback(request, snapshot)
-            dependencies = self._build_dependencies(request.target_path, task_specs)
-            return task_specs, dependencies, {}, {"reasoning": "fallback_rule_planner"}
+            missing = []
+            if not self.config.planner_enabled:
+                missing.append("planner_enabled=false")
+            if not self.config.openai_api_key:
+                missing.append("missing OPENAI_API_KEY")
+            reason = "Planner fallback blocked: " + ", ".join(missing)
+            self._trace(len(self._react_trace) + 1, reason, "fallback_blocked")
+            raise PlannerFallbackError(
+                reason=reason,
+                trace=[s.to_dict() for s in self._react_trace],
+                context={
+                    "target_path": request.target_path,
+                    "injected_nodes": request.injected_nodes,
+                    "target_database": request.target_database,
+                },
+            )
 
         context = self._build_llm_context(request, snapshot, memory_items, reflection)
-        response = tool_registry.chat_tool_calling_loop(
-            config=self.config,
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=context,
-            max_steps=12,
-            temperature=self.config.planner_temperature,
-        )
+        try:
+            response = tool_registry.chat_tool_calling_loop(
+                config=self.config,
+                system_prompt=SYSTEM_PROMPT,
+                user_prompt=context,
+                max_steps=12,
+                temperature=self.config.planner_temperature,
+            )
+        except tool_registry.LLMTimeoutError as exc:
+            reason = f"Planner LLM timeout: {exc}"
+            self._trace(len(self._react_trace) + 1, reason, "llm_timeout")
+            raise PlannerFallbackError(
+                reason=reason,
+                trace=[s.to_dict() for s in self._react_trace],
+                context={
+                    "target_path": request.target_path,
+                    "injected_nodes": request.injected_nodes,
+                    "target_database": request.target_database,
+                },
+            ) from exc
         if response.get("error"):
             self._trace_from_tool_loop(response.get("trace", []))
-            self._trace(len(self._react_trace) + 1, f"Tool loop failed: {response['error']}", "fallback_rule_planner")
-            task_specs = self._generate_task_specs_fallback(request, snapshot)
-            dependencies = self._build_dependencies(request.target_path, task_specs)
-            return task_specs, dependencies, {}, {"reasoning": "fallback_rule_planner", "error": response["error"]}
+            reason = f"Planner fallback blocked after tool loop failure: {response['error']}"
+            self._trace(len(self._react_trace) + 1, reason, "fallback_blocked")
+            raise PlannerFallbackError(
+                reason=reason,
+                trace=response.get("trace", []),
+                context={
+                    "target_path": request.target_path,
+                    "injected_nodes": request.injected_nodes,
+                    "target_database": request.target_database,
+                },
+            )
 
         self._trace_from_tool_loop(response.get("trace", []))
         payload = response.get("json_payload") or {}
@@ -325,15 +390,26 @@ class GlobalPlanner:
                     )
                     task_specs.append(ts)
                 elif node_id == "traffic_surge":
-                    max_conn = snapshot.max_connections
-                    target_conn = int(max_conn * 0.5)
+                    workload = request.workload or {}
+                    duration = min(float(request.max_duration_sec), float(workload.get("injection_observe_sec", 60) or 60))
+                    profile = {
+                        "benchmark": str(workload.get("benchmark") or "tpcc").lower(),
+                        "database": workload.get("database") or request.target_database,
+                        "config_path": workload.get(
+                            "config_path",
+                            ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                        ),
+                        "terminals": max(1, int(workload.get("terminals") or 16)),
+                        "rate": 100.0,
+                        "duration_sec": duration,
+                        "transaction_mix": dict(tool_registry.BENCHBASE_BENCHMARKS[str(workload.get("benchmark") or "tpcc").lower()]["default_mix"]),
+                        "mix_template": "workload_default",
+                        "rationale": "Unused rule fallback profile retained only for private compatibility.",
+                    }
                     ts = tool_registry.build_traffic_task(
                         config=self.config,
-                        database=request.target_database,
                         task_id=f"traffic_{node_id}",
-                        root_cause=node_id,
-                        target_connections=target_conn,
-                        duration_sec=60,
+                        profile=profile,
                     )
                     task_specs.append(ts)
                 elif node_id in ("long_tx", "hot_update"):
@@ -468,12 +544,49 @@ class GlobalPlanner:
                 continue
             if root in seen:
                 raise ValueError(f"multiple TaskSpecs generated for injected node '{root}'")
+            if root == "traffic_surge":
+                self._validate_traffic_task_spec(spec, request)
             seen.add(root)
             filtered.append(spec)
         missing = allowed - seen
         if missing:
             raise ValueError(f"missing TaskSpecs for injected nodes: {', '.join(sorted(missing))}")
         return filtered
+
+    @staticmethod
+    def _validate_traffic_task_spec(spec: dict[str, Any], request: ExperimentRequest) -> None:
+        actions = spec.get("actions") or []
+        if len(actions) != 1 or not isinstance(actions[0], dict):
+            raise ValueError("traffic_surge TaskSpec must contain exactly one benchbase_burst action")
+        action = actions[0]
+        if action.get("kind") != "benchbase_burst":
+            raise ValueError("traffic_surge TaskSpec must use benchbase_burst, not workload_ramp/custom actions")
+        metadata = spec.get("metadata") or {}
+        action_profile = action.get("profile")
+        metadata_profile = metadata.get("traffic_surge_profile")
+        if action_profile is None or metadata_profile is None:
+            raise ValueError("traffic_surge TaskSpec must include TrafficSurgeProfile in action and metadata")
+        normalized_action = tool_registry.validate_traffic_surge_profile(action_profile)
+        normalized_metadata = tool_registry.validate_traffic_surge_profile(metadata_profile)
+        if normalized_action != normalized_metadata:
+            raise ValueError("traffic_surge action profile and metadata profile must match")
+        workload = request.workload or {}
+        if workload.get("enabled"):
+            expected_benchmark = str(workload.get("benchmark") or "").lower()
+            if expected_benchmark and normalized_action["benchmark"] != expected_benchmark:
+                raise ValueError(
+                    "traffic_surge benchmark must match background workload "
+                    f"({normalized_action['benchmark']} != {expected_benchmark})"
+                )
+            expected_database = str(workload.get("database") or request.target_database)
+            if expected_database and normalized_action["database"] != expected_database:
+                raise ValueError(
+                    "traffic_surge database must match background workload "
+                    f"({normalized_action['database']} != {expected_database})"
+                )
+            expected_config_path = str(workload.get("config_path") or "")
+            if expected_config_path and normalized_action["config_path"] != expected_config_path:
+                raise ValueError("traffic_surge config_path must match background workload config_path")
 
     @staticmethod
     def _filter_dependencies(dependencies: list[list[str]], task_specs: list[dict[str, Any]]) -> list[list[str]]:
@@ -499,6 +612,65 @@ class GlobalPlanner:
         reflection: ReflectionResult | None,
     ) -> str:
         """Build the user prompt context for the LLM."""
+        def truncate_text(value: Any, limit: int = 1000) -> str:
+            text = str(value or "")
+            return text if len(text) <= limit else text[:limit] + "...[truncated]"
+
+        def compact_reflection(value: ReflectionResult | None) -> str:
+            if not value:
+                return "No reflection for this round."
+            data = to_jsonable(value)
+            compact = {
+                "failure_reason": truncate_text(data.get("failure_reason"), 1200),
+                "suggested_changes": [
+                    truncate_text(item, 500)
+                    for item in (data.get("suggested_changes") or [])[:5]
+                ],
+                "task_parameter_updates": data.get("task_parameter_updates") or {},
+                "risk_warning": truncate_text(data.get("risk_warning"), 800),
+            }
+            return json.dumps(compact, ensure_ascii=False, default=str)
+
+        def compact_workload_status(value: Any) -> Any:
+            if not isinstance(value, dict):
+                return value
+            compact: dict[str, Any] = {}
+            for key in ("phase", "sample_count", "running", "pid", "exit_code", "summary_flat"):
+                if key in value:
+                    compact[key] = value.get(key)
+            summary = value.get("summary")
+            if isinstance(summary, dict):
+                compact_summary: dict[str, Any] = {}
+                for key in ("qps", "tps", "p50_latency_ms", "p95_latency_ms", "p99_latency_ms"):
+                    if key in summary:
+                        compact_summary[key] = summary.get(key)
+                db_metrics = summary.get("db_metrics")
+                if isinstance(db_metrics, dict):
+                    metric_keys = (
+                        "Threads_connected",
+                        "Threads_running",
+                        "Slow_queries",
+                        "Innodb_row_lock_waits",
+                        "Innodb_row_lock_time",
+                        "Questions",
+                        "Com_commit",
+                        "Com_rollback",
+                    )
+                    compact_summary["db_metrics"] = {
+                        key: db_metrics.get(key)
+                        for key in metric_keys
+                        if key in db_metrics
+                    }
+                if compact_summary:
+                    compact["summary"] = compact_summary
+            elif summary is not None:
+                compact["summary"] = summary
+            if not compact:
+                for key in list(value.keys())[:10]:
+                    if key not in {"samples", "stdout_tail", "stderr_tail"}:
+                        compact[key] = value.get(key)
+            return compact
+
         schema_summary = ""
         if snapshot.schema and snapshot.schema.tables:
             tables = snapshot.schema.tables
@@ -531,7 +703,8 @@ class GlobalPlanner:
             for edge in ANOMALY_GRAPH.edges
             if edge.src in request.target_path or edge.dst in request.target_path
         )
-        reflection_summary = json.dumps(to_jsonable(reflection), ensure_ascii=False) if reflection else "No reflection for this round."
+        reflection_summary = compact_reflection(reflection)
+        workload_status_summary = compact_workload_status(snapshot.workload_status)
 
         context = f"""## User Request
 target_anomaly: {request.target_anomaly}
@@ -545,6 +718,12 @@ injected_nodes: {json.dumps(request.injected_nodes, ensure_ascii=False)}
 {schema_summary}
 
 DB Metrics: {metrics_summary}
+
+Runtime Workload Status:
+{json.dumps(workload_status_summary, ensure_ascii=False, default=str)}
+
+Background Workload Config:
+{json.dumps(request.workload, ensure_ascii=False, default=str)}
 
 ## User-Specified Propagation Path
 {' -> '.join(request.target_path)}

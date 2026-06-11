@@ -17,14 +17,21 @@ from agent.graph import ANOMALY_GRAPH
 from agent.types import EvaluationResult, ExperimentRequest, ReflectionResult
 
 
+class ReflectionFallbackError(RuntimeError):
+    """Raised when reflection would need to fall back to rule-based heuristics."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
 # ---------------------------------------------------------------------------
 # Rule-based suggestions by node type
 # ---------------------------------------------------------------------------
 
 _NODE_SUGGESTIONS: dict[str, dict[str, Any]] = {
     "traffic_surge": {
-        "weak": "Increase target_connections or add more ramp stages. "
-                "Try target_connections at 60% of max_connections instead of 50%.",
+        "weak": "Increase TrafficSurgeProfile terminals/rate/duration_sec or choose a heavier same-benchmark transaction_mix.",
         "strong": "Current traffic level is sufficient.",
     },
     "missing_index": {
@@ -104,9 +111,6 @@ _NODE_PARAM_UPDATES: dict[str, dict[str, Any]] = {
         "holder_concurrency": "increase_by_1",
         "waiter_concurrency": "increase_by_4",
     },
-    "traffic_surge": {
-        "target_connections": "increase_by_20pct",
-    },
 }
 
 
@@ -129,16 +133,21 @@ class SelfReflection:
         """
         Generate a ReflectionResult from a failed EvaluationResult.
 
-        Tries LLM reflection first; falls back to rule-based heuristics.
+        Tries LLM reflection and fails hard if rule-based fallback would be needed.
         """
-        # Try LLM path
-        if self.config.planner_enabled and self.config.openai_api_key:
+        if not self.config.planner_enabled:
+            raise ReflectionFallbackError("Reflection fallback blocked: planner_enabled=false")
+        if not self.config.openai_api_key:
+            raise ReflectionFallbackError("Reflection fallback blocked: missing OPENAI_API_KEY")
+        try:
             llm_result = self._llm_reflect(evaluation, request, memory_items or [])
-            if llm_result and llm_result.failure_reason:
-                return llm_result
-
-        # Fallback: rule-based
-        return self._rule_based_reflect(evaluation, request)
+        except Exception as exc:
+            if exc.__class__.__name__ == "LLMTimeoutError":
+                raise ReflectionFallbackError(f"Reflection LLM timeout: {exc}") from exc
+            raise
+        if llm_result and llm_result.failure_reason:
+            return llm_result
+        raise ReflectionFallbackError("Reflection fallback blocked: LLM reflection failed or returned empty failure_reason")
 
     # -------------------------------------------------------------------------
     # LLM-powered reflection
@@ -187,6 +196,8 @@ class SelfReflection:
                 memory_update=self._build_memory_update(evaluation, request),
                 raw_text=response.get("text", ""),
             )
+        except tool_registry.LLMTimeoutError:
+            raise
         except Exception:
             return None
 
@@ -256,6 +267,13 @@ changes for each failed or weak node. Return a JSON object with:
 - suggested_changes: array of strings with specific suggestions
 - task_parameter_updates: object mapping node_id -> parameter -> new_value
 - risk_warning: any safety concern about the suggested changes
+
+Constraints:
+- target_path and injected_nodes are user-owned; do not change them.
+- If injected_nodes is only traffic_surge, task_parameter_updates may only contain traffic_surge.
+- For traffic_surge, only suggest TrafficSurgeProfile fields: terminals, rate, duration_sec, transaction_mix, mix_template, rationale.
+- Do not suggest adding lock_holder, slow_sql, qps_drop, custom SQL, or any non-injected task.
+- If the user-selected injected_nodes are insufficient, say the user needs to add injected_nodes in failure_reason or suggested_changes, but do not add them yourself.
 """
 
     # -------------------------------------------------------------------------

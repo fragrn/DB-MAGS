@@ -1,0 +1,498 @@
+{
+  "phase": "baseline",
+  "duration_sec": 10.0,
+  "sample_interval_sec": 5.0,
+  "sample_count": 2,
+  "samples": [
+    {
+      "phase": "baseline",
+      "index": 0,
+      "timestamp": 1781167936.49555,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "162576",
+        "Com_insert": "1259405",
+        "Com_select": "9560590",
+        "Com_update": "4737923",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "10136458",
+        "Innodb_row_lock_time_avg": "16",
+        "Innodb_row_lock_waits": "601848",
+        "Max_used_connections": "79",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "5",
+        "Threads_running": "5",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1132832,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 8692,
+            "User": "root",
+            "Host": "localhost:59356",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "waiting for handler commit",
+            "Info": "commit"
+          },
+          {
+            "Id": 8693,
+            "User": "root",
+            "Host": "localhost:59357",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 1052.43994140625\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8694,
+            "User": "root",
+            "Host": "localhost:59358",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 443.2200012207031\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8695,
+            "User": "root",
+            "Host": "localhost:59359",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "statistics",
+            "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8703,
+            "User": "root",
+            "Host": "localhost:59385",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 3132.8,
+        "tps": 1991.8,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 3.19,
+          "5m": 3.11,
+          "15m": 2.74
+        },
+        "cpu_usage": {
+          "user_pct": 19.58,
+          "sys_pct": 16.91,
+          "idle_pct": 63.49,
+          "usage_ratio": 0.365
+        },
+        "memory": {
+          "total_kb": 1972816,
+          "active_kb": 1231996,
+          "wired_kb": 674484,
+          "free_kb": 66336,
+          "usage_ratio": 0.9664
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369208545280,
+          "free_bytes": 125176250368,
+          "usage_ratio": 0.7468
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 41405,
+        "running": true,
+        "start_time": 1781167920.716099,
+        "elapsed_sec": 18.631,
+        "exit_code": null,
+        "stdout_tail": "[INFO ] 2026-06-11 16:52:01,065 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n\nBenchmark:                       TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}\nConfiguration:                   /Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_2/runtime_local_tpcc_10W_config.xml\nType:                            MYSQL\nDriver:                          com.mysql.cj.jdbc.Driver\nURL:                             jdbc:mysql://127.0.0.1:3306/tpcc_10W?rewriteBatchedStatements=true&allowPublicKeyRetrieval=True&sslMode=DISABLED\nIsolation:                       TRANSACTION_SERIALIZABLE\nBatch Size:                      128\nDDL Path:                        null\nLoader Threads:                  10\nSession Setup File:              null\nScale Factor:                    1.0\nTerminals:                       4\nNew Connection Per Txn:          false\nReconnect on Connection Failure: true\n\n[INFO ] 2026-06-11 16:52:01,066 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n[INFO ] 2026-06-11 16:52:01,303 [main]  com.oltpbenchmark.DBWorkload runWorkload - Creating 4 virtual terminals...\n[INFO ] 2026-06-11 16:52:01,317 [main]  com.oltpbenchmark.DBWorkload runWorkload - Launching the TPCC Benchmark with 1 Phase...\n[INFO ] 2026-06-11 16:52:01,320 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mPHASE START\u001b[0;0m :: [Workload=TPCC] [Serial=false] [Time=1800] [WarmupTime=0] [Rate=10000.0] [Arrival=REGULAR] [Ratios=[45.0, 43.0, 4.0, 4.0, 4.0]] [ActiveWorkers=4]\n[INFO ] 2026-06-11 16:52:01,320 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mMEASURE\u001b[0;0m :: Warmup complete, starting measurements.\n",
+        "stderr_tail": "",
+        "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_2/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "baseline",
+      "index": 1,
+      "timestamp": 1781167944.3974469,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "162962",
+        "Com_insert": "1262714",
+        "Com_select": "9586456",
+        "Com_update": "4750681",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "10154824",
+        "Innodb_row_lock_time_avg": "16",
+        "Innodb_row_lock_waits": "603449",
+        "Max_used_connections": "79",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "5",
+        "Threads_running": "5",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1132840,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 8692,
+            "User": "root",
+            "Host": "localhost:59356",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 482.6700134277344\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8693,
+            "User": "root",
+            "Host": "localhost:59357",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 3740.35009765625\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8694,
+            "User": "root",
+            "Host": "localhost:59358",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 3997.929931640625\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8695,
+            "User": "root",
+            "Host": "localhost:59359",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "waiting for handler commit",
+            "Info": "commit"
+          },
+          {
+            "Id": 8706,
+            "User": "root",
+            "Host": "localhost:59405",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 3633.8,
+        "tps": 2325.8,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 3.17,
+          "5m": 3.11,
+          "15m": 2.74
+        },
+        "cpu_usage": {
+          "user_pct": 16.7,
+          "sys_pct": 16.31,
+          "idle_pct": 67.61,
+          "usage_ratio": 0.33
+        },
+        "memory": {
+          "total_kb": 1989164,
+          "active_kb": 1263724,
+          "wired_kb": 671912,
+          "free_kb": 53528,
+          "usage_ratio": 0.9731
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369225322496,
+          "free_bytes": 125159473152,
+          "usage_ratio": 0.7468
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 41405,
+        "running": true,
+        "start_time": 1781167920.716099,
+        "elapsed_sec": 26.275,
+        "exit_code": null,
+        "stdout_tail": "[INFO ] 2026-06-11 16:52:01,065 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n\nBenchmark:                       TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}\nConfiguration:                   /Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_2/runtime_local_tpcc_10W_config.xml\nType:                            MYSQL\nDriver:                          com.mysql.cj.jdbc.Driver\nURL:                             jdbc:mysql://127.0.0.1:3306/tpcc_10W?rewriteBatchedStatements=true&allowPublicKeyRetrieval=True&sslMode=DISABLED\nIsolation:                       TRANSACTION_SERIALIZABLE\nBatch Size:                      128\nDDL Path:                        null\nLoader Threads:                  10\nSession Setup File:              null\nScale Factor:                    1.0\nTerminals:                       4\nNew Connection Per Txn:          false\nReconnect on Connection Failure: true\n\n[INFO ] 2026-06-11 16:52:01,066 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n[INFO ] 2026-06-11 16:52:01,303 [main]  com.oltpbenchmark.DBWorkload runWorkload - Creating 4 virtual terminals...\n[INFO ] 2026-06-11 16:52:01,317 [main]  com.oltpbenchmark.DBWorkload runWorkload - Launching the TPCC Benchmark with 1 Phase...\n[INFO ] 2026-06-11 16:52:01,320 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mPHASE START\u001b[0;0m :: [Workload=TPCC] [Serial=false] [Time=1800] [WarmupTime=0] [Rate=10000.0] [Arrival=REGULAR] [Ratios=[45.0, 43.0, 4.0, 4.0, 4.0]] [ActiveWorkers=4]\n[INFO ] 2026-06-11 16:52:01,320 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mMEASURE\u001b[0;0m :: Warmup complete, starting measurements.\n",
+        "stderr_tail": "",
+        "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_2/runtime_local_tpcc_10W_config.xml"
+      }
+    }
+  ],
+  "summary": {
+    "db_metrics": {
+      "Threads_connected": {
+        "first": 5.0,
+        "last": 5.0,
+        "min": 5.0,
+        "max": 5.0,
+        "avg": 5.0,
+        "delta": 0.0
+      },
+      "Threads_running": {
+        "first": 5.0,
+        "last": 5.0,
+        "min": 5.0,
+        "max": 5.0,
+        "avg": 5.0,
+        "delta": 0.0
+      },
+      "Max_used_connections": {
+        "first": 79.0,
+        "last": 79.0,
+        "min": 79.0,
+        "max": 79.0,
+        "avg": 79.0,
+        "delta": 0.0
+      },
+      "Slow_queries": {
+        "first": 46.0,
+        "last": 46.0,
+        "min": 46.0,
+        "max": 46.0,
+        "avg": 46.0,
+        "delta": 0.0
+      },
+      "Innodb_row_lock_waits": {
+        "first": 601848.0,
+        "last": 603449.0,
+        "min": 601848.0,
+        "max": 603449.0,
+        "avg": 602648.5,
+        "delta": 1601.0
+      },
+      "Innodb_row_lock_time": {
+        "first": 10136458.0,
+        "last": 10154824.0,
+        "min": 10136458.0,
+        "max": 10154824.0,
+        "avg": 10145641.0,
+        "delta": 18366.0
+      },
+      "Innodb_row_lock_time_avg": {
+        "first": 16.0,
+        "last": 16.0,
+        "min": 16.0,
+        "max": 16.0,
+        "avg": 16.0,
+        "delta": 0.0
+      },
+      "Aborted_connects": {
+        "first": 0.0,
+        "last": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "avg": 0.0,
+        "delta": 0.0
+      }
+    },
+    "workload": {
+      "qps": {
+        "first": 3132.8,
+        "last": 3633.8,
+        "min": 3132.8,
+        "max": 3633.8,
+        "avg": 3383.3,
+        "delta": 501.0
+      },
+      "tps": {
+        "first": 1991.8,
+        "last": 2325.8,
+        "min": 1991.8,
+        "max": 2325.8,
+        "avg": 2158.8,
+        "delta": 334.0000000000002
+      }
+    },
+    "os_metrics": {
+      "cpu_usage": {
+        "usage_ratio": {
+          "first": 0.365,
+          "last": 0.33,
+          "min": 0.33,
+          "max": 0.365,
+          "avg": 0.34750000000000003,
+          "delta": -0.034999999999999976
+        }
+      }
+    },
+    "flat": {
+      "Threads_connected": 5.0,
+      "Threads_connected_max": 5.0,
+      "Threads_running": 5.0,
+      "Threads_running_max": 5.0,
+      "Max_used_connections": 79.0,
+      "Slow_queries": 46.0,
+      "Innodb_row_lock_waits": 603449.0,
+      "Innodb_row_lock_time": 10154824.0,
+      "Innodb_row_lock_time_avg": 16.0,
+      "Aborted_connects": 0.0,
+      "qps": 3383.3,
+      "tps": 2158.8,
+      "cpu_usage_ratio": 0.34750000000000003
+    }
+  },
+  "summary_flat": {
+    "Threads_connected": 5.0,
+    "Threads_connected_max": 5.0,
+    "Threads_running": 5.0,
+    "Threads_running_max": 5.0,
+    "Max_used_connections": 79.0,
+    "Slow_queries": 46.0,
+    "Innodb_row_lock_waits": 603449.0,
+    "Innodb_row_lock_time": 10154824.0,
+    "Innodb_row_lock_time_avg": 16.0,
+    "Aborted_connects": 0.0,
+    "qps": 3383.3,
+    "tps": 2158.8,
+    "cpu_usage_ratio": 0.34750000000000003
+  },
+  "db_metrics": {
+    "Threads_connected": {
+      "first": 5.0,
+      "last": 5.0,
+      "min": 5.0,
+      "max": 5.0,
+      "avg": 5.0,
+      "delta": 0.0
+    },
+    "Threads_running": {
+      "first": 5.0,
+      "last": 5.0,
+      "min": 5.0,
+      "max": 5.0,
+      "avg": 5.0,
+      "delta": 0.0
+    },
+    "Max_used_connections": {
+      "first": 79.0,
+      "last": 79.0,
+      "min": 79.0,
+      "max": 79.0,
+      "avg": 79.0,
+      "delta": 0.0
+    },
+    "Slow_queries": {
+      "first": 46.0,
+      "last": 46.0,
+      "min": 46.0,
+      "max": 46.0,
+      "avg": 46.0,
+      "delta": 0.0
+    },
+    "Innodb_row_lock_waits": {
+      "first": 601848.0,
+      "last": 603449.0,
+      "min": 601848.0,
+      "max": 603449.0,
+      "avg": 602648.5,
+      "delta": 1601.0
+    },
+    "Innodb_row_lock_time": {
+      "first": 10136458.0,
+      "last": 10154824.0,
+      "min": 10136458.0,
+      "max": 10154824.0,
+      "avg": 10145641.0,
+      "delta": 18366.0
+    },
+    "Innodb_row_lock_time_avg": {
+      "first": 16.0,
+      "last": 16.0,
+      "min": 16.0,
+      "max": 16.0,
+      "avg": 16.0,
+      "delta": 0.0
+    },
+    "Aborted_connects": {
+      "first": 0.0,
+      "last": 0.0,
+      "min": 0.0,
+      "max": 0.0,
+      "avg": 0.0,
+      "delta": 0.0
+    }
+  },
+  "workload": {
+    "qps": {
+      "first": 3132.8,
+      "last": 3633.8,
+      "min": 3132.8,
+      "max": 3633.8,
+      "avg": 3383.3,
+      "delta": 501.0
+    },
+    "tps": {
+      "first": 1991.8,
+      "last": 2325.8,
+      "min": 1991.8,
+      "max": 2325.8,
+      "avg": 2158.8,
+      "delta": 334.0000000000002
+    }
+  },
+  "os_metrics": {
+    "cpu_usage": {
+      "usage_ratio": {
+        "first": 0.365,
+        "last": 0.33,
+        "min": 0.33,
+        "max": 0.365,
+        "avg": 0.34750000000000003,
+        "delta": -0.034999999999999976
+      }
+    }
+  }
+}

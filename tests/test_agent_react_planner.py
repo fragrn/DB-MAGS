@@ -6,9 +6,9 @@ import unittest
 from unittest.mock import patch
 
 from agent.config import RuntimeConfig
-from agent.planner import GlobalPlanner
-from agent.tools import PLANNING_TOOL_NAMES, planning_tool_schemas
-from agent.types import EnvironmentSnapshot, ExperimentRequest, SchemaInfo
+from agent.planner import GlobalPlanner, PlannerFallbackError
+from agent.tools import LLMTimeoutError, PLANNING_TOOL_NAMES, build_traffic_task, chat_tool_calling_loop, llm_generate, planning_tool_schemas
+from agent.types import EnvironmentSnapshot, ExperimentRequest, ReflectionResult, SchemaInfo
 
 
 class AgentReactPlannerTests(unittest.TestCase):
@@ -69,6 +69,8 @@ class AgentReactPlannerTests(unittest.TestCase):
         schemas = planning_tool_schemas()
         names = {item["function"]["name"] for item in schemas}
         self.assertIn("build_slow_sql_task", names)
+        self.assertIn("get_benchbase_workload_defaults", names)
+        self.assertIn("build_traffic_task", names)
         self.assertNotIn("execute_dag", names)
         self.assertNotIn("write_memory", names)
         self.assertIn("build_slow_sql_task", PLANNING_TOOL_NAMES)
@@ -183,6 +185,117 @@ class AgentReactPlannerTests(unittest.TestCase):
         self.assertTrue(any(step.action == "build_slow_sql_task" for step in trace))
         self.assertTrue(any(message.get("role") == "tool" for message in captured_payloads[1]["messages"]))
 
+    def test_planner_disabled_blocks_fallback(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
+        with self.assertRaisesRegex(PlannerFallbackError, "planner_enabled=false"):
+            planner.plan(self.request(), self.snapshot(), [])
+
+    def test_tool_loop_error_blocks_fallback(self):
+        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
+        planner = GlobalPlanner(config)
+        with patch("agent.tools.chat_tool_calling_loop", return_value={
+            "error": "The read operation timed out",
+            "trace": [{"step": 1, "tool": "read_memory", "result": []}],
+        }):
+            with self.assertRaisesRegex(PlannerFallbackError, "The read operation timed out"):
+                planner.plan(self.request(), self.snapshot(), [])
+        self.assertTrue(any(step.action == "fallback_blocked" for step in planner._react_trace))
+
+    def test_chat_tool_calling_timeout_raises(self):
+        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
+
+        def timeout_urlopen(req_obj, timeout=60):
+            raise TimeoutError("timed out")
+
+        with patch("urllib.request.urlopen", timeout_urlopen):
+            with self.assertRaisesRegex(LLMTimeoutError, "timed out after 120s"):
+                chat_tool_calling_loop(config, "system", "user", max_steps=1)
+
+    def test_chat_tool_calling_retries_timeout_once(self):
+        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
+        responses = [
+            TimeoutError("transient timeout"),
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": json.dumps({"ok": True}),
+                        }
+                    }
+                ]
+            },
+        ]
+
+        class FakeResponse:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+            def read(self):
+                return json.dumps(self.payload).encode("utf-8")
+
+        def flaky_urlopen(req_obj, timeout=60):
+            item = responses.pop(0)
+            if isinstance(item, BaseException):
+                raise item
+            return FakeResponse(item)
+
+        with patch("urllib.request.urlopen", flaky_urlopen):
+            result = chat_tool_calling_loop(config, "system", "user", max_steps=1)
+
+        self.assertEqual(result["json_payload"], {"ok": True})
+
+    def test_llm_generate_timeout_raises(self):
+        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
+
+        def timeout_urlopen(req_obj, timeout=60):
+            raise TimeoutError("timed out")
+
+        with patch("urllib.request.urlopen", timeout_urlopen):
+            with self.assertRaisesRegex(LLMTimeoutError, "timed out after 120s"):
+                llm_generate(config, "system", "user")
+
+    def test_llm_context_compacts_reflection_and_workload_status(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
+        snapshot = self.snapshot()
+        snapshot.workload_status = {
+            "phase": "baseline",
+            "sample_count": 2,
+            "samples": [{"large": "x" * 5000}],
+            "summary": {
+                "qps": 100,
+                "p95_latency_ms": 20,
+                "db_metrics": {
+                    "Threads_connected": 10,
+                    "Threads_running": 2,
+                    "Slow_queries": 0,
+                    "Unused_large_value": "y" * 5000,
+                },
+            },
+        }
+        reflection = ReflectionResult(
+            failure_reason="needs stronger surge",
+            suggested_changes=["increase terminals"],
+            task_parameter_updates={"traffic_surge": {"terminals": 16}},
+            risk_warning="watch connections",
+            raw_text="RAW_TEXT_SHOULD_NOT_BE_INCLUDED" + "z" * 5000,
+        )
+
+        context = planner._build_llm_context(self.request(), snapshot, [], reflection)
+
+        self.assertIn("needs stronger surge", context)
+        self.assertIn('"terminals": 16', context)
+        self.assertIn('"qps": 100', context)
+        self.assertNotIn("RAW_TEXT_SHOULD_NOT_BE_INCLUDED", context)
+        self.assertNotIn('"samples"', context)
+        self.assertNotIn("Unused_large_value", context)
+
     def test_non_requested_task_spec_is_dropped_and_missing_requested_fails(self):
         planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
         bad_spec = {
@@ -192,6 +305,61 @@ class AgentReactPlannerTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "missing TaskSpecs"):
             planner._filter_task_specs([bad_spec], self.request())
+
+    def test_traffic_surge_rejects_legacy_workload_ramp(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "threads_concurrency_up"],
+            injected_nodes=["traffic_surge"],
+        )
+        legacy_spec = {
+            "task_id": "traffic",
+            "task_type": "traffic_surge",
+            "actions": [{"kind": "workload_ramp", "sql": "SELECT 1", "duration_sec": 10}],
+            "metadata": {"root_cause": "traffic_surge"},
+        }
+        with self.assertRaisesRegex(ValueError, "benchbase_burst"):
+            planner._filter_task_specs([legacy_spec], req)
+
+    def test_traffic_surge_rejects_benchmark_mismatch_with_background_workload(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpch_1SF",
+            target_path=["traffic_surge", "threads_concurrency_up"],
+            injected_nodes=["traffic_surge"],
+            workload={
+                "enabled": True,
+                "benchmark": "tpch",
+                "database": "tpch_1SF",
+                "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpch_1SF_config.xml",
+            },
+        )
+        tpcc_spec = build_traffic_task(
+            RuntimeConfig(),
+            profile={
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                "terminals": 4,
+                "rate": 100,
+                "duration_sec": 10,
+                "transaction_mix": {
+                    "NewOrder": 45,
+                    "Payment": 43,
+                    "OrderStatus": 4,
+                    "Delivery": 4,
+                    "StockLevel": 4,
+                },
+                "mix_template": "workload_default",
+                "rationale": "wrong benchmark",
+            },
+            task_id="traffic",
+        )
+        with self.assertRaisesRegex(ValueError, "benchmark must match background workload"):
+            planner._filter_task_specs([tpcc_spec], req)
 
 
 if __name__ == "__main__":

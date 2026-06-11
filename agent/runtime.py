@@ -29,8 +29,12 @@ from agent.dag import build_task_dag
 from agent.evaluator import evaluate
 from agent.memory import MemoryStore
 from agent.planner import GlobalPlanner
+from agent.planner import PlannerFallbackError
 from agent.reflection import SelfReflection
+from agent.reflection import ReflectionFallbackError
 from agent.safety import SafetyChecker
+from agent.safety import EXECUTOR_GRACE_SEC
+from agent.safety import estimate_dag_required_sec
 from agent.workload import (
     make_evaluation_pair,
     make_metrics_collector,
@@ -121,7 +125,7 @@ class DBMAGSRuntime:
             dag, snapshot, react_trace = self._plan(request, snapshot, round_no, round_dir, latest_reflection)
 
             # Step 3: Safety check
-            safety = self._safety_check(dag, snapshot, round_dir)
+            safety = self._safety_check(dag, snapshot, round_dir, request=request)
 
             if not safety.approved:
                 # Cannot proceed — write failure and stop
@@ -139,7 +143,7 @@ class DBMAGSRuntime:
             baseline = self._collect_baseline(request, round_dir)
 
             # Step 5: Execute
-            execution_trace = self._execute(dag, round_no, round_dir)
+            execution_trace = self._execute(dag, round_no, round_dir, request)
 
             # Step 6: After metrics
             after = self._collect_after(request, round_dir)
@@ -219,7 +223,12 @@ class DBMAGSRuntime:
         latest_reflection: ReflectionResult | None,
     ) -> tuple[RunResult, ReflectionResult | None, bool]:
         workload_cfg = normalize_workload_config(request.workload, request.target_database)
+        if workload_cfg.get("duration_sec") is None:
+            workload_cfg["duration_sec"] = self._workload_required_sec(request, workload_cfg)
+            request.workload = dict(request.workload or {})
+            request.workload["duration_sec"] = workload_cfg["duration_sec"]
         self._write_json(round_dir / "workload_config.json", workload_cfg)
+        self._validate_workload_timing_before_start(request, workload_cfg, round_dir)
         workload_trace: dict[str, Any] = {"config": workload_cfg, "events": [], "samples": []}
         runner = self._make_workload_runner(request, round_dir)
         collector = self._make_metrics_collector(request, runner)
@@ -267,7 +276,7 @@ class DBMAGSRuntime:
             self._assert_workload_running(runner, "after_planning_before_safety", round_dir, workload_trace)
 
             # Phase 6: safety while workload keeps running.
-            safety = self._safety_check(dag, runtime_snapshot, round_dir)
+            safety = self._safety_check(dag, runtime_snapshot, round_dir, request=request)
             if not safety.approved:
                 evaluation = EvaluationResult(
                     success=False,
@@ -294,7 +303,7 @@ class DBMAGSRuntime:
             # Phase 7: execute anomaly DAG and collect injection samples concurrently.
             self._assert_workload_running(runner, "after_safety_before_injection", round_dir, workload_trace)
             with ThreadPoolExecutor(max_workers=1) as pool:
-                future = pool.submit(self._execute, dag, round_no, round_dir)
+                future = pool.submit(self._execute, dag, round_no, round_dir, request)
                 injection_window = collector.collect_window(
                     "injection",
                     workload_cfg["injection_observe_sec"],
@@ -303,7 +312,7 @@ class DBMAGSRuntime:
                 workload_trace["samples"].extend(injection_window.get("samples", []))
                 self._write_json(round_dir / "injection_metrics.json", injection_window)
                 try:
-                    execution_trace = future.result(timeout=self.config.max_duration_sec + 30)
+                    execution_trace = future.result(timeout=float(request.max_duration_sec) + EXECUTOR_GRACE_SEC)
                 except TimeoutError:
                     execution_trace = {
                         "tasks": {},
@@ -454,6 +463,59 @@ class DBMAGSRuntime:
         )
         raise RuntimeError(f"Anomaly injection failed before evaluation: {details}")
 
+    def _validate_workload_timing_before_start(
+        self,
+        request: ExperimentRequest,
+        workload_cfg: dict[str, Any],
+        round_dir: Path,
+    ) -> None:
+        planning_budget_sec = self._planning_budget_sec()
+        inspect_safety_margin_sec = self._inspect_safety_margin_sec()
+        required = self._workload_required_sec(request, workload_cfg)
+        payload = {
+            "status": "passed",
+            "phase": "before_start_workload",
+            "warmup_sec": workload_cfg.get("warmup_sec", 0),
+            "baseline_sec": workload_cfg.get("baseline_sec", 0),
+            "injection_observe_sec": workload_cfg.get("injection_observe_sec", 0),
+            "recovery_sec": workload_cfg.get("recovery_sec", 0),
+            "request_max_duration_sec": request.max_duration_sec,
+            "executor_grace_sec": EXECUTOR_GRACE_SEC,
+            "planning_budget_sec": planning_budget_sec,
+            "inspect_safety_margin_sec": inspect_safety_margin_sec,
+            "workload_required_sec": required,
+            "configured_workload_duration_sec": workload_cfg.get("duration_sec"),
+        }
+        duration = workload_cfg.get("duration_sec")
+        if duration is not None and float(duration) < required:
+            payload["status"] = "failed"
+            payload["reason"] = (
+                f"workload.duration_sec {float(duration)}s is shorter than required "
+                f"single-round budget {required}s"
+            )
+            self._write_json(round_dir / "workload_timing_validation.json", payload)
+            raise RuntimeError(payload["reason"])
+        self._write_json(round_dir / "workload_timing_validation.json", payload)
+
+    @staticmethod
+    def _planning_budget_sec() -> float:
+        return 2 * 120.0 + 30.0
+
+    @staticmethod
+    def _inspect_safety_margin_sec() -> float:
+        return 30.0
+
+    def _workload_required_sec(self, request: ExperimentRequest, workload_cfg: dict[str, Any]) -> float:
+        return (
+            float(workload_cfg.get("warmup_sec", 0) or 0)
+            + float(workload_cfg.get("baseline_sec", 0) or 0)
+            + float(request.max_duration_sec)
+            + EXECUTOR_GRACE_SEC
+            + float(workload_cfg.get("recovery_sec", 0) or 0)
+            + self._planning_budget_sec()
+            + self._inspect_safety_margin_sec()
+        )
+
     def cleanup(self, run_id: str, output_root: str = "experiment_runs") -> dict[str, Any]:
         """
         Run cleanup for a previous experiment run.
@@ -536,7 +598,11 @@ class DBMAGSRuntime:
         # Read memory for this anomaly
         memory_items = self.memory.load(anomaly=request.target_anomaly, limit=20)
 
-        dag, snapshot, react_trace = self.planner.plan(request, snapshot, memory_items, reflection=reflection)
+        try:
+            dag, snapshot, react_trace = self.planner.plan(request, snapshot, memory_items, reflection=reflection)
+        except PlannerFallbackError as exc:
+            self._write_planner_failure(round_dir, request, exc)
+            raise RuntimeError(f"Planner fallback blocked: {exc.reason}") from exc
 
         # Write plan artifacts
         plan_payload = dict(self.planner.last_plan_payload)
@@ -547,6 +613,7 @@ class DBMAGSRuntime:
         (round_dir / "react_trace.json").write_text(
             json.dumps([s.to_dict() for s in react_trace], indent=2, ensure_ascii=False)
         )
+        self._validate_benchbase_burst_windows(request, dag, round_dir)
         return dag, snapshot, react_trace
 
     def _safety_check(
@@ -554,6 +621,7 @@ class DBMAGSRuntime:
         dag: ExecutableTaskDAG,
         snapshot: EnvironmentSnapshot,
         round_dir: Path,
+        request: ExperimentRequest | None = None,
     ) -> SafetyResult:
         # Convert DAG to dict for safety checker
         dag_dict = {
@@ -565,11 +633,95 @@ class DBMAGSRuntime:
             task_dag=dag_dict,
             current_db_metrics=snapshot.db_metrics,
             current_os_metrics=snapshot.os_metrics,
+            max_duration_sec=request.max_duration_sec if request else None,
+            injection_observe_sec=(
+                normalize_workload_config(request.workload, request.target_database)["injection_observe_sec"]
+                if request and request.workload.get("enabled")
+                else None
+            ),
+            expected_workload=(
+                normalize_workload_config(request.workload, request.target_database)
+                if request and request.workload.get("enabled")
+                else None
+            ),
         )
         (round_dir / "safety.json").write_text(
             json.dumps(to_jsonable(result), indent=2, ensure_ascii=False)
         )
         return result
+
+    def _validate_benchbase_burst_windows(
+        self,
+        request: ExperimentRequest,
+        dag: ExecutableTaskDAG,
+        round_dir: Path,
+    ) -> None:
+        if not request.workload.get("enabled"):
+            return
+        workload_cfg = normalize_workload_config(request.workload, request.target_database)
+        failures: list[str] = []
+        dag_dict = {
+            "tasks": {tid: to_jsonable(t) for tid, t in dag.tasks.items()},
+            "edges": [to_jsonable(e) for e in dag.edges],
+            "schedule": dag.schedule,
+        }
+        dag_required_sec, timing_reasons = estimate_dag_required_sec(
+            dag_dict,
+            include_grace=False,
+            reject_workload_ramp=True,
+        )
+        failures.extend(timing_reasons)
+        if dag_required_sec > float(workload_cfg["injection_observe_sec"]):
+            failures.append(
+                f"DAG required duration {dag_required_sec}s exceeds injection_observe_sec "
+                f"{workload_cfg['injection_observe_sec']}s"
+            )
+        if dag_required_sec > float(request.max_duration_sec):
+            failures.append(
+                f"DAG required duration {dag_required_sec}s exceeds request max_duration_sec "
+                f"{request.max_duration_sec}s"
+            )
+        for task_id, task in dag.tasks.items():
+            for action in task.actions or []:
+                if action.get("kind") != "benchbase_burst":
+                    continue
+                profile = action.get("profile") or {}
+                duration = float(profile.get("duration_sec", action.get("duration_sec", 0)) or 0)
+                benchmark = str(profile.get("benchmark") or "").lower()
+                if benchmark != str(workload_cfg.get("benchmark") or "").lower():
+                    failures.append(
+                        f"{task_id}: benchbase_burst benchmark {benchmark} does not match workload benchmark {workload_cfg.get('benchmark')}"
+                    )
+                if str(profile.get("database") or "") != str(workload_cfg.get("database") or ""):
+                    failures.append(
+                        f"{task_id}: benchbase_burst database {profile.get('database')} does not match workload database {workload_cfg.get('database')}"
+                    )
+                if str(profile.get("config_path") or "") != str(workload_cfg.get("config_path") or ""):
+                    failures.append(f"{task_id}: benchbase_burst config_path does not match workload config_path")
+        payload = {
+            "status": "passed",
+            "failure_type": "",
+            "reasons": [],
+            "target_path": request.target_path,
+            "injected_nodes": request.injected_nodes,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "warmup_sec": workload_cfg.get("warmup_sec", 0),
+            "baseline_sec": workload_cfg.get("baseline_sec", 0),
+            "injection_observe_sec": workload_cfg.get("injection_observe_sec", 0),
+            "recovery_sec": workload_cfg.get("recovery_sec", 0),
+            "request_max_duration_sec": request.max_duration_sec,
+            "executor_grace_sec": EXECUTOR_GRACE_SEC,
+            "dag_required_sec": dag_required_sec,
+            "workload_required_sec": None,
+        }
+        if failures:
+            payload["status"] = "failed"
+            payload["failure_type"] = "phase_timing_validation"
+            payload["reasons"] = failures
+            self._write_json(round_dir / "plan_validation_failure.json", payload)
+            self._write_json(round_dir / "timing_validation.json", payload)
+            raise RuntimeError("Timing validation failed: " + "; ".join(failures))
+        self._write_json(round_dir / "timing_validation.json", payload)
 
     def _collect_baseline(self, request: ExperimentRequest, round_dir: Path) -> dict[str, Any]:
         baseline = tool_registry.collect_baseline_metrics(
@@ -586,6 +738,7 @@ class DBMAGSRuntime:
         dag: ExecutableTaskDAG,
         round_no: int,
         round_dir: Path,
+        request: ExperimentRequest,
     ) -> dict[str, Any]:
         dag_dict = {
             "tasks": {tid: to_jsonable(t) for tid, t in dag.tasks.items()},
@@ -595,7 +748,8 @@ class DBMAGSRuntime:
         trace = tool_registry.execute_dag(
             task_dag=dag_dict,
             config=self.config,
-            max_duration_sec=self.config.max_duration_sec,
+            max_duration_sec=request.max_duration_sec,
+            round_dir=str(round_dir),
         )
         (round_dir / "execution_trace.json").write_text(
             json.dumps(trace, indent=2, ensure_ascii=False)
@@ -642,11 +796,64 @@ class DBMAGSRuntime:
         round_dir: Path,
     ) -> ReflectionResult:
         memory_items = self.memory.load(anomaly=request.target_anomaly, limit=20)
-        reflection = self.planner.reflect(evaluation, request, memory_items)
+        try:
+            reflection = self.planner.reflect(evaluation, request, memory_items)
+        except ReflectionFallbackError as exc:
+            self._write_reflection_failure(round_dir, request, evaluation, exc)
+            raise RuntimeError(f"Reflection fallback blocked: {exc.reason}") from exc
         (round_dir / "reflection_result.json").write_text(
             json.dumps(to_jsonable(reflection), indent=2, ensure_ascii=False)
         )
         return reflection
+
+    def _write_planner_failure(
+        self,
+        round_dir: Path,
+        request: ExperimentRequest,
+        exc: PlannerFallbackError,
+    ) -> None:
+        trace = exc.trace or []
+        if not trace and getattr(self.planner, "_react_trace", None):
+            trace = [s.to_dict() for s in self.planner._react_trace]
+        payload = {
+            "status": "failed",
+            "failure_type": "planner_fallback_blocked",
+            "reason": exc.reason,
+            "target_path": request.target_path,
+            "injected_nodes": request.injected_nodes,
+            "react_trace": trace,
+            "context": exc.context,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self._write_json(round_dir / "planner_failure.json", payload)
+        self._write_json(round_dir / "react_trace.json", trace)
+        self._write_json(round_dir / "plan.json", {
+            "planning_status": "failed",
+            "failure_type": "planner_fallback_blocked",
+            "reason": exc.reason,
+            "target_path": request.target_path,
+            "injected_nodes": request.injected_nodes,
+            "fallback_used": False,
+            "fallback_blocked": True,
+            "react_trace": trace,
+        })
+
+    def _write_reflection_failure(
+        self,
+        round_dir: Path,
+        request: ExperimentRequest,
+        evaluation: EvaluationResult,
+        exc: ReflectionFallbackError,
+    ) -> None:
+        self._write_json(round_dir / "reflection_failure.json", {
+            "status": "failed",
+            "failure_type": "reflection_fallback_blocked",
+            "reason": exc.reason,
+            "target_path": request.target_path,
+            "injected_nodes": request.injected_nodes,
+            "evaluation": to_jsonable(evaluation),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
 
     def _update_memory(
         self,

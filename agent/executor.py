@@ -7,23 +7,28 @@ collecting cleanup actions at the end.
 
 from __future__ import annotations
 
+import re
 import subprocess
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
+import xml.etree.ElementTree as ET
 
 from agent.config import RuntimeConfig
 from agent.types import ExecutionTrace, TaskResult
+from agent.tools import benchbase_transaction_types, validate_traffic_surge_profile
 
 
 class Executor:
     """Execute an ExecutableTaskDAG dict and return an ExecutionTrace."""
 
-    def __init__(self, config: RuntimeConfig):
+    def __init__(self, config: RuntimeConfig, round_dir: str | None = None):
         self.config = config
+        self.round_dir = Path(round_dir) if round_dir else Path.cwd()
         self._chaosblade_uids: list[str] = []
         self._lock = threading.Lock()
 
@@ -130,6 +135,8 @@ class Executor:
             return self._run_sql_workload(action)
         elif kind == "workload_ramp":
             return self._run_workload_ramp(action)
+        elif kind == "benchbase_burst":
+            return self._run_benchbase_burst(action, task_id)
         elif kind == "lock_conflict":
             return self._run_lock_conflict(action, task_id)
         elif kind == "chaosblade":
@@ -224,6 +231,81 @@ class Executor:
 
         time.sleep(max(0, duration_sec - sum(s.get("at_sec", 0) + 5 for s in stages)))
         return results
+
+    def _run_benchbase_burst(self, action: dict, task_id: str) -> dict:
+        """Run an additional BenchBase client using a validated burst profile."""
+        profile = validate_traffic_surge_profile(action.get("profile") or {})
+        self.round_dir.mkdir(parents=True, exist_ok=True)
+        config_path = self._materialize_benchbase_burst_config(profile, task_id)
+        jar_path = _resolve_path(str(action.get("jar_path") or ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar"))
+        java_bin = str(action.get("java_bin") or "/opt/homebrew/opt/openjdk/bin/java")
+        command = [
+            java_bin,
+            "-jar",
+            str(jar_path),
+            "-b",
+            profile["benchmark"],
+            "-c",
+            str(config_path),
+            "--create=false",
+            "--load=false",
+            "--execute=true",
+        ]
+        stdout_path = self.round_dir / f"{task_id}_benchbase_burst_stdout.log"
+        stderr_path = self.round_dir / f"{task_id}_benchbase_burst_stderr.log"
+        timeout_sec = float(profile["duration_sec"]) + 30.0
+        with stdout_path.open("w", encoding="utf-8") as stdout, stderr_path.open("w", encoding="utf-8") as stderr:
+            proc = subprocess.Popen(
+                command,
+                cwd=str(jar_path.parent),
+                stdout=stdout,
+                stderr=stderr,
+                text=True,
+            )
+            try:
+                exit_code = proc.wait(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    proc.wait(timeout=10)
+                raise RuntimeError(f"BenchBase burst timed out after {timeout_sec:.1f}s")
+        result = {
+            "kind": "benchbase_burst",
+            "pid": proc.pid,
+            "exit_code": exit_code,
+            "command": command,
+            "runtime_config_path": str(config_path),
+            "stdout_path": str(stdout_path),
+            "stderr_path": str(stderr_path),
+            "stdout_tail": _tail(stdout_path),
+            "stderr_tail": _tail(stderr_path),
+            "profile": profile,
+        }
+        if exit_code != 0:
+            raise RuntimeError(f"BenchBase burst exited with {exit_code}: {_tail(stderr_path)}")
+        return result
+
+    def _materialize_benchbase_burst_config(self, profile: dict[str, Any], task_id: str) -> Path:
+        source = _resolve_path(str(profile["config_path"]))
+        if not source.exists():
+            raise FileNotFoundError(f"BenchBase burst config not found: {source}")
+        tree = ET.parse(source)
+        root = tree.getroot()
+        _set_text(root, ".//work/time", str(int(float(profile["duration_sec"]))))
+        _set_text(root, "terminals", str(int(profile["terminals"])))
+        rate = str(profile["rate"])
+        _set_text(root, ".//works/work/rate", rate)
+        _set_text(root, ".//work/rate", rate)
+        transaction_types = benchbase_transaction_types(profile["benchmark"], str(source))
+        weights = ",".join(str(_format_weight(profile["transaction_mix"].get(name, 0))) for name in transaction_types)
+        _set_text(root, ".//work/weights", weights)
+        _replace_jdbc_database(root, profile["database"])
+        out = self.round_dir / f"{task_id}_benchbase_burst_config.xml"
+        tree.write(out, encoding="utf-8", xml_declaration=True)
+        return out
 
     def _run_lock_conflict(self, action: dict, task_id: str) -> dict:
         """Run holder/waiter lock conflict pattern."""
@@ -377,3 +459,53 @@ class Executor:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _resolve_path(path: str) -> Path:
+    p = Path(path).expanduser()
+    if p.is_absolute():
+        return p
+    return (Path.cwd() / p).resolve()
+
+
+def _tail(path: Path, limit: int = 4000) -> str:
+    try:
+        if not path.exists():
+            return ""
+        text = path.read_text(encoding="utf-8", errors="replace")
+        return text[-limit:]
+    except Exception:
+        return ""
+
+
+def _format_weight(value: Any) -> str:
+    numeric = float(value)
+    if numeric.is_integer():
+        return str(int(numeric))
+    return f"{numeric:g}"
+
+
+def _set_text(root: ET.Element, path: str, value: str) -> None:
+    elems = root.findall(path)
+    if elems:
+        for elem in elems:
+            elem.text = value
+        return
+    if path == "terminals":
+        ET.SubElement(root, "terminals").text = value
+        return
+    if path.endswith("/rate") or path.endswith("/weights") or path.endswith("/time"):
+        work = root.find(".//work")
+        if work is not None:
+            ET.SubElement(work, path.rsplit("/", 1)[-1]).text = value
+
+
+def _replace_jdbc_database(root: ET.Element, database: str) -> None:
+    for elem in root.iter():
+        if elem.text and "jdbc:mysql://" in elem.text:
+            elem.text = re.sub(
+                r"(jdbc:mysql://[^/]+/)([^?]+)",
+                rf"\g<1>{database}",
+                elem.text,
+                count=1,
+            )

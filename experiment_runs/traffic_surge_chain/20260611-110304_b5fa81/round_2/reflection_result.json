@@ -1,0 +1,46 @@
+{
+  "failure_reason": "The surge increased concurrency and produced short lock conflicts, but average lock wait time did not rise enough to push any query past the slow-query threshold. Without slow queries, throughput stayed at or above baseline, so the terminal qps_drop was not hit. This is consistent with prior runs: traffic_surge alone has repeatedly failed to generate slow_query and qps_drop. You likely need stronger, longer, and more write-heavy contention to create sustained blocking, or else add injected_nodes (e.g., slow_sql/lock_holder) if you want deterministic slow-query and QPS collapse.",
+  "suggested_changes": [
+    "Increase traffic_surge terminals to 120 (≈12 per warehouse) to amplify concurrent row-level conflicts and raise lock wait times.",
+    "Raise traffic_surge rate to 2800 tx/s to exceed service capacity and induce queueing so that some transactions wait beyond long_query_time.",
+    "Extend traffic_surge duration_sec to 900 to allow contention to build and persist long enough to register slow_query_count_delta ≥ 1.",
+    "Skew transaction_mix to be write-heavy and lock-prone: new_order=0.55, payment=0.20, delivery=0.15, stock_level=0.08, order_status=0.02. The higher Delivery share increases lock hold times; maintaining some Stock-Level helps produce longer reads under contention.",
+    "Use mix_template=\"tpcc_write_lock_hot\" to bias towards high-contention paths; keep rationale documenting the intent to elevate Innodb_row_lock_time_avg and trigger slow queries.",
+    "Operational check: ensure slow query logging is enabled and long_query_time is not set excessively high; otherwise traffic-only changes may still fail to emit slow queries.",
+    "If traffic_surge remains the only injected node, be aware that producing a clear qps_drop from a traffic spike alone can be unreliable. For deterministic reproduction, consider adding injected_nodes like a targeted lock holder or slow SQL in a future run (do not change them in this run)."
+  ],
+  "task_parameter_updates": {
+    "traffic_surge": {
+      "terminals": 120,
+      "rate": 2800,
+      "duration_sec": 900,
+      "transaction_mix": {
+        "new_order": 0.55,
+        "payment": 0.2,
+        "delivery": 0.15,
+        "stock_level": 0.08,
+        "order_status": 0.02
+      },
+      "mix_template": "tpcc_write_lock_hot",
+      "rationale": "Increase concurrency and write-heavy skew to elevate row lock contention and average lock wait time, pushing some transactions beyond the slow-query threshold and causing throughput collapse (qps_ratio down ≤ 0.7)."
+    }
+  },
+  "risk_warning": "These changes can cause severe lock contention, long waits (>10s), deadlocks, rollback storms, and QPS collapse. Monitor error rates, deadlocks, InnoDB lock wait metrics, and replication lag. Have safeguards to abort the surge if sustained timeouts or service SLO violations exceed acceptable limits.",
+  "memory_update": [
+    {
+      "anomaly": "traffic_surge_to_qps_drop_on_tpcc",
+      "path": [
+        "traffic_surge",
+        "threads_concurrency_up",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "outcome": "Propagation chain NOT fully reproduced. 3/5 nodes hit. Failure at: terminal_not_hit:qps_drop",
+      "success": false,
+      "round": 0,
+      "node_hit_ratio": 0.6
+    }
+  ],
+  "raw_text": "{\n  \"failure_reason\": \"The surge increased concurrency and produced short lock conflicts, but average lock wait time did not rise enough to push any query past the slow-query threshold. Without slow queries, throughput stayed at or above baseline, so the terminal qps_drop was not hit. This is consistent with prior runs: traffic_surge alone has repeatedly failed to generate slow_query and qps_drop. You likely need stronger, longer, and more write-heavy contention to create sustained blocking, or else add injected_nodes (e.g., slow_sql/lock_holder) if you want deterministic slow-query and QPS collapse.\",\n  \"suggested_changes\": [\n    \"Increase traffic_surge terminals to 120 (≈12 per warehouse) to amplify concurrent row-level conflicts and raise lock wait times.\",\n    \"Raise traffic_surge rate to 2800 tx/s to exceed service capacity and induce queueing so that some transactions wait beyond long_query_time.\",\n    \"Extend traffic_surge duration_sec to 900 to allow contention to build and persist long enough to register slow_query_count_delta ≥ 1.\",\n    \"Skew transaction_mix to be write-heavy and lock-prone: new_order=0.55, payment=0.20, delivery=0.15, stock_level=0.08, order_status=0.02. The higher Delivery share increases lock hold times; maintaining some Stock-Level helps produce longer reads under contention.\",\n    \"Use mix_template=\\\"tpcc_write_lock_hot\\\" to bias towards high-contention paths; keep rationale documenting the intent to elevate Innodb_row_lock_time_avg and trigger slow queries.\",\n    \"Operational check: ensure slow query logging is enabled and long_query_time is not set excessively high; otherwise traffic-only changes may still fail to emit slow queries.\",\n    \"If traffic_surge remains the only injected node, be aware that producing a clear qps_drop from a traffic spike alone can be unreliable. For deterministic reproduction, consider adding injected_nodes like a targeted lock holder or slow SQL in a future run (do not change them in this run).\"\n  ],\n  \"task_parameter_updates\": {\n    \"traffic_surge\": {\n      \"terminals\": 120,\n      \"rate\": 2800,\n      \"duration_sec\": 900,\n      \"transaction_mix\": {\n        \"new_order\": 0.55,\n        \"payment\": 0.20,\n        \"delivery\": 0.15,\n        \"stock_level\": 0.08,\n        \"order_status\": 0.02\n      },\n      \"mix_template\": \"tpcc_write_lock_hot\",\n      \"rationale\": \"Increase concurrency and write-heavy skew to elevate row lock contention and average lock wait time, pushing some transactions beyond the slow-query threshold and causing throughput collapse (qps_ratio down ≤ 0.7).\"\n    }\n  },\n  \"risk_warning\": \"These changes can cause severe lock contention, long waits (>10s), deadlocks, rollback storms, and QPS collapse. Monitor error rates, deadlocks, InnoDB lock wait metrics, and replication lag. Have safeguards to abort the surge if sustained timeouts or service SLO violations exceed acceptable limits.\"\n}"
+}

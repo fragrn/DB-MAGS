@@ -1,0 +1,899 @@
+{
+  "config": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  },
+  "events": [
+    {
+      "event": "start_workload",
+      "timestamp": 1781167343.4964428,
+      "pid": 32848,
+      "command": [
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-jar",
+        "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/.tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+        "-b",
+        "tpcc",
+        "-c",
+        "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml",
+        "--create=false",
+        "--load=false",
+        "--execute=true"
+      ],
+      "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml"
+    },
+    {
+      "event": "warmup",
+      "timestamp": 1781167343.49708,
+      "duration_sec": 5.0
+    },
+    {
+      "event": "stop_workload",
+      "timestamp": 1781167914.782567,
+      "running_before_stop": true,
+      "exit_code": 143
+    }
+  ],
+  "samples": [
+    {
+      "phase": "baseline",
+      "index": 0,
+      "timestamp": 1781167359.4099488,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "128365",
+        "Com_insert": "1008595",
+        "Com_select": "7591052",
+        "Com_update": "3760789",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "8787805",
+        "Innodb_row_lock_time_avg": "18",
+        "Innodb_row_lock_waits": "480278",
+        "Max_used_connections": "79",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "5",
+        "Threads_running": "6",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1132255,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 8641,
+            "User": "root",
+            "Host": "localhost:56824",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "waiting for handler commit",
+            "Info": "commit"
+          },
+          {
+            "Id": 8642,
+            "User": "root",
+            "Host": "localhost:56825",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 3966.320068359375\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8643,
+            "User": "root",
+            "Host": "localhost:56826",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "statistics",
+            "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8644,
+            "User": "root",
+            "Host": "localhost:56827",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "statistics",
+            "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8652,
+            "User": "root",
+            "Host": "localhost:56849",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 2639.6,
+        "tps": 1679.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 3.72,
+          "5m": 2.7,
+          "15m": 2.35
+        },
+        "cpu_usage": {
+          "user_pct": 32.6,
+          "sys_pct": 24.92,
+          "idle_pct": 43.1,
+          "usage_ratio": 0.575
+        },
+        "memory": {
+          "total_kb": 2084768,
+          "active_kb": 1355168,
+          "wired_kb": 714340,
+          "free_kb": 15260,
+          "usage_ratio": 0.9927
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 368324288512,
+          "free_bytes": 126060507136,
+          "usage_ratio": 0.745
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 32848,
+        "running": true,
+        "start_time": 1781167343.4964428,
+        "elapsed_sec": 19.848,
+        "exit_code": null,
+        "stdout_tail": "[INFO ] 2026-06-11 16:42:23,970 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n\nBenchmark:                       TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}\nConfiguration:                   /Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml\nType:                            MYSQL\nDriver:                          com.mysql.cj.jdbc.Driver\nURL:                             jdbc:mysql://127.0.0.1:3306/tpcc_10W?rewriteBatchedStatements=true&allowPublicKeyRetrieval=True&sslMode=DISABLED\nIsolation:                       TRANSACTION_SERIALIZABLE\nBatch Size:                      128\nDDL Path:                        null\nLoader Threads:                  10\nSession Setup File:              null\nScale Factor:                    1.0\nTerminals:                       4\nNew Connection Per Txn:          false\nReconnect on Connection Failure: true\n\n[INFO ] 2026-06-11 16:42:23,971 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n[INFO ] 2026-06-11 16:42:24,284 [main]  com.oltpbenchmark.DBWorkload runWorkload - Creating 4 virtual terminals...\n[INFO ] 2026-06-11 16:42:24,298 [main]  com.oltpbenchmark.DBWorkload runWorkload - Launching the TPCC Benchmark with 1 Phase...\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mPHASE START\u001b[0;0m :: [Workload=TPCC] [Serial=false] [Time=1800] [WarmupTime=0] [Rate=10000.0] [Arrival=REGULAR] [Ratios=[45.0, 43.0, 4.0, 4.0, 4.0]] [ActiveWorkers=4]\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mMEASURE\u001b[0;0m :: Warmup complete, starting measurements.\n",
+        "stderr_tail": "",
+        "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "baseline",
+      "index": 1,
+      "timestamp": 1781167368.486584,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "128769",
+        "Com_insert": "1011396",
+        "Com_select": "7613302",
+        "Com_update": "3771744",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "8807842",
+        "Innodb_row_lock_time_avg": "18",
+        "Innodb_row_lock_waits": "481607",
+        "Max_used_connections": "79",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "5",
+        "Threads_running": "5",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1132264,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 8641,
+            "User": "root",
+            "Host": "localhost:56824",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 2182.800048828125\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8642,
+            "User": "root",
+            "Host": "localhost:56825",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "update",
+            "Info": "INSERT INTO new_order\n     (NO_O_ID, NO_D_ID, NO_W_ID)\n     VALUES ( 25303, 4, 1)"
+          },
+          {
+            "Id": 8643,
+            "User": "root",
+            "Host": "localhost:56826",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 478.3299865722656\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8644,
+            "User": "root",
+            "Host": "localhost:56827",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "waiting for handler commit",
+            "Info": "commit"
+          },
+          {
+            "Id": 8655,
+            "User": "root",
+            "Host": "localhost:56875",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 2991.2,
+        "tps": 1906.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 3.91,
+          "5m": 2.77,
+          "15m": 2.38
+        },
+        "cpu_usage": {
+          "user_pct": 29.64,
+          "sys_pct": 18.33,
+          "idle_pct": 52.2,
+          "usage_ratio": 0.48
+        },
+        "memory": {
+          "total_kb": 2070204,
+          "active_kb": 1361124,
+          "wired_kb": 693260,
+          "free_kb": 15820,
+          "usage_ratio": 0.9924
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 368325529600,
+          "free_bytes": 126059266048,
+          "usage_ratio": 0.745
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 32848,
+        "running": true,
+        "start_time": 1781167343.4964428,
+        "elapsed_sec": 28.498,
+        "exit_code": null,
+        "stdout_tail": "[INFO ] 2026-06-11 16:42:23,970 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n\nBenchmark:                       TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}\nConfiguration:                   /Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml\nType:                            MYSQL\nDriver:                          com.mysql.cj.jdbc.Driver\nURL:                             jdbc:mysql://127.0.0.1:3306/tpcc_10W?rewriteBatchedStatements=true&allowPublicKeyRetrieval=True&sslMode=DISABLED\nIsolation:                       TRANSACTION_SERIALIZABLE\nBatch Size:                      128\nDDL Path:                        null\nLoader Threads:                  10\nSession Setup File:              null\nScale Factor:                    1.0\nTerminals:                       4\nNew Connection Per Txn:          false\nReconnect on Connection Failure: true\n\n[INFO ] 2026-06-11 16:42:23,971 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n[INFO ] 2026-06-11 16:42:24,284 [main]  com.oltpbenchmark.DBWorkload runWorkload - Creating 4 virtual terminals...\n[INFO ] 2026-06-11 16:42:24,298 [main]  com.oltpbenchmark.DBWorkload runWorkload - Launching the TPCC Benchmark with 1 Phase...\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mPHASE START\u001b[0;0m :: [Workload=TPCC] [Serial=false] [Time=1800] [WarmupTime=0] [Rate=10000.0] [Arrival=REGULAR] [Ratios=[45.0, 43.0, 4.0, 4.0, 4.0]] [ActiveWorkers=4]\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mMEASURE\u001b[0;0m :: Warmup complete, starting measurements.\n",
+        "stderr_tail": "",
+        "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 0,
+      "timestamp": 1781167793.290658,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "154458",
+        "Com_insert": "1200331",
+        "Com_select": "9096181",
+        "Com_update": "4507315",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "9773351",
+        "Innodb_row_lock_time_avg": "17",
+        "Innodb_row_lock_waits": "572873",
+        "Max_used_connections": "79",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "5",
+        "Threads_running": "6",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1132689,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 8641,
+            "User": "root",
+            "Host": "localhost:56824",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "System lock",
+            "Info": "UPDATE customer\n       SET C_BALANCE = -930147.9375,\n           C_YTD_PAYMENT = 1041813.9375,\n           C_PAYMENT_CNT = 398\n     WHERE C_W_ID = 1\n       AND C_D_ID = 2\n       AND C_ID = 247"
+          },
+          {
+            "Id": 8642,
+            "User": "root",
+            "Host": "localhost:56825",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 1,
+            "State": "statistics",
+            "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8643,
+            "User": "root",
+            "Host": "localhost:56826",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 25.989999771118164\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8644,
+            "User": "root",
+            "Host": "localhost:56827",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 1,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 4986.330078125\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8666,
+            "User": "root",
+            "Host": "localhost:58847",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 2238.6,
+        "tps": 1444.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 3.14,
+          "5m": 2.96,
+          "15m": 2.62
+        },
+        "cpu_usage": {
+          "user_pct": 24.93,
+          "sys_pct": 20.78,
+          "idle_pct": 54.28,
+          "usage_ratio": 0.457
+        },
+        "memory": {
+          "total_kb": 1934052,
+          "active_kb": 1192532,
+          "wired_kb": 716772,
+          "free_kb": 24748,
+          "usage_ratio": 0.9872
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369003241472,
+          "free_bytes": 125381554176,
+          "usage_ratio": 0.7464
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 32848,
+        "running": true,
+        "start_time": 1781167343.4964428,
+        "elapsed_sec": 452.799,
+        "exit_code": null,
+        "stdout_tail": "[INFO ] 2026-06-11 16:42:23,970 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n\nBenchmark:                       TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}\nConfiguration:                   /Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml\nType:                            MYSQL\nDriver:                          com.mysql.cj.jdbc.Driver\nURL:                             jdbc:mysql://127.0.0.1:3306/tpcc_10W?rewriteBatchedStatements=true&allowPublicKeyRetrieval=True&sslMode=DISABLED\nIsolation:                       TRANSACTION_SERIALIZABLE\nBatch Size:                      128\nDDL Path:                        null\nLoader Threads:                  10\nSession Setup File:              null\nScale Factor:                    1.0\nTerminals:                       4\nNew Connection Per Txn:          false\nReconnect on Connection Failure: true\n\n[INFO ] 2026-06-11 16:42:23,971 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n[INFO ] 2026-06-11 16:42:24,284 [main]  com.oltpbenchmark.DBWorkload runWorkload - Creating 4 virtual terminals...\n[INFO ] 2026-06-11 16:42:24,298 [main]  com.oltpbenchmark.DBWorkload runWorkload - Launching the TPCC Benchmark with 1 Phase...\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mPHASE START\u001b[0;0m :: [Workload=TPCC] [Serial=false] [Time=1800] [WarmupTime=0] [Rate=10000.0] [Arrival=REGULAR] [Ratios=[45.0, 43.0, 4.0, 4.0, 4.0]] [ActiveWorkers=4]\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mMEASURE\u001b[0;0m :: Warmup complete, starting measurements.\n",
+        "stderr_tail": "",
+        "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 1,
+      "timestamp": 1781167801.346805,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "154910",
+        "Com_insert": "1203142",
+        "Com_select": "9118431",
+        "Com_update": "4518427",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "9817015",
+        "Innodb_row_lock_time_avg": "17",
+        "Innodb_row_lock_waits": "574414",
+        "Max_used_connections": "79",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "9",
+        "Threads_running": "6",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1132697,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 8641,
+            "User": "root",
+            "Host": "localhost:56824",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "statistics",
+            "Info": "SELECT S_QUANTITY, S_DATA, S_DIST_01, S_DIST_02, S_DIST_03, S_DIST_04, S_DIST_05,\n           S_DIST_06, S_DIST_07, S_DIST_08, S_DIST_09, S_DIST_10\n      FROM stock\n     WHERE S_I_ID = 65095\n       AND S_W_ID = 1 FOR UPDATE"
+          },
+          {
+            "Id": 8642,
+            "User": "root",
+            "Host": "localhost:56825",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "Opening tables",
+            "Info": "UPDATE stock\n       SET S_QUANTITY = 90 ,\n           S_YTD = S_YTD + 8,\n           S_ORDER_CNT = S_ORDER_CNT + 1,\n           S_REMOTE_CNT = S_REMOTE_CNT + 0\n     WHERE S_I_ID = 41703\n       AND S_W_ID = 1\n"
+          },
+          {
+            "Id": 8643,
+            "User": "root",
+            "Host": "localhost:56826",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "statistics",
+            "Info": "SELECT S_QUANTITY, S_DATA, S_DIST_01, S_DIST_02, S_DIST_03, S_DIST_04, S_DIST_05,\n           S_DIST_06, S_DIST_07, S_DIST_08, S_DIST_09, S_DIST_10\n      FROM stock\n     WHERE S_I_ID = 73447\n       AND S_W_ID = 1 FOR UPDATE"
+          },
+          {
+            "Id": 8644,
+            "User": "root",
+            "Host": "localhost:56827",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "statistics",
+            "Info": "SELECT O_C_ID FROM oorder\n    WHERE O_ID = 21592\n    AND O_D_ID = 3\n    AND O_W_ID = 1"
+          },
+          {
+            "Id": 8669,
+            "User": "root",
+            "Host": "localhost:58870",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 2222.8798828125\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8670,
+            "User": "root",
+            "Host": "localhost:58871",
+            "db": "tpcc_10w",
+            "Command": "Sleep",
+            "Time": 0,
+            "State": "",
+            "Info": null
+          },
+          {
+            "Id": 8671,
+            "User": "root",
+            "Host": "localhost:58872",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "update",
+            "Info": "INSERT INTO order_line\n     (OL_O_ID, OL_D_ID, OL_W_ID, OL_NUMBER, OL_I_ID, OL_SUPPLY_W_ID, OL_QUANTITY, OL_AMOUNT, OL_DIST_INFO)\n     VALUES (39197,6,1,1,50305,1,4,62.880001068115234,'trgelzmvbnkrndfnfldvtlo'),(39197,6,1,2,80870,1,4,299.0,'bfpfyzxpowfntdfgalbsvhw'),(39197,6,1,3,1349,1,1,59.0,'tgbwvkfsawiytergytkplbe'),(39197,6,1,4,52326,1,2,155.89999389648438,'tpbwwpkohxsrzivphjnwgbi'),(39197,6,1,5,38051,1,1,31.860000610351562,'xmrtfhnixhlelvjuxoorhit'),(39197,6,1,6,15527,1,5,205.4499969482422,'ttzltkrhvilvjxulxursjvd'),(39197,6,1,7,64999,1,8,52.400001525878906,'dkgpljyzbqftpmbrbxpbrfa'),(39197,6,1,8,70945,1,4,139.9199981689453,'rjzvjykgtyqzwvngprpftjv'),(39197,6,1,9,48850,1,8,526.0800170898438,'fofjwwyqocpqndxosfyndrc'),(39197,6,1,10,40607,1,2,66.13999938964844,'iyroygekuvkikefennuftum')"
+          },
+          {
+            "Id": 8672,
+            "User": "root",
+            "Host": "localhost:58873",
+            "db": "tpcc_10w",
+            "Command": "Sleep",
+            "Time": 0,
+            "State": "",
+            "Info": null
+          },
+          {
+            "Id": 8674,
+            "User": "root",
+            "Host": "localhost:58895",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 3763.2,
+        "tps": 2388.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 3.65,
+          "5m": 3.08,
+          "15m": 2.67
+        },
+        "cpu_usage": {
+          "user_pct": 24.22,
+          "sys_pct": 20.13,
+          "idle_pct": 55.63,
+          "usage_ratio": 0.443
+        },
+        "memory": {
+          "total_kb": 1988044,
+          "active_kb": 1235324,
+          "wired_kb": 693036,
+          "free_kb": 59684,
+          "usage_ratio": 0.97
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369021509632,
+          "free_bytes": 125363286016,
+          "usage_ratio": 0.7464
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 32848,
+        "running": true,
+        "start_time": 1781167343.4964428,
+        "elapsed_sec": 460.829,
+        "exit_code": null,
+        "stdout_tail": "[INFO ] 2026-06-11 16:42:23,970 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n\nBenchmark:                       TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}\nConfiguration:                   /Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml\nType:                            MYSQL\nDriver:                          com.mysql.cj.jdbc.Driver\nURL:                             jdbc:mysql://127.0.0.1:3306/tpcc_10W?rewriteBatchedStatements=true&allowPublicKeyRetrieval=True&sslMode=DISABLED\nIsolation:                       TRANSACTION_SERIALIZABLE\nBatch Size:                      128\nDDL Path:                        null\nLoader Threads:                  10\nSession Setup File:              null\nScale Factor:                    1.0\nTerminals:                       4\nNew Connection Per Txn:          false\nReconnect on Connection Failure: true\n\n[INFO ] 2026-06-11 16:42:23,971 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n[INFO ] 2026-06-11 16:42:24,284 [main]  com.oltpbenchmark.DBWorkload runWorkload - Creating 4 virtual terminals...\n[INFO ] 2026-06-11 16:42:24,298 [main]  com.oltpbenchmark.DBWorkload runWorkload - Launching the TPCC Benchmark with 1 Phase...\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mPHASE START\u001b[0;0m :: [Workload=TPCC] [Serial=false] [Time=1800] [WarmupTime=0] [Rate=10000.0] [Arrival=REGULAR] [Ratios=[45.0, 43.0, 4.0, 4.0, 4.0]] [ActiveWorkers=4]\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mMEASURE\u001b[0;0m :: Warmup complete, starting measurements.\n",
+        "stderr_tail": "",
+        "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "injection",
+      "index": 2,
+      "timestamp": 1781167809.37996,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "155334",
+        "Com_insert": "1206895",
+        "Com_select": "9147662",
+        "Com_update": "4532868",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "9862718",
+        "Innodb_row_lock_time_avg": "17",
+        "Innodb_row_lock_waits": "576462",
+        "Max_used_connections": "79",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "5",
+        "Threads_running": "5",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1132705,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 8641,
+            "User": "root",
+            "Host": "localhost:56824",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 1230.9200439453125\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8642,
+            "User": "root",
+            "Host": "localhost:56825",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 4837.9599609375\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8643,
+            "User": "root",
+            "Host": "localhost:56826",
+            "db": "tpcc_10w",
+            "Command": "Sleep",
+            "Time": 0,
+            "State": "",
+            "Info": null
+          },
+          {
+            "Id": 8644,
+            "User": "root",
+            "Host": "localhost:56827",
+            "db": "tpcc_10w",
+            "Command": "Sleep",
+            "Time": 0,
+            "State": "",
+            "Info": null
+          },
+          {
+            "Id": 8678,
+            "User": "root",
+            "Host": "localhost:58911",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 3245.8,
+        "tps": 2083.0,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 3.84,
+          "5m": 3.13,
+          "15m": 2.69
+        },
+        "cpu_usage": {
+          "user_pct": 21.78,
+          "sys_pct": 19.65,
+          "idle_pct": 58.55,
+          "usage_ratio": 0.414
+        },
+        "memory": {
+          "total_kb": 2016752,
+          "active_kb": 1232532,
+          "wired_kb": 714852,
+          "free_kb": 69368,
+          "usage_ratio": 0.9656
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369021603840,
+          "free_bytes": 125363191808,
+          "usage_ratio": 0.7464
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 32848,
+        "running": true,
+        "start_time": 1781167343.4964428,
+        "elapsed_sec": 468.661,
+        "exit_code": null,
+        "stdout_tail": "[INFO ] 2026-06-11 16:42:23,970 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n\nBenchmark:                       TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}\nConfiguration:                   /Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml\nType:                            MYSQL\nDriver:                          com.mysql.cj.jdbc.Driver\nURL:                             jdbc:mysql://127.0.0.1:3306/tpcc_10W?rewriteBatchedStatements=true&allowPublicKeyRetrieval=True&sslMode=DISABLED\nIsolation:                       TRANSACTION_SERIALIZABLE\nBatch Size:                      128\nDDL Path:                        null\nLoader Threads:                  10\nSession Setup File:              null\nScale Factor:                    1.0\nTerminals:                       4\nNew Connection Per Txn:          false\nReconnect on Connection Failure: true\n\n[INFO ] 2026-06-11 16:42:23,971 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n[INFO ] 2026-06-11 16:42:24,284 [main]  com.oltpbenchmark.DBWorkload runWorkload - Creating 4 virtual terminals...\n[INFO ] 2026-06-11 16:42:24,298 [main]  com.oltpbenchmark.DBWorkload runWorkload - Launching the TPCC Benchmark with 1 Phase...\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mPHASE START\u001b[0;0m :: [Workload=TPCC] [Serial=false] [Time=1800] [WarmupTime=0] [Rate=10000.0] [Arrival=REGULAR] [Ratios=[45.0, 43.0, 4.0, 4.0, 4.0]] [ActiveWorkers=4]\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mMEASURE\u001b[0;0m :: Warmup complete, starting measurements.\n",
+        "stderr_tail": "",
+        "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    },
+    {
+      "phase": "recovery",
+      "index": 0,
+      "timestamp": 1781167817.223922,
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "155866",
+        "Com_insert": "1210198",
+        "Com_select": "9174069",
+        "Com_update": "4546047",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "9880039",
+        "Innodb_row_lock_time_avg": "17",
+        "Innodb_row_lock_waits": "578046",
+        "Max_used_connections": "79",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "5",
+        "Threads_running": "6",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1132713,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 8641,
+            "User": "root",
+            "Host": "localhost:56824",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 866.780029296875\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8642,
+            "User": "root",
+            "Host": "localhost:56825",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "waiting for handler commit",
+            "Info": "commit"
+          },
+          {
+            "Id": 8643,
+            "User": "root",
+            "Host": "localhost:56826",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "statistics",
+            "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8644,
+            "User": "root",
+            "Host": "localhost:56827",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 3987.550048828125\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 8681,
+            "User": "root",
+            "Host": "localhost:58937",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "workload": {
+        "qps": 3571.8,
+        "tps": 2311.4,
+        "interval_sec": 5.0
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 3.94,
+          "5m": 3.17,
+          "15m": 2.71
+        },
+        "cpu_usage": {
+          "user_pct": 19.7,
+          "sys_pct": 18.39,
+          "idle_pct": 62.53,
+          "usage_ratio": 0.381
+        },
+        "memory": {
+          "total_kb": 2029972,
+          "active_kb": 1241368,
+          "wired_kb": 688984,
+          "free_kb": 99620,
+          "usage_ratio": 0.9509
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369039679488,
+          "free_bytes": 125345116160,
+          "usage_ratio": 0.7465
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      },
+      "workload_status": {
+        "pid": 32848,
+        "running": true,
+        "start_time": 1781167343.4964428,
+        "elapsed_sec": 476.333,
+        "exit_code": null,
+        "stdout_tail": "[INFO ] 2026-06-11 16:42:23,970 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n\nBenchmark:                       TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}\nConfiguration:                   /Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml\nType:                            MYSQL\nDriver:                          com.mysql.cj.jdbc.Driver\nURL:                             jdbc:mysql://127.0.0.1:3306/tpcc_10W?rewriteBatchedStatements=true&allowPublicKeyRetrieval=True&sslMode=DISABLED\nIsolation:                       TRANSACTION_SERIALIZABLE\nBatch Size:                      128\nDDL Path:                        null\nLoader Threads:                  10\nSession Setup File:              null\nScale Factor:                    1.0\nTerminals:                       4\nNew Connection Per Txn:          false\nReconnect on Connection Failure: true\n\n[INFO ] 2026-06-11 16:42:23,971 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n[INFO ] 2026-06-11 16:42:24,284 [main]  com.oltpbenchmark.DBWorkload runWorkload - Creating 4 virtual terminals...\n[INFO ] 2026-06-11 16:42:24,298 [main]  com.oltpbenchmark.DBWorkload runWorkload - Launching the TPCC Benchmark with 1 Phase...\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mPHASE START\u001b[0;0m :: [Workload=TPCC] [Serial=false] [Time=1800] [WarmupTime=0] [Rate=10000.0] [Arrival=REGULAR] [Ratios=[45.0, 43.0, 4.0, 4.0, 4.0]] [ActiveWorkers=4]\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mMEASURE\u001b[0;0m :: Warmup complete, starting measurements.\n",
+        "stderr_tail": "",
+        "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml"
+      }
+    }
+  ],
+  "status": {
+    "pid": 32848,
+    "running": false,
+    "start_time": 1781167343.4964428,
+    "elapsed_sec": 571.625,
+    "exit_code": 143,
+    "stdout_tail": "[INFO ] 2026-06-11 16:42:23,970 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n\nBenchmark:                       TPCC {com.oltpbenchmark.benchmarks.tpcc.TPCCBenchmark}\nConfiguration:                   /Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml\nType:                            MYSQL\nDriver:                          com.mysql.cj.jdbc.Driver\nURL:                             jdbc:mysql://127.0.0.1:3306/tpcc_10W?rewriteBatchedStatements=true&allowPublicKeyRetrieval=True&sslMode=DISABLED\nIsolation:                       TRANSACTION_SERIALIZABLE\nBatch Size:                      128\nDDL Path:                        null\nLoader Threads:                  10\nSession Setup File:              null\nScale Factor:                    1.0\nTerminals:                       4\nNew Connection Per Txn:          false\nReconnect on Connection Failure: true\n\n[INFO ] 2026-06-11 16:42:23,971 [main]  com.oltpbenchmark.DBWorkload main - ======================================================================\n[INFO ] 2026-06-11 16:42:24,284 [main]  com.oltpbenchmark.DBWorkload runWorkload - Creating 4 virtual terminals...\n[INFO ] 2026-06-11 16:42:24,298 [main]  com.oltpbenchmark.DBWorkload runWorkload - Launching the TPCC Benchmark with 1 Phase...\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mPHASE START\u001b[0;0m :: [Workload=TPCC] [Serial=false] [Time=1800] [WarmupTime=0] [Rate=10000.0] [Arrival=REGULAR] [Ratios=[45.0, 43.0, 4.0, 4.0, 4.0]] [ActiveWorkers=4]\n[INFO ] 2026-06-11 16:42:24,301 [main]  com.oltpbenchmark.ThreadBench runRateLimitedMultiPhase - \u001b[0;1mMEASURE\u001b[0;0m :: Warmup complete, starting measurements.\n",
+    "stderr_tail": "",
+    "runtime_config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/experiment_runs/traffic_surge_chain/20260611-084217_1ea503/round_1/runtime_local_tpcc_10W_config.xml"
+  }
+}

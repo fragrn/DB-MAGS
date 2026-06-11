@@ -1,0 +1,31 @@
+{
+  "failure_reason": "Propagation chain NOT fully reproduced. 1/5 nodes hit. Failure at: terminal_not_hit:qps_drop",
+  "suggested_changes": [
+    "Prior nodes need to produce more concurrent access before this node. Increase traffic_surge concurrency or ensure holder/waiter concurrency is high enough.",
+    "The upstream nodes are not producing sufficient query pressure. Increase concurrency or duration of prior tasks."
+  ],
+  "task_parameter_updates": {
+    "lock_contention": {
+      "holder_concurrency": "increase_by_1",
+      "waiter_concurrency": "increase_by_4"
+    }
+  },
+  "risk_warning": "",
+  "memory_update": [
+    {
+      "anomaly": "traffic_surge_to_qps_drop_on_tpcc",
+      "path": [
+        "traffic_surge",
+        "threads_concurrency_up",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "outcome": "Propagation chain NOT fully reproduced. 1/5 nodes hit. Failure at: terminal_not_hit:qps_drop",
+      "success": false,
+      "round": 0,
+      "node_hit_ratio": 0.2
+    }
+  ],
+  "raw_text": ""
+}

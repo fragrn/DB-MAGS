@@ -13,8 +13,11 @@ from __future__ import annotations
 
 import inspect
 import json
+import socket
 import time
 import uuid
+import xml.etree.ElementTree as ET
+from pathlib import Path
 from typing import Any, List, Optional
 
 from agent.config import RuntimeConfig
@@ -38,6 +41,7 @@ PLANNING_TOOL_NAMES = {
     "explain_sql",
     "latency_sample",
     "build_slow_sql_task",
+    "get_benchbase_workload_defaults",
     "build_traffic_task",
     "build_lock_task",
     "build_chaos_task",
@@ -46,6 +50,94 @@ PLANNING_TOOL_NAMES = {
     "check_safety",
     "read_memory",
 }
+
+BENCHBASE_BENCHMARKS = {
+    "tpcc": {
+        "transaction_types": ["NewOrder", "Payment", "OrderStatus", "Delivery", "StockLevel"],
+        "default_mix": {"NewOrder": 45, "Payment": 43, "OrderStatus": 4, "Delivery": 4, "StockLevel": 4},
+    },
+    "tpch": {
+        "transaction_types": [f"Q{i}" for i in range(1, 23)],
+        "default_mix": {f"Q{i}": 1 for i in range(1, 23)},
+    },
+    "tatp": {
+        "transaction_types": [
+            "DeleteCallForwarding",
+            "GetAccessData",
+            "GetNewDestination",
+            "GetSubscriberData",
+            "InsertCallForwarding",
+            "UpdateLocation",
+            "UpdateSubscriberData",
+        ],
+        "default_mix": {
+            "DeleteCallForwarding": 2,
+            "GetAccessData": 35,
+            "GetNewDestination": 10,
+            "GetSubscriberData": 35,
+            "InsertCallForwarding": 2,
+            "UpdateLocation": 14,
+            "UpdateSubscriberData": 2,
+        },
+    },
+}
+TPCC_TRANSACTION_TYPES = BENCHBASE_BENCHMARKS["tpcc"]["transaction_types"]
+TRAFFIC_SURGE_PROFILE_FIELDS = {
+    "benchmark",
+    "database",
+    "config_path",
+    "terminals",
+    "rate",
+    "duration_sec",
+    "transaction_mix",
+    "mix_template",
+    "rationale",
+}
+TRAFFIC_SURGE_FORBIDDEN_FIELDS = {
+    "sql",
+    "query",
+    "queries",
+    "lock_holder",
+    "lock_sql",
+    "lock_task",
+    "slow_sql",
+    "custom_actions",
+    "extra_tasks",
+    "actions",
+    "ramp_stages",
+    "target_connections",
+}
+
+
+class LLMTimeoutError(TimeoutError):
+    """Raised when an OpenAI-compatible chat completion request times out."""
+
+
+LLM_HTTP_TIMEOUT_SEC = 120
+LLM_HTTP_MAX_ATTEMPTS = 2
+
+
+def _read_chat_completion_json(req: Any, *, timeout_sec: int = LLM_HTTP_TIMEOUT_SEC, label: str) -> dict[str, Any]:
+    """Read an OpenAI-compatible chat completion response with one retry on timeout."""
+    import urllib.request
+
+    last_timeout: BaseException | None = None
+    for attempt in range(1, LLM_HTTP_MAX_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
+                raw = resp.read()
+            if isinstance(raw, bytes):
+                raw = raw.decode("utf-8")
+            return json.loads(raw)
+        except (TimeoutError, socket.timeout) as exc:
+            last_timeout = exc
+            if attempt < LLM_HTTP_MAX_ATTEMPTS:
+                time.sleep(1.0)
+                continue
+    raise LLMTimeoutError(
+        f"{label} timed out after {timeout_sec}s "
+        f"(attempts={LLM_HTTP_MAX_ATTEMPTS}): {last_timeout}"
+    )
 
 
 def tool(name: str):
@@ -292,36 +384,27 @@ def build_slow_sql_task(
 @tool("build_traffic_task")
 def build_traffic_task(
     config: RuntimeConfig,
-    database: str,
+    profile: dict[str, Any],
     task_id: str = "",
-    root_cause: str = "traffic_surge",
-    target_connections: int = 50,
-    ramp_stages: Optional[List[dict]] = None,
-    duration_sec: int = 60,
 ) -> dict[str, Any]:
     """
-    Build a TaskSpec for traffic surge / connection ramp.
-
-    ramp_stages: list of {at_sec, connections} defining how many
-    concurrent sessions to add at each stage.
+    Build a traffic_surge TaskSpec from a validated BenchBase burst profile.
     """
+    normalized_profile = validate_traffic_surge_profile(profile)
     if not task_id:
         task_id = f"traffic_{uuid.uuid4().hex[:6]}"
 
-    if ramp_stages is None:
-        ramp_stages = [
-            {"at_sec": 0, "connections": max(target_connections // 3, 10)},
-            {"at_sec": 20, "connections": max(target_connections * 2 // 3, 20)},
-            {"at_sec": 40, "connections": target_connections},
-        ]
-
     actions = [
         {
-            "kind": "workload_ramp",
-            "database": database,
-            "ramp_stages": ramp_stages,
-            "duration_sec": duration_sec,
-            "sql": "SELECT 1",
+            "kind": "benchbase_burst",
+            "profile": dict(normalized_profile),
+            "benchmark": normalized_profile["benchmark"],
+            "database": normalized_profile["database"],
+            "config_path": normalized_profile["config_path"],
+            "terminals": normalized_profile["terminals"],
+            "rate": normalized_profile["rate"],
+            "duration_sec": normalized_profile["duration_sec"],
+            "transaction_mix": dict(normalized_profile["transaction_mix"]),
         }
     ]
 
@@ -338,11 +421,199 @@ def build_traffic_task(
         },
         "risk_assessment": "medium",
         "metadata": {
-            "root_cause": root_cause,
-            "target_connections": target_connections,
-            "ramp_stages": ramp_stages,
+            "root_cause": "traffic_surge",
+            "traffic_surge_profile": dict(normalized_profile),
         },
     }
+
+
+@tool("get_benchbase_workload_defaults")
+def get_benchbase_workload_defaults(
+    benchmark: str,
+    config_path: str = "",
+    database: str = "",
+    terminals: int = 0,
+    rate: str = "",
+    duration_sec: float = 0,
+) -> dict[str, Any]:
+    """
+    Return the current BenchBase workload defaults and constraints, with no candidate templates.
+    """
+    benchmark = _normalize_benchmark(benchmark)
+    xml_defaults = benchbase_workload_defaults(benchmark, config_path)
+    resolved_terminals = int(terminals) if terminals else xml_defaults.get("terminals")
+    resolved_rate = rate if rate not in ("", None) else xml_defaults.get("rate")
+    resolved_duration = float(duration_sec) if duration_sec else xml_defaults.get("duration_sec")
+    return {
+        "benchmark": benchmark,
+        "database": database,
+        "config_path": config_path,
+        "legal_transaction_types": list(xml_defaults["transaction_types"]),
+        "default_transaction_mix": dict(xml_defaults["transaction_mix"]),
+        "default_terminals": resolved_terminals,
+        "default_rate": resolved_rate,
+        "default_duration_sec": resolved_duration,
+        "constraints": {
+            "profile_fields": sorted(TRAFFIC_SURGE_PROFILE_FIELDS),
+            "forbidden_fields": sorted(TRAFFIC_SURGE_FORBIDDEN_FIELDS),
+            "transaction_mix": f"dict of {benchmark} transaction type to non-negative numeric weight; sum must be > 0",
+            "terminals": "positive integer; safety checker enforces connection headroom",
+            "rate": "positive numeric requests/second target or 'unlimited'",
+            "duration_sec": "positive numeric seconds; runtime requires it to fit request max_duration_sec and injection_observe_sec",
+        },
+        "policy": (
+            "Initial round should use these defaults. After reflection, the LLM may adjust "
+            "terminals, rate, duration_sec, and transaction_mix based on evaluation feedback."
+        ),
+    }
+
+
+def validate_traffic_surge_profile(profile: dict[str, Any], transaction_types: list[str] | None = None) -> dict[str, Any]:
+    """Validate and normalize a TrafficSurgeProfile for a BenchBase burst."""
+    if not isinstance(profile, dict):
+        raise ValueError("TrafficSurgeProfile must be an object")
+    forbidden = sorted(k for k in profile if k in TRAFFIC_SURGE_FORBIDDEN_FIELDS)
+    if forbidden:
+        raise ValueError(f"TrafficSurgeProfile contains forbidden fields: {', '.join(forbidden)}")
+    extra = sorted(k for k in profile if k not in TRAFFIC_SURGE_PROFILE_FIELDS)
+    if extra:
+        raise ValueError(f"TrafficSurgeProfile contains unknown fields: {', '.join(extra)}")
+    missing = sorted(k for k in TRAFFIC_SURGE_PROFILE_FIELDS if k not in profile)
+    if missing:
+        raise ValueError(f"TrafficSurgeProfile missing required fields: {', '.join(missing)}")
+    benchmark = _normalize_benchmark(profile["benchmark"])
+    database = str(profile["database"]).strip()
+    config_path = str(profile["config_path"]).strip()
+    mix_template = str(profile["mix_template"]).strip()
+    rationale = str(profile["rationale"]).strip()
+    if not database:
+        raise ValueError("TrafficSurgeProfile database is required")
+    if not config_path:
+        raise ValueError("TrafficSurgeProfile config_path is required")
+    if not mix_template:
+        raise ValueError("TrafficSurgeProfile mix_template is required")
+    if not rationale:
+        raise ValueError("TrafficSurgeProfile rationale is required")
+    terminals = int(profile["terminals"])
+    rate = _normalize_rate(profile["rate"])
+    duration_sec = float(profile["duration_sec"])
+    if terminals <= 0:
+        raise ValueError("TrafficSurgeProfile terminals must be > 0")
+    if rate != "unlimited" and float(rate) <= 0:
+        raise ValueError("TrafficSurgeProfile rate must be > 0")
+    if duration_sec <= 0:
+        raise ValueError("TrafficSurgeProfile duration_sec must be > 0")
+    raw_mix = profile["transaction_mix"]
+    if not isinstance(raw_mix, dict):
+        raise ValueError("TrafficSurgeProfile transaction_mix must be an object")
+    ordered_types = list(transaction_types or benchbase_transaction_types(benchmark, config_path))
+    unknown = sorted(k for k in raw_mix if k not in ordered_types)
+    if unknown:
+        raise ValueError(f"TrafficSurgeProfile transaction_mix has unknown transaction types: {', '.join(unknown)}")
+    mix: dict[str, float] = {}
+    for name in ordered_types:
+        value = float(raw_mix.get(name, 0))
+        if value < 0:
+            raise ValueError(f"TrafficSurgeProfile transaction_mix weight for {name} must be >= 0")
+        mix[name] = value
+    if sum(mix.values()) <= 0:
+        raise ValueError("TrafficSurgeProfile transaction_mix total weight must be > 0")
+    return {
+        "benchmark": benchmark,
+        "database": database,
+        "config_path": config_path,
+        "terminals": terminals,
+        "rate": rate,
+        "duration_sec": duration_sec,
+        "transaction_mix": mix,
+        "mix_template": mix_template,
+        "rationale": rationale,
+    }
+
+
+def benchbase_transaction_types(benchmark: str, config_path: str = "") -> list[str]:
+    """Return transaction order for a BenchBase benchmark, preferring the XML config."""
+    benchmark = _normalize_benchmark(benchmark)
+    if config_path:
+        try:
+            path = Path(config_path).expanduser()
+            if not path.is_absolute():
+                path = (Path.cwd() / path).resolve()
+            if path.exists():
+                root = ET.parse(path).getroot()
+                names = [
+                    str(name.text).strip()
+                    for name in root.findall(".//transactiontypes/transactiontype/name")
+                    if name.text and str(name.text).strip()
+                ]
+                if names:
+                    return names
+        except Exception:
+            pass
+    return list(BENCHBASE_BENCHMARKS[benchmark]["transaction_types"])
+
+
+def benchbase_workload_defaults(benchmark: str, config_path: str = "") -> dict[str, Any]:
+    """Return transaction order, weights, rate, time, and terminals from XML or benchmark defaults."""
+    benchmark = _normalize_benchmark(benchmark)
+    transaction_types = benchbase_transaction_types(benchmark, config_path)
+    defaults = {
+        "transaction_types": transaction_types,
+        "transaction_mix": _align_mix(BENCHBASE_BENCHMARKS[benchmark]["default_mix"], transaction_types),
+        "terminals": None,
+        "rate": None,
+        "duration_sec": None,
+    }
+    if not config_path:
+        return defaults
+    try:
+        path = Path(config_path).expanduser()
+        if not path.is_absolute():
+            path = (Path.cwd() / path).resolve()
+        if not path.exists():
+            return defaults
+        root = ET.parse(path).getroot()
+        terminals_elem = root.find("terminals")
+        if terminals_elem is not None and terminals_elem.text:
+            defaults["terminals"] = int(float(terminals_elem.text.strip()))
+        work = root.find(".//works/work")
+        if work is None:
+            work = root.find(".//work")
+        if work is not None:
+            rate_elem = work.find("rate")
+            time_elem = work.find("time")
+            weights_elem = work.find("weights")
+            if rate_elem is not None and rate_elem.text:
+                raw_rate = rate_elem.text.strip()
+                defaults["rate"] = "unlimited" if raw_rate.lower() == "unlimited" else float(raw_rate)
+            if time_elem is not None and time_elem.text:
+                defaults["duration_sec"] = float(time_elem.text.strip())
+            if weights_elem is not None and weights_elem.text:
+                weights = [float(x.strip()) for x in weights_elem.text.split(",") if x.strip()]
+                if len(weights) == len(transaction_types):
+                    defaults["transaction_mix"] = dict(zip(transaction_types, weights))
+    except Exception:
+        return defaults
+    return defaults
+
+
+def _align_mix(mix: dict[str, Any], transaction_types: list[str]) -> dict[str, float]:
+    return {name: float(mix.get(name, 0)) for name in transaction_types}
+
+
+def _normalize_benchmark(benchmark: Any) -> str:
+    value = str(benchmark or "").strip().lower()
+    if value not in BENCHBASE_BENCHMARKS:
+        raise ValueError(f"Unsupported BenchBase benchmark: {benchmark}")
+    return value
+
+
+def _normalize_rate(rate: Any) -> float | str:
+    if isinstance(rate, str) and rate.strip().lower() == "unlimited":
+        return "unlimited"
+    return float(rate)
+
+
 
 
 @tool("build_lock_task")
@@ -539,6 +810,9 @@ def check_safety(
     config: RuntimeConfig,
     current_db_metrics: dict | None = None,
     current_os_metrics: dict | None = None,
+    max_duration_sec: float | None = None,
+    injection_observe_sec: float | None = None,
+    expected_workload: dict | None = None,
 ) -> dict[str, Any]:
     """
     Run safety checks against an ExecutableTaskDAG.
@@ -548,7 +822,14 @@ def check_safety(
     from agent.safety import SafetyChecker
 
     checker = SafetyChecker(config)
-    result = checker.check(task_dag, current_db_metrics, current_os_metrics)
+    result = checker.check(
+        task_dag,
+        current_db_metrics,
+        current_os_metrics,
+        max_duration_sec=max_duration_sec,
+        injection_observe_sec=injection_observe_sec,
+        expected_workload=expected_workload,
+    )
     return {
         "approved": result.approved,
         "reasons": result.reasons,
@@ -557,13 +838,18 @@ def check_safety(
 
 
 @tool("execute_dag")
-def execute_dag(task_dag: dict, config: RuntimeConfig, max_duration_sec: int = 300) -> dict[str, Any]:
+def execute_dag(
+    task_dag: dict,
+    config: RuntimeConfig,
+    max_duration_sec: int = 300,
+    round_dir: str = "",
+) -> dict[str, Any]:
     """
     Execute an ExecutableTaskDAG and return an ExecutionTrace.
     """
     from agent.executor import Executor
 
-    executor = Executor(config)
+    executor = Executor(config, round_dir=round_dir or None)
     trace = executor.execute(task_dag, max_duration_sec=max_duration_sec)
     return to_jsonable(trace)
 
@@ -666,8 +952,7 @@ def llm_generate(
 
         body = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            data = json.loads(resp.read())
+        data = _read_chat_completion_json(req, label="LLM request")
         text = data["choices"][0]["message"]["content"]
         result: dict[str, Any] = {"text": text}
         if json_mode:
@@ -676,6 +961,8 @@ def llm_generate(
             except json.JSONDecodeError:
                 pass
         return result
+    except LLMTimeoutError:
+        raise
     except Exception as e:
         return {"text": "", "error": str(e)}
 
@@ -742,8 +1029,11 @@ def chat_tool_calling_loop(
             method="POST",
         )
         try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                raw = json.loads(resp.read().decode("utf-8"))
+            raw = _read_chat_completion_json(req, label=f"LLM tool-calling request at step {step}")
+        except LLMTimeoutError as exc:
+            raise LLMTimeoutError(
+                f"LLM tool-calling request timed out after {LLM_HTTP_TIMEOUT_SEC}s at step {step}: {exc}"
+            ) from exc
         except Exception as exc:
             return {"error": str(exc), "trace": trace}
 

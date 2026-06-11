@@ -1,0 +1,46 @@
+{
+  "failure_reason": "The surge increased connections but not active execution: Threads_connected ratio_up matched, but Threads_running ratio_up 1.5 did NOT. As a result, threads_concurrency_up failed, lock_contention was only partial (waits up but wait time not), no slow_query was generated (slow_query_count_delta=0), and the system never crossed the throughput knee, so qps_ratio did not drop. Likely causes: the surge was too shallow (insufficient terminals/rate/duration), the workload wasn’t hot-spotted to induce write conflicts, and relying on traffic_surge alone may be insufficient to deterministically produce slow queries and a QPS drop.",
+  "suggested_changes": [
+    "Increase concurrency to drive Threads_running ratio_up ≥ 1.5: set terminals to 480 and raise rate to ~3× baseline for at least 15 minutes to allow queues to build.",
+    "Concentrate write pressure to amplify lock wait time: skew the mix to an 80/20 hotspot on a small key range (e.g., 2 warehouses × 2 districts, remote_txn_ratio=0.0) to force intra-warehouse conflicts.",
+    "Bias the transaction mix toward write-heavy operations to raise lock contention: new_order≈50%, payment≈40%, delivery≈7%, stock_level≈2%, order_status≈1%.",
+    "Ensure the traffic generator does not throttle per-terminal too aggressively (minimize think time; raise max in-flight per terminal if applicable) so increased terminals translate into running threads.",
+    "Maintain overload long enough for slow queries to appear (slow_query_count_delta ≥ 1): run the surge for 900s; if after 300s slow_query_count is still 0, increase rate by +15–20% (e.g., to 3.5× baseline) and, if needed, terminals to 640.",
+    "To force a QPS drop (qps_ratio ≤ 0.7), keep the load above the system’s capacity knee; monitor Threads_running and InnoDB row lock wait time; if qps still doesn’t fall after 5 minutes at 3×, raise rate incrementally in 10–15% steps.",
+    "If reproducing the full chain with traffic_surge alone remains unreliable, consider adding injected_nodes (e.g., a targeted lock holder or slow_sql) in a future run to deterministically hit slow_query and qps_drop."
+  ],
+  "task_parameter_updates": {
+    "traffic_surge": {
+      "terminals": 480,
+      "rate": 3.0,
+      "duration_sec": 900,
+      "transaction_mix": {
+        "new_order": 50,
+        "payment": 40,
+        "delivery": 7,
+        "order_status": 1,
+        "stock_level": 2
+      },
+      "mix_template": "hotspot_warehouses=2;hotspot_ratio=0.8;hotspot_districts=2;remote_txn_ratio=0.0",
+      "rationale": "Increase running threads by ≥1.5×, force write conflicts on hot keys to raise Innodb_row_lock_waits and lock_time_avg, create slow queries via queueing, and push the system past the throughput knee to drop QPS."
+    }
+  },
+  "risk_warning": "These changes can intentionally overload the database and create heavy write contention, potentially causing deadlocks, replication lag, long recovery/rollback, and transient unavailability. Apply only in an isolated test environment with strict safeguards (rate/terminal kill switch, CPU/disk/redo log monitoring, and timeouts). If the system exhibits sustained stalls or error spikes, immediately roll back the surge parameters.",
+  "memory_update": [
+    {
+      "anomaly": "traffic_surge_to_qps_drop_on_tpcc",
+      "path": [
+        "traffic_surge",
+        "threads_concurrency_up",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "outcome": "Propagation chain NOT fully reproduced. 1/5 nodes hit. Failure at: terminal_not_hit:qps_drop",
+      "success": false,
+      "round": 0,
+      "node_hit_ratio": 0.2
+    }
+  ],
+  "raw_text": "{\n  \"failure_reason\": \"The surge increased connections but not active execution: Threads_connected ratio_up matched, but Threads_running ratio_up 1.5 did NOT. As a result, threads_concurrency_up failed, lock_contention was only partial (waits up but wait time not), no slow_query was generated (slow_query_count_delta=0), and the system never crossed the throughput knee, so qps_ratio did not drop. Likely causes: the surge was too shallow (insufficient terminals/rate/duration), the workload wasn’t hot-spotted to induce write conflicts, and relying on traffic_surge alone may be insufficient to deterministically produce slow queries and a QPS drop.\",\n  \"suggested_changes\": [\n    \"Increase concurrency to drive Threads_running ratio_up ≥ 1.5: set terminals to 480 and raise rate to ~3× baseline for at least 15 minutes to allow queues to build.\",\n    \"Concentrate write pressure to amplify lock wait time: skew the mix to an 80/20 hotspot on a small key range (e.g., 2 warehouses × 2 districts, remote_txn_ratio=0.0) to force intra-warehouse conflicts.\",\n    \"Bias the transaction mix toward write-heavy operations to raise lock contention: new_order≈50%, payment≈40%, delivery≈7%, stock_level≈2%, order_status≈1%.\",\n    \"Ensure the traffic generator does not throttle per-terminal too aggressively (minimize think time; raise max in-flight per terminal if applicable) so increased terminals translate into running threads.\",\n    \"Maintain overload long enough for slow queries to appear (slow_query_count_delta ≥ 1): run the surge for 900s; if after 300s slow_query_count is still 0, increase rate by +15–20% (e.g., to 3.5× baseline) and, if needed, terminals to 640.\",\n    \"To force a QPS drop (qps_ratio ≤ 0.7), keep the load above the system’s capacity knee; monitor Threads_running and InnoDB row lock wait time; if qps still doesn’t fall after 5 minutes at 3×, raise rate incrementally in 10–15% steps.\",\n    \"If reproducing the full chain with traffic_surge alone remains unreliable, consider adding injected_nodes (e.g., a targeted lock holder or slow_sql) in a future run to deterministically hit slow_query and qps_drop.\"\n  ],\n  \"task_parameter_updates\": {\n    \"traffic_surge\": {\n      \"terminals\": 480,\n      \"rate\": 3.0,\n      \"duration_sec\": 900,\n      \"transaction_mix\": {\n        \"new_order\": 50,\n        \"payment\": 40,\n        \"delivery\": 7,\n        \"order_status\": 1,\n        \"stock_level\": 2\n      },\n      \"mix_template\": \"hotspot_warehouses=2;hotspot_ratio=0.8;hotspot_districts=2;remote_txn_ratio=0.0\",\n      \"rationale\": \"Increase running threads by ≥1.5×, force write conflicts on hot keys to raise Innodb_row_lock_waits and lock_time_avg, create slow queries via queueing, and push the system past the throughput knee to drop QPS.\"\n    }\n  },\n  \"risk_warning\": \"These changes can intentionally overload the database and create heavy write contention, potentially causing deadlocks, replication lag, long recovery/rollback, and transient unavailability. Apply only in an isolated test environment with strict safeguards (rate/terminal kill switch, CPU/disk/redo log monitoring, and timeouts). If the system exhibits sustained stalls or error spikes, immediately roll back the surge parameters.\"\n}"
+}

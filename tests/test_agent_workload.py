@@ -6,15 +6,21 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent.config import RuntimeConfig
+from agent.executor import Executor
 from agent.runtime import DBMAGSRuntime
+from agent.safety import SafetyChecker
 from agent.types import (
     EnvironmentSnapshot,
     EvaluationResult,
     ExecutableTaskDAG,
     ExperimentRequest,
     SafetyResult,
+    TaskSpec,
 )
+from agent.planner import PlannerFallbackError
+from agent.reflection import ReflectionFallbackError
 from agent.workload import BenchBaseWorkloadRunner, MetricsCollector, normalize_workload_config
+from agent.tools import build_traffic_task, get_benchbase_workload_defaults
 
 
 class FakeProcess:
@@ -143,6 +149,13 @@ class AgentWorkloadTests(unittest.TestCase):
         cfg = normalize_workload_config({"enabled": True, "duration_sec": 600}, "tpcc")
         self.assertEqual(cfg["duration_sec"], 600.0)
 
+    def test_normalize_workload_config_supports_tpch_and_requires_tatp_config(self):
+        tpch = normalize_workload_config({"enabled": True, "benchmark": "tpch"}, "tpch_1SF")
+        self.assertEqual(tpch["benchmark"], "tpch")
+        self.assertIn("local_tpch_1SF_config.xml", tpch["config_path"])
+        with self.assertRaisesRegex(ValueError, "config_path is required"):
+            normalize_workload_config({"enabled": True, "benchmark": "tatp"}, "tatp")
+
     def test_benchbase_runner_start_stop_with_mock_subprocess(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -201,6 +214,248 @@ class AgentWorkloadTests(unittest.TestCase):
             text = runtime_config.read_text()
         self.assertIn("<time>600</time>", text)
 
+    def test_benchbase_workload_defaults_are_not_candidate_templates(self):
+        result = get_benchbase_workload_defaults(
+            "tpcc",
+            config_path=".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+            database="tpcc_10W",
+            terminals=16,
+            duration_sec=60,
+        )
+        self.assertEqual(result["benchmark"], "tpcc")
+        self.assertEqual(result["default_transaction_mix"]["NewOrder"], 45.0)
+        self.assertEqual(result["default_transaction_mix"]["Payment"], 43.0)
+        self.assertEqual(result["default_terminals"], 16)
+        self.assertIn("forbidden_fields", result["constraints"])
+        self.assertNotIn("candidates", result)
+        self.assertNotIn("preferred_template", result)
+        self.assertNotIn("task_specs", result)
+
+    def test_benchbase_workload_defaults_support_tpch_and_tatp(self):
+        tpch = get_benchbase_workload_defaults("tpch")
+        tatp = get_benchbase_workload_defaults("tatp")
+        self.assertEqual(len(tpch["legal_transaction_types"]), 22)
+        self.assertIn("Q22", tpch["legal_transaction_types"])
+        self.assertIn("GetSubscriberData", tatp["legal_transaction_types"])
+        self.assertEqual(tatp["benchmark"], "tatp")
+
+    def test_build_traffic_task_requires_profile_and_rejects_sql(self):
+        profile = _traffic_profile()
+        task = build_traffic_task(RuntimeConfig(), profile=profile, task_id="traffic")
+        self.assertEqual(task["actions"][0]["kind"], "benchbase_burst")
+        self.assertEqual(task["actions"][0]["profile"], task["metadata"]["traffic_surge_profile"])
+        bad = dict(profile)
+        bad["sql"] = "SELECT 1"
+        with self.assertRaisesRegex(ValueError, "forbidden fields"):
+            build_traffic_task(RuntimeConfig(), profile=bad, task_id="traffic")
+
+    def test_build_traffic_task_accepts_tpch_and_tatp_profiles(self):
+        tpch_task = build_traffic_task(RuntimeConfig(), profile=_traffic_profile_for("tpch"), task_id="tpch_traffic")
+        tatp_task = build_traffic_task(RuntimeConfig(), profile=_traffic_profile_for("tatp"), task_id="tatp_traffic")
+        self.assertEqual(tpch_task["actions"][0]["benchmark"], "tpch")
+        self.assertEqual(tatp_task["actions"][0]["benchmark"], "tatp")
+        bad = _traffic_profile_for("tpch")
+        bad["transaction_mix"]["NewOrder"] = 1
+        with self.assertRaisesRegex(ValueError, "unknown transaction types"):
+            build_traffic_task(RuntimeConfig(), profile=bad, task_id="bad")
+
+    def test_executor_materializes_benchbase_burst_xml(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            source = root / "tpcc.xml"
+            source.write_text(
+                """<?xml version="1.0"?><parameters><dbtype>mysql</dbtype><url>jdbc:mysql://127.0.0.1/old_db?x=1</url><terminals>1</terminals><works><work><time>60</time><rate>10</rate><weights>45,43,4,4,4</weights></work></works></parameters>"""
+            )
+            profile = _traffic_profile(config_path=str(source), database="tpcc_10W")
+            executor = Executor(RuntimeConfig(), round_dir=str(root))
+            runtime_config = executor._materialize_benchbase_burst_config(profile, "traffic")
+            text = runtime_config.read_text()
+        self.assertIn("<time>15</time>", text)
+        self.assertIn("<terminals>8</terminals>", text)
+        self.assertIn("<rate>120.0</rate>", text)
+        self.assertIn("<weights>50,45,1,2,2</weights>", text)
+        self.assertIn("jdbc:mysql://127.0.0.1/tpcc_10W?x=1", text)
+
+    def test_executor_materializes_tpch_and_tatp_weights(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            tpch_source = root / "tpch.xml"
+            tatp_source = root / "tatp.xml"
+            tpch_source.write_text(_benchbase_xml("tpch", [f"Q{i}" for i in range(1, 23)], weights=",".join(["1"] * 22)))
+            tatp_names = [
+                "DeleteCallForwarding",
+                "GetAccessData",
+                "GetNewDestination",
+                "GetSubscriberData",
+                "InsertCallForwarding",
+                "UpdateLocation",
+                "UpdateSubscriberData",
+            ]
+            tatp_source.write_text(_benchbase_xml("tatp", tatp_names, weights="2,35,10,35,2,14,2"))
+            executor = Executor(RuntimeConfig(), round_dir=str(root))
+            tpch_xml = executor._materialize_benchbase_burst_config(
+                _traffic_profile_for("tpch", config_path=str(tpch_source), database="tpch_1SF"),
+                "tpch_traffic",
+            ).read_text()
+            tatp_xml = executor._materialize_benchbase_burst_config(
+                _traffic_profile_for("tatp", config_path=str(tatp_source), database="tatp"),
+                "tatp_traffic",
+            ).read_text()
+        self.assertIn("<weights>" + ",".join(["1"] * 22) + "</weights>", tpch_xml)
+        self.assertIn("<weights>2,35,10,35,2,14,2</weights>", tatp_xml)
+        self.assertIn("jdbc:mysql://127.0.0.1/tpch_1SF?x=1", tpch_xml)
+        self.assertIn("jdbc:mysql://127.0.0.1/tatp?x=1", tatp_xml)
+
+    def test_safety_rejects_burst_duration_outside_injection_window(self):
+        task = build_traffic_task(RuntimeConfig(), profile=_traffic_profile(duration_sec=30), task_id="traffic")
+        dag = {"tasks": {"traffic": task}, "edges": [], "schedule": {}}
+        result = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0)).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=60,
+            injection_observe_sec=10,
+        )
+        self.assertFalse(result.approved)
+        self.assertIn("injection_observe_sec", "; ".join(result.reasons))
+
+    def test_safety_rejects_generic_sql_and_lock_outside_injection_window(self):
+        dag = {
+            "tasks": {
+                "sql": {
+                    "task_id": "sql",
+                    "task_type": "slow_sql",
+                    "actions": [{"kind": "sql_workload", "duration_sec": 20, "concurrency": 1, "sql": "SELECT 1"}],
+                },
+                "lock": {
+                    "task_id": "lock",
+                    "task_type": "lock_conflict",
+                    "actions": [{"kind": "lock_conflict", "hold_sec": 20}],
+                },
+            },
+            "edges": [],
+            "schedule": {},
+        }
+        result = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0)).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=30,
+            injection_observe_sec=15,
+            expected_workload={"benchmark": "tpcc", "database": "tpcc_10W", "config_path": "tpcc.xml"},
+        )
+        self.assertFalse(result.approved)
+        self.assertIn("DAG required duration", "; ".join(result.reasons))
+
+    def test_safety_rejects_workload_ramp_when_background_workload_enabled(self):
+        dag = {
+            "tasks": {
+                "traffic": {
+                    "task_id": "traffic",
+                    "task_type": "traffic_surge",
+                    "actions": [{"kind": "workload_ramp", "duration_sec": 10}],
+                }
+            },
+            "edges": [],
+            "schedule": {},
+        }
+        result = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0)).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=30,
+            injection_observe_sec=15,
+            expected_workload={"benchmark": "tpcc", "database": "tpcc_10W", "config_path": "tpcc.xml"},
+        )
+        self.assertFalse(result.approved)
+        self.assertIn("workload_ramp", "; ".join(result.reasons))
+
+    def test_safety_rejects_burst_benchmark_mismatch(self):
+        task = build_traffic_task(RuntimeConfig(), profile=_traffic_profile_for("tpcc"), task_id="traffic")
+        dag = {"tasks": {"traffic": task}, "edges": [], "schedule": {}}
+        result = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0)).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=60,
+            injection_observe_sec=30,
+            expected_workload={"benchmark": "tpch", "database": "tpch_1SF", "config_path": "tpch.xml"},
+        )
+        self.assertFalse(result.approved)
+        self.assertIn("does not match background workload", "; ".join(result.reasons))
+
+    def test_runtime_timing_validation_rejects_short_workload_duration(self):
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+            max_duration_sec=30,
+            workload={
+                "enabled": True,
+                "runner": "benchbase",
+                "benchmark": "tpcc",
+                "database": "tpcc",
+                "duration_sec": 20,
+                "warmup_sec": 5,
+                "baseline_sec": 10,
+                "injection_observe_sec": 15,
+                "recovery_sec": 5,
+                "sample_interval_sec": 5,
+            },
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig())
+        cfg = normalize_workload_config(req.workload, req.target_database)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            round_dir = Path(tmpdir)
+            with self.assertRaisesRegex(RuntimeError, "shorter than required"):
+                runtime._validate_workload_timing_before_start(req, cfg, round_dir)
+            text = (round_dir / "workload_timing_validation.json").read_text()
+        self.assertIn('"status": "failed"', text)
+
+    def test_runtime_phase_validation_rejects_dag_longer_than_injection_window(self):
+        req = ExperimentRequest(
+            target_anomaly="slow",
+            target_database="tpcc",
+            target_path=["missing_index", "slow_query"],
+            injected_nodes=["missing_index"],
+            max_duration_sec=30,
+            workload={
+                "enabled": True,
+                "runner": "benchbase",
+                "benchmark": "tpcc",
+                "database": "tpcc",
+                "config_path": "tpcc.xml",
+                "injection_observe_sec": 15,
+            },
+        )
+        dag = ExecutableTaskDAG(tasks={
+            "sql": TaskSpec(
+                task_id="sql",
+                task_type="slow_sql",
+                actions=[{"kind": "sql_workload", "duration_sec": 20, "concurrency": 1, "sql": "SELECT 1"}],
+                metadata={"root_cause": "missing_index"},
+            )
+        })
+        runtime = DBMAGSRuntime(RuntimeConfig())
+        with tempfile.TemporaryDirectory() as tmpdir:
+            round_dir = Path(tmpdir)
+            with self.assertRaisesRegex(RuntimeError, "Timing validation failed"):
+                runtime._validate_benchbase_burst_windows(req, dag, round_dir)
+            text = (round_dir / "timing_validation.json").read_text()
+        self.assertIn('"status": "failed"', text)
+
+    def test_runtime_execute_uses_request_max_duration(self):
+        req = ExperimentRequest(target_database="tpcc", max_duration_sec=17)
+        dag = ExecutableTaskDAG()
+        runtime = DBMAGSRuntime(RuntimeConfig(max_duration_sec=300))
+        captured = {}
+
+        def fake_execute_dag(task_dag, config, max_duration_sec=300, round_dir=""):
+            captured["max_duration_sec"] = max_duration_sec
+            return {"tasks": {}}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("agent.tools.execute_dag", fake_execute_dag):
+                runtime._execute(dag, 1, Path(tmpdir), req)
+        self.assertEqual(captured["max_duration_sec"], 17)
+
     def test_runtime_workload_enabled_phase_order_and_stop(self):
         events: list[str] = []
         req = ExperimentRequest(
@@ -235,8 +490,8 @@ class AgentWorkloadTests(unittest.TestCase):
             snapshot,
             [],
         )
-        runtime._safety_check = lambda dag, snapshot, round_dir: events.append("safety") or SafetyResult()  # type: ignore[method-assign]
-        runtime._execute = lambda dag, round_no, round_dir: events.append("execute") or {"tasks": {}}  # type: ignore[method-assign]
+        runtime._safety_check = lambda dag, snapshot, round_dir, request=None: events.append("safety") or SafetyResult()  # type: ignore[method-assign]
+        runtime._execute = lambda dag, round_no, round_dir, request: events.append("execute") or {"tasks": {}}  # type: ignore[method-assign]
         runtime._evaluate = lambda **kwargs: events.append("evaluate") or EvaluationResult(success=True, final_score=1.0)  # type: ignore[method-assign]
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -291,6 +546,53 @@ class AgentWorkloadTests(unittest.TestCase):
         self.assertIn("stop_workload", events)
         self.assertIn("workload_exited_before_phase10", trace_text)
 
+    def test_runtime_blocks_planner_fallback_writes_artifacts_and_stops_runner(self):
+        events: list[str] = []
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+            max_retry_rounds=1,
+            workload={
+                "enabled": True,
+                "runner": "benchbase",
+                "benchmark": "tpcc",
+                "database": "tpcc",
+                "warmup_sec": 0,
+                "baseline_sec": 10,
+                "injection_observe_sec": 10,
+                "recovery_sec": 10,
+                "sample_interval_sec": 5,
+            },
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig(planner_enabled=True, openai_api_key="key"))
+        runtime._make_workload_runner = lambda request, round_dir: FakeRunner(events)  # type: ignore[method-assign]
+        runtime._make_metrics_collector = lambda request, runner: FakeCollector(events)  # type: ignore[method-assign]
+        runtime._inspect_named = lambda request, round_no, round_dir, filename: (  # type: ignore[method-assign]
+            events.append(filename) or EnvironmentSnapshot(database=request.target_database)
+        )
+        runtime.planner.plan = lambda request, snapshot, memory_items, reflection=None: (  # type: ignore[method-assign]
+            (_ for _ in ()).throw(PlannerFallbackError(
+                "Planner fallback blocked after tool loop failure: timeout",
+                trace=[{"step": 1, "tool": "read_memory"}],
+            ))
+        )
+        runtime._safety_check = lambda *args, **kwargs: events.append("safety") or SafetyResult()  # type: ignore[method-assign]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(RuntimeError, "Planner fallback blocked"):
+                runtime.run(req, output_root=tmpdir)
+            run_dirs = list(Path(tmpdir).iterdir())
+            round_dir = run_dirs[0] / "round_1"
+            failure = (round_dir / "planner_failure.json").read_text()
+            plan = (round_dir / "plan.json").read_text()
+
+        self.assertIn("stop_workload", events)
+        self.assertNotIn("safety", events)
+        self.assertIn("planner_fallback_blocked", failure)
+        self.assertIn("fallback_blocked", plan)
+
     def test_runtime_raises_if_anomaly_execution_fails_before_evaluation(self):
         events: list[str] = []
         req = ExperimentRequest(
@@ -322,8 +624,8 @@ class AgentWorkloadTests(unittest.TestCase):
             snapshot,
             [],
         )
-        runtime._safety_check = lambda dag, snapshot, round_dir: events.append("safety") or SafetyResult()  # type: ignore[method-assign]
-        runtime._execute = lambda dag, round_no, round_dir: events.append("execute") or {  # type: ignore[method-assign]
+        runtime._safety_check = lambda dag, snapshot, round_dir, request=None: events.append("safety") or SafetyResult()  # type: ignore[method-assign]
+        runtime._execute = lambda dag, round_no, round_dir, request: events.append("execute") or {  # type: ignore[method-assign]
             "tasks": {
                 "traffic": {
                     "status": "failed",
@@ -348,6 +650,101 @@ class AgentWorkloadTests(unittest.TestCase):
         self.assertNotIn("evaluate", events)
         self.assertIn("stop_workload", events)
         self.assertIn("execution_failed_before_evaluation", trace_text)
+
+    def test_runtime_blocks_reflection_fallback_and_writes_failure_artifact(self):
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig(planner_enabled=True, openai_api_key="key"))
+        runtime.planner.reflect = lambda evaluation, request, memory_items: (  # type: ignore[method-assign]
+            (_ for _ in ()).throw(ReflectionFallbackError("Reflection fallback blocked: LLM failed"))
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            round_dir = Path(tmpdir)
+            with self.assertRaisesRegex(RuntimeError, "Reflection fallback blocked"):
+                runtime._reflect(EvaluationResult(success=False, reason="failed"), req, 1, round_dir)
+            text = (round_dir / "reflection_failure.json").read_text()
+        self.assertIn("reflection_fallback_blocked", text)
+        self.assertIn("LLM failed", text)
+
+def _traffic_profile(**overrides):
+    profile = {
+        "benchmark": "tpcc",
+        "database": "tpcc",
+        "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+        "terminals": 8,
+        "rate": 120.0,
+        "duration_sec": 15,
+        "transaction_mix": {
+            "NewOrder": 50,
+            "Payment": 45,
+            "OrderStatus": 1,
+            "Delivery": 2,
+            "StockLevel": 2,
+        },
+        "mix_template": "workload_default",
+        "rationale": "Write-heavy burst for lock and qps-drop propagation.",
+    }
+    profile.update(overrides)
+    return profile
+
+
+def _traffic_profile_for(benchmark, **overrides):
+    if benchmark == "tpch":
+        mix = {f"Q{i}": 1 for i in range(1, 23)}
+        profile = {
+            "benchmark": "tpch",
+            "database": "tpch_1SF",
+            "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpch_1SF_config.xml",
+            "terminals": 2,
+            "rate": "unlimited",
+            "duration_sec": 15,
+            "transaction_mix": mix,
+            "mix_template": "workload_default",
+            "rationale": "Same-benchmark TPCH burst for OLAP pressure.",
+        }
+    elif benchmark == "tatp":
+        profile = {
+            "benchmark": "tatp",
+            "database": "tatp",
+            "config_path": "tatp.xml",
+            "terminals": 8,
+            "rate": 10000,
+            "duration_sec": 15,
+            "transaction_mix": {
+                "DeleteCallForwarding": 2,
+                "GetAccessData": 35,
+                "GetNewDestination": 10,
+                "GetSubscriberData": 35,
+                "InsertCallForwarding": 2,
+                "UpdateLocation": 14,
+                "UpdateSubscriberData": 2,
+            },
+            "mix_template": "workload_default",
+            "rationale": "Same-benchmark TATP burst for OLTP pressure.",
+        }
+    else:
+        profile = _traffic_profile()
+    profile.update(overrides)
+    return profile
+
+
+def _benchbase_xml(benchmark, names, weights):
+    tx = "".join(f"<transactiontype><name>{name}</name></transactiontype>" for name in names)
+    return (
+        "<?xml version=\"1.0\"?>"
+        "<parameters>"
+        f"<url>jdbc:mysql://127.0.0.1/old_{benchmark}?x=1</url>"
+        "<terminals>1</terminals>"
+        "<works><work><time>60</time><rate>100</rate>"
+        f"<weights>{weights}</weights>"
+        "</work></works>"
+        f"<transactiontypes>{tx}</transactiontypes>"
+        "</parameters>"
+    )
 
 
 if __name__ == "__main__":

@@ -1,0 +1,45 @@
+{
+  "failure_reason": "Only the terminal qps_drop was hit while all upstream nodes (traffic_surge, threads_concurrency_up, lock_contention, slow_query) failed. The surge likely increased per-connection throughput but not the number of DB connections or runnable threads: Threads_connected ratio_up 1.5 and Threads_running ratio_up 1.5 were not met, suggesting the load client reused a small connection pool and/or the surge was too mild/short. With a read-lean mix and uniform key distribution, InnoDB row lock waits did not rise (ratio_up 2.0 not met), so no slow queries were recorded, breaking the slow_query -> qps_drop edge. In short: insufficient connection count, insufficient duration, and insufficient write-hotspot contention from the traffic_surge profile.",
+  "suggested_changes": [
+    "Increase the number of terminals (client connections) so that Threads_connected rises by at least 50%. Set terminals to 200 to force a clear ratio_up and avoid relying on connection reuse.",
+    "Raise request rate to push more work per connection and elevate Threads_running by >=50%. Set rate to 8000 ops/sec (adjust down if sustained error rates exceed 5%).",
+    "Extend the surge duration to allow lock waits to accumulate and cross slow-query thresholds. Set duration_sec to 900.",
+    "Skew the transaction_mix toward write-heavy operations that contend on hot rows (district/warehouse counters). Use: new_order 55%, payment 35%, delivery 5%, order_status 3%, stock_level 2%.",
+    "Concentrate traffic on a small subset of warehouses/districts to amplify row-lock conflicts. Use mix_template 'tpcc_hotspot_10pct' (hotspots 10% of warehouses) so that most writes target overlapping rows.",
+    "If these changes still do not produce slow_query_count increases, your scenario may require additional injected nodes that explicitly induce contention/slow queries; a traffic surge alone may be insufficient depending on server settings (e.g., long_query_time)."
+  ],
+  "task_parameter_updates": {
+    "traffic_surge": {
+      "terminals": 200,
+      "rate": 8000,
+      "duration_sec": 900,
+      "transaction_mix": {
+        "new_order": 55,
+        "payment": 35,
+        "delivery": 5,
+        "order_status": 3,
+        "stock_level": 2
+      },
+      "mix_template": "tpcc_hotspot_10pct",
+      "rationale": "Boost connection count and throughput to satisfy Threads_connected and Threads_running ratio_up >=1.5. Shift to a write-heavy TPCC mix and hotspot ~10% of warehouses to drive InnoDB row lock waits (ratio_up >=2.0), which should produce slow queries and then a downstream QPS drop."
+    }
+  },
+  "risk_warning": "These settings can induce severe lock contention, deadlocks, long stalls (>10s), and significant slow-log growth. Monitor error/timeouts carefully, ensure ample disk for logs, and avoid running on production. Be prepared to abort early if latency or error budgets are exceeded.",
+  "memory_update": [
+    {
+      "anomaly": "traffic_surge_to_qps_drop_on_tpcc",
+      "path": [
+        "traffic_surge",
+        "threads_concurrency_up",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "outcome": "Propagation chain NOT fully reproduced. 1/5 nodes hit. Failure at: broken_edge:slow_query->qps_drop",
+      "success": false,
+      "round": 0,
+      "node_hit_ratio": 0.2
+    }
+  ],
+  "raw_text": "{\n  \"failure_reason\": \"Only the terminal qps_drop was hit while all upstream nodes (traffic_surge, threads_concurrency_up, lock_contention, slow_query) failed. The surge likely increased per-connection throughput but not the number of DB connections or runnable threads: Threads_connected ratio_up 1.5 and Threads_running ratio_up 1.5 were not met, suggesting the load client reused a small connection pool and/or the surge was too mild/short. With a read-lean mix and uniform key distribution, InnoDB row lock waits did not rise (ratio_up 2.0 not met), so no slow queries were recorded, breaking the slow_query -> qps_drop edge. In short: insufficient connection count, insufficient duration, and insufficient write-hotspot contention from the traffic_surge profile.\",\n  \"suggested_changes\": [\n    \"Increase the number of terminals (client connections) so that Threads_connected rises by at least 50%. Set terminals to 200 to force a clear ratio_up and avoid relying on connection reuse.\",\n    \"Raise request rate to push more work per connection and elevate Threads_running by >=50%. Set rate to 8000 ops/sec (adjust down if sustained error rates exceed 5%).\",\n    \"Extend the surge duration to allow lock waits to accumulate and cross slow-query thresholds. Set duration_sec to 900.\",\n    \"Skew the transaction_mix toward write-heavy operations that contend on hot rows (district/warehouse counters). Use: new_order 55%, payment 35%, delivery 5%, order_status 3%, stock_level 2%.\",\n    \"Concentrate traffic on a small subset of warehouses/districts to amplify row-lock conflicts. Use mix_template 'tpcc_hotspot_10pct' (hotspots 10% of warehouses) so that most writes target overlapping rows.\",\n    \"If these changes still do not produce slow_query_count increases, your scenario may require additional injected nodes that explicitly induce contention/slow queries; a traffic surge alone may be insufficient depending on server settings (e.g., long_query_time).\"\n  ],\n  \"task_parameter_updates\": {\n    \"traffic_surge\": {\n      \"terminals\": 200,\n      \"rate\": 8000,\n      \"duration_sec\": 900,\n      \"transaction_mix\": {\n        \"new_order\": 55,\n        \"payment\": 35,\n        \"delivery\": 5,\n        \"order_status\": 3,\n        \"stock_level\": 2\n      },\n      \"mix_template\": \"tpcc_hotspot_10pct\",\n      \"rationale\": \"Boost connection count and throughput to satisfy Threads_connected and Threads_running ratio_up >=1.5. Shift to a write-heavy TPCC mix and hotspot ~10% of warehouses to drive InnoDB row lock waits (ratio_up >=2.0), which should produce slow queries and then a downstream QPS drop.\"\n    }\n  },\n  \"risk_warning\": \"These settings can induce severe lock contention, deadlocks, long stalls (>10s), and significant slow-log growth. Monitor error/timeouts carefully, ensure ample disk for logs, and avoid running on production. Be prepared to abort early if latency or error budgets are exceeded.\"\n}"
+}

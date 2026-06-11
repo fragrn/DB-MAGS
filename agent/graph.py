@@ -61,8 +61,9 @@ NODES: dict[str, AnomalyNode] = {
         injectable=True,
         default_tool="build_traffic_task",
         planner_notes=(
-            "Increase active sessions and Threads_running. Use SELECT 1 workload ramp "
-            "across multiple stages. Compute safe headroom from max_connections * 0.8."
+            "Increase active sessions and Threads_running with an additional BenchBase "
+            "burst client. Generate a TrafficSurgeProfile only: terminals, rate, duration_sec, "
+            "and the current benchmark transaction mix. Do not use custom SQL or lock-holder behavior."
         ),
         evidence_rules=[
             _r("Threads_connected", "ratio_up", 1.5, required=True, weight=1.5),

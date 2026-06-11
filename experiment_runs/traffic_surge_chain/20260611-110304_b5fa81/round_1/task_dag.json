@@ -1,0 +1,78 @@
+{
+  "tasks": {
+    "traffic_surge_tpcc_burst": {
+      "task_id": "traffic_surge_tpcc_burst",
+      "task_type": "traffic_surge",
+      "actions": [
+        {
+          "kind": "benchbase_burst",
+          "profile": {
+            "benchmark": "tpcc",
+            "database": "tpcc_10W",
+            "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+            "terminals": 1,
+            "rate": 10000.0,
+            "duration_sec": 15.0,
+            "transaction_mix": {
+              "NewOrder": 45.0,
+              "Payment": 43.0,
+              "OrderStatus": 4.0,
+              "Delivery": 4.0,
+              "StockLevel": 4.0
+            },
+            "mix_template": "default",
+            "rationale": "Use default TPCC transaction mix to mirror background workload and amplify contention. A brief burst (15s) within the observe window with 1 terminal and high target rate increases Threads_running, inducing lock waits on hot rows (e.g., warehouse/district), causing slow queries and reducing effective QPS to drive qps_drop."
+          },
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+          "terminals": 1,
+          "rate": 10000.0,
+          "duration_sec": 15.0,
+          "transaction_mix": {
+            "NewOrder": 45.0,
+            "Payment": 43.0,
+            "OrderStatus": 4.0,
+            "Delivery": 4.0,
+            "StockLevel": 4.0
+          }
+        }
+      ],
+      "expected_metrics": {
+        "threads_connected_ratio": ">=1.5",
+        "threads_running_ratio": ">=1.5"
+      },
+      "success_criteria": {
+        "threads_connected_ratio": ">=1.5"
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "traffic_surge",
+        "traffic_surge_profile": {
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+          "terminals": 1,
+          "rate": 10000.0,
+          "duration_sec": 15.0,
+          "transaction_mix": {
+            "NewOrder": 45.0,
+            "Payment": 43.0,
+            "OrderStatus": 4.0,
+            "Delivery": 4.0,
+            "StockLevel": 4.0
+          },
+          "mix_template": "default",
+          "rationale": "Use default TPCC transaction mix to mirror background workload and amplify contention. A brief burst (15s) within the observe window with 1 terminal and high target rate increases Threads_running, inducing lock waits on hot rows (e.g., warehouse/district), causing slow queries and reducing effective QPS to drive qps_drop."
+        }
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "traffic_surge_tpcc_burst": 0.0
+  }
+}

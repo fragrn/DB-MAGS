@@ -12,7 +12,13 @@ from typing import Any
 from agent.config import RuntimeConfig
 from agent.probes.mysql_probe import MySQLProbe
 from agent.probes.os_probe import OSProbe
+from agent.tools import BENCHBASE_BENCHMARKS
 
+
+DEFAULT_CONFIG_PATHS = {
+    "tpcc": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "tpch": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpch_1SF_config.xml",
+}
 
 DEFAULT_WORKLOAD = {
     "enabled": False,
@@ -197,8 +203,17 @@ class MetricsCollector:
 
 
 def normalize_workload_config(workload: dict[str, Any], default_database: str) -> dict[str, Any]:
+    raw = workload or {}
     cfg = dict(DEFAULT_WORKLOAD)
-    cfg.update(workload or {})
+    cfg.update(raw)
+    cfg["benchmark"] = str(cfg.get("benchmark") or "tpcc").lower()
+    if cfg["benchmark"] not in BENCHBASE_BENCHMARKS:
+        raise ValueError(f"Unsupported workload benchmark: {cfg['benchmark']}")
+    if "config_path" not in raw:
+        if cfg["benchmark"] in DEFAULT_CONFIG_PATHS:
+            cfg["config_path"] = DEFAULT_CONFIG_PATHS[cfg["benchmark"]]
+        elif cfg.get("enabled"):
+            raise ValueError(f"workload.config_path is required for benchmark {cfg['benchmark']}")
     if not cfg.get("database"):
         cfg["database"] = default_database
     for key in ("warmup_sec", "baseline_sec", "injection_observe_sec", "recovery_sec", "sample_interval_sec"):
