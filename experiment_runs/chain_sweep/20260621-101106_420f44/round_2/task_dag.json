@@ -1,0 +1,44 @@
+{
+  "tasks": {
+    "missing_index_ol_scan": {
+      "task_id": "missing_index_ol_scan",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT SQL_NO_CACHE SUM(ol_quantity) FROM tpcc_10W.order_line WHERE UPPER(ol_dist_info) LIKE 'Z%' ORDER BY ol_delivery_d",
+          "concurrency": 6,
+          "duration_sec": 15
+        }
+      ],
+      "expected_metrics": {
+        "poor_plan": {
+          "evidence": "EXPLAIN shows table scan on order_line with Filter on UPPER(ol_dist_info) and filesort on ol_delivery_d (type=ALL)"
+        },
+        "slow_query": {
+          "p95_latency_ratio": 1.5
+        },
+        "qps_drop": {
+          "qps_ratio_max": 0.7
+        }
+      },
+      "success_criteria": [
+        "During injection, EXPLAIN for the statement shows table scan (type=ALL) on order_line with rows examined in the millions",
+        "p95 latency increases by >= 1.5x versus baseline on the tpcc workload",
+        "Overall QPS drops to <= 70% of baseline during the injection window"
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "Full scans on order_line (~9.5M rows) at concurrency 6 may cause IO and CPU spikes and increase lock waits for TPCC writers. Monitor Threads_running and abort if saturation causes errors.",
+      "metadata": {
+        "root_cause": "missing_index"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "missing_index_ol_scan": 0.0
+  }
+}

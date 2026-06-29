@@ -1,0 +1,188 @@
+Title:​ mysql - Slow SQL Queries - Database Administrators Stack Exchange
+Asked:​ 6 years, 6 months ago
+Modified:​ 6 years, 6 months ago
+Viewed:​ 104 times
+Question (Uti Uttam Sapkota)
+I'm having problems with my application performance.
+The tables in the database have the following records:
+"issues" has more than 334,823
+"custom_values" has over 1,350,243
+"users" has 1,350
+"projects" 494
+The system currently has 1350 users. Currently only goes to 100 concurrent users.
+The application is being way too slow. The slowest query is as below and take about 15 seconds:
+SELECT issues.* 
+FROM `issues` 
+INNER JOIN `projects` ON `projects`.`id` = `issues`.`project_id` 
+WHERE (
+    (
+        (`projects`.`status` <> 9 
+        AND EXISTS (
+            SELECT 1 AS one FROM enabled_modules em 
+            WHERE em.project_id = projects.id AND em.name = 'issue_tracking'
+        ))
+        AND (
+            (
+                (`projects`.`is_public` = 1 
+                AND `projects`.`id` NOT IN (
+                    SELECT project_id FROM members WHERE user_id IN (44, 638)
+                )
+                AND (
+                    (`issues`.`is_private` = 0 OR `issues`.`author_id` = 44 
+                    OR `issues`.`assigned_to_id` IN (44, 186, 898))
+                )
+            ) 
+            OR (`projects`.`id` IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) 
+                AND ((`issues`.`is_private` = 0 OR `issues`.`author_id` = 44 OR `issues`.`assigned_to_id` IN (44, 186, 898))))
+            OR (`projects`.`id` IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) 
+                AND (1 = 1))
+            OR (`projects`.`id` IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) 
+                AND ((`issues`.`is_private` = 0 OR `issues`.`author_id` = 44 OR `issues`.`assigned_to_id` IN (44, 186, 898))))
+            OR (`projects`.`id` IN (457) 
+                AND ((`issues`.`is_private` = 0 OR `issues`.`author_id` = 44 OR `issues`.`assigned_to_id` IN (44, 186, 898))))
+        )
+    ) 
+    AND (`issues`.`id` != 251880) 
+    AND (LOWER(`issues`.`subject`) LIKE LOWER('%255392%'))
+) 
+ORDER BY `issues`.`id` DESC 
+LIMIT 10;
+Tabular Explain:
+id
+	
+select_type
+	
+table
+	
+type
+	
+possible_keys
+	
+key
+	
+key_len
+	
+ref
+	
+rows
+	
+Extra
+
+
+1
+	
+PRIMARY
+	
+issues
+	
+range
+	
+PRIMARY,issues_project_id,...
+	
+PRIMARY
+	
+4
+		
+311632
+	
+Using where
+
+
+1
+	
+PRIMARY
+	
+projects
+	
+eq_ref
+	
+PRIMARY
+	
+PRIMARY
+	
+4
+	
+determine.issues.project_id
+	
+1
+	
+Using where
+
+
+3
+	
+DEPENDENT SUBQUERY
+	
+members
+	
+index_subquery
+	
+...
+	
+index_members_on_user_id...
+		
+func
+	
+29
+	
+Using where
+
+
+2
+	
+DEPENDENT SUBQUERY
+	
+em
+	
+ref
+	
+enabled_modules_project_id
+	
+enabled_modules_project_id
+		
+determine.projects.id
+	
+2
+	
+Using where
+Table Schemas (Partial):
+issues
+CREATE TABLE issues (
+  id int(11) NOT NULL AUTO_INCREMENT,
+  tracker_id int(11) NOT NULL,
+  project_id int(11) NOT NULL,
+  subject varchar(255) NOT NULL DEFAULT '',
+  description longtext,
+  due_date date DEFAULT NULL,
+  category_id int(11) DEFAULT NULL,
+  ...
+);
+projects
+CREATE TABLE projects (
+  id int(11) NOT NULL AUTO_INCREMENT,
+  name varchar(255) NOT NULL DEFAULT '',
+  description text,
+  homepage varchar(255) DEFAULT '',
+  is_public tinyint(1) NOT NULL DEFAULT '1',
+  parent_id int(11) DEFAULT NULL,
+  created_on datetime DEFAULT NULL,
+  ...
+);
+enabled_modules
+CREATE TABLE enabled_modules (
+  id int(11) NOT NULL AUTO_INCREMENT,
+  project_id int(11) DEFAULT NULL,
+  name varchar(255) NOT NULL,
+  PRIMARY KEY (id),
+  KEY enabled_modules_project_id (project_id)
+) ENGINE=InnoDB;
+members
+CREATE TABLE members (
+  id int(11) NOT NULL AUTO_INCREMENT,
+  user_id int(11) NOT NULL DEFAULT '0',
+  project_id int(11) NOT NULL DEFAULT '0',
+  created_on datetime DEFAULT NULL,
+  mail_notification tinyint(1) NOT NULL DEFAULT '0',
+  ...
+  PRIMARY KEY (id)
+);

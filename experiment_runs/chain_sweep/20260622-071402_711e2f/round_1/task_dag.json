@@ -1,0 +1,56 @@
+{
+  "tasks": {
+    "improper_sql_tpcc_ol_groupby": {
+      "task_id": "improper_sql_tpcc_ol_groupby",
+      "task_type": "improper_sql",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT SQL_NO_CACHE SQL_BIG_RESULT ol_i_id, COUNT(*) AS cnt, SUM(ol_amount) AS amt FROM order_line GROUP BY ol_i_id ORDER BY cnt DESC LIMIT 5000",
+          "concurrency": 3,
+          "duration_sec": 14
+        }
+      ],
+      "expected_metrics": {
+        "intermediate_signals": [
+          "sort_hash_spill",
+          "threads_concurrency_up"
+        ],
+        "db_metrics_expectations": {
+          "Created_tmp_disk_tables_delta": ">=1",
+          "Sort_merge_passes_delta": ">=1",
+          "Threads_running_increase": ">=1",
+          "Slow_queries_delta": ">=1"
+        },
+        "latency_expectations": {
+          "p95_ratio": ">=1.5"
+        },
+        "throughput_expectations": {
+          "qps_ratio": "<=0.7"
+        },
+        "terminals": [
+          "slow_query",
+          "qps_drop"
+        ]
+      },
+      "success_criteria": [
+        "EXPLAIN shows table scan with sort/temporary on order_line",
+        "During injection: Created_tmp_disk_tables increases by at least 1 OR Sort_merge_passes increases by at least 1",
+        "Slow_queries increases by at least 1 OR p95 latency ratio >= 1.5",
+        "Overall QPS ratio <= 0.7 vs baseline during observe window"
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "Full table scan and external sort on order_line may cause disk spills and buffer pool churn, slowing TPCC. Read-only query avoids locks. Memory is near saturation; limiting concurrency (3) and duration (14s) keeps within the 15s observe window.",
+      "metadata": {
+        "root_cause": "improper_sql"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "improper_sql_tpcc_ol_groupby": 0.0
+  }
+}

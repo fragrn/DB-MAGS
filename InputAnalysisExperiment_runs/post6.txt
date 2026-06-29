@@ -1,0 +1,99 @@
+Slow SQL Server 2008 R2 backups after Windows update
+Asked 10 years ago
+Modified 9 years, 11 months ago
+Viewed 2k times
+0
+
+I recently installed a series of Windows Updates on our SQL Server 2008 R2 server. Note, these were not SQL Server updates, they were just the usual monthly Windows updates. These updates included a couple of re-boots, but otherwise this was just routine maintenance. Since then however, SQL Server has been running at least 4 times slower than usual - backups and queries - and I'm at a loss to figure out why. Backups which used to take 3 hours now take 20. I appreciate there are a myriad reasons why queries can be slow on a restart, but backups?
+
+I've heard there were issues with the Balanced Power Plan when upgrading from SP2 to SP3 with SQL Server 2008 R2, but this server has had SP3 installed for over a year now. I tried changing to the High Performance Plan anyway, but that made no difference to the speed of the backups.
+
+I also checked if there were any pending sp_configure changes that would kick-in (or kick-out) after a restart, but the Error Logs did not show any changes.
+
+Is it possible that the Network Adapters would somehow reset after a re-boot? One of the Windows updates was for the "Intel Ethernet Server Adapter X520-2". Could that be an issue? Would the Jumbo Frames size, or anything other configuration value, reset itself after a driver update?
+
+To give more information about the slow backups, the biggest database I backup is about 3TB, hosted on one Windows drive letter. That Windows drive is made up of six 820GB spindle drives (strictly speaking, it's twelve drives in a RAID-1 formation). Previously, this database would backup in about 3.5 hours at a rate of 192 MB/sec. Now it takes 20 hours at a rate of 32 MB/sec, and I don't understand what's changed. It seems that in the past, data must have been pulled from all six drives simultaneously during the backup to achieve 192 MB/sec, but now I'm guessing the backup is pulling data from just one drive at a time (checking with PerfMon), hence 32 MB/sec. Why? Could this have been caused by a change in the RAID controller, the network adapters, the SQL Server backup command itself, or what? And is it typical for data to be read/written from an array of drives in a parallel fashion? If so, what piece of hardware controls this?
+
+sql-server-2008-r2performance
+Share
+Improve this question
+Follow
+edited May 28, 2016 at 0:12
+asked May 25, 2016 at 15:35
+kme757's user avatar
+kme757
+133 bronze badges
+2
+This is way too broad - "my server is slow" but what have you looked at? What have you eliminated? Sometimes a reboot can cause perceived slowness because it dumps the plan cache and buffer pool, forcing you to now get everything from disk the first time and recompile all of your execution plans, which may yield worse plans depending on parameters, and other things like configuration changes that were made a long time ago but didn't take effect until the reboot. You need to determine how it is actually slow - your long backups, for example, are they being blocked? Is their I/O slower? Etc. – 
+Aaron Bertrand
+ CommentedMay 25, 2016 at 15:50 
+(And also, if you're on the balanced performance plan, fix that right now. Please.) – 
+Aaron Bertrand
+ CommentedMay 25, 2016 at 15:55
+Your backups and queries are consistently 4x+ slower as well as all of your queries? So your queries rose in the same factor of performance degradation as your backups did? Backups are almost all diskIO with the exception of compression, thus your query plan shouldn't be affecting backups unless it's so bad that everything is doing a table scan on a system with a bad io subsystem. What is the underlying architecture and do you have perfmon metrics from prior? Is this a VM? – 
+Ali Razeghi - AWS
+ CommentedMay 25, 2016 at 16:18 
+Yes, sorry the question was rather broad originally. I'm happy to stick to the speed of the backups though, and have updated my question accordingly. – 
+kme757
+ CommentedMay 25, 2016 at 17:08
+Not sure if you have an IO benchmark or baseline from before the update you can compare to, but I'd take a good look at some IO benchmarks/latencies/throughput or other measures – 
+Tom V
+ CommentedMay 25, 2016 at 18:43 
+Show 1 more comment
+2 Answers
+Sorted by:
+
+Highest score (default)
+1
+
+This is a bit of a fishing expedition but here would be my troubleshooting process assuming you don't have your own stats to help clear things up.
+
+Check the history of database size and compressed backup size from your msdb catalogs. Have they changed over the past few weeks.
+
+Sometimes an application will go bezerk and fill a database with garbage; what was 100GB is now 1TB. SCOM and Sharepoint are good examples of this.
+Sometimes someone can go in and turn off compression on your instance or in whatever your backup software is, especially if they are trying to force you to use de-duplication on a SAN.
+You need to talk to the staff who are managing the Infrastructure and SAN.
+
+If this is a VM they may have loaded the VM server with another host that is chewing up resources.
+Their VM monitoring software may be logging useful statistics that will help you narrow things down.
+The SAN people usually have their own built in monitors that may be able to add some detail.
+If you're still stuck with no metrics of any kind, go back to your msdb information and use the timings to calculate an MB/s for backups. Now take a copy only backup to NUL (note: this will put a negative load on your system of course) and compare.
+
+If your backup to NUL speed is below your previous MB/s speed you'll know your read speed of the database has changed and is likely the bottleneck (though there may be others, it's a starting point).
+Otherwise you'll know the server itself is fine and that you need to refocus your attention in the direction of network IO and the destination SAN.
+If all of this fails for some reason...
+
+You can see what updates were installed in Add/Remove Programs and do some Googling on the KBs to see what turns up. I don't think you will find anything but who knows; maybe?
+Start capturing new metrics. You could use the built in Management Data Warehouse functionality seeing as you have nothing else. You could use a trial of a paid tool.
+If you still had to do it manually, you could capture the disk IO DMVs (sys.dm_io_virtual_file_stats) using sample scripts from the net to work out your IO wait times, and see if they're abnormally high like over 100ms which would point at a local disk (or SAN) issue, or intensive queries. Then you can use other DMVs (and sample scripts) to pull out intensive queries from the plan cache and see if you can spot anything strange.
+Have any new staff been added, or a new developer, or even to an existing AD group that has been granted access, or a new login on the server (check sys.server_principals)? I've seen new people point Excel and other tools at a production database and kill it without realising the impact.
+It's possible, but unlikely, you're in a situation where the first few queries that came in had parameters that created poorly optimised plans which are now doing table scans over and over and dragging down performance. If you got desperate, you can also free your plan cache (seeing as the system is in dire straights anyway) and see what happens. I've never seen this drag a system down before but I have seen it kill individual applications before.
+As you can see, if you have no previously recorded information about how the system should be acting, it's a matter of thinking of everything it could possibly be, and working out how you're going to rule that in or out through expensive and time wasting investigation. But them's the breaks.
+
+Share
+Improve this answer
+Follow
+edited May 25, 2016 at 18:50
+answered May 25, 2016 at 18:39
+Cody Konior's user avatar
+Cody Konior
+3,5381515 silver badges2424 bronze badges
+Thank you for this very comprehensive answer, Cody. It's greatly appreciated. To respond to your suggestions: 1) The new backups are the same size as the old, and still compressed. 2) It's a standalone server, and I'm working with the systems guys, who know the most about this. 3) A backup to NUL was an excellent idea and showed the bottleneck seems to be the read speed. 4) I've rolled back the later Windows Updates but it made no difference. Meanwhile, I'm still working on it. If I find the cause I'll let you know. – 
+kme757
+ CommentedMay 26, 2016 at 18:03
+Seems like the updates might be a red herring. I'm willing to bet something else happened around the same time which might not be transparent at the moment. Good luck! – 
+Ali Razeghi - AWS
+ CommentedMay 27, 2016 at 22:42
+I'm inclined to agree with you Ali, this was the first time this server had been rebooted in six months and my gut feel is that some part of the server didn't like it. – 
+kme757
+ CommentedMay 27, 2016 at 23:38
+@kme757 Usually when a server restarts and SQL starts running slowly it's a newly cached execution plan issue. It's hard to prove without capturing plan stats but it's worth digging around for top CPU, top IO, and see what shows up, and possibly freeing the plan cache and crossing fingers (though this can also end poorly/worse, and so it's better to have evidence first). – 
+Cody Konior
+ CommentedMay 28, 2016 at 6:18
+Add a comment
+0
+
+Looks like it was MAXDOP (the SQL Server max degrees of parallelism setting). After changing the value from 4 to 8 (and ultimately 16), the disc backup performance went back to what it was before (and the SQL query performance too). I really have no idea how MAXDOP could have had an impact on disc performance, especially as the value hadn't changed as part of the Windows update, but somehow it did. Heigh ho.
+
+Share
+Improve this answer

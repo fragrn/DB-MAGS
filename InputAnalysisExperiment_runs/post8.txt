@@ -1,0 +1,187 @@
+
+
+Title: sql server - Wrapping query in IF EXISTS makes it very slow - Database Administrators Stack Exchange
+
+Asked: 9 years, 6 months ago  
+Modified: 6 years, 11 months ago  
+Viewed: 14k times  
+
+Question
+
+I have the below query:
+SELECT databasename
+FROM somedb.dbo.bigtable l
+WHERE databasename = 'someval'
+  AND source <> 'kt'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM dbo.smalltable c
+      WHERE c.source = l.source
+  );
+
+
+The above query completes in three seconds.
+
+If the above query returns any value, we want the stored procedure to EXIT, so I rewrote it like below:
+IF EXISTS (
+    SELECT databasename
+    FROM somedb.dbo.bigtable l
+    WHERE databasename = 'someval'
+      AND source <> 'kt'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM dbo.smalltable c
+          WHERE c.source = l.source
+      )
+)
+BEGIN
+    RAISERROR('Source missing', 16, 1);
+    RETURN;
+END
+
+
+However this is taking 10 minutes.
+
+I can rewrite the above query like below, which also completes in less than 3 seconds:
+SELECT databasename
+FROM somedb.dbo.bigtable l
+WHERE databasename = 'someval'
+  AND source <> 'kt'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM dbo.smalltable c
+      WHERE c.source = l.source
+  );
+
+IF @@ROWCOUNT > 0
+BEGIN
+    RAISERROR('Source missing', 16, 1);
+    RETURN;
+END
+
+
+The issue with the above rewrite is that the above query is part of a bigger stored procedure and it returns multiple result sets. In C#, we iterate through each result set and do some processing.  
+The above returns an empty result set, so if I go with this approach, I have to change my C# code and redeploy.
+
+So my question is:  
+Why does using just IF EXISTS change the plan to take so much time?
+
+Below are the details which may help you (let me know if you need anything else):
+
+1. Create table and statistics script to get the same plan as mine
+2. Slow Execution plan  
+   https://www.brentozar.com/pastetheplan/?id=...
+3. Fast Execution plan  
+   https://www.brentozar.com/pastetheplan/?id=...
+
+(Note: Both queries are the same using parameters; the only difference is EXISTS.)
+
+Table creation scripts:
+• Small table stats: http://pastebin.com/CgSHeqXc
+
+• Big table stats: http://pastebin.com/GUu9KfpS
+
+Comments on Question
+
+(No additional comments extracted beyond the question body.)
+
+Answer 1 (Tom V)
+
+As has been explained by Paul White in his blog post Inside the Optimizer: Row Goals In Depth, the EXISTS introduces a row goal, which prefers Nested Loops or Merge Join over Hash Match.
+
+A logical semi-join (such as a sub-query introduced with EXISTS) should be optimized to find the first matching row quickly.
+
+In your query, this apparently causes the optimizer to choose nested loops and remove parallelism, resulting in a much slower plan.
+
+You would probably need to rewrite your query without using NOT EXISTS.
+
+You might get away with rewriting it using a LEFT OUTER JOIN and checking for NULL:
+IF EXISTS (
+    SELECT 1
+    FROM somedb.dbo.bigtable l
+    LEFT JOIN dbo.smalltable c
+        ON c.source = l.source
+    WHERE l.databasename = 'someval'
+      AND l.source <> 'kt'
+      AND c.source IS NULL
+)
+BEGIN
+    RAISERROR('Source missing', 16, 1);
+    RETURN;
+END
+
+
+You could also use an EXCEPT query, depending on how many fields you need to compare:
+IF EXISTS (
+    SELECT source
+    FROM somedb.dbo.bigtable l
+    WHERE databasename = 'someval'
+      AND source <> 'kt'
+
+    EXCEPT
+
+    SELECT source
+    FROM dbo.smalltable
+)
+BEGIN
+    RAISERROR('Source missing', 16, 1);
+    RETURN;
+END
+
+
+Mind you, Aaron Bertrand has a blog post explaining why he prefers NOT EXISTS. Read it carefully to understand correctness issues when dealing with NULL values.
+
+Related Q&A:  
+https://dba.stackexchange.com/questions/...
+
+Answer 2 (Hayder Nahee)
+
+I’ve come across the same issue. I managed to work around it by avoiding EXISTS and using COUNT() with an IF...ELSE statement.
+
+Try the following:
+IF (
+    SELECT COUNT(l.databasename) + 1
+    FROM somedb.dbo.bigtable AS l
+    WHERE l.databasename = 'someval'
+      AND l.[source] <> 'kt'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM dbo.smalltable AS c
+          WHERE c.[source] = l.[source]
+      )
+) > 1  -- Acts like EXISTS
+BEGIN
+    RAISERROR('Source missing', 16, 1);
+    RETURN;
+END
+
+
+The reason I’m adding + 1 to the count is so that I can use > 1 in the IF condition.  
+Using > 0 or <> 0 triggers nested loops instead of a Hash Match.  
+I haven’t fully investigated why this happens, but it works.
+
+Answer 3 (Artem Machnev)
+
+You need to rewrite your query using explicit joins and specify which join operation you want (Loop, Hash, or Merge):
+IF NOT EXISTS (
+    SELECT databasename
+    FROM somedb.dbo.bigtable l
+    INNER HASH JOIN dbo.smalltable c
+        ON c.source = l.source
+    WHERE databasename = 'someval'
+      AND source <> 'kt'
+)
+BEGIN
+    RAISERROR('Source missing', 16, 1);
+    RETURN;
+END
+
+
+When using EXISTS or NOT EXISTS, SQL Server generates a plan with a Nested Loop, assuming it should scan rows one by one to find the first match.  
+Using a Hash Join speeds it up significantly.
+
+Comments on Answers
+
+•   TheGameiswar: Thank you, will test it. (Jun 25, 2019 at 16:14)
+
+Tags: sql-server, sql-server-2012, performance, exists, query-performance

@@ -1,0 +1,206 @@
+{
+  "post_understanding": {
+    "summary": "User enables MySQL slow query logging with long_query_time=0 for 5 minutes to capture all queries, worries the slow log file will grow too large, observes that deleting the slow log file while logging is on does not recreate it until executing FLUSH SLOW LOGS, and asks if deletion is safe and what FLUSH SLOW LOGS does.",
+    "symptoms": [
+      "slow log file not recreated after deletion while slow logging is on",
+      "potential rapid growth of slow log when long_query_time=0",
+      "uncertainty about FLUSH SLOW LOGS effect"
+    ],
+    "suspected_root_causes": [
+      "OS file descriptor semantics (process continues writing to an unlinked file until it is closed)",
+      "log_output=FILE with an open handle to the slow log",
+      "lack of log rotation or explicit FLUSH SLOW LOGS to close/reopen the file"
+    ],
+    "key_evidence": [
+      "User states: 'if I delete the slow-query-log file, MySQL doesn't create it back until I run FLUSH SLOW LOGS.'",
+      "User intends: 'slow-query-log to ON with long_query_time = 0 for 5 minutes to log all queries currently running.'"
+    ],
+    "assumptions": [
+      "MySQL is configured with log_output=FILE (not TABLE or BOTH) so slow logs are written to a filesystem file.",
+      "OS is a Unix-like system (e.g., Linux) where deleting an open file keeps the inode open until the file is closed, so space is not freed until a close/reopen occurs.",
+      "MySQL version is 5.7+ or 8.0, where SET GLOBAL slow_query_log and long_query_time are dynamic and FLUSH SLOW LOGS closes/reopens the slow log file handle.",
+      "The mysqld process has permission to write to the chosen slow_query_log_file path.",
+      "The test server is non-production to safely generate high log volume and to manipulate log files."
+    ],
+    "confidence": 0.67
+  },
+  "experiment_environment": {
+    "dbms": "mysql",
+    "target_database": "slowlog_test",
+    "target_tables": [
+      {
+        "table": "t_reads",
+        "purpose": "Generate read queries that will be captured in the slow log when long_query_time=0.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INT PRIMARY KEY AUTO_INCREMENT",
+            "role": "primary key"
+          },
+          {
+            "name": "k",
+            "type": "INT",
+            "role": "filter"
+          },
+          {
+            "name": "v",
+            "type": "VARCHAR(100)",
+            "role": "payload"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "100000",
+          "distribution": "Uniform distribution of k across 0..9999; v random strings",
+          "key_fields": [
+            "id",
+            "k"
+          ],
+          "rationale": "Sufficient rows to sustain a steady stream of simple read queries that will all be logged with long_query_time=0."
+        }
+      },
+      {
+        "table": "t_writes",
+        "purpose": "Generate write queries to diversify workload and ensure continued logging during the test.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INT PRIMARY KEY AUTO_INCREMENT",
+            "role": "primary key"
+          },
+          {
+            "name": "payload",
+            "type": "VARCHAR(100)",
+            "role": "payload"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "0 to start; rows will be inserted by workload",
+          "distribution": "N/A",
+          "key_fields": [
+            "id"
+          ],
+          "rationale": "Insert operations provide additional statements to log, increasing log volume for clearer observation."
+        }
+      }
+    ]
+  },
+  "background_workloads": [
+    {
+      "name": "steady_mixed_queries",
+      "inferred_from_post": "User wants to capture 'all queries currently running' and is concerned about log growth with long_query_time=0, implying a steady stream of queries.",
+      "simulation_method": "custom client",
+      "transactions_or_queries": [
+        "SELECT v FROM t_reads WHERE id = ?",
+        "SELECT COUNT(*) FROM t_reads WHERE k = ?",
+        "INSERT INTO t_writes (payload) VALUES (?)",
+        "UPDATE t_reads SET v = CONCAT(v, 'x') WHERE id = ? LIMIT 1",
+        "DELETE FROM t_writes WHERE id = ?"
+      ],
+      "concurrency": "16 threads",
+      "duration_sec": 600,
+      "transaction_mix": {
+        "SELECT_by_pk": "40%",
+        "SELECT_count_by_k": "20%",
+        "INSERT": "20%",
+        "UPDATE": "10%",
+        "DELETE": "10%"
+      }
+    }
+  ],
+  "anomaly_injection": [
+    {
+      "name": "enable_full_slow_logging",
+      "anomaly_type": "config_flip",
+      "mapped_dbmags_anomaly": "observability_overhead",
+      "target": "global slow query log settings",
+      "method": "SET GLOBAL variables to enable slow log to FILE and log all queries for the experiment window",
+      "parameters": {
+        "log_output": "FILE",
+        "slow_query_log": "ON",
+        "long_query_time": "0",
+        "slow_query_log_file": "assumed settable dynamically; path e.g., /var/log/mysql/slow.log or datadir/slow.log",
+        "log_timestamps": "SYSTEM or UTC (no functional impact)"
+      },
+      "duration_sec": 600,
+      "safety_notes": [
+        "Logging all queries increases overhead and log volume; run only on a non-production host.",
+        "Ensure available disk space; consider a dedicated filesystem for logs."
+      ]
+    },
+    {
+      "name": "unlink_slow_log_file_while_open",
+      "anomaly_type": "log_file_unlink",
+      "mapped_dbmags_anomaly": "log_rotation_misuse",
+      "target": "slow query log file",
+      "method": "From OS shell, delete the active slow log file path while mysqld is running and logging",
+      "parameters": {
+        "action": "rm -f <slow_query_log_file_path>",
+        "timing": "Execute approximately 120 seconds after background workload starts",
+        "os_prereq": "Linux/Unix semantics where unlink does not close the file descriptor"
+      },
+      "duration_sec": 5,
+      "safety_notes": [
+        "On Unix, deleting an open file does not immediately free disk space; space is reclaimed only when the file is closed.",
+        "On Windows, deleting an open file may fail; do not force kill mysqld.",
+        "Do not perform on production; risk of disk space confusion and loss of visibility into logs."
+      ]
+    },
+    {
+      "name": "flush_slow_logs_to_reopen_file",
+      "anomaly_type": "log_rotation",
+      "mapped_dbmags_anomaly": "operator_recovery",
+      "target": "mysqld slow log handle",
+      "method": "Execute FLUSH SLOW LOGS to close and reopen the slow log file, recreating it if missing",
+      "parameters": {
+        "sql": "FLUSH SLOW LOGS",
+        "timing": "Execute approximately 300 seconds after workload starts (around 180 seconds after deletion)"
+      },
+      "duration_sec": 1,
+      "safety_notes": [
+        "FLUSH SLOW LOGS is lightweight but should be executed with appropriate privileges.",
+        "Verify the new file path is writable by mysqld before flushing."
+      ]
+    }
+  ],
+  "expected_result": {
+    "metrics": [
+      {
+        "metric": "Slow_queries (SHOW GLOBAL STATUS)",
+        "expected_change": "increase steadily throughout test"
+      },
+      {
+        "metric": "Presence of slow_query_log_file on filesystem",
+        "expected_change": "exists initially; absent immediately after deletion; reappears only after FLUSH SLOW LOGS"
+      },
+      {
+        "metric": "mysqld open file descriptors (lsof)",
+        "expected_change": "shows the slow log as '(deleted)' and still open after unlink; disappears after FLUSH SLOW LOGS"
+      },
+      {
+        "metric": "Disk space usage for deleted inode",
+        "expected_change": "not reclaimed until FLUSH SLOW LOGS closes the handle"
+      }
+    ],
+    "query_or_transaction_effects": [
+      "Queries continue to execute normally while the slow log file is deleted.",
+      "All queries continue to be counted in Slow_queries and are written to the still-open (unlinked) file handle but are not visible on disk until the handle is closed.",
+      "After FLUSH SLOW LOGS, a new slow log file is created and subsequent queries are visible in that file."
+    ],
+    "validation_criteria": [
+      "Deleting the slow log file while slow_query_log=ON and log_output=FILE does not recreate the file until FLUSH SLOW LOGS is executed.",
+      "lsof (or equivalent) shows mysqld retains an open handle to the deleted slow log file between deletion and FLUSH SLOW LOGS.",
+      "After FLUSH SLOW LOGS, a new file appears at the configured slow_query_log_file path and logging resumes into this new file, and the previously '(deleted)' FD is closed."
+    ]
+  },
+  "open_questions": [
+    "What MySQL version and OS are you using? Behavior differs on Windows versus Linux/Unix.",
+    "Is log_output set to FILE, TABLE, or BOTH? The described behavior assumes FILE.",
+    "What is the exact slow_query_log_file path and does mysqld have permission to recreate it?",
+    "Are you using any external log rotation (e.g., logrotate)? If so, is it using copytruncate or calling FLUSH SLOW LOGS/FLUSH LOGS?",
+    "Do you intend to capture slow log to the mysql.slow_log table instead of a file during the 5-minute window?"
+  ]
+}

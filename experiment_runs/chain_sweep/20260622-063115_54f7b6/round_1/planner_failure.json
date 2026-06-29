@@ -1,0 +1,1560 @@
+{
+  "status": "failed",
+  "failure_type": "planner_fallback_blocked",
+  "reason": "Planner fallback blocked after tool loop failure: tool calling exceeded max_steps=15",
+  "target_path": [
+    "traffic_surge",
+    "threads_concurrency_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "traffic_surge"
+  ],
+  "react_trace": [
+    {
+      "step": 1,
+      "tool": "read_memory",
+      "arguments": {
+        "anomaly": "traffic_surge",
+        "limit": 20
+      },
+      "result": []
+    },
+    {
+      "step": 2,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "ts_tpcc_traffic_surge_001",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        ],
+        "dependencies": []
+      },
+      "result": {
+        "tasks": {
+          "ts_tpcc_traffic_surge_001": {
+            "task_id": "ts_tpcc_traffic_surge_001",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "ts_tpcc_traffic_surge_001": 0.0
+        }
+      }
+    },
+    {
+      "step": 3,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Threads_connected": 5,
+          "Threads_running": 6,
+          "Slow_queries": 203,
+          "Innodb_row_lock_waits": 2154862
+        },
+        "current_os_metrics": {},
+        "expected_workload": {
+          "runner": "benchbase",
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "ts_tpcc_traffic_surge_001": {
+              "task_id": "ts_tpcc_traffic_surge_001",
+              "task_type": "injection",
+              "actions": [
+                {
+                  "kind": "benchbase_burst_command",
+                  "benchmark": "tpcc",
+                  "database": "tpcc_10W",
+                  "command": [
+                    "java",
+                    "-jar",
+                    ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql.jar",
+                    "-b",
+                    "tpcc",
+                    "-c",
+                    ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                    "--execute=true"
+                  ],
+                  "duration_sec": 15,
+                  "terminals": 12,
+                  "rate": 300
+                }
+              ],
+              "expected_metrics": [
+                {
+                  "name": "threads_concurrency_up",
+                  "signal": "Threads_running.delta",
+                  "operator": "ge",
+                  "threshold": 3
+                },
+                {
+                  "name": "lock_contention",
+                  "signal": "Innodb_row_lock_waits.delta",
+                  "operator": "ge",
+                  "threshold": 50
+                },
+                {
+                  "name": "slow_query",
+                  "signal": "Slow_queries.delta",
+                  "operator": "ge",
+                  "threshold": 1
+                },
+                {
+                  "name": "qps_drop",
+                  "signal": "QPS.ratio_injection_vs_baseline",
+                  "operator": "le",
+                  "threshold": 0.7
+                }
+              ],
+              "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+              "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+              "metadata": {
+                "root_cause": "traffic_surge",
+                "background_benchmark": "tpcc",
+                "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "ts_tpcc_traffic_surge_001": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": false,
+        "reasons": [
+          "Task 'ts_tpcc_traffic_surge_001' benchbase_burst_command jar not found: .tools/benchbase-main/target/benchbase-mysql/benchbase-mysql.jar"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "step": 4,
+      "tool": "probe_full_snapshot",
+      "arguments": {
+        "database": "tpcc_10W"
+      },
+      "result": {
+        "truncated": true,
+        "preview": "{\"database\": \"tpcc_10W\", \"db_version\": \"9.6.0\", \"schema\": {\"customer\": {\"columns\": [{\"name\": \"c_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_discount\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(4,4)\", \"default\": null}, {\"name\": \"c_credit\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_last\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(16)\", \"default\": null}, {\"name\": \"c_first\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(16)\", \"default\": null}, {\"name\": \"c_credit_lim\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"c_balance\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"c_ytd_payment\", \"type\": \"float\", \"nullable\": false, \"key\": \"\", \"column_type\": \"float\", \"default\": null}, {\"name\": \"c_payment_cnt\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_delivery_cnt\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_street_1\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_street_2\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_city\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_state\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_zip\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(9)\", \"default\": null}, {\"name\": \"c_phone\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(16)\", \"default\": null}, {\"name\": \"c_since\", \"type\": \"timestamp\", \"nullable\": false, \"key\": \"\", \"column_type\": \"timestamp\", \"default\": \"CURRENT_TIMESTAMP\"}, {\"name\": \"c_middle\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_data\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(500)\", \"default\": null}], \"indexes\": [{\"index_name\": \"idx_customer_name\", \"column\": \"c_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_d_id\", \"non_unique\": true, \"seq\": 2}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_last\", \"non_unique\": true, \"seq\": 3}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_first\", \"non_unique\": true, \"seq\": 4}, {\"index_name\": \"PRIMARY\", \"column\": \"c_w_id\", \"non_unique\": false, \"seq\": 1}, {\"index_name\": \"PRIMARY\", \"column\": \"c_d_id\", \"non_unique\": false, \"seq\": 2}, {\"index_name\": \"PRIMARY\", \"column\": \"c_id\", \"non_unique\": false, \"seq\": 3}]}, \"district\": {\"columns\": [{\"name\": \"d_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_ytd\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"d_tax\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(4,4)\", \"default\": null}, {\"name\": \"d_next_o_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_name\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(10)\", \"default\": null}, {\"name\": \"d_street_1\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_street_2\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_city\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_state\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"d_zip\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(9)\", \"default\": null}], \"indexes\": [{\"index_name\": \"PRIMARY\", \"column\": \"d_w_id\", \"non_unique\": false, \"seq\": 1}, {\"index_name\": \"PRIMARY\", \"column\": \"d_id\", \"non_unique\": false, \"seq\": 2}]}, \"history\": {\"columns\": [{\"name\": \"h_c_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_c_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_c_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"MUL\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"MUL\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_date\", \"type\": \"timestamp\", \"nullable\": false, \"key\": \"\", \"column_type\": \"timestamp\", \"default\": \"CURRENT_TIMESTAMP\"}, {\"name\": \"h_amount\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(6,2)\", \"default\": null}, {\"name\": \"h_data\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(24)\", \"default\": null}], \"indexes\": [{\"index_name\": \"h_c_w_id\", \"column\": \"h_c_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"h_c_w_id\", \"column\": \"h_c_d_id\", \"non_unique\": true, \"seq\": 2}, {\"index_name\": \"h_c_w_id\", \"column\": \"h_c_id\", \"non_unique\": true, \"seq\": 3}, {\"index_name\": \"h_w_id\", \"column\": \"h_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"h_w_id\", \"column\": \"h_d_id\", \"non_unique\": true, \"seq\": 2}]}, \"item\": {\"columns\": [{\"name\": \"i_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"i_name\", "
+      }
+    },
+    {
+      "step": 5,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "ts_tpcc_traffic_surge_002",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/target/benchbase.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        ],
+        "dependencies": []
+      },
+      "result": {
+        "tasks": {
+          "ts_tpcc_traffic_surge_002": {
+            "task_id": "ts_tpcc_traffic_surge_002",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/target/benchbase.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "ts_tpcc_traffic_surge_002": 0.0
+        }
+      }
+    },
+    {
+      "step": 6,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Threads_connected": 5,
+          "Threads_running": 6,
+          "Slow_queries": 203,
+          "Innodb_row_lock_waits": 2154862
+        },
+        "current_os_metrics": {},
+        "expected_workload": {
+          "runner": "benchbase",
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "ts_tpcc_traffic_surge_002": {
+              "task_id": "ts_tpcc_traffic_surge_002",
+              "task_type": "injection",
+              "actions": [
+                {
+                  "kind": "benchbase_burst_command",
+                  "benchmark": "tpcc",
+                  "database": "tpcc_10W",
+                  "command": [
+                    "java",
+                    "-jar",
+                    ".tools/benchbase-main/target/benchbase.jar",
+                    "-b",
+                    "tpcc",
+                    "-c",
+                    ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                    "--execute=true"
+                  ],
+                  "duration_sec": 15,
+                  "terminals": 12,
+                  "rate": 300
+                }
+              ],
+              "expected_metrics": [
+                {
+                  "name": "threads_concurrency_up",
+                  "signal": "Threads_running.delta",
+                  "operator": "ge",
+                  "threshold": 3
+                },
+                {
+                  "name": "lock_contention",
+                  "signal": "Innodb_row_lock_waits.delta",
+                  "operator": "ge",
+                  "threshold": 50
+                },
+                {
+                  "name": "slow_query",
+                  "signal": "Slow_queries.delta",
+                  "operator": "ge",
+                  "threshold": 1
+                },
+                {
+                  "name": "qps_drop",
+                  "signal": "QPS.ratio_injection_vs_baseline",
+                  "operator": "le",
+                  "threshold": 0.7
+                }
+              ],
+              "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+              "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+              "metadata": {
+                "root_cause": "traffic_surge",
+                "java_bin": "java",
+                "jar_path": ".tools/benchbase-main/target/benchbase.jar",
+                "background_benchmark": "tpcc",
+                "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "ts_tpcc_traffic_surge_002": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": false,
+        "reasons": [
+          "Task 'ts_tpcc_traffic_surge_002' benchbase_burst_command jar not found: .tools/benchbase-main/target/benchbase.jar"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "step": 7,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "ts_tpcc_traffic_surge_003",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql-with-dependencies.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 16,
+                "rate": 400
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals aggressive (16). Monitor for connection errors; stop if errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql-with-dependencies.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        ],
+        "dependencies": []
+      },
+      "result": {
+        "tasks": {
+          "ts_tpcc_traffic_surge_003": {
+            "task_id": "ts_tpcc_traffic_surge_003",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql-with-dependencies.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 16,
+                "rate": 400
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals aggressive (16). Monitor for connection errors; stop if errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql-with-dependencies.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "ts_tpcc_traffic_surge_003": 0.0
+        }
+      }
+    },
+    {
+      "step": 8,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Threads_connected": 5,
+          "Threads_running": 6,
+          "Slow_queries": 203,
+          "Innodb_row_lock_waits": 2154862
+        },
+        "current_os_metrics": {},
+        "expected_workload": {
+          "runner": "benchbase",
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "ts_tpcc_traffic_surge_003": {
+              "task_id": "ts_tpcc_traffic_surge_003",
+              "task_type": "injection",
+              "actions": [
+                {
+                  "kind": "benchbase_burst_command",
+                  "benchmark": "tpcc",
+                  "database": "tpcc_10W",
+                  "command": [
+                    "java",
+                    "-jar",
+                    ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql-with-dependencies.jar",
+                    "-b",
+                    "tpcc",
+                    "-c",
+                    ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                    "--execute=true"
+                  ],
+                  "duration_sec": 15,
+                  "terminals": 16,
+                  "rate": 400
+                }
+              ],
+              "expected_metrics": [
+                {
+                  "name": "threads_concurrency_up",
+                  "signal": "Threads_running.delta",
+                  "operator": "ge",
+                  "threshold": 3
+                },
+                {
+                  "name": "lock_contention",
+                  "signal": "Innodb_row_lock_waits.delta",
+                  "operator": "ge",
+                  "threshold": 50
+                },
+                {
+                  "name": "slow_query",
+                  "signal": "Slow_queries.delta",
+                  "operator": "ge",
+                  "threshold": 1
+                },
+                {
+                  "name": "qps_drop",
+                  "signal": "QPS.ratio_injection_vs_baseline",
+                  "operator": "le",
+                  "threshold": 0.7
+                }
+              ],
+              "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+              "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals aggressive (16). Monitor for connection errors; stop if errors spike.",
+              "metadata": {
+                "root_cause": "traffic_surge",
+                "java_bin": "java",
+                "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql-with-dependencies.jar",
+                "background_benchmark": "tpcc",
+                "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "ts_tpcc_traffic_surge_003": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": false,
+        "reasons": [
+          "Task 'ts_tpcc_traffic_surge_003' benchbase_burst_command jar not found: .tools/benchbase-main/target/benchbase-mysql/benchbase-mysql-with-dependencies.jar"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "step": 9,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "ts_tpcc_traffic_surge_004",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase-mysql.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/target/benchbase-mysql.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        ],
+        "dependencies": []
+      },
+      "result": {
+        "tasks": {
+          "ts_tpcc_traffic_surge_004": {
+            "task_id": "ts_tpcc_traffic_surge_004",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase-mysql.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/target/benchbase-mysql.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "ts_tpcc_traffic_surge_004": 0.0
+        }
+      }
+    },
+    {
+      "step": 10,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Threads_connected": 5,
+          "Threads_running": 6,
+          "Slow_queries": 203,
+          "Innodb_row_lock_waits": 2154862
+        },
+        "current_os_metrics": {},
+        "expected_workload": {
+          "runner": "benchbase",
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "ts_tpcc_traffic_surge_004": {
+              "task_id": "ts_tpcc_traffic_surge_004",
+              "task_type": "injection",
+              "actions": [
+                {
+                  "kind": "benchbase_burst_command",
+                  "benchmark": "tpcc",
+                  "database": "tpcc_10W",
+                  "command": [
+                    "java",
+                    "-jar",
+                    ".tools/benchbase-main/target/benchbase-mysql.jar",
+                    "-b",
+                    "tpcc",
+                    "-c",
+                    ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                    "--execute=true"
+                  ],
+                  "duration_sec": 15,
+                  "terminals": 12,
+                  "rate": 300
+                }
+              ],
+              "expected_metrics": [
+                {
+                  "name": "threads_concurrency_up",
+                  "signal": "Threads_running.delta",
+                  "operator": "ge",
+                  "threshold": 3
+                },
+                {
+                  "name": "lock_contention",
+                  "signal": "Innodb_row_lock_waits.delta",
+                  "operator": "ge",
+                  "threshold": 50
+                },
+                {
+                  "name": "slow_query",
+                  "signal": "Slow_queries.delta",
+                  "operator": "ge",
+                  "threshold": 1
+                },
+                {
+                  "name": "qps_drop",
+                  "signal": "QPS.ratio_injection_vs_baseline",
+                  "operator": "le",
+                  "threshold": 0.7
+                }
+              ],
+              "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+              "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+              "metadata": {
+                "root_cause": "traffic_surge",
+                "java_bin": "java",
+                "jar_path": ".tools/benchbase-main/target/benchbase-mysql.jar",
+                "background_benchmark": "tpcc",
+                "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "ts_tpcc_traffic_surge_004": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": false,
+        "reasons": [
+          "Task 'ts_tpcc_traffic_surge_004' benchbase_burst_command jar not found: .tools/benchbase-main/target/benchbase-mysql.jar"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "step": 11,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "ts_tpcc_traffic_surge_005",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/benchbase-mysql/target/benchbase-mysql.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/benchbase-mysql/target/benchbase-mysql.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        ],
+        "dependencies": []
+      },
+      "result": {
+        "tasks": {
+          "ts_tpcc_traffic_surge_005": {
+            "task_id": "ts_tpcc_traffic_surge_005",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/benchbase-mysql/target/benchbase-mysql.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/benchbase-mysql/target/benchbase-mysql.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "ts_tpcc_traffic_surge_005": 0.0
+        }
+      }
+    },
+    {
+      "step": 12,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Threads_connected": 5,
+          "Threads_running": 6,
+          "Slow_queries": 203,
+          "Innodb_row_lock_waits": 2154862
+        },
+        "current_os_metrics": {},
+        "expected_workload": {
+          "runner": "benchbase",
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "ts_tpcc_traffic_surge_005": {
+              "task_id": "ts_tpcc_traffic_surge_005",
+              "task_type": "injection",
+              "actions": [
+                {
+                  "kind": "benchbase_burst_command",
+                  "benchmark": "tpcc",
+                  "database": "tpcc_10W",
+                  "command": [
+                    "java",
+                    "-jar",
+                    ".tools/benchbase-main/benchbase-mysql/target/benchbase-mysql.jar",
+                    "-b",
+                    "tpcc",
+                    "-c",
+                    ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                    "--execute=true"
+                  ],
+                  "duration_sec": 15,
+                  "terminals": 12,
+                  "rate": 300
+                }
+              ],
+              "expected_metrics": [
+                {
+                  "name": "threads_concurrency_up",
+                  "signal": "Threads_running.delta",
+                  "operator": "ge",
+                  "threshold": 3
+                },
+                {
+                  "name": "lock_contention",
+                  "signal": "Innodb_row_lock_waits.delta",
+                  "operator": "ge",
+                  "threshold": 50
+                },
+                {
+                  "name": "slow_query",
+                  "signal": "Slow_queries.delta",
+                  "operator": "ge",
+                  "threshold": 1
+                },
+                {
+                  "name": "qps_drop",
+                  "signal": "QPS.ratio_injection_vs_baseline",
+                  "operator": "le",
+                  "threshold": 0.7
+                }
+              ],
+              "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+              "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+              "metadata": {
+                "root_cause": "traffic_surge",
+                "java_bin": "java",
+                "jar_path": ".tools/benchbase-main/benchbase-mysql/target/benchbase-mysql.jar",
+                "background_benchmark": "tpcc",
+                "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "ts_tpcc_traffic_surge_005": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": false,
+        "reasons": [
+          "Task 'ts_tpcc_traffic_surge_005' benchbase_burst_command jar not found: .tools/benchbase-main/benchbase-mysql/target/benchbase-mysql.jar"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "step": 13,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "ts_tpcc_traffic_surge_006",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/benchbase/target/benchbase.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/benchbase/target/benchbase.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        ],
+        "dependencies": []
+      },
+      "result": {
+        "tasks": {
+          "ts_tpcc_traffic_surge_006": {
+            "task_id": "ts_tpcc_traffic_surge_006",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/benchbase/target/benchbase.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/benchbase/target/benchbase.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "ts_tpcc_traffic_surge_006": 0.0
+        }
+      }
+    },
+    {
+      "step": 14,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Threads_connected": 5,
+          "Threads_running": 6,
+          "Slow_queries": 203,
+          "Innodb_row_lock_waits": 2154862
+        },
+        "current_os_metrics": {},
+        "expected_workload": {
+          "runner": "benchbase",
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "ts_tpcc_traffic_surge_006": {
+              "task_id": "ts_tpcc_traffic_surge_006",
+              "task_type": "injection",
+              "actions": [
+                {
+                  "kind": "benchbase_burst_command",
+                  "benchmark": "tpcc",
+                  "database": "tpcc_10W",
+                  "command": [
+                    "java",
+                    "-jar",
+                    ".tools/benchbase-main/benchbase/target/benchbase.jar",
+                    "-b",
+                    "tpcc",
+                    "-c",
+                    ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                    "--execute=true"
+                  ],
+                  "duration_sec": 15,
+                  "terminals": 12,
+                  "rate": 300
+                }
+              ],
+              "expected_metrics": [
+                {
+                  "name": "threads_concurrency_up",
+                  "signal": "Threads_running.delta",
+                  "operator": "ge",
+                  "threshold": 3
+                },
+                {
+                  "name": "lock_contention",
+                  "signal": "Innodb_row_lock_waits.delta",
+                  "operator": "ge",
+                  "threshold": 50
+                },
+                {
+                  "name": "slow_query",
+                  "signal": "Slow_queries.delta",
+                  "operator": "ge",
+                  "threshold": 1
+                },
+                {
+                  "name": "qps_drop",
+                  "signal": "QPS.ratio_injection_vs_baseline",
+                  "operator": "le",
+                  "threshold": 0.7
+                }
+              ],
+              "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+              "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+              "metadata": {
+                "root_cause": "traffic_surge",
+                "java_bin": "java",
+                "jar_path": ".tools/benchbase-main/benchbase/target/benchbase.jar",
+                "background_benchmark": "tpcc",
+                "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "ts_tpcc_traffic_surge_006": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": false,
+        "reasons": [
+          "Task 'ts_tpcc_traffic_surge_006' benchbase_burst_command jar not found: .tools/benchbase-main/benchbase/target/benchbase.jar"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "step": 15,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "ts_tpcc_traffic_surge_007",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        ],
+        "dependencies": []
+      },
+      "result": {
+        "tasks": {
+          "ts_tpcc_traffic_surge_007": {
+            "task_id": "ts_tpcc_traffic_surge_007",
+            "task_type": "injection",
+            "actions": [
+              {
+                "kind": "benchbase_burst_command",
+                "benchmark": "tpcc",
+                "database": "tpcc_10W",
+                "command": [
+                  "java",
+                  "-jar",
+                  ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+                  "-b",
+                  "tpcc",
+                  "-c",
+                  ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                  "--execute=true"
+                ],
+                "duration_sec": 15,
+                "terminals": 12,
+                "rate": 300
+              }
+            ],
+            "expected_metrics": [
+              {
+                "name": "threads_concurrency_up",
+                "signal": "Threads_running.delta",
+                "operator": "ge",
+                "threshold": 3
+              },
+              {
+                "name": "lock_contention",
+                "signal": "Innodb_row_lock_waits.delta",
+                "operator": "ge",
+                "threshold": 50
+              },
+              {
+                "name": "slow_query",
+                "signal": "Slow_queries.delta",
+                "operator": "ge",
+                "threshold": 1
+              },
+              {
+                "name": "qps_drop",
+                "signal": "QPS.ratio_injection_vs_baseline",
+                "operator": "le",
+                "threshold": 0.7
+              }
+            ],
+            "success_criteria": "Within 15s of surge: Threads_running increases by >=3, lock waits increase by >=50, Slow_queries increases by >=1, and QPS drops to <=70% of baseline.",
+            "risk_assessment": "Potential elevated CPU/IO, increased lock contention and timeouts. Keep duration short (15s) and terminals moderate (12). Monitor for excessive errors; stop if connection errors spike.",
+            "metadata": {
+              "root_cause": "traffic_surge",
+              "java_bin": "java",
+              "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+              "background_benchmark": "tpcc",
+              "background_config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "ts_tpcc_traffic_surge_007": 0.0
+        }
+      }
+    }
+  ],
+  "context": {
+    "target_path": [
+      "traffic_surge",
+      "threads_concurrency_up",
+      "lock_contention",
+      "slow_query",
+      "qps_drop"
+    ],
+    "injected_nodes": [
+      "traffic_surge"
+    ],
+    "target_database": "tpcc_10W"
+  },
+  "timestamp": "2026-06-22T06:36:51.527312+00:00"
+}

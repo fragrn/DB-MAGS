@@ -1,0 +1,68 @@
+1
+
+My machine disk is SSD and memory is 32GB.
+My executed SQL:
+
+SELECT `country_detail`.`country_name` AS `country_name`
+FROM `statistic_detail`
+  INNER JOIN `country_detail` ON (`statistic_detail`.`country` = `country_detail`.`country_code`)
+GROUP BY 1;
+
+The SQL need cost 30 second. So slowly! My explain is:
++----+-------------+----------------+-----------+------+------------------------+---------------------------------+---------+-------+------+-------------+
+| id | select_type | table          | partitions| type | possible_keys          | key                             | key_len | ref   | rows | filtered    | Extra       |
++----+-------------+----------------+-----------+------+------------------------+---------------------------------+---------+-------+------+-------------+
+|  1 | SIMPLE      | country_detail | NULL      | index| PRIMARY,country_name_idx| country_name_idx                | 67      | NULL  | 334  | 100.00      | Using index |
+|  1 | SIMPLE      | statistic_detail| NULL     | ref  | index_test,country_detail| index_test,country_detail|country_code | 82      | NULL  | 306  | 100.00      | Using where; Using index |
++----+-------------+----------------+-----------+------+------------------------+---------------------------------+---------+-------+------+-------------+
+
+I don't understand why it need so much time?
+I know how optimize it, I want to know why it is so slow.
+
+My table information is:
+
+CREATE TABLE `statistic_detail` (
+  `date` varchar(10) NOT NULL,
+  `os` varchar(10) NOT NULL,
+  `ver` varchar(16) NOT NULL,
+  `country` varchar(16) NOT NULL,
+  `utype` varchar(8) NOT NULL,
+  `stype` varchar(32) NOT NULL,
+  `language` varchar(16) NOT NULL,
+  `num0` bigint DEFAULT NULL,
+  `num1` double DEFAULT NULL,
+  `num2` double DEFAULT NULL,
+  `num3` double DEFAULT NULL,
+  `num4` double DEFAULT NULL,
+  `num5` double DEFAULT NULL,
+  `num6` double DEFAULT NULL,
+  `num7` double DEFAULT NULL,
+  `num8` double DEFAULT NULL,
+  `num9` double DEFAULT NULL,
+  `num10` double DEFAULT NULL,
+  `num11` double DEFAULT NULL,
+  `num12` double DEFAULT NULL,
+  `num13` double NOT NULL,
+  PRIMARY KEY (`country`, `ver`, `language`, `utype`, `stype`, `os`, `date`),  
+  KEY `ver_idx` (`ver`),
+  KEY `language_idx` (`language`),
+  KEY `utype_idx` (`utype`),
+  KEY `stype_idx` (`stype`),
+  KEY `os_idx` (`os`),
+  KEY `date_idx` (`date`),
+  KEY `country_idx` (`country`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+13731253 rows.
+
+CREATE TABLE `country_detail` (
+  `country_code` varchar(20) NOT NULL,
+  `country_name` varchar(16),
+  `region_code` varchar(16),
+  `region_name` varchar(16),
+  PRIMARY KEY (`country_code`),
+  KEY `region_code_idx` (`region_code`),
+  KEY `region_name_idx` (`region_name`),
+  KEY `country_name_idx` (`country_name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+334 rows.
+

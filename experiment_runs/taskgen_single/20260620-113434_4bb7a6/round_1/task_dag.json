@@ -1,0 +1,49 @@
+{
+  "tasks": {
+    "missing_index_ol_quantity_scan": {
+      "task_id": "missing_index_ol_quantity_scan",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT COUNT(*) FROM order_line WHERE ol_quantity >= 1",
+          "concurrency": 3,
+          "duration_sec": 12
+        }
+      ],
+      "expected_metrics": {
+        "poor_plan": {
+          "evidence": "EXPLAIN shows full table scan on order_line for predicate ol_quantity >= 1"
+        },
+        "slow_query": {
+          "p95_latency_ratio": ">=1.5",
+          "slow_query_count_delta": ">=1"
+        },
+        "threads_concurrency_up": {
+          "Threads_running_delta": ">=2"
+        }
+      },
+      "success_criteria": [
+        "EXPLAIN confirms full table scan on order_line for the provided SQL",
+        "During the 12s injection window, slow_query_count increases by at least 1 OR p95 latency of SELECT statements increases by 1.5x vs baseline"
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "Read-only full table scans across ~6.2M order_line rows may spike CPU and buffer pool reads, slowing background TPC-C. Bounded to 12s and concurrency 3 to limit impact. No DDL or writes. Potential QPS drop/slow queries during the window.",
+      "metadata": {
+        "root_cause": "missing_index",
+        "target_table": "order_line",
+        "unindexed_columns": [
+          "ol_quantity"
+        ],
+        "explain_plan_sample": "-> Table scan on order_line (cost=659043 rows=6.28e+6)"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "missing_index_ol_quantity_scan": 0.0
+  }
+}

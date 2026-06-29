@@ -1,0 +1,203 @@
+{
+  "post_understanding": {
+    "summary": "Wrapping an anti-semi join query in IF EXISTS in SQL Server 2012 causes a plan change that makes it much slower (minutes vs seconds). The EXISTS introduces a row goal, leading the optimizer to choose a nested loops, non-parallel plan instead of a (parallel) hash anti-join.",
+    "symptoms": [
+      "Significant slowdown only when wrapped in IF EXISTS (minutes vs seconds)",
+      "Execution plan switches from Hash Match + Parallelism to Nested Loops without parallelism",
+      "Higher logical reads and row-by-row lookups into smalltable",
+      "Same logical query semantics; only plan shape differs"
+    ],
+    "suspected_root_causes": [
+      "Row goal introduced by EXISTS leading to nested loops and removal of parallelism",
+      "Cardinality/distribution skew causing nested loops to perform many lookups before finding a qualifying row",
+      "Parameterization context within stored procedure (parameter sniffing may amplify but not required)",
+      "Stats and index choices affecting join strategy preference"
+    ],
+    "key_evidence": [
+      "Author reports: SELECT completes in ~3 seconds; IF EXISTS version takes ~10 minutes",
+      "Answer cites: EXISTS introduces a row goal that favors Nested Loops or Merge Join over Hash Match and removes parallelism",
+      "Both queries are the same except EXISTS; execution plans differ (links provided in post)",
+      "SQL Server 2012 context with default behavior for row goals"
+    ],
+    "assumptions": [
+      "SQL Server 2012 instance with default cost threshold for parallelism and MAXDOP settings (assume cost threshold = 5, MAXDOP > 1)",
+      "Both tables exist in the same SQL Server instance; cross-database join is permitted (bigtable in somedb, smalltable in current DB)",
+      "bigtable is large (tens of millions of rows) with an index on (databasename, source); smalltable has an index/unique key on (source)",
+      "For databasename = 'someval', a large number of rows qualify in bigtable, and most of their sources exist in smalltable (anti-semi matches are rare, e.g., ~1–10%)",
+      "Data is distributed so that early rows (by the index used to satisfy databasename = 'someval') mostly match smalltable, forcing nested loops to perform many lookups before finding a non-matching row",
+      "Auto-create/update statistics is ON and up to date",
+      "No significant concurrent workload is required to reproduce the issue"
+    ],
+    "confidence": 0.78
+  },
+  "experiment_environment": {
+    "dbms": "sql-server",
+    "target_database": "somedb",
+    "target_tables": [
+      {
+        "table": "dbo.bigtable",
+        "purpose": "Large fact-like table providing many candidate rows for databasename='someval' to drive plan choice differences between EXISTS and non-EXISTS versions.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "bigint identity(1,1)",
+            "role": "primary key / clustered index key"
+          },
+          {
+            "name": "databasename",
+            "type": "nvarchar(128)",
+            "role": "filter key; hot predicate equals 'someval'"
+          },
+          {
+            "name": "source",
+            "type": "nvarchar(50)",
+            "role": "join/anti-join key to smalltable; also used in filter source <> 'kt'"
+          },
+          {
+            "name": "payload",
+            "type": "char(100)",
+            "role": "row bloat to mimic real table width and IO patterns"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "50,000,000",
+          "distribution": "databasename values: 'someval' for 20% (~10M rows), remainder spread across ~100 other names; source values: ~5,000,000 distinct overall with skew such that for databasename='someval' most sources appear in smalltable and only ~5% do not; arrange insertion so early index order for (databasename, source) favors sources present in smalltable, with non-present sources clustered toward the end.",
+          "key_fields": [
+            "databasename",
+            "source"
+          ],
+          "rationale": "Large outer input with many qualifying rows ensures nested loops will perform many lookups under a row goal before finding a qualifying anti-semi row; supports hash anti-semi join and parallelism in the non-EXISTS version."
+        }
+      },
+      {
+        "table": "dbo.smalltable",
+        "purpose": "Lookup/reference table joined on source for anti-semi logic.",
+        "columns": [
+          {
+            "name": "source",
+            "type": "nvarchar(50)",
+            "role": "primary/unique key; anti-join key"
+          },
+          {
+            "name": "payload",
+            "type": "char(50)",
+            "role": "row width filler"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "4,750,000",
+          "distribution": "Contains ~95% of the ~5,000,000 distinct source values used by bigtable for databasename='someval'; missing ~5% chosen to be greater values by collation so they sort after present ones when scanning index (to delay first anti-semi hit).",
+          "key_fields": [
+            "source"
+          ],
+          "rationale": "Large reference set enables a fast hash anti-join for the non-EXISTS version and many successful probes for the EXISTS nested loops before finding a non-existing source."
+        }
+      }
+    ]
+  },
+  "background_workloads": [],
+  "anomaly_injection": [
+    {
+      "name": "baseline_non_exists_select",
+      "anomaly_type": "none (baseline)",
+      "mapped_dbmags_anomaly": "baseline",
+      "target": "dbo.bigtable JOIN dbo.smalltable",
+      "method": "Execute the non-EXISTS SELECT that returns the qualifying rows, capturing plan and metrics.",
+      "parameters": {
+        "sql": "SELECT l.databasename FROM somedb.dbo.bigtable AS l WHERE l.databasename = N'someval' AND l.source <> N'kt' AND NOT EXISTS (SELECT 1 FROM dbo.smalltable AS c WHERE c.source = l.source);",
+        "expected_plan_shape": "Parallel Hash Match (anti-semi) with a scan/seek on bigtable filtered by databasename='someval' and a hash build on smalltable(source)"
+      },
+      "duration_sec": 0,
+      "safety_notes": [
+        "Run in a non-production environment",
+        "Large scans may consume CPU/IO; monitor and cap MAXDOP if needed"
+      ]
+    },
+    {
+      "name": "exists_row_goal_injection",
+      "anomaly_type": "slow_sql",
+      "mapped_dbmags_anomaly": "plan_regression_row_goal",
+      "target": "dbo.bigtable JOIN dbo.smalltable",
+      "method": "Wrap the same logic in IF EXISTS to introduce a row goal and force a different optimization path.",
+      "parameters": {
+        "sql": "IF EXISTS (SELECT 1 FROM somedb.dbo.bigtable AS l WHERE l.databasename = N'someval' AND l.source <> N'kt' AND NOT EXISTS (SELECT 1 FROM dbo.smalltable AS c WHERE c.source = l.source)) BEGIN; RAISERROR('Source missing', 16, 1); RETURN; END;",
+        "expected_plan_shape": "Non-parallel Nested Loops (anti-semi) probing smalltable for each qualifying bigtable row under a row goal",
+        "session_settings": "Use default MAXDOP and cost threshold; ensure AUTO UPDATE STATISTICS is ON"
+      },
+      "duration_sec": 0,
+      "safety_notes": [
+        "Query may run for minutes due to row-by-row probes; be prepared to cancel if resource contention occurs",
+        "Confirm indexes and statistics are in place to avoid confounding missing-index issues"
+      ]
+    },
+    {
+      "name": "mitigation_hash_join_hint_check",
+      "anomaly_type": "diagnostic_variation",
+      "mapped_dbmags_anomaly": "none",
+      "target": "dbo.bigtable JOIN dbo.smalltable",
+      "method": "Apply a HASH JOIN hint within the IF EXISTS to validate that the slowdown is due to the row goal causing nested loops.",
+      "parameters": {
+        "sql": "IF EXISTS (SELECT 1 FROM somedb.dbo.bigtable AS l WITH (INDEX(IX_bigtable_databasename_source)) INNER HASH JOIN dbo.smalltable AS c ON c.source = l.source WHERE l.databasename = N'someval' AND l.source <> N'kt' AND c.source IS NULL) BEGIN; RAISERROR('Source missing', 16, 1); RETURN; END; -- Alternatively: IF EXISTS (SELECT 1 FROM somedb.dbo.bigtable AS l WHERE l.databasename = N'someval' AND l.source <> N'kt' AND NOT EXISTS (SELECT 1 FROM dbo.smalltable AS c WHERE c.source = l.source)) OPTION (HASH JOIN);",
+        "expected_plan_shape": "Hash anti-join (may still be non-parallel due to IF EXISTS, but significantly faster than nested loops)"
+      },
+      "duration_sec": 0,
+      "safety_notes": [
+        "Hints are for diagnostic confirmation only; remove for true reproduction of the anomaly",
+        "Ensure hinted plan compiles successfully; adjust index names as implemented"
+      ]
+    }
+  ],
+  "expected_result": {
+    "metrics": [
+      {
+        "metric": "elapsed_time_ms",
+        "expected_change": "IF EXISTS version increases by >10x compared to baseline SELECT"
+      },
+      {
+        "metric": "cpu_time_ms",
+        "expected_change": "increase"
+      },
+      {
+        "metric": "logical_reads_bigtable",
+        "expected_change": "increase due to many outer probes with nested loops"
+      },
+      {
+        "metric": "logical_reads_smalltable",
+        "expected_change": "significant increase due to many key lookups/probes"
+      },
+      {
+        "metric": "degree_of_parallelism",
+        "expected_change": "drops to 1 for IF EXISTS plan; baseline uses >1 if server allows"
+      },
+      {
+        "metric": "plan_shape",
+        "expected_change": "baseline shows Hash Match (anti-semi) + Parallelism; IF EXISTS shows Nested Loops (Left Anti Semi Join) with Row Goal property"
+      }
+    ],
+    "query_or_transaction_effects": [
+      "Baseline SELECT returns the anti-semi rowset in seconds",
+      "IF EXISTS version does not return rowset but completes far slower before RAISERROR/RETURN",
+      "Hinted or rewritten IF EXISTS (LEFT JOIN/EXCEPT or OPTION(HASH JOIN)) performs closer to baseline"
+    ],
+    "validation_criteria": [
+      "Observe IF EXISTS plan containing a Nested Loops anti-semi join and single-threaded execution (or otherwise measurably slower)",
+      "Observe baseline SELECT plan containing a Hash Match anti-semi join with parallelism",
+      "Timing difference consistent with the post (seconds vs minutes) on the generated data",
+      "When applying a HASH JOIN hint or rewriting to LEFT JOIN/EXCEPT inside IF EXISTS, performance improves and plan shape aligns with hash anti-join"
+    ]
+  },
+  "open_questions": [
+    "Exact table schemas and indexes for somedb.dbo.bigtable and dbo.smalltable (clustered index, nonclustered indexes, included columns)?",
+    "Approximate row counts and cardinality for bigtable and smalltable, especially number of rows with databasename = 'someval' and distinct sources?",
+    "Distribution/selectivity: what fraction of bigtable sources (for databasename='someval') are missing from smalltable?",
+    "Are bigtable and smalltable in the same database, or is this a cross-database query in production?",
+    "Instance settings: MAXDOP, cost threshold for parallelism, auto update stats settings, compatibility level?",
+    "Is the query executed inside a stored procedure with parameters (any parameter sniffing behavior observed)?",
+    "Are there any filtered indexes or statistics that influence the plan for databasename='someval'?",
+    "What is the collation and does it affect source ordering/distribution relevant to early vs late matches?"
+  ]
+}

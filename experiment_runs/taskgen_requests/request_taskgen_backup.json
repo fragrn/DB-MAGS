@@ -1,0 +1,30 @@
+{
+  "target_anomaly": "taskgen_single_backup",
+  "target_database": "tpcc_10W",
+  "dba_description": "Taskgen only: generate one backup injection task. The LLM should directly generate a logical_backup_command TaskSpec, preferably mysqldump against a large TPCC table, with command represented as an argv array. Do not execute the task.",
+  "target_path": [
+    "backup",
+    "maintenance_conflict"
+  ],
+  "injected_nodes": [
+    "backup"
+  ],
+  "max_duration_sec": 30,
+  "max_retry_rounds": 1,
+  "risk_level": "medium",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "warmup_sec": 5,
+    "baseline_sec": 10,
+    "injection_observe_sec": 15,
+    "recovery_sec": 5,
+    "sample_interval_sec": 5,
+    "duration_sec": 1800,
+    "terminals": 4
+  }
+}

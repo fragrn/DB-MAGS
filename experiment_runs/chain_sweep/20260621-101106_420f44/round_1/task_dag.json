@@ -1,0 +1,61 @@
+{
+  "tasks": {
+    "missing_index_ol_scan": {
+      "task_id": "missing_index_ol_scan",
+      "task_type": "anomaly_injection",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT SQL_NO_CACHE COUNT(*) FROM order_line WHERE ol_i_id BETWEEN 1 AND 1000 AND ol_quantity >= 5 AND ol_amount BETWEEN 10 AND 20",
+          "concurrency": 2,
+          "duration_sec": 12
+        }
+      ],
+      "expected_metrics": {
+        "poor_plan": {
+          "explain_type": "ALL",
+          "plan_contains": "Table scan on order_line"
+        },
+        "slow_query": {
+          "slow_query_count_delta": 1,
+          "p95_latency_ratio": 1.5
+        },
+        "qps_drop": {
+          "qps_ratio": 0.7
+        }
+      },
+      "success_criteria": [
+        "EXPLAIN shows table scan (type=ALL) on order_line for the injected SQL",
+        "At least one slow query logged or p95 latency increases by >=1.5x during injection",
+        "Observed QPS drops (ratio <= 0.7) during injection window"
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": {
+        "risks": [
+          "Increased CPU and IO utilization due to full table scans on large table",
+          "Potential interference with TPCC background workload causing latency spikes",
+          "Buffer pool churn and cache eviction"
+        ],
+        "mitigations": [
+          "Limit concurrency to 2 and duration to 12 seconds to fit observe window",
+          "Use SELECT only (no writes) to avoid data corruption",
+          "Bounded by max_duration_sec and monitored during injection window"
+        ]
+      },
+      "metadata": {
+        "root_cause": "missing_index",
+        "explain_sample": {
+          "sql": "SELECT SQL_NO_CACHE COUNT(*) FROM order_line WHERE ol_i_id BETWEEN 1 AND 1000 AND ol_quantity >= 5 AND ol_amount BETWEEN 10 AND 20",
+          "plan_summary": "Table scan on order_line with filter on ol_i_id, ol_quantity, ol_amount"
+        }
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "missing_index_ol_scan": 0.0
+  }
+}

@@ -1,0 +1,125 @@
+Slow SQL Server Query
+Asked 9 years, 5 months ago
+Modified 6 years, 6 months ago
+Viewed 124 times
+1
+
+First let me start off by saying I am in no way a DB expert. I know enough to be dangerous, but I am primarily a c# developer. I have a query off a view that is slow, but I am having problems figuring out the root cause. I have attached the query plan, hoping I can get some insight here.
+
+https://www.brentozar.com/pastetheplan/?id=H1GT43J8e
+
+Here is the view info as well:
+
+CREATE VIEW [dbo].[ReSyncAdwords]
+WITH schemabinding
+AS
+  SELECT dbo.currentadwordsmaxbid.maxcpc - dervtable.Bid AS Expr1,
+         dbo.currentadwordsmaxbid.webid,
+         dbo.currentadwordsmaxbid.maxcpc,
+         dbo.currentadwordsmaxbid.adgroupid,
+         dbo.currentadwordsmaxbid.keywordid,
+         dervtable.SKU,
+         dervtable.Bid,
+         dbo.currentadwordsmaxbid.campaginid
+  FROM   dbo.currentadwordsmaxbid
+         LEFT OUTER JOIN dbo.WebSkuLookup
+                      ON dbo.currentadwordsmaxbid.webid = dbo.WebSkuLookup.webid
+         LEFT OUTER JOIN (SELECT SKU,
+                                 Bid,
+                                 Channel,
+                                 DTStamp,
+                                 campaginid
+                          FROM   dbo.BidHistory AS ph1
+                          WHERE  ( DTStamp = (SELECT MAX(DTStamp) AS Expr1
+                                              FROM   dbo.BidHistory AS ph2
+                                              WHERE  ( campaginid = ph1.campaginid )
+                                                     AND ( ph1.SKU = SKU )) )) AS dervtable
+                      ON dbo.WebSkuLookup.sku = dervtable.SKU
+                         AND dbo.currentadwordsmaxbid.campaginid = dervtable.campaginid
+  WHERE  ( dbo.currentadwordsmaxbid.maxcpc - dervtable.Bid <> 0 )
+
+GO 
+Thanks.
+
+sql-server-2012performanceexecution-planquery-performance
+Share
+Improve this question
+Follow
+edited Jan 7, 2020 at 22:23
+Community's user avatar
+CommunityBot
+1
+asked Jan 8, 2017 at 12:54
+Ben Schwartz's user avatar
+Ben Schwartz
+3555 bronze badges
+1
+WHERE  ( dbo.currentadwordsmaxbid.maxcpc - dervtable.Bid <> 0 ) converts your left joins back to inner joins BTW – 
+Martin Smith
+ CommentedJan 8, 2017 at 13:09
+Oh, interesting. I think I understand why. Just to confirm, since NULLs would get omitted I might as well be doing an inner join. Correct? – 
+Ben Schwartz
+ CommentedJan 8, 2017 at 13:15
+yes. Though the plan shows the optimiser just treats them as inner joins anyway. – 
+Martin Smith
+ CommentedJan 8, 2017 at 13:16
+Can you better define what "slow" means and how quickly you need the query to complete? If the query finishes at all it would be very helpful to provide an actual plan posted to Paste The Plan. – 
+Joe Obbish
+ CommentedJan 8, 2017 at 17:12
+Joe, thanks for the comment. But it seems the answer below has fixed this query. Thanks! – 
+Ben Schwartz
+ CommentedJan 8, 2017 at 18:14
+Add a comment
+1 Answer
+Sorted by:
+
+Highest score (default)
+1
+
+Why all the ( ) and long names?
+Why mixed lowerecase camel case on table names?
+
+Just basic cleanup
+
+  SELECT dbo.currentadwordsmaxbid.maxcpc - dervtable.Bid AS Expr1,
+         dbo.currentadwordsmaxbid.webid,
+         dbo.currentadwordsmaxbid.maxcpc,
+         dbo.currentadwordsmaxbid.adgroupid,
+         dbo.currentadwordsmaxbid.keywordid,
+         dbo.currentadwordsmaxbid.campaginid,
+         dervtable.SKU,
+         dervtable.Bid
+  FROM   dbo.currentadwordsmaxbid
+         LEFT OUTER JOIN dbo.WebSkuLookup
+                      ON dbo.currentadwordsmaxbid.webid = dbo.WebSkuLookup.webid
+         LEFT OUTER JOIN (SELECT SKU, campaginid, Bid
+                          FROM   dbo.BidHistory AS ph1
+                          WHERE  DTStamp = ( SELECT MAX(DTStamp) AS Expr1
+                                             FROM   dbo.BidHistory AS ph2
+                                             WHERE  ph1.campaginid = ph2.campaginid
+                                             AND    ph1.SKU = ph2.SKU )
+                        ) AS dervtable
+                      ON dbo.WebSkuLookup.sku = dervtable.SKU
+                     AND dbo.currentadwordsmaxbid.campaginid = dervtable.campaginid
+                     AND dbo.currentadwordsmaxbid.maxcpc <> dervtable.Bid
+row_number()
+
+  SELECT dbo.currentadwordsmaxbid.maxcpc - dervtable.Bid AS Expr1,
+         dbo.currentadwordsmaxbid.webid,
+         dbo.currentadwordsmaxbid.maxcpc,
+         dbo.currentadwordsmaxbid.adgroupid,
+         dbo.currentadwordsmaxbid.keywordid,
+         dbo.currentadwordsmaxbid.campaginid,
+         dervtable.SKU,
+         dervtable.Bid
+  FROM   dbo.currentadwordsmaxbid
+         LEFT OUTER JOIN dbo.WebSkuLookup
+                      ON dbo.currentadwordsmaxbid.webid = dbo.WebSkuLookup.webid
+         LEFT OUTER JOIN (SELECT SKU, campaginid, Bid 
+                               , row_number over (partition by SKU, campaginid order by DTStamp desc) as rn
+                          FROM   dbo.BidHistory AS ph1
+                        ) AS dervtable
+                      ON dbo.WebSkuLookup.sku = dervtable.SKU 
+                     AND dervtable.rn = 1
+                     AND dbo.currentadwordsmaxbid.campaginid = dervtable.campaginid
+                     AND dbo.currentadwordsmaxbid.maxcpc <> dervtable.Bid

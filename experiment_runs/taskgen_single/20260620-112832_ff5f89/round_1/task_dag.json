@@ -1,0 +1,52 @@
+{
+  "tasks": {
+    "improper_sql_implicit_conversion_count_order_line": {
+      "task_id": "improper_sql_implicit_conversion_count_order_line",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT COUNT(*) FROM order_line WHERE CAST(ol_w_id AS CHAR)='1' AND CAST(ol_d_id AS CHAR)='1' AND CAST(ol_o_id AS CHAR) BETWEEN '450000' AND '550000'",
+          "concurrency": 2,
+          "duration_sec": 12
+        }
+      ],
+      "expected_metrics": {
+        "slow_query_count_delta": ">=1",
+        "p95_latency_ratio": ">=1.5",
+        "rows_examined_per_query": ">=100000"
+      },
+      "success_criteria": [
+        "At least 1 slow query recorded during injection window",
+        "Median latency of the injected SQL >= 2x baseline OR p95 latency ratio >= 1.5",
+        "EXPLAIN (pre-checked) shows CAST() on indexed numeric columns preventing index range scan"
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": {
+        "risks": [
+          "Increased CPU and IO due to large index scan on order_line",
+          "Potential buffer pool pressure causing eviction",
+          "Minor contention with TPCC readers"
+        ],
+        "mitigations": [
+          "Limit duration to 12s and concurrency to 2",
+          "Read-only SELECT to avoid locks",
+          "Stop on safety violation by orchestrator"
+        ]
+      },
+      "metadata": {
+        "root_cause": "improper_sql",
+        "subtype": "implicit_conversion",
+        "target_table": "order_line",
+        "notes": "Forces implicit/string conversion on numeric columns; EXPLAIN shows covering index scan with filter on CAST()."
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "improper_sql_implicit_conversion_count_order_line": 0.0
+  }
+}

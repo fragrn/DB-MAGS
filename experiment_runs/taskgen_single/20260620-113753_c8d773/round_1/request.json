@@ -1,0 +1,37 @@
+{
+  "target_anomaly": "taskgen_single_slow_sql_multi_table_join",
+  "target_database": "tpcc_10W",
+  "dba_description": "Taskgen only: generate one slow SQL injection task for subtype multi_table_join. This subtype is represented by injected node improper_sql in the current graph. The LLM should directly generate a raw_sql_workload TaskSpec with a bounded multi-table TPCC join that is expected to be expensive, preferably after explain_sql. Do not execute the task.",
+  "target_path": [
+    "improper_sql",
+    "slow_query"
+  ],
+  "injected_nodes": [
+    "improper_sql"
+  ],
+  "target_chain": [
+    "improper_sql",
+    "slow_query"
+  ],
+  "max_duration_sec": 30,
+  "max_retry_rounds": 1,
+  "risk_level": "medium",
+  "allowed_anomalies": [],
+  "safety_overrides": {},
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  }
+}

@@ -43,7 +43,7 @@ class BenchBaseWorkloadRunner:
     def __init__(self, config: RuntimeConfig, workload_config: dict[str, Any], round_dir: Path):
         self.config = config
         self.workload_config = normalize_workload_config(workload_config, config.default_database)
-        self.round_dir = Path(round_dir)
+        self.round_dir = Path(round_dir).resolve()
         self.process: subprocess.Popen | None = None
         self.started_at: float | None = None
         self.runtime_config_path: Path | None = None
@@ -137,7 +137,7 @@ class BenchBaseWorkloadRunner:
             elem = root.find("terminals")
             if elem is not None:
                 elem.text = str(int(terminals))
-        out = self.round_dir / f"runtime_{source.name}"
+        out = (self.round_dir / f"runtime_{source.name}").resolve()
         tree.write(out, encoding="utf-8", xml_declaration=True)
         return out
 

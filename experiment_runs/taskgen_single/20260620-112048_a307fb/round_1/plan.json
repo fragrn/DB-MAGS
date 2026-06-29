@@ -1,0 +1,814 @@
+{
+  "planning_status": "failed",
+  "failure_type": "planner_fallback_blocked",
+  "reason": "Planner fallback blocked after tool loop failure: tool calling exceeded max_steps=12",
+  "target_path": [
+    "excessive_index",
+    "slow_query"
+  ],
+  "injected_nodes": [
+    "excessive_index"
+  ],
+  "fallback_used": false,
+  "fallback_blocked": true,
+  "react_trace": [
+    {
+      "step": 1,
+      "tool": "read_memory",
+      "arguments": {
+        "anomaly": "excessive_index",
+        "limit": 20
+      },
+      "result": []
+    },
+    {
+      "step": 2,
+      "tool": "probe_schema",
+      "arguments": {
+        "database": "tpcc_10W"
+      },
+      "result": {
+        "truncated": true,
+        "preview": "{\"customer\": {\"columns\": [{\"name\": \"c_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_discount\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(4,4)\", \"default\": null}, {\"name\": \"c_credit\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_last\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(16)\", \"default\": null}, {\"name\": \"c_first\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(16)\", \"default\": null}, {\"name\": \"c_credit_lim\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"c_balance\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"c_ytd_payment\", \"type\": \"float\", \"nullable\": false, \"key\": \"\", \"column_type\": \"float\", \"default\": null}, {\"name\": \"c_payment_cnt\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_delivery_cnt\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_street_1\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_street_2\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_city\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_state\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_zip\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(9)\", \"default\": null}, {\"name\": \"c_phone\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(16)\", \"default\": null}, {\"name\": \"c_since\", \"type\": \"timestamp\", \"nullable\": false, \"key\": \"\", \"column_type\": \"timestamp\", \"default\": \"CURRENT_TIMESTAMP\"}, {\"name\": \"c_middle\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_data\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(500)\", \"default\": null}], \"indexes\": [{\"index_name\": \"idx_customer_name\", \"column\": \"c_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_d_id\", \"non_unique\": true, \"seq\": 2}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_last\", \"non_unique\": true, \"seq\": 3}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_first\", \"non_unique\": true, \"seq\": 4}, {\"index_name\": \"PRIMARY\", \"column\": \"c_w_id\", \"non_unique\": false, \"seq\": 1}, {\"index_name\": \"PRIMARY\", \"column\": \"c_d_id\", \"non_unique\": false, \"seq\": 2}, {\"index_name\": \"PRIMARY\", \"column\": \"c_id\", \"non_unique\": false, \"seq\": 3}]}, \"district\": {\"columns\": [{\"name\": \"d_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_ytd\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"d_tax\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(4,4)\", \"default\": null}, {\"name\": \"d_next_o_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_name\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(10)\", \"default\": null}, {\"name\": \"d_street_1\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_street_2\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_city\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_state\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"d_zip\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(9)\", \"default\": null}], \"indexes\": [{\"index_name\": \"PRIMARY\", \"column\": \"d_w_id\", \"non_unique\": false, \"seq\": 1}, {\"index_name\": \"PRIMARY\", \"column\": \"d_id\", \"non_unique\": false, \"seq\": 2}]}, \"history\": {\"columns\": [{\"name\": \"h_c_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_c_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_c_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"MUL\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"MUL\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_date\", \"type\": \"timestamp\", \"nullable\": false, \"key\": \"\", \"column_type\": \"timestamp\", \"default\": \"CURRENT_TIMESTAMP\"}, {\"name\": \"h_amount\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(6,2)\", \"default\": null}, {\"name\": \"h_data\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(24)\", \"default\": null}], \"indexes\": [{\"index_name\": \"h_c_w_id\", \"column\": \"h_c_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"h_c_w_id\", \"column\": \"h_c_d_id\", \"non_unique\": true, \"seq\": 2}, {\"index_name\": \"h_c_w_id\", \"column\": \"h_c_id\", \"non_unique\": true, \"seq\": 3}, {\"index_name\": \"h_w_id\", \"column\": \"h_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"h_w_id\", \"column\": \"h_d_id\", \"non_unique\": true, \"seq\": 2}]}, \"item\": {\"columns\": [{\"name\": \"i_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"i_name\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_t"
+      }
+    },
+    {
+      "step": 2,
+      "tool": "probe_table_stats",
+      "arguments": {
+        "database": "tpcc_10W"
+      },
+      "result": [
+        {
+          "TABLE_NAME": "order_line",
+          "TABLE_ROWS": 5404527,
+          "DATA_LENGTH": 450887680,
+          "INDEX_LENGTH": 272613376,
+          "AVG_ROW_LENGTH": 83,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "oorder",
+          "TABLE_ROWS": 600396,
+          "DATA_LENGTH": 47775744,
+          "INDEX_LENGTH": 20316160,
+          "AVG_ROW_LENGTH": 79,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "history",
+          "TABLE_ROWS": 540140,
+          "DATA_LENGTH": 38338560,
+          "INDEX_LENGTH": 33619968,
+          "AVG_ROW_LENGTH": 70,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "new_order",
+          "TABLE_ROWS": 269335,
+          "DATA_LENGTH": 10502144,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 38,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "item",
+          "TABLE_ROWS": 99347,
+          "DATA_LENGTH": 9977856,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 100,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "stock",
+          "TABLE_ROWS": 97823,
+          "DATA_LENGTH": 36241408,
+          "INDEX_LENGTH": 1589248,
+          "AVG_ROW_LENGTH": 370,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "customer",
+          "TABLE_ROWS": 29215,
+          "DATA_LENGTH": 19464192,
+          "INDEX_LENGTH": 2637824,
+          "AVG_ROW_LENGTH": 666,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "district",
+          "TABLE_ROWS": 10,
+          "DATA_LENGTH": 16384,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 1638,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "warehouse",
+          "TABLE_ROWS": 1,
+          "DATA_LENGTH": 16384,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 16384,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        }
+      ]
+    },
+    {
+      "step": 3,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "EXPLAIN UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')) WHERE c_w_id BETWEEN 1 AND 10 AND c_d_id BETWEEN 1 AND 10 AND (c_id % 10) = 0 LIMIT 1000"
+      },
+      "result": {
+        "sql": "EXPLAIN UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')) WHERE c_w_id BETWEEN 1 AND 10 AND c_d_id BETWEEN 1 AND 10 AND (c_id % 10) = 0 LIMIT 1000",
+        "plan": [
+          {
+            "error": "(1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'EXPLAIN UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c' at line 1\")"
+          }
+        ]
+      }
+    },
+    {
+      "step": 4,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id BETWEEN 1 AND 10 AND c_d_id BETWEEN 1 AND 10 AND (c_id % 10) = 0 LIMIT 300"
+      },
+      "result": {
+        "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id BETWEEN 1 AND 10 AND c_d_id BETWEEN 1 AND 10 AND (c_id % 10) = 0 LIMIT 300",
+        "plan": [
+          {
+            "EXPLAIN": "-> <not executable by iterator executor>\n"
+          }
+        ]
+      }
+    },
+    {
+      "step": 5,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id BETWEEN 1 AND 5 AND c_d_id BETWEEN 1 AND 10 AND (c_id % 20) = 0 ORDER BY c_w_id, c_d_id, c_id LIMIT 200"
+      },
+      "result": {
+        "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id BETWEEN 1 AND 5 AND c_d_id BETWEEN 1 AND 10 AND (c_id % 20) = 0 ORDER BY c_w_id, c_d_id, c_id LIMIT 200",
+        "plan": [
+          {
+            "EXPLAIN": "-> <not executable by iterator executor>\n"
+          }
+        ]
+      }
+    },
+    {
+      "step": 6,
+      "tool": "probe_db_metrics",
+      "arguments": {
+        "database": "tpcc_10W"
+      },
+      "result": {
+        "Aborted_connects": "0",
+        "Com_delete": "294200",
+        "Com_insert": "2231259",
+        "Com_select": "17187919",
+        "Com_update": "8523504",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "16712877",
+        "Innodb_row_lock_time_avg": "15",
+        "Innodb_row_lock_waits": "1074350",
+        "Max_used_connections": "105",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "5",
+        "Threads_running": "6",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1919546,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 9092,
+            "User": "root",
+            "Host": "localhost:64099",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 1679.719970703125\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 9093,
+            "User": "root",
+            "Host": "localhost:64100",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 2232.169921875\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 9094,
+            "User": "root",
+            "Host": "localhost:64101",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "starting",
+            "Info": null
+          },
+          {
+            "Id": 9095,
+            "User": "root",
+            "Host": "localhost:64102",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "statistics",
+            "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 9103,
+            "User": "root",
+            "Host": "localhost:64639",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      }
+    },
+    {
+      "step": 6,
+      "tool": "probe_os_metrics",
+      "arguments": {},
+      "result": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.04,
+          "5m": 3.58,
+          "15m": 3.97
+        },
+        "cpu_usage": {
+          "user_pct": 17.41,
+          "sys_pct": 16.69,
+          "idle_pct": 65.89,
+          "usage_ratio": 0.341
+        },
+        "memory": {
+          "total_kb": 2151744,
+          "active_kb": 1408256,
+          "wired_kb": 692496,
+          "free_kb": 50992,
+          "usage_ratio": 0.9763
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 364038098944,
+          "free_bytes": 130346696704,
+          "usage_ratio": 0.7363
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      }
+    },
+    {
+      "step": 7,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id BETWEEN 1 AND 5 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_w_id, c_d_id, c_id LIMIT 200"
+      },
+      "result": {
+        "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id BETWEEN 1 AND 5 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_w_id, c_d_id, c_id LIMIT 200",
+        "plan": [
+          {
+            "EXPLAIN": "-> <not executable by iterator executor>\n"
+          }
+        ]
+      }
+    },
+    {
+      "step": 8,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id = 1 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_d_id, c_id LIMIT 200"
+      },
+      "result": {
+        "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id = 1 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_d_id, c_id LIMIT 200",
+        "plan": [
+          {
+            "EXPLAIN": "-> <not executable by iterator executor>\n"
+          }
+        ]
+      }
+    },
+    {
+      "step": 9,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "excessive_index_tpcc_customer_update",
+            "task_type": "raw_sql_workload",
+            "actions": [
+              {
+                "kind": "raw_sql_workload",
+                "database": "tpcc_10W",
+                "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id = 1 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_d_id, c_id LIMIT 200",
+                "concurrency": 3,
+                "duration_sec": 20
+              }
+            ],
+            "expected_metrics": {
+              "db": {
+                "Com_update_delta_min": 500,
+                "Slow_queries_delta_min": 1
+              },
+              "observability": {
+                "p95_latency_ratio_min": 1.5
+              },
+              "node_expectations": [
+                "excessive_index -> slow_query"
+              ]
+            },
+            "success_criteria": "During or shortly after the task window, either Slow_queries increases by >=1 or the background workload p95 latency increases by >=1.5x compared to baseline.",
+            "risk_assessment": "Updates touch indexed columns (c_last, c_first) on customer, forcing secondary-index maintenance and write amplification. Bounded by LIMIT 200 per statement, concurrency 3, duration 20s to avoid runaway bloat or long locks. Uses primary key range predicates to keep scans bounded. Potential risks: increased lock waits and slow queries under load.",
+            "metadata": {
+              "root_cause": "excessive_index"
+            }
+          }
+        ]
+      },
+      "result": {
+        "tasks": {
+          "excessive_index_tpcc_customer_update": {
+            "task_id": "excessive_index_tpcc_customer_update",
+            "task_type": "raw_sql_workload",
+            "actions": [
+              {
+                "kind": "raw_sql_workload",
+                "database": "tpcc_10W",
+                "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id = 1 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_d_id, c_id LIMIT 200",
+                "concurrency": 3,
+                "duration_sec": 20
+              }
+            ],
+            "expected_metrics": {
+              "db": {
+                "Com_update_delta_min": 500,
+                "Slow_queries_delta_min": 1
+              },
+              "observability": {
+                "p95_latency_ratio_min": 1.5
+              },
+              "node_expectations": [
+                "excessive_index -> slow_query"
+              ]
+            },
+            "success_criteria": "During or shortly after the task window, either Slow_queries increases by >=1 or the background workload p95 latency increases by >=1.5x compared to baseline.",
+            "risk_assessment": "Updates touch indexed columns (c_last, c_first) on customer, forcing secondary-index maintenance and write amplification. Bounded by LIMIT 200 per statement, concurrency 3, duration 20s to avoid runaway bloat or long locks. Uses primary key range predicates to keep scans bounded. Potential risks: increased lock waits and slow queries under load.",
+            "metadata": {
+              "root_cause": "excessive_index"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "excessive_index_tpcc_customer_update": 0.0
+        }
+      }
+    },
+    {
+      "step": 10,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Aborted_connects": "0",
+          "Com_delete": "294200",
+          "Com_insert": "2231259",
+          "Com_select": "17187919",
+          "Com_update": "8523504",
+          "Created_tmp_disk_tables": "2",
+          "Innodb_row_lock_time": "16712877",
+          "Innodb_row_lock_time_avg": "15",
+          "Innodb_row_lock_waits": "1074350",
+          "Max_used_connections": "105",
+          "Slow_queries": "46",
+          "Sort_merge_passes": "0",
+          "Threads_connected": "5",
+          "Threads_running": "6",
+          "innodb_lock_wait_timeout": "50",
+          "max_connections": 151,
+          "wait_timeout": "28800",
+          "processlist": [
+            {
+              "Id": 5,
+              "User": "event_scheduler",
+              "Host": "localhost",
+              "db": null,
+              "Command": "Daemon",
+              "Time": 1919546,
+              "State": "Waiting on empty queue",
+              "Info": null
+            },
+            {
+              "Id": 9092,
+              "User": "root",
+              "Host": "localhost:64099",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "updating",
+              "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 1679.719970703125\n     WHERE W_ID = 1"
+            },
+            {
+              "Id": 9093,
+              "User": "root",
+              "Host": "localhost:64100",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "updating",
+              "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 2232.169921875\n     WHERE W_ID = 1"
+            },
+            {
+              "Id": 9094,
+              "User": "root",
+              "Host": "localhost:64101",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "starting",
+              "Info": null
+            },
+            {
+              "Id": 9095,
+              "User": "root",
+              "Host": "localhost:64102",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "statistics",
+              "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+            },
+            {
+              "Id": 9103,
+              "User": "root",
+              "Host": "localhost:64639",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "init",
+              "Info": "SHOW FULL PROCESSLIST"
+            }
+          ]
+        },
+        "current_os_metrics": {
+          "platform": "Darwin",
+          "load_average": {
+            "1m": 2.04,
+            "5m": 3.58,
+            "15m": 3.97
+          },
+          "cpu_usage": {
+            "user_pct": 17.41,
+            "sys_pct": 16.69,
+            "idle_pct": 65.89,
+            "usage_ratio": 0.341
+          },
+          "memory": {
+            "total_kb": 2151744,
+            "active_kb": 1408256,
+            "wired_kb": 692496,
+            "free_kb": 50992,
+            "usage_ratio": 0.9763
+          },
+          "disk": {
+            "total_bytes": 494384795648,
+            "used_bytes": 364038098944,
+            "free_bytes": 130346696704,
+            "usage_ratio": 0.7363
+          },
+          "disk_io": {},
+          "network": {},
+          "file_descriptors": {
+            "open_fds": -1
+          }
+        },
+        "expected_workload": {
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "excessive_index_tpcc_customer_update": {
+              "task_id": "excessive_index_tpcc_customer_update",
+              "task_type": "raw_sql_workload",
+              "actions": [
+                {
+                  "kind": "raw_sql_workload",
+                  "database": "tpcc_10W",
+                  "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id = 1 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_d_id, c_id LIMIT 200",
+                  "concurrency": 3,
+                  "duration_sec": 20
+                }
+              ],
+              "expected_metrics": {
+                "db": {
+                  "Com_update_delta_min": 500,
+                  "Slow_queries_delta_min": 1
+                },
+                "observability": {
+                  "p95_latency_ratio_min": 1.5
+                },
+                "node_expectations": [
+                  "excessive_index -> slow_query"
+                ]
+              },
+              "success_criteria": "During or shortly after the task window, either Slow_queries increases by >=1 or the background workload p95 latency increases by >=1.5x compared to baseline.",
+              "risk_assessment": "Updates touch indexed columns (c_last, c_first) on customer, forcing secondary-index maintenance and write amplification. Bounded by LIMIT 200 per statement, concurrency 3, duration 20s to avoid runaway bloat or long locks. Uses primary key range predicates to keep scans bounded. Potential risks: increased lock waits and slow queries under load.",
+              "metadata": {
+                "root_cause": "excessive_index"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "excessive_index_tpcc_customer_update": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": false,
+        "reasons": [
+          "DAG required duration 20.0s exceeds injection_observe_sec 15.0s"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "step": 11,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "excessive_index_tpcc_customer_update",
+            "task_type": "raw_sql_workload",
+            "actions": [
+              {
+                "kind": "raw_sql_workload",
+                "database": "tpcc_10W",
+                "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id = 1 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_d_id, c_id LIMIT 200",
+                "concurrency": 3,
+                "duration_sec": 12
+              }
+            ],
+            "expected_metrics": {
+              "db": {
+                "Com_update_delta_min": 100,
+                "Slow_queries_delta_min": 1
+              },
+              "observability": {
+                "p95_latency_ratio_min": 1.5
+              },
+              "node_expectations": [
+                "excessive_index -> slow_query"
+              ]
+            },
+            "success_criteria": "During or shortly after the task window, either Slow_queries increases by >=1 or the background workload p95 latency increases by >=1.5x compared to baseline.",
+            "risk_assessment": "Updates touch indexed columns (c_last, c_first) on customer, forcing secondary-index maintenance and write amplification. Bounded by LIMIT 200 per statement, concurrency 3, duration 12s to avoid runaway bloat or long locks. Uses primary key range predicates to keep scans bounded. Potential risks: increased lock waits and slow queries under load.",
+            "metadata": {
+              "root_cause": "excessive_index"
+            }
+          }
+        ]
+      },
+      "result": {
+        "tasks": {
+          "excessive_index_tpcc_customer_update": {
+            "task_id": "excessive_index_tpcc_customer_update",
+            "task_type": "raw_sql_workload",
+            "actions": [
+              {
+                "kind": "raw_sql_workload",
+                "database": "tpcc_10W",
+                "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id = 1 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_d_id, c_id LIMIT 200",
+                "concurrency": 3,
+                "duration_sec": 12
+              }
+            ],
+            "expected_metrics": {
+              "db": {
+                "Com_update_delta_min": 100,
+                "Slow_queries_delta_min": 1
+              },
+              "observability": {
+                "p95_latency_ratio_min": 1.5
+              },
+              "node_expectations": [
+                "excessive_index -> slow_query"
+              ]
+            },
+            "success_criteria": "During or shortly after the task window, either Slow_queries increases by >=1 or the background workload p95 latency increases by >=1.5x compared to baseline.",
+            "risk_assessment": "Updates touch indexed columns (c_last, c_first) on customer, forcing secondary-index maintenance and write amplification. Bounded by LIMIT 200 per statement, concurrency 3, duration 12s to avoid runaway bloat or long locks. Uses primary key range predicates to keep scans bounded. Potential risks: increased lock waits and slow queries under load.",
+            "metadata": {
+              "root_cause": "excessive_index"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "excessive_index_tpcc_customer_update": 0.0
+        }
+      }
+    },
+    {
+      "step": 12,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Aborted_connects": "0",
+          "Com_delete": "294200",
+          "Com_insert": "2231259",
+          "Com_select": "17187919",
+          "Com_update": "8523504",
+          "Created_tmp_disk_tables": "2",
+          "Innodb_row_lock_time": "16712877",
+          "Innodb_row_lock_time_avg": "15",
+          "Innodb_row_lock_waits": "1074350",
+          "Max_used_connections": "105",
+          "Slow_queries": "46",
+          "Sort_merge_passes": "0",
+          "Threads_connected": "5",
+          "Threads_running": "6",
+          "innodb_lock_wait_timeout": "50",
+          "max_connections": 151,
+          "wait_timeout": "28800",
+          "processlist": [
+            {
+              "Id": 5,
+              "User": "event_scheduler",
+              "Host": "localhost",
+              "db": null,
+              "Command": "Daemon",
+              "Time": 1919546,
+              "State": "Waiting on empty queue",
+              "Info": null
+            },
+            {
+              "Id": 9092,
+              "User": "root",
+              "Host": "localhost:64099",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "updating",
+              "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 1679.719970703125\n     WHERE W_ID = 1"
+            },
+            {
+              "Id": 9093,
+              "User": "root",
+              "Host": "localhost:64100",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "updating",
+              "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 2232.169921875\n     WHERE W_ID = 1"
+            },
+            {
+              "Id": 9094,
+              "User": "root",
+              "Host": "localhost:64101",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "starting",
+              "Info": null
+            },
+            {
+              "Id": 9095,
+              "User": "root",
+              "Host": "localhost:64102",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "statistics",
+              "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+            },
+            {
+              "Id": 9103,
+              "User": "root",
+              "Host": "localhost:64639",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "init",
+              "Info": "SHOW FULL PROCESSLIST"
+            }
+          ]
+        },
+        "current_os_metrics": {
+          "platform": "Darwin",
+          "load_average": {
+            "1m": 2.04,
+            "5m": 3.58,
+            "15m": 3.97
+          },
+          "cpu_usage": {
+            "user_pct": 17.41,
+            "sys_pct": 16.69,
+            "idle_pct": 65.89,
+            "usage_ratio": 0.341
+          },
+          "memory": {
+            "total_kb": 2151744,
+            "active_kb": 1408256,
+            "wired_kb": 692496,
+            "free_kb": 50992,
+            "usage_ratio": 0.9763
+          },
+          "disk": {
+            "total_bytes": 494384795648,
+            "used_bytes": 364038098944,
+            "free_bytes": 130346696704,
+            "usage_ratio": 0.7363
+          },
+          "disk_io": {},
+          "network": {},
+          "file_descriptors": {
+            "open_fds": -1
+          }
+        },
+        "expected_workload": {
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "excessive_index_tpcc_customer_update": {
+              "task_id": "excessive_index_tpcc_customer_update",
+              "task_type": "raw_sql_workload",
+              "actions": [
+                {
+                  "kind": "raw_sql_workload",
+                  "database": "tpcc_10W",
+                  "sql": "UPDATE customer SET c_first = CONCAT(SUBSTRING(c_first,1,15), IF(RIGHT(c_first,1)='Z','Y','Z')), c_last = CONCAT(SUBSTRING(c_last,1,15), IF(RIGHT(c_last,1)='Z','Y','Z')) WHERE c_w_id = 1 AND c_d_id BETWEEN 1 AND 10 AND c_id BETWEEN 1 AND 3000 AND (c_id % 10) = 0 ORDER BY c_d_id, c_id LIMIT 200",
+                  "concurrency": 3,
+                  "duration_sec": 12
+                }
+              ],
+              "expected_metrics": {
+                "db": {
+                  "Com_update_delta_min": 100,
+                  "Slow_queries_delta_min": 1
+                },
+                "observability": {
+                  "p95_latency_ratio_min": 1.5
+                },
+                "node_expectations": [
+                  "excessive_index -> slow_query"
+                ]
+              },
+              "success_criteria": "During or shortly after the task window, either Slow_queries increases by >=1 or the background workload p95 latency increases by >=1.5x compared to baseline.",
+              "risk_assessment": "Updates touch indexed columns (c_last, c_first) on customer, forcing secondary-index maintenance and write amplification. Bounded by LIMIT 200 per statement, concurrency 3, duration 12s to avoid runaway bloat or long locks. Uses primary key range predicates to keep scans bounded. Potential risks: increased lock waits and slow queries under load.",
+              "metadata": {
+                "root_cause": "excessive_index"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "excessive_index_tpcc_customer_update": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": true,
+        "reasons": [],
+        "warnings": []
+      }
+    }
+  ]
+}

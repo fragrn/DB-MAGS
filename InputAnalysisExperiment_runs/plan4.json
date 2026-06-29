@@ -1,0 +1,348 @@
+{
+  "post_understanding": {
+    "summary": "A MySQL application query against an issues/projects schema is very slow (~15 seconds). The query filters on issues.subject with a leading-wildcard LIKE, joins to projects, and uses correlated subqueries on enabled_modules and members for permissions, returning 10 rows ordered by issues.id DESC.",
+    "symptoms": [
+      "slow query (~15s)",
+      "high rows examined (EXPLAIN shows ~311k rows on issues)",
+      "dependent subqueries in EXPLAIN",
+      "application perceived as slow under up to ~100 concurrent users"
+    ],
+    "suspected_root_causes": [
+      "leading-wildcard LIKE on issues.subject prevents index use causing large scan",
+      "use of LOWER() on subject further prevents index use (unless CI collation makes it redundant)",
+      "correlated/DEPENDENT subqueries (EXISTS on enabled_modules, IN subquery on members) per-project overhead",
+      "ORDER BY issues.id DESC LIMIT 10 causing scan to find matches before it can limit"
+    ],
+    "key_evidence": [
+      "Query includes LOWER(issues.subject) LIKE LOWER('%255392%')",
+      "EXPLAIN rows for issues: 311632 with key PRIMARY and Using where",
+      "Dependent subqueries appear in EXPLAIN (DEPENDENT SUBQUERY on members and enabled_modules)",
+      "Tables sizes: issues ~334,823 rows; projects 494; concurrent users up to 100",
+      "Query runtime reported ~15 seconds"
+    ],
+    "assumptions": [
+      "MySQL/InnoDB is used (based on schema and EXPLAIN), version 5.6/5.7 without functional indexes; no fulltext index on issues.subject",
+      "Database collation is case-insensitive (e.g., utf8_general_ci), making LOWER() redundant but not aiding index use with a leading wildcard",
+      "Issues.id is the PRIMARY KEY; there is a secondary index on issues.project_id; no index on LOWER(subject) or generated column for subject",
+      "Members has an index on user_id (as hinted by index_members_on_user_id in EXPLAIN); enabled_modules has an index on project_id",
+      "Data distribution: only a very small fraction of issues.subject contains the substring '255392' (or similar search tokens), forcing most of the table to be scanned",
+      "The IN lists of project IDs in the query correspond to existing projects IDs in the dataset",
+      "Hardware and buffer pool sizes are modest so that scanning ~300k+ rows results in multi-second latency; cold cache effects are acceptable for reproduction",
+      "Semijoin optimizations are not transforming subqueries into joins (as EXPLAIN shows DEPENDENT SUBQUERY); if needed, optimizer_switch may be adjusted at session level in the experiment"
+    ],
+    "confidence": 0.73
+  },
+  "experiment_environment": {
+    "dbms": "mysql",
+    "target_database": "determine",
+    "target_tables": [
+      {
+        "table": "projects",
+        "purpose": "Project metadata used for join and permission filters (status, is_public). Small dimension table but pivotal in correlated subqueries.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INT NOT NULL AUTO_INCREMENT",
+            "role": "primary key/join"
+          },
+          {
+            "name": "name",
+            "type": "VARCHAR(255) NOT NULL",
+            "role": "metadata"
+          },
+          {
+            "name": "description",
+            "type": "TEXT",
+            "role": "metadata"
+          },
+          {
+            "name": "is_public",
+            "type": "TINYINT(1) NOT NULL DEFAULT 1",
+            "role": "filter"
+          },
+          {
+            "name": "status",
+            "type": "TINYINT(1) NOT NULL DEFAULT 1",
+            "role": "filter (status <> 9 in query)"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "494",
+          "distribution": "Status values skewed toward active (e.g., 85% status in {1..8}, 15% status=9). is_public ~70% true, 30% false.",
+          "key_fields": [
+            "id",
+            "is_public",
+            "status"
+          ],
+          "rationale": "Provide realistic join cardinality and permission filtering on projects."
+        }
+      },
+      {
+        "table": "issues",
+        "purpose": "Main fact table being filtered by a leading-wildcard LIKE and joined to projects. Expected to drive scan cost.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INT NOT NULL AUTO_INCREMENT",
+            "role": "primary key/order by"
+          },
+          {
+            "name": "project_id",
+            "type": "INT NOT NULL",
+            "role": "join/filter"
+          },
+          {
+            "name": "subject",
+            "type": "VARCHAR(255) NOT NULL",
+            "role": "filter (leading-wildcard LIKE)"
+          },
+          {
+            "name": "is_private",
+            "type": "TINYINT(1) NOT NULL DEFAULT 0",
+            "role": "filter"
+          },
+          {
+            "name": "author_id",
+            "type": "INT NOT NULL",
+            "role": "filter"
+          },
+          {
+            "name": "assigned_to_id",
+            "type": "INT DEFAULT NULL",
+            "role": "filter"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "340000 (approximate to reported 334,823)",
+          "distribution": "Uniform spread across projects with skew (e.g., Zipf) to create hot projects; subject mostly random words/IDs with only ~0.02% of rows containing the token '255392' somewhere in the middle; is_private ~10% true; author_id and assigned_to_id sampled from 1..1350 with some skew toward lower IDs (include 44, 186, 898).",
+          "key_fields": [
+            "id",
+            "project_id",
+            "subject",
+            "author_id",
+            "assigned_to_id",
+            "is_private"
+          ],
+          "rationale": "Ensure a large scan due to leading-wildcard LIKE and meaningful distribution for permission filters."
+        }
+      },
+      {
+        "table": "enabled_modules",
+        "purpose": "Correlated EXISTS subquery checks for 'issue_tracking' module per project.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INT NOT NULL AUTO_INCREMENT",
+            "role": "primary key"
+          },
+          {
+            "name": "project_id",
+            "type": "INT",
+            "role": "join/filter"
+          },
+          {
+            "name": "name",
+            "type": "VARCHAR(255) NOT NULL",
+            "role": "filter (name='issue_tracking')"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "700 (1-2 rows per project on average)",
+          "distribution": "For ~85% of projects, include one row with name='issue_tracking'; for others include other module names or none.",
+          "key_fields": [
+            "project_id",
+            "name"
+          ],
+          "rationale": "Drive EXISTS predicate selectivity and maintain dependency per project."
+        }
+      },
+      {
+        "table": "members",
+        "purpose": "Used by correlated IN subquery to filter projects by user memberships.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INT NOT NULL AUTO_INCREMENT",
+            "role": "primary key"
+          },
+          {
+            "name": "user_id",
+            "type": "INT NOT NULL",
+            "role": "filter (user_id IN (44,638))"
+          },
+          {
+            "name": "project_id",
+            "type": "INT NOT NULL",
+            "role": "filter/join"
+          },
+          {
+            "name": "created_on",
+            "type": "DATETIME",
+            "role": "metadata"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "2000",
+          "distribution": "For users 44 and 638, insert memberships into a minority of projects (~10-20% each); fill rest with other random users among 1..1350.",
+          "key_fields": [
+            "user_id",
+            "project_id"
+          ],
+          "rationale": "Provide realistic membership sets to exercise the IN (SELECT project_id FROM members WHERE user_id IN (...)) subquery."
+        }
+      },
+      {
+        "table": "users",
+        "purpose": "Dimension table to represent 1350 users; not directly used in the slow query but used to populate realistic IDs.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INT NOT NULL AUTO_INCREMENT",
+            "role": "primary key"
+          },
+          {
+            "name": "login",
+            "type": "VARCHAR(255)",
+            "role": "metadata"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "1350",
+          "distribution": "Sequential IDs 1..1350; include users 44, 186, 638, 898.",
+          "key_fields": [
+            "id"
+          ],
+          "rationale": "Support foreign keys/ID distributions for issues."
+        }
+      }
+    ]
+  },
+  "background_workloads": [
+    {
+      "name": "Baseline read workload",
+      "inferred_from_post": "The system has up to 100 concurrent users; we simulate lighter concurrent activity to reflect background load while running the slow query.",
+      "simulation_method": "custom client",
+      "transactions_or_queries": [
+        "SELECT COUNT(*) FROM issues WHERE project_id = ?",
+        "SELECT * FROM issues WHERE project_id = ? ORDER BY id DESC LIMIT 20",
+        "SELECT * FROM projects WHERE id = ?",
+        "SELECT * FROM enabled_modules WHERE project_id = ? AND name = 'issue_tracking'"
+      ],
+      "concurrency": "20 threads",
+      "duration_sec": 600,
+      "transaction_mix": {
+        "project issue listing": "40%",
+        "issue counts": "30%",
+        "project lookups": "20%",
+        "module checks": "10%"
+      }
+    },
+    {
+      "name": "High concurrency surge",
+      "inferred_from_post": "Reported up to 100 concurrent users; simulate a surge to see compounded impact on the slow query.",
+      "simulation_method": "custom client",
+      "transactions_or_queries": [
+        "The slow query under test (exact text from the post)"
+      ],
+      "concurrency": "100 threads",
+      "duration_sec": 180,
+      "transaction_mix": {
+        "slow query": "100%"
+      }
+    }
+  ],
+  "anomaly_injection": [
+    {
+      "name": "Slow subject search with leading wildcard",
+      "anomaly_type": "slow_sql",
+      "mapped_dbmags_anomaly": "slow_sql",
+      "target": "determine.issues (subject column filter)",
+      "method": "Execute the provided query containing LOWER(subject) LIKE '%255392%' which prevents index usage due to leading wildcard; ensure no fulltext/functional index exists on subject and collation is case-insensitive.",
+      "parameters": {
+        "query_text": "SELECT issues.* FROM `issues` INNER JOIN `projects` ON `projects`.`id` = `issues`.`project_id` WHERE (((`projects`.`status` <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((`projects`.`is_public` = 1 AND `projects`.`id` NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((`issues`.`is_private` = 0 OR `issues`.`author_id` = 44 OR `issues`.`assigned_to_id` IN (44, 186, 898)))) OR (`projects`.`id` IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((`issues`.`is_private` = 0 OR `issues`.`author_id` = 44 OR `issues`.`assigned_to_id` IN (44, 186, 898)))) OR (`projects`.`id` IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (`projects`.`id` IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((`issues`.`is_private` = 0 OR `issues`.`author_id` = 44 OR `issues`.`assigned_to_id` IN (44, 186, 898)))) OR (`projects`.`id` IN (457) AND ((`issues`.`is_private` = 0 OR `issues`.`author_id` = 44 OR `issues`.`assigned_to_id` IN (44, 186, 898))))))) AND (`issues`.`id` != 251880) AND (LOWER(`issues`.`subject`) LIKE LOWER('%255392%'))) ORDER BY `issues`.`id` DESC LIMIT 10;",
+        "ensure_no_subject_index": true,
+        "collation": "utf8_general_ci",
+        "optimizer_switch": "semijoin=off (if version >= 5.7 and needed to reproduce DEPENDENT SUBQUERY)"
+      },
+      "duration_sec": 600,
+      "safety_notes": [
+        "Run against non-production dataset only.",
+        "Limit concurrency and runtime to prevent resource exhaustion.",
+        "Ensure there is sufficient disk and memory for the generated dataset."
+      ]
+    },
+    {
+      "name": "Concurrency surge on slow query",
+      "anomaly_type": "traffic_surge",
+      "mapped_dbmags_anomaly": "traffic_surge",
+      "target": "determine database",
+      "method": "Spawn multiple client threads concurrently issuing the slow query to emulate 100 concurrent users.",
+      "parameters": {
+        "threads": 100,
+        "think_time_ms": 200
+      },
+      "duration_sec": 180,
+      "safety_notes": [
+        "Bound the test duration and concurrency.",
+        "Monitor server resource usage to avoid impact outside the test scope."
+      ]
+    }
+  ],
+  "expected_result": {
+    "metrics": [
+      {
+        "metric": "Query latency (p95)",
+        "expected_change": "increase to >= 10 seconds for single-thread run; higher under surge"
+      },
+      {
+        "metric": "Rows examined per execution",
+        "expected_change": "approximately >= 300,000 (close to total issues row count)"
+      },
+      {
+        "metric": "Handler_read_next / logical reads",
+        "expected_change": "significant increase indicating table/index scan"
+      },
+      {
+        "metric": "EXPLAIN rows for issues",
+        "expected_change": "shows large estimate (e.g., ~311k) with key=PRIMARY and Using where"
+      },
+      {
+        "metric": "CPU utilization",
+        "expected_change": "increase due to scanning and string comparisons"
+      }
+    ],
+    "query_or_transaction_effects": [
+      "The slow query returns up to 10 issues ordered by id DESC after scanning most of the issues table.",
+      "Dependent subqueries (EXISTS/IN) are evaluated per candidate project, contributing additional overhead.",
+      "Under concurrency, overall throughput drops and individual latencies increase."
+    ],
+    "validation_criteria": [
+      "Reproduced EXPLAIN plan shows issues using PRIMARY (or no subject index) with Using where and high rows estimate.",
+      "Measured rows_examined per execution is near the issues row count.",
+      "Single-thread execution time of the provided query is >= 10s on the generated dataset.",
+      "Under the 100-thread surge, average and p95 latencies increase further and server shows elevated IO/CPU."
+    ]
+  },
+  "open_questions": [
+    "What exact MySQL version and storage engine are in use?",
+    "What is the collation of the issues.subject column (e.g., utf8_general_ci)?",
+    "Are there any indexes on issues.subject (FULLTEXT or generated-column functional index)?",
+    "What are the exact indexes on issues (project_id, author_id, assigned_to_id)?",
+    "Is the optimizer_switch (e.g., semijoin) configured to allow subquery-to-join transformations?",
+    "How selective is the subject search pattern in production (how many rows match on average)?",
+    "Are there additional WHERE predicates not included in the example that may affect selectivity?",
+    "What is the hardware profile (CPU, RAM, storage) and InnoDB buffer pool size?",
+    "Are query and table statistics up-to-date and do they reflect approximately 300k+ rows in issues?",
+    "Is query cache enabled or any other caching layer that might affect repeated runs?"
+  ]
+}

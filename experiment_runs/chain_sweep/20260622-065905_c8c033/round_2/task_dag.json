@@ -1,0 +1,59 @@
+{
+  "tasks": {
+    "missing_index_order_line_fullscan": {
+      "task_id": "missing_index_order_line_fullscan",
+      "task_type": "missing_index",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT COUNT(*) FROM order_line WHERE ol_delivery_d > NOW() - INTERVAL 1 DAY",
+          "concurrency": 4,
+          "duration_sec": 15
+        }
+      ],
+      "expected_metrics": {
+        "poor_plan": [
+          "EXPLAIN shows table scan (type=ALL) on order_line for the injected query"
+        ],
+        "slow_query": [
+          "slow_query_count_delta >= 1 during injection window",
+          "p95_latency_ratio >= 1.5 vs baseline"
+        ],
+        "qps_drop": [
+          "qps_ratio <= 0.7 during injection window"
+        ]
+      },
+      "success_criteria": {
+        "poor_plan": {
+          "evidence": [
+            "explain_plan_contains: 'Table scan on order_line'"
+          ],
+          "min_occurrences": 1
+        },
+        "slow_query": {
+          "thresholds": {
+            "slow_query_count_delta": 1,
+            "p95_ratio": 1.5
+          }
+        },
+        "qps_drop": {
+          "thresholds": {
+            "qps_ratio_max": 0.7
+          }
+        }
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "This task issues a hot full-table scan on order_line (~13.6M rows) without an index on ol_delivery_d, generating poor plans and latency pressure. Limited to 15s and concurrency 4 to fit the injection window and reduce risk of excessive load.",
+      "metadata": {
+        "root_cause": "missing_index"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "missing_index_order_line_fullscan": 0.0
+  }
+}

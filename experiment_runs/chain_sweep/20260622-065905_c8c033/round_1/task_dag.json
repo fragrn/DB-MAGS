@@ -1,0 +1,77 @@
+{
+  "tasks": {
+    "missing_index_ol_dist_info_fullscan_tpcc10w": {
+      "task_id": "missing_index_ol_dist_info_fullscan_tpcc10w",
+      "task_type": "direct_raw_action",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT COUNT(*) FROM order_line WHERE ol_dist_info LIKE '%XYZ%';",
+          "concurrency": 8,
+          "duration_sec": 14
+        }
+      ],
+      "expected_metrics": {
+        "intermediate": {
+          "poor_plan": {
+            "plan_contains": [
+              "Table scan on order_line"
+            ],
+            "predicate": "ol_dist_info LIKE '%XYZ%'"
+          },
+          "threads_concurrency_up": true
+        },
+        "terminal": {
+          "slow_query": {
+            "slow_query_count_delta": ">=1",
+            "p95_latency_ratio": ">=1.5"
+          },
+          "qps_drop": {
+            "qps_ratio": "<=0.7"
+          }
+        }
+      },
+      "success_criteria": {
+        "must_hit": [
+          "poor_plan",
+          "slow_query"
+        ],
+        "prefer_hit": [
+          "qps_drop"
+        ],
+        "observation_window_sec": 15
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": {
+        "impact": "High CPU and IO from full table scans on order_line may contend with TPCC workload and reduce QPS.",
+        "blast_radius_controls": [
+          "read-only query",
+          "bounded duration (14s)",
+          "bounded concurrency (8)",
+          "stop after window"
+        ],
+        "operational_risks": [
+          "Transient latency spikes",
+          "Potential connection timeouts if server saturated"
+        ],
+        "mitigations": [
+          "keep concurrency modest relative to background terminals (8 vs 4)",
+          "stay within max_duration_sec",
+          "monitor Threads_running and Aborted_connects"
+        ]
+      },
+      "metadata": {
+        "root_cause": "missing_index",
+        "table": "order_line",
+        "column": "ol_dist_info"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "missing_index_ol_dist_info_fullscan_tpcc10w": 0.0
+  }
+}

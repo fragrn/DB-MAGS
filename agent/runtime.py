@@ -41,6 +41,7 @@ from agent.workload import (
     make_workload_runner,
     normalize_workload_config,
 )
+from agent.probes.mysql_probe import MySQLProbe
 from agent.types import (
     EnvironmentSnapshot,
     EvaluationResult,
@@ -930,6 +931,188 @@ class DBMAGSRuntime:
     # -------------------------------------------------------------------------
     # Standalone experiment API
     # -------------------------------------------------------------------------
+
+    def generate_tasks_only(
+        self,
+        request: ExperimentRequest,
+        output_root: str = "experiment_runs/taskgen",
+        workload_mode: str = "auto",
+        taskgen_probe_interval_sec: float = 3.0,
+        qps_threshold: float = 0.1,
+    ) -> dict[str, Any]:
+        """Start background workload, generate TaskSpecs/DAG, write artifacts, and stop."""
+        workload_mode = str(workload_mode or "auto").lower()
+        if workload_mode not in {"auto", "start", "reuse", "none"}:
+            raise ValueError(f"unsupported taskgen workload_mode: {workload_mode}")
+        if workload_mode != "none" and not request.workload.get("enabled"):
+            raise ValueError("taskgen requires request.workload.enabled=true")
+
+        run_id = _generate_run_id()
+        output_dir = Path(output_root) / run_id
+        round_dir = output_dir / "round_1"
+        round_dir.mkdir(parents=True, exist_ok=True)
+
+        workload_cfg = normalize_workload_config(request.workload, request.target_database)
+        request.workload = dict(workload_cfg)
+        self._write_json(round_dir / "request.json", to_jsonable(request))
+        self._write_json(round_dir / "workload_config.json", workload_cfg)
+
+        workload_trace: dict[str, Any] = {"config": workload_cfg, "events": [], "samples": [], "source": "none"}
+        runner = None
+        started_by_taskgen = False
+        dag = ExecutableTaskDAG()
+        snapshot = EnvironmentSnapshot(database=request.target_database)
+        react_trace: list[ReActStep] = []
+        detection = self._detect_taskgen_workload(
+            request=request,
+            mode=workload_mode,
+            interval_sec=taskgen_probe_interval_sec,
+            qps_threshold=qps_threshold,
+        )
+        self._write_json(round_dir / "taskgen_workload_detection.json", detection)
+
+        try:
+            if workload_mode == "reuse" and not detection["existing_workload_detected"]:
+                raise RuntimeError(
+                    "taskgen workload_mode=reuse requires an existing workload, "
+                    f"but detected qps={detection['qps']}, tps={detection['tps']}"
+                )
+            if workload_mode in {"auto", "start"} and (
+                workload_mode == "start" or not detection["existing_workload_detected"]
+            ):
+                runner = self._make_workload_runner(request, round_dir)
+                workload_trace["source"] = "started_by_taskgen"
+                workload_trace["events"].append(runner.start())
+                detection["started_new_workload"] = True
+                self._write_json(round_dir / "taskgen_workload_detection.json", detection)
+                self._write_json(round_dir / "workload_trace.json", workload_trace)
+                self._assert_workload_running(runner, "taskgen_after_start_workload", round_dir, workload_trace)
+                started_by_taskgen = True
+            elif detection["existing_workload_detected"]:
+                workload_trace["source"] = "existing"
+                workload_trace["events"].append({
+                    "event": "reuse_existing_workload",
+                    "timestamp": time.time(),
+                    "qps": detection["qps"],
+                    "tps": detection["tps"],
+                })
+                self._write_json(round_dir / "workload_trace.json", workload_trace)
+            else:
+                workload_trace["source"] = "none"
+                workload_trace["events"].append({"event": "no_workload_started", "timestamp": time.time()})
+                self._write_json(round_dir / "workload_trace.json", workload_trace)
+
+            if started_by_taskgen and runner is not None:
+                self._assert_workload_running(runner, "taskgen_before_inspect", round_dir, workload_trace)
+            snapshot = self.planner.inspect(request)
+            if started_by_taskgen and runner is not None:
+                self._assert_workload_running(runner, "taskgen_after_inspect_before_plan", round_dir, workload_trace)
+                snapshot.workload_status = {
+                    "phase": "taskgen_after_workload_start",
+                    "status": runner.status(),
+                }
+            elif detection["existing_workload_detected"]:
+                snapshot.workload_status = {
+                    "phase": "taskgen_reuse_existing_workload",
+                    "detected_qps": detection["qps"],
+                    "detected_tps": detection["tps"],
+                    "probe_interval_sec": detection["probe_interval_sec"],
+                }
+            else:
+                snapshot.workload_status = {
+                    "phase": "taskgen_no_workload",
+                    "detected_qps": detection["qps"],
+                    "detected_tps": detection["tps"],
+                }
+            self._write_json(round_dir / "static_snapshot.json", to_jsonable(snapshot))
+            self._write_json(round_dir / "snapshot.json", to_jsonable(snapshot))
+
+            memory_items = self.memory.load(anomaly=request.target_anomaly, limit=20)
+            try:
+                if started_by_taskgen and runner is not None:
+                    self._assert_workload_running(runner, "taskgen_before_planning", round_dir, workload_trace)
+                dag, snapshot, react_trace = self.planner.plan(request, snapshot, memory_items)
+                if started_by_taskgen and runner is not None:
+                    self._assert_workload_running(runner, "taskgen_after_planning_before_write_artifacts", round_dir, workload_trace)
+            except PlannerFallbackError as exc:
+                self._write_planner_failure(round_dir, request, exc)
+                raise RuntimeError(f"Planner fallback blocked: {exc.reason}") from exc
+
+            plan_payload = dict(self.planner.last_plan_payload)
+            plan_payload.setdefault("target_path", request.target_path)
+            plan_payload.setdefault("injected_nodes", request.injected_nodes)
+            plan_payload["react_trace"] = [s.to_dict() for s in react_trace]
+            dag_dict = {
+                "tasks": {tid: to_jsonable(t) for tid, t in dag.tasks.items()},
+                "edges": [to_jsonable(e) for e in dag.edges],
+                "schedule": dag.schedule,
+            }
+            generated = {
+                "run_id": run_id,
+                "target_path": request.target_path,
+                "injected_nodes": request.injected_nodes,
+                "workload": workload_cfg,
+                "task_specs": [to_jsonable(t) for t in dag.tasks.values()],
+                "dependencies": [[edge.source, edge.target] for edge in dag.edges],
+                "dag": dag_dict,
+                "workload_detection": detection,
+                "react_trace_path": "react_trace.json",
+                "plan_path": "plan.json",
+                "task_dag_path": "task_dag.json",
+            }
+            self._write_json(round_dir / "plan.json", plan_payload)
+            self._write_json(round_dir / "react_trace.json", [s.to_dict() for s in react_trace])
+            self._write_json(round_dir / "task_dag.json", dag_dict)
+            self._write_json(round_dir / "generated_tasks.json", generated)
+            return {
+                "run_id": run_id,
+                "output_dir": str(output_dir),
+                "round_dir": str(round_dir),
+                "task_specs": generated["task_specs"],
+                "dag": dag_dict,
+            }
+        finally:
+            if started_by_taskgen and runner is not None:
+                workload_trace["events"].append(runner.stop())
+                workload_trace["status"] = runner.status()
+            self._write_json(round_dir / "workload_trace.json", workload_trace)
+
+    def _detect_taskgen_workload(
+        self,
+        request: ExperimentRequest,
+        mode: str,
+        interval_sec: float,
+        qps_threshold: float,
+    ) -> dict[str, Any]:
+        if mode in {"start", "none"}:
+            return {
+                "mode": mode,
+                "probe_interval_sec": 0,
+                "qps": 0.0,
+                "tps": 0.0,
+                "existing_workload_detected": False,
+                "started_new_workload": False,
+                "skipped_probe": True,
+            }
+        probe = MySQLProbe(
+            database=request.target_database,
+            host=self.config.mysql_host,
+            port=self.config.mysql_port,
+            user=self.config.mysql_user,
+            password=self.config.mysql_password,
+        )
+        metrics = probe.workload_probe(interval_sec=float(interval_sec))
+        qps = float(metrics.get("qps") or 0.0)
+        tps = float(metrics.get("tps") or 0.0)
+        return {
+            "mode": mode,
+            "probe_interval_sec": float(interval_sec),
+            "qps": qps,
+            "tps": tps,
+            "existing_workload_detected": qps > float(qps_threshold),
+            "started_new_workload": False,
+            "qps_threshold": float(qps_threshold),
+        }
 
     def plan_only(self, request: ExperimentRequest) -> tuple[ExecutableTaskDAG, EnvironmentSnapshot]:
         """Plan without executing (for dry-run / review)."""

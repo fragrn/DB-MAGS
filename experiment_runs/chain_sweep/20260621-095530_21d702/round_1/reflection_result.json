@@ -1,0 +1,59 @@
+{
+  "failure_reason": "No contention was actually created. The long_tx likely did not hold exclusive row locks on hot TPCC keys (e.g., it used plain SELECTs or updated non-hot keys), and there was little or no conflicting traffic hitting the same rows. As a result, Innodb_row_lock_time and Innodb_row_lock_waits did not increase, no statements crossed the slow-query threshold, and overall QPS did not drop. Additionally, the lock hold time was probably shorter than the typical slow-log threshold (10s), so even if there were waits they weren’t recorded as slow queries. If only long_tx was injected, the chain cannot propagate without a conflicting writer swarm targeting the same rows.",
+  "suggested_changes": [
+    "Make long_tx hold real X locks on hot TPCC rows for >30–60s. Use UPDATE or SELECT ... FOR UPDATE on a small, fixed hot key set (e.g., warehouse w_id=1, district w_id=1,d_id=1, and one customer row) and hold the transaction with DO SLEEP(60) before COMMIT. This directly drives Innodb_row_lock_time up.",
+    "Align conflict traffic exactly to those locked rows. Ensure your contention generator continuously executes short UPDATEs against the same hot key (e.g., UPDATE district SET d_ytd = d_ytd + 1 WHERE w_id=1 AND d_id=1) with high concurrency (32–64 sessions) and no think time. This drives Innodb_row_lock_waits up and creates blocked sessions.",
+    "Increase wait durations to exceed slow-query threshold. Either set session long_query_time=1 for the conflictors or ensure the lock hold time is >12–15s so blocked statements are logged as slow. Also set session innodb_lock_wait_timeout >= hold time (e.g., 120s) so they wait rather than time out.",
+    "Order the actions: start long_tx first, confirm it acquired locks, then start the contention storm 1–2s later, and run for ≥90–120s so ratio-based metrics (Innodb_row_lock_time/waits) and slow_query_count have time to show ≥2× increases.",
+    "If you only injected long_tx and did not inject any conflicting writer workload, you need to add a lock-contention generator targeting the same keys; otherwise the chain long_tx -> lock_contention -> slow_query -> qps_drop cannot be reproduced.",
+    "If TPCC background load is present and configurable, pin it to the same warehouse (e.g., W_ID=1) during the experiment window to amplify contention. Otherwise rely on the explicit contention generator to provide the required waits.",
+    "Monitor for blocked_session_count during the run; if it stays near zero, your conflict SQL is not hitting the same rows as long_tx. Adjust predicates until blocked sessions rise."
+  ],
+  "task_parameter_updates": {
+    "long_tx": {
+      "transaction_script_steps": [
+        "SET SESSION autocommit=0",
+        "SET SESSION innodb_lock_wait_timeout=120",
+        "START TRANSACTION",
+        "UPDATE warehouse SET w_ytd = w_ytd WHERE w_id = 1",
+        "UPDATE district SET d_ytd = d_ytd WHERE w_id = 1 AND d_id = 1",
+        "SELECT c_balance FROM customer WHERE w_id = 1 AND d_id = 1 AND c_id = 1 FOR UPDATE",
+        "DO SLEEP(60)",
+        "COMMIT"
+      ],
+      "concurrency": 1,
+      "duration_sec": 90
+    },
+    "lock_contention": {
+      "transaction_script_steps": [
+        "SET SESSION long_query_time=1",
+        "SET SESSION innodb_lock_wait_timeout=120",
+        "/* loop this block continuously for the duration */",
+        "START TRANSACTION",
+        "UPDATE district SET d_ytd = d_ytd + 1 WHERE w_id = 1 AND d_id = 1",
+        "COMMIT"
+      ],
+      "concurrency": 48,
+      "rate": "unlimited",
+      "duration_sec": 120,
+      "terminals": 48
+    }
+  },
+  "risk_warning": "These changes will intentionally create heavy lock contention and long waits. Expect deadlocks and lock wait timeouts, large undo/history growth, replication lag or binlog spikes, thread pool saturation, and potential connection pile-up. Run only in an isolated test environment, set innodb_lock_wait_timeout sufficiently high to avoid premature timeouts, and monitor disk space for undo/binlog growth. Ensure you stop the contention storm before saturating the instance.",
+  "memory_update": [
+    {
+      "anomaly": "long_tx_lock_contention_chain",
+      "path": [
+        "long_tx",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "outcome": "Propagation chain NOT fully reproduced. 0/4 nodes hit. Failure at: terminal_not_hit:qps_drop",
+      "success": false,
+      "round": 0,
+      "node_hit_ratio": 0.0
+    }
+  ],
+  "raw_text": "{\n  \"failure_reason\": \"No contention was actually created. The long_tx likely did not hold exclusive row locks on hot TPCC keys (e.g., it used plain SELECTs or updated non-hot keys), and there was little or no conflicting traffic hitting the same rows. As a result, Innodb_row_lock_time and Innodb_row_lock_waits did not increase, no statements crossed the slow-query threshold, and overall QPS did not drop. Additionally, the lock hold time was probably shorter than the typical slow-log threshold (10s), so even if there were waits they weren’t recorded as slow queries. If only long_tx was injected, the chain cannot propagate without a conflicting writer swarm targeting the same rows.\",\n  \"suggested_changes\": [\n    \"Make long_tx hold real X locks on hot TPCC rows for >30–60s. Use UPDATE or SELECT ... FOR UPDATE on a small, fixed hot key set (e.g., warehouse w_id=1, district w_id=1,d_id=1, and one customer row) and hold the transaction with DO SLEEP(60) before COMMIT. This directly drives Innodb_row_lock_time up.\",\n    \"Align conflict traffic exactly to those locked rows. Ensure your contention generator continuously executes short UPDATEs against the same hot key (e.g., UPDATE district SET d_ytd = d_ytd + 1 WHERE w_id=1 AND d_id=1) with high concurrency (32–64 sessions) and no think time. This drives Innodb_row_lock_waits up and creates blocked sessions.\",\n    \"Increase wait durations to exceed slow-query threshold. Either set session long_query_time=1 for the conflictors or ensure the lock hold time is >12–15s so blocked statements are logged as slow. Also set session innodb_lock_wait_timeout >= hold time (e.g., 120s) so they wait rather than time out.\",\n    \"Order the actions: start long_tx first, confirm it acquired locks, then start the contention storm 1–2s later, and run for ≥90–120s so ratio-based metrics (Innodb_row_lock_time/waits) and slow_query_count have time to show ≥2× increases.\",\n    \"If you only injected long_tx and did not inject any conflicting writer workload, you need to add a lock-contention generator targeting the same keys; otherwise the chain long_tx -> lock_contention -> slow_query -> qps_drop cannot be reproduced.\",\n    \"If TPCC background load is present and configurable, pin it to the same warehouse (e.g., W_ID=1) during the experiment window to amplify contention. Otherwise rely on the explicit contention generator to provide the required waits.\",\n    \"Monitor for blocked_session_count during the run; if it stays near zero, your conflict SQL is not hitting the same rows as long_tx. Adjust predicates until blocked sessions rise.\"\n  ],\n  \"task_parameter_updates\": {\n    \"long_tx\": {\n      \"transaction_script_steps\": [\n        \"SET SESSION autocommit=0\",\n        \"SET SESSION innodb_lock_wait_timeout=120\",\n        \"START TRANSACTION\",\n        \"UPDATE warehouse SET w_ytd = w_ytd WHERE w_id = 1\",\n        \"UPDATE district SET d_ytd = d_ytd WHERE w_id = 1 AND d_id = 1\",\n        \"SELECT c_balance FROM customer WHERE w_id = 1 AND d_id = 1 AND c_id = 1 FOR UPDATE\",\n        \"DO SLEEP(60)\",\n        \"COMMIT\"\n      ],\n      \"concurrency\": 1,\n      \"duration_sec\": 90\n    },\n    \"lock_contention\": {\n      \"transaction_script_steps\": [\n        \"SET SESSION long_query_time=1\",\n        \"SET SESSION innodb_lock_wait_timeout=120\",\n        \"/* loop this block continuously for the duration */\",\n        \"START TRANSACTION\",\n        \"UPDATE district SET d_ytd = d_ytd + 1 WHERE w_id = 1 AND d_id = 1\",\n        \"COMMIT\"\n      ],\n      \"concurrency\": 48,\n      \"rate\": \"unlimited\",\n      \"duration_sec\": 120,\n      \"terminals\": 48\n    }\n  },\n  \"risk_warning\": \"These changes will intentionally create heavy lock contention and long waits. Expect deadlocks and lock wait timeouts, large undo/history growth, replication lag or binlog spikes, thread pool saturation, and potential connection pile-up. Run only in an isolated test environment, set innodb_lock_wait_timeout sufficiently high to avoid premature timeouts, and monitor disk space for undo/binlog growth. Ensure you stop the contention storm before saturating the instance.\"\n}"
+}

@@ -37,6 +37,28 @@ class PlannerFallbackError(RuntimeError):
         self.context = context or {}
 
 
+ALLOWED_PLANNER_ACTION_KINDS = {
+    "raw_sql_workload",
+    "raw_transaction_script",
+    "raw_command",
+    "logical_backup_command",
+    "benchbase_burst_command",
+    # Legacy action kinds remain accepted for old artifacts and transitional plans.
+    "sql_workload",
+    "benchbase_burst",
+    "lock_conflict",
+    "chaosblade",
+    "logical_backup",
+}
+
+RESOURCE_ROOT_CAUSES = {
+    "resource_cpu",
+    "resource_io",
+    "resource_memory",
+    "resource_network",
+}
+
+
 # ---------------------------------------------------------------------------
 # System prompt — the core knowledge injected into the global planner
 # ---------------------------------------------------------------------------
@@ -57,17 +79,17 @@ Never call execution or memory-writing tools.
 The graph has three node layers:
 
 ### Injectable nodes (can be actively triggered)
-- traffic_surge        → extra BenchBase burst workload matching the current background benchmark
-- missing_index        → SQL on unindexed columns causing index miss
-- improper_sql         → poorly shaped SQL (SELECT *, weak predicates, functions on columns)
-- long_tx             → transaction holding locks for long duration
-- hot_update           → many concurrent updates to the same hot row
-- backup               → mysqldump or ANALYZE creating IO/metadata pressure
-- excessive_index      → too many indexes causing write amplification
-- resource_cpu         → chaosblade CPU stress
-- resource_io          → chaosblade disk IO stress
-- resource_memory       → chaosblade memory stress
-- resource_network      → chaosblade network stress
+- traffic_surge        → direct TaskSpec using benchbase_burst_command or raw_command
+- missing_index        → direct SQL workload on unindexed columns
+- improper_sql         → direct poorly shaped SQL workload
+- long_tx              → direct transaction script holding locks
+- hot_update           → direct transaction script with concurrent updates
+- backup               → direct backup command or SQL maintenance workload
+- excessive_index      → direct SQL/command workload for write amplification
+- resource_cpu         → direct ChaosBlade command
+- resource_io          → direct ChaosBlade command
+- resource_memory      → direct ChaosBlade command
+- resource_network     → direct ChaosBlade command
 
 ### Intermediate observable nodes
 - threads_concurrency_up   → Threads_running / Threads_connected increased
@@ -92,8 +114,8 @@ Use the provided runtime snapshot and baseline context first.
 Only call probe_full_snapshot or other probe tools when the provided context is insufficient.
 You SHOULD call read_memory before choosing task parameters.
 You SHOULD call explain_sql for SQL workload candidates before finalizing them.
-You MUST call one TaskSpec builder tool for each user-specified injected node.
-You MUST NOT build TaskSpecs for nodes outside injected_nodes.
+You MUST directly write one complete TaskSpec JSON object for each user-specified injected node in the final answer.
+You MUST NOT write TaskSpecs for nodes outside injected_nodes.
 You MUST call build_task_dag and check_safety before returning the final answer.
 
 ### Environment probe tools
@@ -102,15 +124,8 @@ You MUST call build_task_dag and check_safety before returning the final answer.
 - probe_table_stats(config, database) → table sizes only
 - probe_db_metrics(config, database) → current DB status
 - probe_os_metrics() → OS metrics (CPU, memory, disk)
+- probe_workload(config, database, interval_sec) → current workload QPS/TPS sample
 - explain_sql(config, database, sql) → EXPLAIN a candidate SQL
-
-### TaskSpec builder tools (replace SpecialistAgents)
-- build_slow_sql_task(config, database, task_id, root_cause, table, column, predicate, sort_column, pattern, limit, concurrency, duration_sec)
-- get_benchbase_workload_defaults(benchmark, config_path, database, terminals, rate, duration_sec) -> current BenchBase defaults and constraints
-- build_traffic_task(config, profile, task_id)
-- build_lock_task(config, database, task_id, table, key_column, holder_concurrency, waiter_concurrency, hold_sec, lock_type)
-- build_chaos_task(config, task_id, resource_type, duration_sec, intensity)
-- build_backup_task(config, database, task_id, table, tool)
 
 ### Orchestration tools
 - build_task_dag(task_specs, dependencies) → ExecutableTaskDAG
@@ -123,38 +138,38 @@ You MUST call build_task_dag and check_safety before returning the final answer.
 
 Step 1 — Inspect: Use the provided runtime snapshot. Call probe tools only if extra evidence is needed.
 Step 2 — Memory check: Call read_memory. Incorporate reflection context if provided.
-Step 3 — TaskSpec generation: Generate TaskSpecs only for injected_nodes. Prefer large/hot tables and safe parameters.
+Step 3 — TaskSpec generation: Directly write TaskSpecs only for injected_nodes. Prefer large/hot tables and bounded parameters.
 Step 4 — DAG construction: Call build_task_dag with dependencies only between generated TaskSpecs.
 Step 5 — Safety check: Call check_safety.
 
-## Traffic Surge Profile Policy
+## Direct Raw Action TaskSpec Policy
 
-If injected_nodes contains traffic_surge:
-- You MUST use the background workload benchmark from request.workload.benchmark.
-- You MUST call get_benchbase_workload_defaults using the background workload config before build_traffic_task.
-- You MUST generate a TrafficSurgeProfile and pass it to build_traffic_task(profile=...).
-- TrafficSurgeProfile may contain ONLY:
-  benchmark, database, config_path, terminals, rate, duration_sec, transaction_mix, mix_template, rationale.
-- It MUST NOT contain SQL, queries, lock-holder behavior, slow SQL, custom actions, extra tasks, or ramp stages.
-- TrafficSurgeProfile benchmark/database/config_path must match the background workload configuration.
-- transaction_mix keys must be legal transaction names for that benchmark.
-- On the initial round with no reflection, use the default_transaction_mix, default_rate, default_terminals, and default_duration_sec returned by the defaults tool, except where the user request explicitly overrides duration/terminals.
-- After reflection, the LLM may adjust terminals, rate, duration_sec, and transaction_mix based on evaluation feedback.
-- rationale must explain why the transaction mix, terminals, rate, and duration support the requested propagation path.
+Do not call specialist builder tools. They are intentionally unavailable.
+In the final JSON, each TaskSpec must include:
+- task_id
+- task_type
+- actions
+- expected_metrics
+- success_criteria
+- risk_assessment
+- metadata.root_cause, exactly equal to its injected node
 
-## Slow SQL Diversity Policy
+Allowed new raw action kinds:
+- raw_sql_workload: {kind, database, sql, concurrency, duration_sec}
+- raw_transaction_script: {kind, database, scripts, duration_sec, concurrency}
+- raw_command: {kind, command, duration_sec, cwd, env, cleanup_command}
+- logical_backup_command: {kind, database, command, duration_sec, output_path}
+- benchbase_burst_command: {kind, benchmark, database, command, duration_sec, terminals, rate}
 
-When generating slow SQL TaskSpecs, ensure diversity across:
-- Table choice: pick different large tables across retries
-- Predicate type: range scan vs equality vs LIKE vs function-on-column
-- Join shape: single-table vs multi-table JOIN
-- Sort/group: ORDER BY on unindexed column, GROUP BY with no index
-- Scan intensity: rows_examined / rows_returned ratio
-
-For missing_index specifically:
-- Choose a column that appears in WHERE/ORDER BY but has NO index
-- Use range predicate (BETWEEN, >=, <=) or ORDER BY on that column
-- Use EXPLAIN to confirm access type degrades to ALL or filesort appears
+Commands must be argv arrays, never shell strings.
+SQL tasks should call explain_sql before finalizing candidate SQL when possible.
+Traffic surge should use benchbase_burst_command and match the background workload benchmark/database.
+For benchbase_burst_command, generate an argv command using the background workload java_bin and jar_path, e.g. [java_bin, "-jar", jar_path, "-b", benchmark, "-c", config_path, "--execute=true"].
+Do not use the BenchBase directory as command[0]; command[0] must be java/java_bin.
+Lock contention and deadtuple should use raw_transaction_script.
+Resource limitations must use raw_command with a ChaosBlade argv command. The command[0] must be the configured ChaosBlade binary path from RuntimeConfig.chaosblade_path, not bare "blade".
+For resource_cpu/resource_io/resource_memory/resource_network, generate a unique ChaosBlade --uid and a matching cleanup_command such as [configured_chaosblade_path, "destroy", uid].
+Backup should use logical_backup_command.
 
 ## Output Format
 
@@ -171,6 +186,21 @@ Return a JSON object with this exact structure:
 
 Only return this JSON — no extra text outside it.
 """
+
+
+def _is_chaosblade_binary(value: str, configured_path: str) -> bool:
+    if not value:
+        return False
+    return value == configured_path
+
+
+def _extract_chaosblade_uid(command: list[str]) -> str:
+    for idx, part in enumerate(command):
+        if part == "--uid" and idx + 1 < len(command):
+            return command[idx + 1]
+        if part.startswith("--uid="):
+            return part.split("=", 1)[1]
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +345,7 @@ class GlobalPlanner:
                 config=self.config,
                 system_prompt=SYSTEM_PROMPT,
                 user_prompt=context,
-                max_steps=12,
+                max_steps=15,
                 temperature=self.config.planner_temperature,
             )
         except tool_registry.LLMTimeoutError as exc:
@@ -544,8 +574,7 @@ class GlobalPlanner:
                 continue
             if root in seen:
                 raise ValueError(f"multiple TaskSpecs generated for injected node '{root}'")
-            if root == "traffic_surge":
-                self._validate_traffic_task_spec(spec, request)
+            self._validate_direct_task_spec(spec, request)
             seen.add(root)
             filtered.append(spec)
         missing = allowed - seen
@@ -553,40 +582,95 @@ class GlobalPlanner:
             raise ValueError(f"missing TaskSpecs for injected nodes: {', '.join(sorted(missing))}")
         return filtered
 
-    @staticmethod
-    def _validate_traffic_task_spec(spec: dict[str, Any], request: ExperimentRequest) -> None:
-        actions = spec.get("actions") or []
-        if len(actions) != 1 or not isinstance(actions[0], dict):
-            raise ValueError("traffic_surge TaskSpec must contain exactly one benchbase_burst action")
-        action = actions[0]
-        if action.get("kind") != "benchbase_burst":
-            raise ValueError("traffic_surge TaskSpec must use benchbase_burst, not workload_ramp/custom actions")
+    def _validate_direct_task_spec(self, spec: dict[str, Any], request: ExperimentRequest) -> None:
+        required = ("task_id", "task_type", "actions", "expected_metrics", "success_criteria", "risk_assessment", "metadata")
+        missing = [name for name in required if name not in spec]
+        if missing:
+            raise ValueError(f"TaskSpec missing required fields: {', '.join(missing)}")
         metadata = spec.get("metadata") or {}
-        action_profile = action.get("profile")
-        metadata_profile = metadata.get("traffic_surge_profile")
-        if action_profile is None or metadata_profile is None:
-            raise ValueError("traffic_surge TaskSpec must include TrafficSurgeProfile in action and metadata")
-        normalized_action = tool_registry.validate_traffic_surge_profile(action_profile)
-        normalized_metadata = tool_registry.validate_traffic_surge_profile(metadata_profile)
-        if normalized_action != normalized_metadata:
-            raise ValueError("traffic_surge action profile and metadata profile must match")
+        root = str(metadata.get("root_cause", ""))
+        if not root:
+            raise ValueError("TaskSpec metadata.root_cause is required")
+        if root not in set(request.injected_nodes):
+            raise ValueError(f"TaskSpec root_cause '{root}' is not in injected_nodes")
+        actions = spec.get("actions")
+        if not isinstance(actions, list) or not actions:
+            raise ValueError(f"TaskSpec '{spec.get('task_id')}' must contain at least one action")
+        for action in actions:
+            if not isinstance(action, dict):
+                raise ValueError(f"TaskSpec '{spec.get('task_id')}' contains a non-object action")
+            kind = str(action.get("kind", ""))
+            if kind not in ALLOWED_PLANNER_ACTION_KINDS:
+                raise ValueError(f"TaskSpec '{spec.get('task_id')}' uses unsupported action kind: {kind}")
+            if kind in {"raw_command", "logical_backup_command", "benchbase_burst_command"}:
+                command = action.get("command")
+                if not isinstance(command, list) or not all(isinstance(part, str) for part in command):
+                    raise ValueError(f"Action kind '{kind}' requires command as argv string array")
+            if kind == "raw_sql_workload" and not str(action.get("sql", "")).strip():
+                raise ValueError("raw_sql_workload requires sql")
+            if kind == "raw_transaction_script":
+                scripts = action.get("scripts")
+                if not isinstance(scripts, list) or not scripts:
+                    raise ValueError("raw_transaction_script requires non-empty scripts")
+            if kind == "benchbase_burst":
+                tool_registry.validate_traffic_surge_profile(action.get("profile") or {})
+        if root in RESOURCE_ROOT_CAUSES:
+            self._validate_resource_chaosblade_task(spec)
         workload = request.workload or {}
         if workload.get("enabled"):
-            expected_benchmark = str(workload.get("benchmark") or "").lower()
-            if expected_benchmark and normalized_action["benchmark"] != expected_benchmark:
-                raise ValueError(
-                    "traffic_surge benchmark must match background workload "
-                    f"({normalized_action['benchmark']} != {expected_benchmark})"
-                )
-            expected_database = str(workload.get("database") or request.target_database)
-            if expected_database and normalized_action["database"] != expected_database:
-                raise ValueError(
-                    "traffic_surge database must match background workload "
-                    f"({normalized_action['database']} != {expected_database})"
-                )
-            expected_config_path = str(workload.get("config_path") or "")
-            if expected_config_path and normalized_action["config_path"] != expected_config_path:
-                raise ValueError("traffic_surge config_path must match background workload config_path")
+            for action in actions:
+                kind = action.get("kind")
+                if kind not in {"benchbase_burst", "benchbase_burst_command"}:
+                    continue
+                expected_benchmark = str(workload.get("benchmark") or "").lower()
+                expected_database = str(workload.get("database") or request.target_database)
+                if kind == "benchbase_burst":
+                    profile = tool_registry.validate_traffic_surge_profile(action.get("profile") or {})
+                    benchmark = profile.get("benchmark")
+                    database = profile.get("database")
+                else:
+                    benchmark = str(action.get("benchmark") or "").lower()
+                    database = str(action.get("database") or "")
+                if expected_benchmark and benchmark and benchmark != expected_benchmark:
+                    raise ValueError(
+                        f"benchbase burst benchmark must match background workload ({benchmark} != {expected_benchmark})"
+                    )
+                if expected_database and database and database != expected_database:
+                    raise ValueError(
+                        f"benchbase burst database must match background workload ({database} != {expected_database})"
+                    )
+
+    def _validate_resource_chaosblade_task(self, spec: dict[str, Any]) -> None:
+        actions = spec.get("actions") or []
+        for action in actions:
+            kind = str(action.get("kind", ""))
+            if kind != "raw_command":
+                raise ValueError("resource TaskSpec must use raw_command with a ChaosBlade command")
+            command = action.get("command")
+            cleanup = action.get("cleanup_command")
+            if not isinstance(command, list) or not all(isinstance(part, str) for part in command):
+                raise ValueError("resource raw_command requires command as argv string array")
+            if not isinstance(cleanup, list) or not all(isinstance(part, str) for part in cleanup):
+                raise ValueError("resource raw_command requires cleanup_command as argv string array")
+            if not _is_chaosblade_binary(command[0], self.config.chaosblade_path):
+                raise ValueError("resource raw_command must invoke RuntimeConfig.chaosblade_path, not bare 'blade'")
+            if "create" not in command:
+                raise ValueError("resource ChaosBlade command must create an experiment")
+            uid = _extract_chaosblade_uid(command)
+            if not uid:
+                raise ValueError("resource ChaosBlade command must include a unique --uid")
+            if not _is_chaosblade_binary(cleanup[0], self.config.chaosblade_path):
+                raise ValueError("resource cleanup_command must invoke RuntimeConfig.chaosblade_path, not bare 'blade'")
+            if "destroy" not in cleanup:
+                raise ValueError("resource cleanup_command must destroy the ChaosBlade experiment")
+            if uid not in cleanup:
+                raise ValueError("resource cleanup_command must contain the same ChaosBlade uid")
+            try:
+                duration = float(action.get("duration_sec", 0) or 0)
+            except (TypeError, ValueError):
+                duration = 0.0
+            if duration <= 0:
+                raise ValueError("resource raw_command duration_sec must be greater than 0")
 
     @staticmethod
     def _filter_dependencies(dependencies: list[list[str]], task_specs: list[dict[str, Any]]) -> list[list[str]]:

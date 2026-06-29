@@ -1,0 +1,369 @@
+{
+  "note": "Manual conversion of post1-post10 DBA descriptions into the current agent raw-action TaskSpec shape. Items marked runnable_by_current_executor=true use action kinds understood by agent/executor.py, but may still require the referenced schema/data to exist. Items marked blocked require DBMS/environment/tools not currently available in the MySQL-focused runner.",
+  "current_executor_action_kinds": [
+    "raw_sql_workload",
+    "raw_transaction_script",
+    "raw_command",
+    "logical_backup_command",
+    "benchbase_burst_command"
+  ],
+  "posts": [
+    {
+      "post_id": 1,
+      "status": "task_spec_convertible_requires_schema_data",
+      "runnable_by_current_executor": true,
+      "target_dbms": "mysql",
+      "problem": "Large fact-table join with GROUP BY is slow because it touches most rows in statistic_detail.",
+      "required_preparation": [
+        "Create country_detail and statistic_detail in the target MySQL database.",
+        "Load approximately the same scale or a smaller but still large synthetic statistic_detail dataset.",
+        "Keep the join/group-by indexes close to the post if strict reproduction is desired."
+      ],
+      "task_specs": [
+        {
+          "task_id": "post1_improper_sql_group_by_join",
+          "task_type": "slow_sql",
+          "actions": [
+            {
+              "kind": "raw_sql_workload",
+              "database": "repro_db",
+              "sql": "SELECT c.country_name AS country_name FROM statistic_detail AS s INNER JOIN country_detail AS c ON s.country = c.country_code GROUP BY 1",
+              "concurrency": 1,
+              "duration_sec": 60
+            }
+          ],
+          "expected_metrics": {
+            "rows_examined_ratio": ">2",
+            "slow_query_count_delta": ">=1",
+            "p95_latency_ratio": ">1.5"
+          },
+          "success_criteria": {
+            "slow_query_count_delta": ">=1"
+          },
+          "risk_assessment": "medium",
+          "metadata": {
+            "root_cause": "improper_sql",
+            "source_post": "post1",
+            "pattern": "large_join_group_by"
+          }
+        }
+      ]
+    },
+    {
+      "post_id": 2,
+      "status": "partially_convertible_missing_log_rotation_node_and_filesystem_probe",
+      "runnable_by_current_executor": true,
+      "target_dbms": "mysql",
+      "problem": "Deleting the active MySQL slow query log file does not recreate it until FLUSH SLOW LOGS because mysqld keeps writing to an open file descriptor.",
+      "required_preparation": [
+        "Use a disposable MySQL instance.",
+        "Provide an explicit test slow log path writable by mysqld.",
+        "Add evaluator support for file existence and open deleted inode evidence if this should be judged automatically."
+      ],
+      "task_specs": [
+        {
+          "task_id": "post2_slowlog_unlink_and_flush",
+          "task_type": "maintenance_observability",
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "database": "slowlog_test",
+              "duration_sec": 5,
+              "concurrency": 1,
+              "scripts": [
+                {
+                  "role": "enable_full_slow_logging",
+                  "autocommit": true,
+                  "steps": [
+                    {
+                      "sql": "SET GLOBAL log_output = 'FILE'"
+                    },
+                    {
+                      "sql": "SET GLOBAL slow_query_log = 'ON'"
+                    },
+                    {
+                      "sql": "SET GLOBAL long_query_time = 0"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "raw_command",
+              "command": [
+                "/bin/rm",
+                "-f",
+                "/tmp/dbmags_mysql_slow.log"
+              ],
+              "duration_sec": 1
+            },
+            {
+              "kind": "raw_transaction_script",
+              "database": "slowlog_test",
+              "duration_sec": 1,
+              "concurrency": 1,
+              "scripts": [
+                {
+                  "role": "flush_slow_logs",
+                  "autocommit": true,
+                  "steps": [
+                    {
+                      "sql": "FLUSH SLOW LOGS"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "expected_metrics": {
+            "slow_log_file_recreated_after_flush": true
+          },
+          "success_criteria": {
+            "manual_check": "slow log path disappears after unlink and reappears after FLUSH SLOW LOGS"
+          },
+          "risk_assessment": "medium",
+          "metadata": {
+            "root_cause": "backup",
+            "source_post": "post2",
+            "pattern": "slow_log_rotation_misuse",
+            "current_graph_gap": "No dedicated log_rotation or observability_overhead node exists."
+          }
+        }
+      ]
+    },
+    {
+      "post_id": 3,
+      "status": "partially_convertible_missing_slowlog_evaluator",
+      "runnable_by_current_executor": true,
+      "target_dbms": "mysql",
+      "problem": "Slow log records fast queries because log_queries_not_using_indexes is enabled.",
+      "required_preparation": [
+        "Use a disposable MySQL instance.",
+        "Create items without a useful index on category or description.",
+        "Add evaluator support for slow log entry parsing if automatic hit judgment is needed."
+      ],
+      "task_specs": [
+        {
+          "task_id": "post3_log_queries_not_using_indexes",
+          "task_type": "observability_overhead",
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "database": "slowlog_repro",
+              "duration_sec": 5,
+              "concurrency": 1,
+              "scripts": [
+                {
+                  "role": "enable_unindexed_query_logging",
+                  "autocommit": true,
+                  "steps": [
+                    {
+                      "sql": "SET GLOBAL slow_query_log = 'ON'"
+                    },
+                    {
+                      "sql": "SET GLOBAL long_query_time = 2"
+                    },
+                    {
+                      "sql": "SET GLOBAL log_queries_not_using_indexes = 'ON'"
+                    },
+                    {
+                      "sql": "SET GLOBAL min_examined_row_limit = 0"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "raw_sql_workload",
+              "database": "slowlog_repro",
+              "sql": "SELECT COUNT(*) FROM items WHERE description LIKE '%dbmags_non_indexed_probe%'",
+              "concurrency": 3,
+              "duration_sec": 60
+            }
+          ],
+          "expected_metrics": {
+            "slow_log_entries_below_long_query_time": "increase"
+          },
+          "success_criteria": {
+            "manual_check": "fast full-scan queries appear in slow log due to log_queries_not_using_indexes"
+          },
+          "risk_assessment": "medium",
+          "metadata": {
+            "root_cause": "improper_sql",
+            "source_post": "post3",
+            "pattern": "unindexed_fast_queries_logged_as_slow",
+            "current_graph_gap": "No dedicated verbose_slowlog/config_misconfiguration node exists."
+          }
+        }
+      ]
+    },
+    {
+      "post_id": 4,
+      "status": "task_spec_convertible_requires_schema_data",
+      "runnable_by_current_executor": true,
+      "target_dbms": "mysql",
+      "problem": "Application query is slow because LOWER(subject) LIKE '%...%' and dependent permission subqueries force large scans under concurrency.",
+      "required_preparation": [
+        "Create issues, projects, enabled_modules, members and users tables.",
+        "Load a Redmine-like synthetic dataset.",
+        "Do not create a fulltext/functional index that would remove the leading-wildcard scan."
+      ],
+      "task_specs": [
+        {
+          "task_id": "post4_improper_sql_leading_wildcard",
+          "task_type": "slow_sql",
+          "actions": [
+            {
+              "kind": "raw_sql_workload",
+              "database": "determine",
+              "sql": "SELECT i.* FROM issues AS i INNER JOIN projects AS p ON p.id = i.project_id WHERE p.status <> 9 AND EXISTS (SELECT 1 FROM enabled_modules AS em WHERE em.project_id = p.id AND em.name = 'issue_tracking') AND i.id <> 251880 AND LOWER(i.subject) LIKE LOWER('%255392%') ORDER BY i.id DESC LIMIT 10",
+              "concurrency": 20,
+              "duration_sec": 120
+            }
+          ],
+          "expected_metrics": {
+            "rows_examined_ratio": ">3",
+            "slow_query_count_delta": ">=1",
+            "p95_latency_ratio": ">2"
+          },
+          "success_criteria": {
+            "slow_query_count_delta": ">=1"
+          },
+          "risk_assessment": "medium",
+          "metadata": {
+            "root_cause": "improper_sql",
+            "source_post": "post4",
+            "pattern": "leading_wildcard_like_dependent_subquery"
+          }
+        }
+      ]
+    },
+    {
+      "post_id": 5,
+      "status": "blocked_missing_sqlserver_executor",
+      "runnable_by_current_executor": false,
+      "target_dbms": "sqlserver",
+      "problem": "SQL Server view uses correlated latest-per-group subquery and missing composite index, causing slow plan.",
+      "missing_capabilities": [
+        "SQL Server connection/runtime config.",
+        "SQL Server executor for T-SQL batches, schemabinding views, SET STATISTICS IO/TIME and showplan collection.",
+        "SQL Server synthetic data loader.",
+        "SQL Server evaluator for logical reads and plan operators."
+      ],
+      "closest_current_task_shape": {
+        "action_kind": "raw_sql_workload",
+        "why_not_enough": "The executor can send SQL to MySQL only; SQL Server view syntax and optimizer behavior cannot be reproduced accurately in MySQL."
+      }
+    },
+    {
+      "post_id": 6,
+      "status": "blocked_missing_sqlserver_backup_environment",
+      "runnable_by_current_executor": false,
+      "target_dbms": "sqlserver_2008_r2_sp3",
+      "problem": "SQL Server backup/read throughput drops after reboot/configuration change, ultimately tied to MAXDOP/parallelism.",
+      "missing_capabilities": [
+        "SQL Server 2008 R2 or compatible SQL Server lab instance.",
+        "Large SQL Server database or controlled backup-size fixture.",
+        "Executor for sp_configure, BACKUP DATABASE TO DISK='NUL', PerfMon/wait-stat collection.",
+        "Evaluator for backup throughput, wait stats and IO latency.",
+        "Safe rollback of instance-level MAXDOP changes."
+      ],
+      "closest_current_task_shape": {
+        "action_kind": "logical_backup_command",
+        "why_not_enough": "Current logical_backup_command can run argv commands such as mysqldump, not SQL Server BACKUP DATABASE or instance-level MAXDOP experiments."
+      }
+    },
+    {
+      "post_id": 7,
+      "status": "task_spec_convertible_requires_schema_data",
+      "runnable_by_current_executor": true,
+      "target_dbms": "mysql",
+      "problem": "INSERT...SELECT with LEFT JOIN to a derived table examines huge row counts because useful indexes are missing.",
+      "required_preparation": [
+        "Create bot_sessions and bot_sessions_statistics in a disposable MySQL database.",
+        "Load enough synthetic rows to make today buckets large.",
+        "Avoid secondary indexes on member_id, latest_renewal and date_active for the anomalous run."
+      ],
+      "task_specs": [
+        {
+          "task_id": "post7_missing_index_insert_select",
+          "task_type": "slow_sql",
+          "actions": [
+            {
+              "kind": "raw_sql_workload",
+              "database": "dbmags_repro",
+              "sql": "INSERT INTO bot_sessions_statistics (member_id, session_token, username, ip_address) SELECT s.member_id, s.session_token, s.username, s.ip_address FROM bot_sessions AS s LEFT JOIN (SELECT st.member_id, st.session_token, st.username, st.ip_address FROM bot_sessions_statistics AS st WHERE st.date_active >= DATE(NOW())) AS st ON s.member_id = st.member_id WHERE s.latest_renewal >= DATE(NOW()) AND st.member_id IS NULL",
+              "concurrency": 1,
+              "duration_sec": 60
+            }
+          ],
+          "expected_metrics": {
+            "rows_examined_ratio": ">3",
+            "slow_query_count_delta": ">=1",
+            "Handler_read_rnd_next": "increase"
+          },
+          "success_criteria": {
+            "rows_examined_ratio": ">3"
+          },
+          "risk_assessment": "medium",
+          "metadata": {
+            "root_cause": "missing_index",
+            "source_post": "post7",
+            "pattern": "missing_join_filter_indexes_derived_left_join"
+          }
+        }
+      ]
+    },
+    {
+      "post_id": 8,
+      "status": "blocked_missing_sqlserver_optimizer_environment",
+      "runnable_by_current_executor": false,
+      "target_dbms": "sql-server",
+      "problem": "SQL Server IF EXISTS introduces a row goal and changes the plan from parallel hash anti-join to nested loops.",
+      "missing_capabilities": [
+        "SQL Server executor and data loader.",
+        "Plan collection with actual execution plans or SHOWPLAN XML.",
+        "Evaluator for row-goal/nested-loops/parallelism evidence.",
+        "SQL Server-specific request schema for optimizer plan regression nodes."
+      ],
+      "closest_current_task_shape": {
+        "action_kind": "raw_sql_workload",
+        "why_not_enough": "MySQL cannot reproduce SQL Server row-goal optimizer behavior from IF EXISTS."
+      }
+    },
+    {
+      "post_id": 9,
+      "status": "blocked_missing_alwayson_cluster_environment",
+      "runnable_by_current_executor": false,
+      "target_dbms": "microsoft_sql_server_alwayson",
+      "problem": "AlwaysOn Availability Group metadata query is slow because HADR DMVs repeatedly call cluster APIs across many AGs/subnets.",
+      "missing_capabilities": [
+        "Multi-node SQL Server AlwaysOn Availability Group lab.",
+        "WSFC/cluster provisioning controls.",
+        "Network impairment tool integrated with the SQL Server cluster environment.",
+        "SQL Server DMV/wait-stat evaluator for HADR_CLUSAPI_CALL.",
+        "Safe setup/teardown for dozens of AGs."
+      ],
+      "closest_current_task_shape": {
+        "action_kind": "raw_command plus raw_sql_workload",
+        "why_not_enough": "Current MySQL executor can run commands, but it cannot provision or observe SQL Server AlwaysOn/WSFC state."
+      }
+    },
+    {
+      "post_id": 10,
+      "status": "blocked_missing_sqlserver_optimizer_environment",
+      "runnable_by_current_executor": false,
+      "target_dbms": "sql-server",
+      "problem": "Same SQL Server row-goal regression class as post8: wrapping anti-join in IF EXISTS causes nested loops and loss of parallelism.",
+      "missing_capabilities": [
+        "SQL Server executor and data loader.",
+        "Plan collection with logical reads, DOP and operator-shape extraction.",
+        "Evaluator for plan regression from IF EXISTS row goal."
+      ],
+      "closest_current_task_shape": {
+        "action_kind": "raw_sql_workload",
+        "why_not_enough": "Current MySQL executor can only approximate a slow anti-join, not the SQL Server-specific row-goal anomaly."
+      }
+    }
+  ]
+}

@@ -4,6 +4,7 @@ CLI entry point for the agent system.
 Usage:
     python -m agent.cli inspect --db testdb --output snapshot.json
     python -m agent.cli plan   --request request.json --output plan.json
+    python -m agent.cli taskgen --request request.json --output-root experiment_runs/taskgen
     python -m agent.cli run    --request request.json --output-root experiment_runs
     python -m agent.cli cleanup --run-id 20250605-123456_abc123
 """
@@ -39,6 +40,17 @@ def main(args: Optional[List[str]] = None) -> int:
     p_plan.add_argument("--request", required=True, help="JSON request file path")
     p_plan.add_argument("--output", default="plan.json", help="Output file path")
 
+    # taskgen
+    p_taskgen = sub.add_parser("taskgen", help="Start workload, generate TaskSpecs, then stop.")
+    p_taskgen.add_argument("--request", required=True, help="JSON request file path")
+    p_taskgen.add_argument("--output-root", default="experiment_runs/taskgen", help="Output root directory")
+    p_taskgen.add_argument(
+        "--workload-mode",
+        choices=["auto", "start", "reuse", "none"],
+        default="auto",
+        help="How taskgen should handle background workload",
+    )
+
     # run
     p_run = sub.add_parser("run", help="Run a full anomaly propagation experiment.")
     p_run.add_argument("--request", required=True, help="JSON request file path")
@@ -59,6 +71,8 @@ def main(args: Optional[List[str]] = None) -> int:
         return cmd_inspect(config, parsed)
     elif parsed.command == "plan":
         return cmd_plan(config, parsed)
+    elif parsed.command == "taskgen":
+        return cmd_taskgen(config, parsed)
     elif parsed.command == "run":
         return cmd_run(config, parsed)
     elif parsed.command == "cleanup":
@@ -98,6 +112,24 @@ def cmd_plan(config: RuntimeConfig, args) -> int:
         "snapshot": snapshot.to_dict(),
     }, indent=2, ensure_ascii=False))
     print(f"Plan written to {output}", file=sys.stderr)
+    return 0
+
+
+def cmd_taskgen(config: RuntimeConfig, args) -> int:
+    request = _load_request(args.request)
+    runtime = DBMAGSRuntime(config)
+    try:
+        result = runtime.generate_tasks_only(
+            request,
+            output_root=args.output_root,
+            workload_mode=args.workload_mode,
+        )
+    except Exception as exc:
+        print(f"Task generation failed: {exc}", file=sys.stderr)
+        import traceback; traceback.print_exc()
+        return 1
+    print(f"Task generation output: {result['output_dir']}", file=sys.stderr)
+    print(f"Generated tasks: {len(result.get('task_specs', []))}", file=sys.stderr)
     return 0
 
 

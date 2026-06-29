@@ -1,0 +1,56 @@
+{
+  "failure_reason": "Upstream conditions for missing_index, poor_plan, and slow_query were not met. The dropped/hidden index did not meaningfully alter the access path of the dominant TPC-C queries (optimizer still used the PK or another secondary index), so rows_examined_ratio stayed <= 2 and EXPLAIN did not show ALL. Additionally, the slow query log likely did not capture any queries (long_query_time too high and/or not enough affected queries executed), so slow_query_count_delta stayed 0. Meanwhile, QPS/TPS dropped for reasons unrelated to slow_query, breaking the slow_query->qps_drop edge. If only the missing_index node was injected without an accompanying workload amplification or slow-log configuration step, the current injected_nodes are insufficient to reliably propagate the chain.",
+  "suggested_changes": [
+    "Retarget the missing_index to a secondary index that TPC-C truly relies on for customer lookups by customer-id in orders, then execute a probe query that cannot use any remaining index so EXPLAIN shows access type ALL. Concretely, drop the orders customer index and hammer a predicate on o_c_id only.",
+    "Lower the slow log threshold and enable logging for queries not using indexes before traffic to ensure slow_query_count_delta >= 1 (e.g., SET GLOBAL slow_query_log=ON; SET GLOBAL long_query_time=0.2; SET GLOBAL log_queries_not_using_indexes=ON).",
+    "Within the missing_index node, add a high-frequency scan probe to force poor_plan and slow_query: repeatedly run SELECT COUNT(*) FROM orders WHERE o_c_id = ? with random o_c_id while the index is dropped. This will produce EXPLAIN access type ALL and large rows examined.",
+    "Increase the probe’s concurrency/rate and duration so rows_examined_ratio > 2.0 and at least one slow query is recorded (e.g., concurrency 24–32, rate 300–500 qps, duration 180s).",
+    "Keep the baseline TPC-C workload rate/terminals constant during the injection so that any QPS/TPS drop is due to the induced slow scans, not due to lowered load. If you lack control of the workload as an injected node, you will need to add a workload control node in future runs.",
+    "Verify the actual index name in your tpcc_10W schema before dropping (SHOW INDEX FROM orders) and adjust the DROP INDEX accordingly. After the experiment, restore the index with the exact column list.",
+    "Validate the access path before ramping load: EXPLAIN SELECT COUNT(*) FROM orders WHERE o_c_id=1234 must show type=ALL; if not, choose a different probe predicate that avoids leading indexed columns."
+  ],
+  "task_parameter_updates": {
+    "missing_index": {
+      "table": "orders",
+      "index_name": "idx_orders_cust",
+      "drop_index_sql": "ALTER TABLE orders DROP INDEX idx_orders_cust",
+      "pre_sql": [
+        "SET GLOBAL slow_query_log = ON",
+        "SET GLOBAL long_query_time = 0.2",
+        "SET GLOBAL log_queries_not_using_indexes = ON"
+      ],
+      "verify_explain_sql": "EXPLAIN SELECT COUNT(*) FROM orders WHERE o_c_id = 1234",
+      "probe_sql": "SELECT COUNT(*) FROM orders WHERE o_c_id = ?",
+      "probe_params": {
+        "o_c_id_min": 1,
+        "o_c_id_max": 3000,
+        "random": true
+      },
+      "probe_concurrency": 24,
+      "probe_rate": 300,
+      "duration_sec": 180,
+      "post_sql": [
+        "ALTER TABLE orders ADD INDEX idx_orders_cust (o_w_id, o_d_id, o_c_id, o_id)",
+        "SET GLOBAL long_query_time = 10",
+        "SET GLOBAL log_queries_not_using_indexes = OFF"
+      ]
+    }
+  },
+  "risk_warning": "Dropping a secondary index on a large orders table can take time and acquire metadata locks; on replicas it may cause replication lag. Enabling slow_query_log and lowering long_query_time will increase log volume. The proposed COUNT(*) scans at high concurrency will stress CPU and I/O, potentially impacting co-located services. Run only in an isolated test environment and restore the index and slow log settings immediately after the experiment.",
+  "memory_update": [
+    {
+      "anomaly": "missing_index_to_qps_drop",
+      "path": [
+        "missing_index",
+        "poor_plan",
+        "slow_query",
+        "qps_drop"
+      ],
+      "outcome": "Propagation chain NOT fully reproduced. 1/4 nodes hit. Failure at: broken_edge:slow_query->qps_drop",
+      "success": false,
+      "round": 0,
+      "node_hit_ratio": 0.25
+    }
+  ],
+  "raw_text": "{\n  \"failure_reason\": \"Upstream conditions for missing_index, poor_plan, and slow_query were not met. The dropped/hidden index did not meaningfully alter the access path of the dominant TPC-C queries (optimizer still used the PK or another secondary index), so rows_examined_ratio stayed <= 2 and EXPLAIN did not show ALL. Additionally, the slow query log likely did not capture any queries (long_query_time too high and/or not enough affected queries executed), so slow_query_count_delta stayed 0. Meanwhile, QPS/TPS dropped for reasons unrelated to slow_query, breaking the slow_query->qps_drop edge. If only the missing_index node was injected without an accompanying workload amplification or slow-log configuration step, the current injected_nodes are insufficient to reliably propagate the chain.\",\n  \"suggested_changes\": [\n    \"Retarget the missing_index to a secondary index that TPC-C truly relies on for customer lookups by customer-id in orders, then execute a probe query that cannot use any remaining index so EXPLAIN shows access type ALL. Concretely, drop the orders customer index and hammer a predicate on o_c_id only.\",\n    \"Lower the slow log threshold and enable logging for queries not using indexes before traffic to ensure slow_query_count_delta >= 1 (e.g., SET GLOBAL slow_query_log=ON; SET GLOBAL long_query_time=0.2; SET GLOBAL log_queries_not_using_indexes=ON).\",\n    \"Within the missing_index node, add a high-frequency scan probe to force poor_plan and slow_query: repeatedly run SELECT COUNT(*) FROM orders WHERE o_c_id = ? with random o_c_id while the index is dropped. This will produce EXPLAIN access type ALL and large rows examined.\",\n    \"Increase the probe’s concurrency/rate and duration so rows_examined_ratio > 2.0 and at least one slow query is recorded (e.g., concurrency 24–32, rate 300–500 qps, duration 180s).\",\n    \"Keep the baseline TPC-C workload rate/terminals constant during the injection so that any QPS/TPS drop is due to the induced slow scans, not due to lowered load. If you lack control of the workload as an injected node, you will need to add a workload control node in future runs.\",\n    \"Verify the actual index name in your tpcc_10W schema before dropping (SHOW INDEX FROM orders) and adjust the DROP INDEX accordingly. After the experiment, restore the index with the exact column list.\",\n    \"Validate the access path before ramping load: EXPLAIN SELECT COUNT(*) FROM orders WHERE o_c_id=1234 must show type=ALL; if not, choose a different probe predicate that avoids leading indexed columns.\"\n  ],\n  \"task_parameter_updates\": {\n    \"missing_index\": {\n      \"table\": \"orders\",\n      \"index_name\": \"idx_orders_cust\",\n      \"drop_index_sql\": \"ALTER TABLE orders DROP INDEX idx_orders_cust\",\n      \"pre_sql\": [\n        \"SET GLOBAL slow_query_log = ON\",\n        \"SET GLOBAL long_query_time = 0.2\",\n        \"SET GLOBAL log_queries_not_using_indexes = ON\"\n      ],\n      \"verify_explain_sql\": \"EXPLAIN SELECT COUNT(*) FROM orders WHERE o_c_id = 1234\",\n      \"probe_sql\": \"SELECT COUNT(*) FROM orders WHERE o_c_id = ?\",\n      \"probe_params\": {\n        \"o_c_id_min\": 1,\n        \"o_c_id_max\": 3000,\n        \"random\": true\n      },\n      \"probe_concurrency\": 24,\n      \"probe_rate\": 300,\n      \"duration_sec\": 180,\n      \"post_sql\": [\n        \"ALTER TABLE orders ADD INDEX idx_orders_cust (o_w_id, o_d_id, o_c_id, o_id)\",\n        \"SET GLOBAL long_query_time = 10\",\n        \"SET GLOBAL log_queries_not_using_indexes = OFF\"\n      ]\n    }\n  },\n  \"risk_warning\": \"Dropping a secondary index on a large orders table can take time and acquire metadata locks; on replicas it may cause replication lag. Enabling slow_query_log and lowering long_query_time will increase log volume. The proposed COUNT(*) scans at high concurrency will stress CPU and I/O, potentially impacting co-located services. Run only in an isolated test environment and restore the index and slow log settings immediately after the experiment.\"\n}"
+}

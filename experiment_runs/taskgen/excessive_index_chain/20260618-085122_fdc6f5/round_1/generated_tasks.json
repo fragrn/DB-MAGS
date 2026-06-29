@@ -1,0 +1,126 @@
+{
+  "run_id": "20260618-085122_fdc6f5",
+  "target_path": [
+    "excessive_index",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "excessive_index"
+  ],
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  },
+  "task_specs": [
+    {
+      "task_id": "excessive_index_orderline_write_amp",
+      "task_type": "lock_conflict",
+      "actions": [
+        {
+          "kind": "lock_conflict",
+          "database": "tpcc_10W",
+          "table": "order_line",
+          "key_column": "ol_o_id",
+          "holder_concurrency": 2,
+          "waiter_concurrency": 2,
+          "hold_sec": 15,
+          "lock_type": "record_lock"
+        }
+      ],
+      "expected_metrics": {
+        "lock_waits_ratio": ">=2.0",
+        "blocked_session_count": ">=1"
+      },
+      "success_criteria": {
+        "blocked_session_count": ">=1"
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [
+        {
+          "kind": "kill_blocking_sessions",
+          "database": "tpcc_10W"
+        }
+      ],
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "excessive_index",
+        "table": "order_line",
+        "key_column": "ol_o_id",
+        "lock_type": "record_lock"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "excessive_index_orderline_write_amp": {
+        "task_id": "excessive_index_orderline_write_amp",
+        "task_type": "lock_conflict",
+        "actions": [
+          {
+            "kind": "lock_conflict",
+            "database": "tpcc_10W",
+            "table": "order_line",
+            "key_column": "ol_o_id",
+            "holder_concurrency": 2,
+            "waiter_concurrency": 2,
+            "hold_sec": 15,
+            "lock_type": "record_lock"
+          }
+        ],
+        "expected_metrics": {
+          "lock_waits_ratio": ">=2.0",
+          "blocked_session_count": ">=1"
+        },
+        "success_criteria": {
+          "blocked_session_count": ">=1"
+        },
+        "start_after_sec": 0.0,
+        "dependencies": [],
+        "cleanup_actions": [
+          {
+            "kind": "kill_blocking_sessions",
+            "database": "tpcc_10W"
+          }
+        ],
+        "risk_assessment": "medium",
+        "metadata": {
+          "root_cause": "excessive_index",
+          "table": "order_line",
+          "key_column": "ol_o_id",
+          "lock_type": "record_lock"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "excessive_index_orderline_write_amp": 0.0
+    }
+  },
+  "workload_detection": {
+    "mode": "auto",
+    "probe_interval_sec": 3.0,
+    "qps": 0.0,
+    "tps": 0.0,
+    "existing_workload_detected": false,
+    "started_new_workload": true,
+    "qps_threshold": 0.1
+  },
+  "react_trace_path": "react_trace.json",
+  "plan_path": "plan.json",
+  "task_dag_path": "task_dag.json"
+}

@@ -1,0 +1,665 @@
+{
+  "planning_status": "failed",
+  "failure_type": "planner_fallback_blocked",
+  "reason": "Planner fallback blocked after tool loop failure: tool calling exceeded max_steps=12",
+  "target_path": [
+    "improper_sql",
+    "sort_hash_spill",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "improper_sql"
+  ],
+  "fallback_used": false,
+  "fallback_blocked": true,
+  "react_trace": [
+    {
+      "step": 1,
+      "tool": "read_memory",
+      "arguments": {
+        "anomaly": "improper_sql",
+        "limit": 20
+      },
+      "result": []
+    },
+    {
+      "step": 1,
+      "tool": "probe_table_stats",
+      "arguments": {
+        "database": "tpcc_10W"
+      },
+      "result": [
+        {
+          "TABLE_NAME": "order_line",
+          "TABLE_ROWS": 4673195,
+          "DATA_LENGTH": 394264576,
+          "INDEX_LENGTH": 236961792,
+          "AVG_ROW_LENGTH": 84,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "oorder",
+          "TABLE_ROWS": 511382,
+          "DATA_LENGTH": 40435712,
+          "INDEX_LENGTH": 17170432,
+          "AVG_ROW_LENGTH": 79,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "history",
+          "TABLE_ROWS": 455051,
+          "DATA_LENGTH": 34144256,
+          "INDEX_LENGTH": 30474240,
+          "AVG_ROW_LENGTH": 75,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "new_order",
+          "TABLE_ROWS": 223973,
+          "DATA_LENGTH": 9453568,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 42,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "item",
+          "TABLE_ROWS": 99347,
+          "DATA_LENGTH": 9977856,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 100,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "stock",
+          "TABLE_ROWS": 97823,
+          "DATA_LENGTH": 36241408,
+          "INDEX_LENGTH": 1589248,
+          "AVG_ROW_LENGTH": 370,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "customer",
+          "TABLE_ROWS": 28759,
+          "DATA_LENGTH": 19464192,
+          "INDEX_LENGTH": 2637824,
+          "AVG_ROW_LENGTH": 676,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "district",
+          "TABLE_ROWS": 10,
+          "DATA_LENGTH": 16384,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 1638,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "warehouse",
+          "TABLE_ROWS": 1,
+          "DATA_LENGTH": 16384,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 16384,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        }
+      ]
+    },
+    {
+      "step": 1,
+      "tool": "probe_schema",
+      "arguments": {
+        "database": "tpcc_10W"
+      },
+      "result": {
+        "truncated": true,
+        "preview": "{\"customer\": {\"columns\": [{\"name\": \"c_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_discount\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(4,4)\", \"default\": null}, {\"name\": \"c_credit\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_last\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(16)\", \"default\": null}, {\"name\": \"c_first\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(16)\", \"default\": null}, {\"name\": \"c_credit_lim\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"c_balance\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"c_ytd_payment\", \"type\": \"float\", \"nullable\": false, \"key\": \"\", \"column_type\": \"float\", \"default\": null}, {\"name\": \"c_payment_cnt\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_delivery_cnt\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_street_1\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_street_2\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_city\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_state\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_zip\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(9)\", \"default\": null}, {\"name\": \"c_phone\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(16)\", \"default\": null}, {\"name\": \"c_since\", \"type\": \"timestamp\", \"nullable\": false, \"key\": \"\", \"column_type\": \"timestamp\", \"default\": \"CURRENT_TIMESTAMP\"}, {\"name\": \"c_middle\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_data\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(500)\", \"default\": null}], \"indexes\": [{\"index_name\": \"idx_customer_name\", \"column\": \"c_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_d_id\", \"non_unique\": true, \"seq\": 2}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_last\", \"non_unique\": true, \"seq\": 3}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_first\", \"non_unique\": true, \"seq\": 4}, {\"index_name\": \"PRIMARY\", \"column\": \"c_w_id\", \"non_unique\": false, \"seq\": 1}, {\"index_name\": \"PRIMARY\", \"column\": \"c_d_id\", \"non_unique\": false, \"seq\": 2}, {\"index_name\": \"PRIMARY\", \"column\": \"c_id\", \"non_unique\": false, \"seq\": 3}]}, \"district\": {\"columns\": [{\"name\": \"d_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_ytd\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"d_tax\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(4,4)\", \"default\": null}, {\"name\": \"d_next_o_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_name\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(10)\", \"default\": null}, {\"name\": \"d_street_1\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_street_2\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_city\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_state\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"d_zip\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(9)\", \"default\": null}], \"indexes\": [{\"index_name\": \"PRIMARY\", \"column\": \"d_w_id\", \"non_unique\": false, \"seq\": 1}, {\"index_name\": \"PRIMARY\", \"column\": \"d_id\", \"non_unique\": false, \"seq\": 2}]}, \"history\": {\"columns\": [{\"name\": \"h_c_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_c_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_c_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"MUL\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"MUL\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_date\", \"type\": \"timestamp\", \"nullable\": false, \"key\": \"\", \"column_type\": \"timestamp\", \"default\": \"CURRENT_TIMESTAMP\"}, {\"name\": \"h_amount\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(6,2)\", \"default\": null}, {\"name\": \"h_data\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(24)\", \"default\": null}], \"indexes\": [{\"index_name\": \"h_c_w_id\", \"column\": \"h_c_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"h_c_w_id\", \"column\": \"h_c_d_id\", \"non_unique\": true, \"seq\": 2}, {\"index_name\": \"h_c_w_id\", \"column\": \"h_c_id\", \"non_unique\": true, \"seq\": 3}, {\"index_name\": \"h_w_id\", \"column\": \"h_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"h_w_id\", \"column\": \"h_d_id\", \"non_unique\": true, \"seq\": 2}]}, \"item\": {\"columns\": [{\"name\": \"i_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"i_name\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_t"
+      }
+    },
+    {
+      "step": 1,
+      "tool": "probe_db_metrics",
+      "arguments": {
+        "database": "tpcc_10W"
+      },
+      "result": {
+        "Aborted_connects": "0",
+        "Com_delete": "238628",
+        "Com_insert": "1816971",
+        "Com_select": "13937148",
+        "Com_update": "6910897",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "14561935",
+        "Innodb_row_lock_time_avg": "16",
+        "Innodb_row_lock_waits": "874389",
+        "Max_used_connections": "105",
+        "Slow_queries": "46",
+        "Sort_merge_passes": "0",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 1737617,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 8988,
+            "User": "root",
+            "Host": "localhost:58600",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      }
+    },
+    {
+      "step": 1,
+      "tool": "probe_os_metrics",
+      "arguments": {},
+      "result": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 6.29,
+          "5m": 8.78,
+          "15m": 6.66
+        },
+        "cpu_usage": {
+          "user_pct": 5.61,
+          "sys_pct": 10.68,
+          "idle_pct": 83.69,
+          "usage_ratio": 0.163
+        },
+        "memory": {
+          "total_kb": 2343008,
+          "active_kb": 1543988,
+          "wired_kb": 699428,
+          "free_kb": 99592,
+          "usage_ratio": 0.9575
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 373929869312,
+          "free_bytes": 120454926336,
+          "usage_ratio": 0.7564
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      }
+    },
+    {
+      "step": 2,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "EXPLAIN SELECT o_id, o_d_id, o_w_id, o_c_id, o_entry_d FROM oorder WHERE YEAR(o_entry_d) >= 2000 ORDER BY o_entry_d DESC LIMIT 2000"
+      },
+      "result": {
+        "sql": "EXPLAIN SELECT o_id, o_d_id, o_w_id, o_c_id, o_entry_d FROM oorder WHERE YEAR(o_entry_d) >= 2000 ORDER BY o_entry_d DESC LIMIT 2000",
+        "plan": [
+          {
+            "error": "(1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'EXPLAIN SELECT o_id, o_d_id, o_w_id, o_c_id, o_entry_d FROM oorder WHERE YEAR(o_' at line 1\")"
+          }
+        ]
+      }
+    },
+    {
+      "step": 3,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "SELECT ol_i_id, COUNT(*) FROM order_line WHERE ROUND(ol_amount) >= 0 GROUP BY ol_i_id ORDER BY COUNT(*) DESC LIMIT 100000"
+      },
+      "result": {
+        "sql": "SELECT ol_i_id, COUNT(*) FROM order_line WHERE ROUND(ol_amount) >= 0 GROUP BY ol_i_id ORDER BY COUNT(*) DESC LIMIT 100000",
+        "plan": [
+          {
+            "EXPLAIN": "-> Limit: 100000 row(s)\n    -> Sort: COUNT(*) DESC, limit input to 100000 row(s) per chunk\n        -> Table scan on <temporary>\n            -> Aggregate using temporary table\n                -> Filter: (round(order_line.ol_amount,0) >= 0)  (cost=491328 rows=4.67e+6)\n                    -> Table scan on order_line  (cost=491328 rows=4.67e+6)\n"
+          }
+        ]
+      }
+    },
+    {
+      "step": 3,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "SELECT ol_o_id, ol_d_id, ol_w_id FROM order_line WHERE LEFT(ol_dist_info, 1) IN ('A','B','C','D','E') ORDER BY ol_amount DESC LIMIT 200000"
+      },
+      "result": {
+        "sql": "SELECT ol_o_id, ol_d_id, ol_w_id FROM order_line WHERE LEFT(ol_dist_info, 1) IN ('A','B','C','D','E') ORDER BY ol_amount DESC LIMIT 200000",
+        "plan": [
+          {
+            "EXPLAIN": "-> Limit: 200000 row(s)  (cost=491328 rows=200000)\n    -> Sort: order_line.ol_amount DESC, limit input to 200000 row(s) per chunk  (cost=491328 rows=4.67e+6)\n        -> Filter: (left(order_line.ol_dist_info,1) in ('A','B','C','D','E'))  (cost=491328 rows=4.67e+6)\n            -> Table scan on order_line  (cost=491328 rows=4.67e+6)\n"
+          }
+        ]
+      }
+    },
+    {
+      "step": 3,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "SELECT o_id, o_d_id, o_w_id, o_c_id, o_entry_d FROM oorder WHERE YEAR(o_entry_d) >= 2000 ORDER BY o_entry_d DESC LIMIT 200000"
+      },
+      "result": {
+        "sql": "SELECT o_id, o_d_id, o_w_id, o_c_id, o_entry_d FROM oorder WHERE YEAR(o_entry_d) >= 2000 ORDER BY o_entry_d DESC LIMIT 200000",
+        "plan": [
+          {
+            "EXPLAIN": "-> Limit: 200000 row(s)  (cost=52647 rows=200000)\n    -> Sort: oorder.o_entry_d DESC, limit input to 200000 row(s) per chunk  (cost=52647 rows=511382)\n        -> Filter: (year(oorder.o_entry_d) >= 2000)  (cost=52647 rows=511382)\n            -> Table scan on oorder  (cost=52647 rows=511382)\n"
+          }
+        ]
+      }
+    },
+    {
+      "step": 4,
+      "tool": "build_slow_sql_task",
+      "arguments": {
+        "database": "tpcc_10W",
+        "task_id": "improper_sql_ol_sort_spill",
+        "root_cause": "improper_sql",
+        "table": "order_line",
+        "column": "ol_dist_info",
+        "predicate": "LEFT(ol_dist_info,1) IN ('A','B','C','D','E')",
+        "sort_column": "ol_amount",
+        "pattern": "function_predicate_order_by",
+        "limit": 200000,
+        "concurrency": 8,
+        "duration_sec": 30
+      },
+      "result": {
+        "task_id": "improper_sql_ol_sort_spill",
+        "task_type": "slow_sql",
+        "actions": [
+          {
+            "kind": "sql_workload",
+            "sql": "SELECT * FROM order_line LIMIT 200000",
+            "concurrency": 8,
+            "duration_sec": 30,
+            "database": "tpcc_10W"
+          }
+        ],
+        "expected_metrics": {
+          "rows_examined_delta": ">0",
+          "slow_query_delta": ">=1",
+          "p95_latency_ratio": ">=1.5"
+        },
+        "success_criteria": {
+          "slow_query_delta": ">=1"
+        },
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "improper_sql",
+          "pattern": "function_predicate_order_by",
+          "table": "order_line",
+          "sql": "SELECT * FROM order_line LIMIT 200000"
+        }
+      }
+    },
+    {
+      "step": 5,
+      "tool": "build_task_dag",
+      "arguments": "{\"task_specs\":[{\"task_id\":\"improper_sql_ol_sort_spill\",\"task_type\":\"slow_sql\",\"actions\":[{\"kind\":\"sql_workload\",\"sql\":\"SELECT * FROM order_line LIMIT 200000\",\"concurrency\":8,\"duration_sec\":30,\"database\":\"tpcc_10W\"}],\"expected_metrics\":{\"rows_examined_delta\":\">0\",\"slow_query_delta\":\">=1\",\"p95_latency_ratio\":\">=1.5\"},\"success_criteria\":{\"slow_query_delta\":\">=1\"},\"risk_assessment\":\"low\",\"metadata\":{\"root_cause\":\"improper_sql\",\"pattern\":\"function_predicate_order_by\",\"table\":\"order_line\",\"sql\":\"SELECT * FROM order_line LIMIT 200000\"}}],\"dependencies\":\"[]\"}",
+      "error": "Invalid dependency pair: ["
+    },
+    {
+      "step": 6,
+      "tool": "build_slow_sql_task",
+      "arguments": {
+        "database": "tpcc_10W",
+        "task_id": "improper_sql_ol_func_sort",
+        "root_cause": "improper_sql",
+        "table": "order_line",
+        "column": "ol_dist_info",
+        "predicate": "LEFT(ol_dist_info,1) IN ('A','B','C','D','E')",
+        "sort_column": "ol_amount",
+        "pattern": "orderby_unindexed_function_predicate",
+        "limit": 200000,
+        "concurrency": 8,
+        "duration_sec": 30
+      },
+      "result": {
+        "task_id": "improper_sql_ol_func_sort",
+        "task_type": "slow_sql",
+        "actions": [
+          {
+            "kind": "sql_workload",
+            "sql": "SELECT * FROM order_line LIMIT 200000",
+            "concurrency": 8,
+            "duration_sec": 30,
+            "database": "tpcc_10W"
+          }
+        ],
+        "expected_metrics": {
+          "rows_examined_delta": ">0",
+          "slow_query_delta": ">=1",
+          "p95_latency_ratio": ">=1.5"
+        },
+        "success_criteria": {
+          "slow_query_delta": ">=1"
+        },
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "improper_sql",
+          "pattern": "orderby_unindexed_function_predicate",
+          "table": "order_line",
+          "sql": "SELECT * FROM order_line LIMIT 200000"
+        }
+      }
+    },
+    {
+      "step": 7,
+      "tool": "build_task_dag",
+      "arguments": "{\"task_specs\":[{\"task_id\":\"improper_sql_ol_func_sort\",\"task_type\":\"slow_sql\",\"actions\":[{\"kind\":\"sql_workload\",\"sql\":\"SELECT * FROM order_line LIMIT 200000\",\"concurrency\":8,\"duration_sec\":30,\"database\":\"tpcc_10W\"}],\"expected_metrics\":{\"rows_examined_delta\":\">0\",\"slow_query_delta\":\">=1\",\"p95_latency_ratio\":\">=1.5\"},\"success_criteria\":{\"slow_query_delta\":\">=1\"},\"risk_assessment\":\"low\",\"metadata\":{\"root_cause\":\"improper_sql\",\"pattern\":\"orderby_unindexed_function_predicate\",\"table\":\"order_line\",\"sql\":\"SELECT * FROM order_line LIMIT 200000\"}}],\"dependencies\":\"[]\"}",
+      "error": "Invalid dependency pair: ["
+    },
+    {
+      "step": 8,
+      "tool": "build_slow_sql_task",
+      "arguments": {
+        "database": "tpcc_10W",
+        "task_id": "improper_sql_ol_groupby_spill",
+        "root_cause": "improper_sql",
+        "table": "order_line",
+        "column": "ol_amount",
+        "predicate": "ROUND(ol_amount,0) >= 0",
+        "sort_column": "ol_i_id",
+        "pattern": "group_by_orderby_count_function_predicate",
+        "limit": 100000,
+        "concurrency": 6,
+        "duration_sec": 30
+      },
+      "result": {
+        "task_id": "improper_sql_ol_groupby_spill",
+        "task_type": "slow_sql",
+        "actions": [
+          {
+            "kind": "sql_workload",
+            "sql": "SELECT * FROM order_line LIMIT 100000",
+            "concurrency": 6,
+            "duration_sec": 30,
+            "database": "tpcc_10W"
+          }
+        ],
+        "expected_metrics": {
+          "rows_examined_delta": ">0",
+          "slow_query_delta": ">=1",
+          "p95_latency_ratio": ">=1.5"
+        },
+        "success_criteria": {
+          "slow_query_delta": ">=1"
+        },
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "improper_sql",
+          "pattern": "group_by_orderby_count_function_predicate",
+          "table": "order_line",
+          "sql": "SELECT * FROM order_line LIMIT 100000"
+        }
+      }
+    },
+    {
+      "step": 9,
+      "tool": "build_task_dag",
+      "arguments": "{\"task_specs\":[{\"task_id\":\"improper_sql_ol_groupby_spill\",\"task_type\":\"slow_sql\",\"actions\":[{\"kind\":\"sql_workload\",\"sql\":\"SELECT * FROM order_line LIMIT 100000\",\"concurrency\":6,\"duration_sec\":30,\"database\":\"tpcc_10W\"}],\"expected_metrics\":{\"rows_examined_delta\":\">0\",\"slow_query_delta\":\">=1\",\"p95_latency_ratio\":\">=1.5\"},\"success_criteria\":{\"slow_query_delta\":\">=1\"},\"risk_assessment\":\"low\",\"metadata\":{\"root_cause\":\"improper_sql\",\"pattern\":\"group_by_orderby_count_function_predicate\",\"table\":\"order_line\",\"sql\":\"SELECT * FROM order_line LIMIT 100000\"}}],\"dependencies\":\"[]\"}",
+      "error": "Invalid dependency pair: ["
+    },
+    {
+      "step": 10,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "improper_sql_ol_func_sort",
+            "task_type": "slow_sql",
+            "actions": [
+              {
+                "kind": "sql_workload",
+                "sql": "SELECT * FROM order_line LIMIT 200000",
+                "concurrency": 8,
+                "duration_sec": 30,
+                "database": "tpcc_10W"
+              }
+            ],
+            "expected_metrics": {
+              "rows_examined_delta": ">0",
+              "slow_query_delta": ">=1",
+              "p95_latency_ratio": ">=1.5"
+            },
+            "success_criteria": {
+              "slow_query_delta": ">=1"
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "improper_sql",
+              "pattern": "orderby_unindexed_function_predicate",
+              "table": "order_line",
+              "sql": "SELECT * FROM order_line LIMIT 200000"
+            }
+          }
+        ]
+      },
+      "result": {
+        "tasks": {
+          "improper_sql_ol_func_sort": {
+            "task_id": "improper_sql_ol_func_sort",
+            "task_type": "slow_sql",
+            "actions": [
+              {
+                "kind": "sql_workload",
+                "sql": "SELECT * FROM order_line LIMIT 200000",
+                "concurrency": 8,
+                "duration_sec": 30,
+                "database": "tpcc_10W"
+              }
+            ],
+            "expected_metrics": {
+              "rows_examined_delta": ">0",
+              "slow_query_delta": ">=1",
+              "p95_latency_ratio": ">=1.5"
+            },
+            "success_criteria": {
+              "slow_query_delta": ">=1"
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "improper_sql",
+              "pattern": "orderby_unindexed_function_predicate",
+              "table": "order_line",
+              "sql": "SELECT * FROM order_line LIMIT 200000"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "improper_sql_ol_func_sort": 0.0
+        }
+      }
+    },
+    {
+      "step": 11,
+      "tool": "check_safety",
+      "arguments": {
+        "task_dag": {
+          "tasks": {
+            "improper_sql_ol_func_sort": {
+              "task_id": "improper_sql_ol_func_sort",
+              "task_type": "slow_sql",
+              "actions": [
+                {
+                  "kind": "sql_workload",
+                  "sql": "SELECT * FROM order_line LIMIT 200000",
+                  "concurrency": 8,
+                  "duration_sec": 30,
+                  "database": "tpcc_10W"
+                }
+              ],
+              "expected_metrics": {
+                "rows_examined_delta": ">0",
+                "slow_query_delta": ">=1",
+                "p95_latency_ratio": ">=1.5"
+              },
+              "success_criteria": {
+                "slow_query_delta": ">=1"
+              },
+              "risk_assessment": "low",
+              "metadata": {
+                "root_cause": "improper_sql",
+                "pattern": "orderby_unindexed_function_predicate",
+                "table": "order_line",
+                "sql": "SELECT * FROM order_line LIMIT 200000"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "improper_sql_ol_func_sort": 0.0
+          }
+        },
+        "current_db_metrics": {
+          "Aborted_connects": "0",
+          "Com_delete": "238628",
+          "Com_insert": "1816971",
+          "Com_select": "13937148",
+          "Com_update": "6910897",
+          "Created_tmp_disk_tables": "2",
+          "Innodb_row_lock_time": "14561935",
+          "Innodb_row_lock_time_avg": "16",
+          "Innodb_row_lock_waits": "874389",
+          "Max_used_connections": "105",
+          "Slow_queries": "46",
+          "Sort_merge_passes": "0",
+          "Threads_connected": "1",
+          "Threads_running": "2",
+          "innodb_lock_wait_timeout": "50",
+          "max_connections": 151,
+          "wait_timeout": "28800",
+          "processlist": [
+            {
+              "Id": 5,
+              "User": "event_scheduler",
+              "Host": "localhost",
+              "db": null,
+              "Command": "Daemon",
+              "Time": 1737617,
+              "State": "Waiting on empty queue",
+              "Info": null
+            },
+            {
+              "Id": 8988,
+              "User": "root",
+              "Host": "localhost:58600",
+              "db": "tpcc_10w",
+              "Command": "Query",
+              "Time": 0,
+              "State": "init",
+              "Info": "SHOW FULL PROCESSLIST"
+            }
+          ]
+        },
+        "current_os_metrics": {
+          "platform": "Darwin",
+          "load_average": {
+            "1m": 6.29,
+            "5m": 8.78,
+            "15m": 6.66
+          },
+          "cpu_usage": {
+            "user_pct": 5.61,
+            "sys_pct": 10.68,
+            "idle_pct": 83.69,
+            "usage_ratio": 0.163
+          },
+          "memory": {
+            "total_kb": 2343008,
+            "active_kb": 1543988,
+            "wired_kb": 699428,
+            "free_kb": 99592,
+            "usage_ratio": 0.9575
+          },
+          "disk": {
+            "total_bytes": 494384795648,
+            "used_bytes": 373929869312,
+            "free_bytes": 120454926336,
+            "usage_ratio": 0.7564
+          },
+          "disk_io": {},
+          "network": {},
+          "file_descriptors": {
+            "open_fds": -1
+          }
+        },
+        "expected_workload": {
+          "anomaly": "improper_sql"
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30
+      },
+      "result": {
+        "approved": false,
+        "reasons": [
+          "DAG required duration 30.0s exceeds injection_observe_sec 15.0s"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "step": 12,
+      "tool": "build_slow_sql_task",
+      "arguments": {
+        "database": "tpcc_10W",
+        "task_id": "improper_sql_ol_func_sort_v2",
+        "root_cause": "improper_sql",
+        "table": "order_line",
+        "column": "ol_dist_info",
+        "predicate": "LEFT(ol_dist_info,1) IN ('A','B','C','D','E')",
+        "sort_column": "ol_amount",
+        "pattern": "orderby_unindexed_function_predicate",
+        "limit": 200000,
+        "concurrency": 6,
+        "duration_sec": 15
+      },
+      "result": {
+        "task_id": "improper_sql_ol_func_sort_v2",
+        "task_type": "slow_sql",
+        "actions": [
+          {
+            "kind": "sql_workload",
+            "sql": "SELECT * FROM order_line LIMIT 200000",
+            "concurrency": 6,
+            "duration_sec": 15,
+            "database": "tpcc_10W"
+          }
+        ],
+        "expected_metrics": {
+          "rows_examined_delta": ">0",
+          "slow_query_delta": ">=1",
+          "p95_latency_ratio": ">=1.5"
+        },
+        "success_criteria": {
+          "slow_query_delta": ">=1"
+        },
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "improper_sql",
+          "pattern": "orderby_unindexed_function_predicate",
+          "table": "order_line",
+          "sql": "SELECT * FROM order_line LIMIT 200000"
+        }
+      }
+    }
+  ]
+}

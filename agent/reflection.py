@@ -31,7 +31,7 @@ class ReflectionFallbackError(RuntimeError):
 
 _NODE_SUGGESTIONS: dict[str, dict[str, Any]] = {
     "traffic_surge": {
-        "weak": "Increase TrafficSurgeProfile terminals/rate/duration_sec or choose a heavier same-benchmark transaction_mix.",
+        "weak": "Adjust the generated raw benchbase_burst_command/raw_command: increase terminals, rate, duration_sec, or transaction mix.",
         "strong": "Current traffic level is sufficient.",
     },
     "missing_index": {
@@ -72,13 +72,13 @@ _NODE_SUGGESTIONS: dict[str, dict[str, Any]] = {
         "strong": "Slow query pattern is confirmed.",
     },
     "resource_cpu": {
-        "weak": "Increase chaosblade intensity or duration. "
+        "weak": "Adjust the generated ChaosBlade raw_command CPU stress intensity or duration. "
                 "Ensure the database is under active query load.",
-        "strong": "CPU stress is being applied.",
+        "strong": "ChaosBlade CPU stress is being applied.",
     },
     "resource_io": {
-        "weak": "Increase IO stress duration or use a larger fill size for disk fill.",
-        "strong": "IO stress is adequate.",
+        "weak": "Adjust the generated ChaosBlade raw_command IO stress duration or disk parameters.",
+        "strong": "ChaosBlade IO stress is adequate.",
     },
     "backup": {
         "weak": "Run mysqldump on the largest table. "
@@ -270,9 +270,10 @@ changes for each failed or weak node. Return a JSON object with:
 
 Constraints:
 - target_path and injected_nodes are user-owned; do not change them.
-- If injected_nodes is only traffic_surge, task_parameter_updates may only contain traffic_surge.
-- For traffic_surge, only suggest TrafficSurgeProfile fields: terminals, rate, duration_sec, transaction_mix, mix_template, rationale.
-- Do not suggest adding lock_holder, slow_sql, qps_drop, custom SQL, or any non-injected task.
+- task_parameter_updates may only contain user-specified injected_nodes.
+- Suggest concrete raw action TaskSpec changes: SQL text, transaction script steps, command argv, concurrency, duration_sec, table, column, predicate, terminals, rate, or transaction mix.
+- For resource_cpu/resource_io/resource_memory/resource_network, command argv changes must stay within ChaosBlade raw_command semantics.
+- Do not suggest adding lock_holder, slow_sql, qps_drop, or any non-injected task.
 - If the user-selected injected_nodes are insufficient, say the user needs to add injected_nodes in failure_reason or suggested_changes, but do not add them yourself.
 """
 

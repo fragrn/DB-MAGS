@@ -1,0 +1,276 @@
+{
+  "target_path": [
+    "hot_update",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "hot_update"
+  ],
+  "task_specs": [
+    {
+      "task_id": "hot_update_tpcc_district_lock",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "scripts": [
+            "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+            "START TRANSACTION",
+            "SELECT d_ytd FROM district WHERE d_w_id=1 AND d_id=1 FOR UPDATE",
+            "SELECT SLEEP(4.0)",
+            "UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id=1 AND d_id=1",
+            "COMMIT"
+          ],
+          "duration_sec": 15,
+          "concurrency": 64
+        }
+      ],
+      "expected_metrics": {
+        "intermediate": {
+          "lock_contention": {
+            "Innodb_row_lock_waits_delta": {
+              ">=": 100
+            },
+            "Innodb_row_lock_time_delta_ms": {
+              ">=": 2000
+            },
+            "Threads_running_avg_increase": {
+              ">=": 2
+            }
+          }
+        },
+        "terminal": {
+          "slow_query": {
+            "Slow_queries_delta": {
+              ">=": 1
+            },
+            "p95_latency_ratio": {
+              ">=": 1.5
+            }
+          },
+          "qps_drop": {
+            "qps_ratio": {
+              "<=": 0.8
+            }
+          }
+        },
+        "observability_window_sec": 15
+      },
+      "success_criteria": [
+        "Innodb_row_lock_waits increased by >= 100 during injection_observe_sec",
+        "AND either Slow_queries increased by >= 1 OR p95 latency ratio >= 1.5 vs baseline",
+        "AND overall QPS ratio <= 0.8 vs baseline during observe window"
+      ],
+      "risk_assessment": [
+        "High lock contention on tpcc_10W.district(d_w_id=1,d_id=1) may stall TPCC transactions touching this district",
+        "Potential deadlocks and long lock waits; monitor Innodb_deadlocks and lock wait time",
+        "Duration 15s and 64 concurrent workers aim for impact within observe window; under max_duration_sec=30"
+      ],
+      "metadata": {
+        "root_cause": "hot_update",
+        "target_path": [
+          "hot_update",
+          "lock_contention",
+          "slow_query",
+          "qps_drop"
+        ],
+        "notes": "Concentrates updates on a single hot row and holds the lock for ~4s to induce contention within observe window"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "hot_update_tpcc_district_lock": {
+        "task_id": "hot_update_tpcc_district_lock",
+        "task_type": "injection",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "database": "tpcc_10W",
+            "scripts": [
+              "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+              "START TRANSACTION",
+              "SELECT d_ytd FROM district WHERE d_w_id=1 AND d_id=1 FOR UPDATE",
+              "SELECT SLEEP(4.0)",
+              "UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id=1 AND d_id=1",
+              "COMMIT"
+            ],
+            "duration_sec": 15,
+            "concurrency": 64
+          }
+        ],
+        "expected_metrics": {
+          "intermediate": {
+            "lock_contention": {
+              "Innodb_row_lock_waits_delta": {
+                ">=": 100
+              },
+              "Innodb_row_lock_time_delta_ms": {
+                ">=": 2000
+              },
+              "Threads_running_avg_increase": {
+                ">=": 2
+              }
+            }
+          },
+          "terminal": {
+            "slow_query": {
+              "Slow_queries_delta": {
+                ">=": 1
+              },
+              "p95_latency_ratio": {
+                ">=": 1.5
+              }
+            },
+            "qps_drop": {
+              "qps_ratio": {
+                "<=": 0.8
+              }
+            }
+          },
+          "observability_window_sec": 15
+        },
+        "success_criteria": [
+          "Innodb_row_lock_waits increased by >= 100 during injection_observe_sec",
+          "AND either Slow_queries increased by >= 1 OR p95 latency ratio >= 1.5 vs baseline",
+          "AND overall QPS ratio <= 0.8 vs baseline during observe window"
+        ],
+        "risk_assessment": [
+          "High lock contention on tpcc_10W.district(d_w_id=1,d_id=1) may stall TPCC transactions touching this district",
+          "Potential deadlocks and long lock waits; monitor Innodb_deadlocks and lock wait time",
+          "Duration 15s and 64 concurrent workers aim for impact within observe window; under max_duration_sec=30"
+        ],
+        "metadata": {
+          "root_cause": "hot_update",
+          "target_path": [
+            "hot_update",
+            "lock_contention",
+            "slow_query",
+            "qps_drop"
+          ],
+          "notes": "Concentrates updates on a single hot row and holds the lock for ~4s to induce contention within observe window"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "hot_update_tpcc_district_lock": 0.0
+    }
+  },
+  "reasoning": "The hot_update task pins all workers to the same TPC-C hotspot district row (d_w_id=1,d_id=1) and uses SELECT ... FOR UPDATE with a 4s hold before UPDATE to maximize row-level lock contention. This should elevate Innodb_row_lock_waits and lock wait time (lock_contention), causing queued transactions to exceed slow thresholds (slow_query) and reduce throughput (qps_drop). Concurrency=64 and duration within 15s ensures impact fits the observe window and the user's max duration.",
+  "safety_check": {
+    "approved": true,
+    "reasons": [],
+    "warnings": []
+  },
+  "react_trace": [
+    {
+      "round": 1,
+      "thought": "Environment snapshot collected. Schema has 9 tables. DB version: 9.6.0. Max connections: 151.",
+      "action": "probe_full_snapshot",
+      "observe": "Tables: ['customer', 'district', 'history', 'item', 'new_order']",
+      "decision": "",
+      "timestamp": "2026-06-21T09:51:16+00:00"
+    },
+    {
+      "round": 2,
+      "thought": "LLM requested planning tool",
+      "action": "read_memory",
+      "observe": "[]",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 3,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"SELECT d_ytd FROM district WHERE d_w_id=1 AND d_id=1 FOR UPDATE\", \"plan\": [{\"EXPLAIN\": \"-> Rows fetched before execution  (cost=0..0 rows=1)\\n\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 4,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id=1 AND d_id=1\", \"plan\": [{\"EXPLAIN\": \"-> <not executable by iterator executor>\\n\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 5,
+      "thought": "LLM requested planning tool",
+      "action": "probe_db_metrics",
+      "observe": "{\"Aborted_connects\": \"0\", \"Com_delete\": \"398708\", \"Com_insert\": \"3012296\", \"Com_select\": \"23308148\", \"Com_update\": \"11559245\", \"Created_tmp_disk_tables\": \"2\", \"Innodb_row_lock_time\": \"21200619\", \"Innodb_row_lock_time_avg\": \"14\", \"Innodb_row_lock_waits\": \"1451310\", \"Max_used_connections\": \"105\", \"Slow_queries\": \"46\", \"Sort_merge_passes\": \"0\", \"Threads_connected\": \"5\", \"Threads_running\": \"5\", \"innodb_lock_wait_timeout\": \"50\", \"max_connections\": 151, \"wait_timeout\": \"28800\", \"processlist\": [{\"Id\": 5, \"User\": \"event_scheduler\", \"Host\": \"localhost\", \"db\": null, \"Command\": \"Daemon\", \"Time\": 2000413, \"State\": \"Waiting on empty queue\", \"Info\": null}, {\"Id\": 9320, \"User\": \"root\", \"Host\": \"localhost:54436\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"statistics\", \"Info\": \"SELECT W_TAX\\n      FROM warehouse\\n     WHERE W_ID = 1\"}, {\"Id\": 9321, \"User\": \"root\", \"Host\": \"localhost:54437\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"updating\", \"Info\": \"UPDATE warehouse\\n       SET W_YTD = W_YTD + 4470.10009765625\\n     WHERE W_ID = 1\"}, {\"Id\": 9322, \"User\": \"root\", \"Host\": \"localhost:54438\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"waiting for handler commit\", \"Info\": \"commit\"}, {\"Id\": 9323, \"User\": \"root\", \"Host\": \"localhost:54439\", \"db\": \"tpcc_10w\", \"Command\": \"Sleep\", \"Time\": 0, \"State\": null, \"Info\": null}, {\"Id\": 9339, \"User\": \"root\", \"Host\": \"localhost:54645\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"init\", \"Info\": \"SHOW FULL PROCESSLIST\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 6,
+      "thought": "LLM requested planning tool",
+      "action": "probe_os_metrics",
+      "observe": "{\"platform\": \"Darwin\", \"load_average\": {\"1m\": 6.27, \"5m\": 6.79, \"15m\": 5.9}, \"cpu_usage\": {\"user_pct\": 26.6, \"sys_pct\": 24.15, \"idle_pct\": 49.23, \"usage_ratio\": 0.507}, \"memory\": {\"total_kb\": 2172948, \"active_kb\": 1304304, \"wired_kb\": 848512, \"free_kb\": 20132, \"usage_ratio\": 0.9907}, \"disk\": {\"total_bytes\": 494384795648, \"used_bytes\": 364338683904, \"free_bytes\": 130046111744, \"usage_ratio\": 0.737}, \"disk_io\": {}, \"network\": {}, \"file_descriptors\": {\"open_fds\": -1}}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 7,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"hot_update_tpcc_district_lock\": {\"task_id\": \"hot_update_tpcc_district_lock\", \"task_type\": \"injection\", \"actions\": [{\"kind\": \"raw_transaction_script\", \"database\": \"tpcc_10W\", \"scripts\": [\"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\", \"START TRANSACTION\", \"SELECT d_ytd FROM district WHERE d_w_id=1 AND d_id=1 FOR UPDATE\", \"SELECT SLEEP(4.0)\", \"UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id=1 AND d_id=1\", \"COMMIT\"], \"duration_sec\": 28, \"concurrency\": 64}], \"expected_metrics\": {\"intermediate\": {\"lock_contention\": {\"Innodb_row_lock_waits_delta\": {\">=\": 100}, \"Innodb_row_lock_time_delta_ms\": {\">=\": 2000}, \"Threads_running_avg_increase\": {\">=\": 2}}}, \"terminal\": {\"slow_query\": {\"Slow_queries_delta\": {\">=\": 1}, \"p95_latency_ratio\": {\">=\": 1.5}}, \"qps_drop\": {\"qps_ratio\": {\"<=\": 0.8}}}, \"observability_window_sec\": 15}, \"success_criteria\": [\"Innodb_row_lock_waits increased by >= 100 during injection_observe_sec\", \"AND either Slow_queries increased by >= 1 OR p95 latency ratio >= 1.5 vs baseline\", \"AND overall QPS ratio <= 0.8 vs baseline during observe window\"], \"risk_assessment\": [\"High lock contention on tpcc_10W.district(d_w_id=1,d_id=1) may stall TPCC transactions touching this district\", \"Potential deadlocks and long lock waits; monitor Innodb_deadlocks and lock wait time\", \"Short 28s duration and 64 concurrent workers limit blast radius; runs under max_duration_sec=30\"], \"metadata\": {\"root_cause\": \"hot_update\", \"target_path\": [\"hot_update\", \"lock_contention\", \"slow_query\", \"qps_drop\"], \"notes\": \"This concentrates updates on a single hot row and holds the lock for ~4s to induce contention\"}}}, \"edges\": [], \"schedule\": {\"hot_update_tpcc_district_lock\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 8,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": false, \"reasons\": [\"DAG required duration 28.0s exceeds injection_observe_sec 15.0s\"], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 9,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"hot_update_tpcc_district_lock\": {\"task_id\": \"hot_update_tpcc_district_lock\", \"task_type\": \"injection\", \"actions\": [{\"kind\": \"raw_transaction_script\", \"database\": \"tpcc_10W\", \"scripts\": [\"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\", \"START TRANSACTION\", \"SELECT d_ytd FROM district WHERE d_w_id=1 AND d_id=1 FOR UPDATE\", \"SELECT SLEEP(4.0)\", \"UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id=1 AND d_id=1\", \"COMMIT\"], \"duration_sec\": 15, \"concurrency\": 64}], \"expected_metrics\": {\"intermediate\": {\"lock_contention\": {\"Innodb_row_lock_waits_delta\": {\">=\": 100}, \"Innodb_row_lock_time_delta_ms\": {\">=\": 2000}, \"Threads_running_avg_increase\": {\">=\": 2}}}, \"terminal\": {\"slow_query\": {\"Slow_queries_delta\": {\">=\": 1}, \"p95_latency_ratio\": {\">=\": 1.5}}, \"qps_drop\": {\"qps_ratio\": {\"<=\": 0.8}}}, \"observability_window_sec\": 15}, \"success_criteria\": [\"Innodb_row_lock_waits increased by >= 100 during injection_observe_sec\", \"AND either Slow_queries increased by >= 1 OR p95 latency ratio >= 1.5 vs baseline\", \"AND overall QPS ratio <= 0.8 vs baseline during observe window\"], \"risk_assessment\": [\"High lock contention on tpcc_10W.district(d_w_id=1,d_id=1) may stall TPCC transactions touching this district\", \"Potential deadlocks and long lock waits; monitor Innodb_deadlocks and lock wait time\", \"Duration 15s and 64 concurrent workers aim for impact within observe window; under max_duration_sec=30\"], \"metadata\": {\"root_cause\": \"hot_update\", \"target_path\": [\"hot_update\", \"lock_contention\", \"slow_query\", \"qps_drop\"], \"notes\": \"Concentrates updates on a single hot row and holds the lock for ~4s to induce contention within observe window\"}}}, \"edges\": [], \"schedule\": {\"hot_update_tpcc_district_lock\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 10,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": true, \"reasons\": [], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 11,
+      "thought": "LLM returned final plan JSON",
+      "action": "final_answer",
+      "observe": "{\"step\": 6, \"tool\": \"final_answer\", \"content\": \"{\\n  \\\"target_path\\\": [\\\"hot_update\\\", \\\"lock_contention\\\", \\\"slow_query\\\", \\\"qps_drop\\\"],\\n  \\\"injected_nodes\\\": [\\\"hot_update\\\"],\\n  \\\"task_specs\\\": [\\n    {\\n      \\\"task_id\\\": \\\"hot_update_tpcc_district_lock\\\",\\n      \\\"task_type\\\": \\\"injection\\\",\\n      \\\"actions\\\": [\\n        {\\n          \\\"kind\\\": \\\"raw_transaction_script\\\",\\n          \\\"database\\\": \\\"tpcc_10W\\\",\\n          \\\"scripts\\\": [\\n            \\\"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\\\",\\n            \\\"START TRANSACTION\\\",\\n            \\\"SELECT d_ytd FROM district WHERE d_w_id=1 AND d_id=1 FOR UPDATE\\\",\\n            \\\"SELECT SLEEP(4.0)\\\",\\n            \\\"UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id=1 AND d_id=1\\\",\\n            \\\"COMMIT\\\"\\n          ],\\n          \\\"duration_sec\\\": 15,\\n          \\\"concurrency\\\": 64\\n        }\\n      ],\\n      \\\"expected_metrics\\\": {\\n        \\\"intermediate\\\": {\\n          \\\"lock_contention\\\": {\\n            \\\"Innodb_row_lock_waits_delta\\\": { \\\">=\\\": 100 },\\n            \\\"Innodb_row_lock_time_delta_ms\\\": { \\\">=\\\": 2000 },\\n            \\\"Threads_running_avg_increase\\\": { \\\">=\\\": 2 }\\n          }\\n        },\\n        \\\"terminal\\\": {\\n          \\\"slow_query\\\": {\\n            \\\"Slow_queries_delta\\\": { \\\">=\\\": 1 },\\n            \\\"p95_latency_ratio\\\": { \\\">=\\\": 1.5 }\\n          },\\n          \\\"qps_drop\\\": { \\\"qps_ratio\\\": { \\\"<=\\\": 0.8 } }\\n        },\\n        \\\"observability_window_sec\\\": 15\\n      },\\n      \\\"success_criteria\\\": [\\n        \\\"Innodb_row_lock_waits increased by >= 100 during injection_observe_sec\\\",\\n        \\\"AND either Slow_queries increased by >= 1 OR p95 latency ratio >= 1.5 vs baseline\\\",\\n        \\\"AND overall QPS ratio <= 0.8 vs baseline during observe window\\\"\\n      ],\\n      \\\"risk_assessment\\\": [\\n        \\\"High lock contention on tpcc_10W.district(d_w_id=1,d_id=1) may stall TPCC transactions touching this district\\\",\\n        \\\"Potential deadlocks and long lock waits; monitor Innodb_deadlocks and lock wait time\\\",\\n        \\\"Duration 15s and 64 concurrent workers aim for impact within observe window; under max_duration_sec=30\\\"\\n      ],\\n      \\\"metadata\\\": {\\n        \\\"root_cause\\\":\"}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 12,
+      "thought": "ReAct generated 1 TaskSpecs for injected nodes ['hot_update']",
+      "action": "final_plan_validation",
+      "observe": "{\"task_ids\": [\"hot_update_tpcc_district_lock\"]}",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    },
+    {
+      "round": 13,
+      "thought": "DAG built with 1 tasks and 0 edges",
+      "action": "build_task_dag",
+      "observe": "Task IDs: ['hot_update_tpcc_district_lock']",
+      "decision": "",
+      "timestamp": "2026-06-21T09:53:34+00:00"
+    }
+  ]
+}

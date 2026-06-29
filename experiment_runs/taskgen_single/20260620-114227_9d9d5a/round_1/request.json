@@ -1,0 +1,37 @@
+{
+  "target_anomaly": "taskgen_single_traffic_surge",
+  "target_database": "tpcc_10W",
+  "dba_description": "Taskgen only: generate one traffic_surge injection task. The LLM should directly generate a raw TaskSpec using benchbase_burst_command or raw_command, matching the TPCC background workload. Do not execute the task.",
+  "target_path": [
+    "traffic_surge",
+    "threads_concurrency_up"
+  ],
+  "injected_nodes": [
+    "traffic_surge"
+  ],
+  "target_chain": [
+    "traffic_surge",
+    "threads_concurrency_up"
+  ],
+  "max_duration_sec": 30,
+  "max_retry_rounds": 1,
+  "risk_level": "medium",
+  "allowed_anomalies": [],
+  "safety_overrides": {},
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "tasks": {
+    "traffic_surge_tpcc_burst_002": {
+      "task_id": "traffic_surge_tpcc_burst_002",
+      "task_type": "traffic_surge",
+      "actions": [
+        {
+          "kind": "benchbase_burst_command",
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "command": [
+            "/opt/homebrew/opt/openjdk/bin/java",
+            "-jar",
+            ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+            "-b",
+            "tpcc",
+            "-c",
+            ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+            "-d",
+            "tpcc_10W",
+            "execute"
+          ],
+          "duration_sec": 12,
+          "terminals": 10,
+          "rate": 500
+        }
+      ],
+      "expected_metrics": [
+        {
+          "name": "Threads_running",
+          "expected_direction": "up"
+        },
+        {
+          "name": "Threads_connected",
+          "expected_direction": "up"
+        }
+      ],
+      "success_criteria": [
+        "Threads_running increases by >= 4 above pre-burst level during execution window",
+        "Burst completes 12s without fatal errors"
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": [
+        "Potential CPU and IO pressure; may elevate lock waits",
+        "High OS memory utilization detected; short duration and moderate rate to reduce risk"
+      ],
+      "metadata": {
+        "root_cause": "traffic_surge",
+        "target_path": [
+          "traffic_surge",
+          "threads_concurrency_up"
+        ]
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "traffic_surge_tpcc_burst_002": 0.0
+  }
+}

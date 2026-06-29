@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 from agent.config import RuntimeConfig
 from agent.planner import GlobalPlanner, PlannerFallbackError
-from agent.tools import LLMTimeoutError, PLANNING_TOOL_NAMES, build_traffic_task, chat_tool_calling_loop, llm_generate, planning_tool_schemas
+from agent.tools import LLMTimeoutError, PLANNING_TOOL_NAMES, call_planning_tool, chat_tool_calling_loop, llm_generate, planning_tool_schemas
 from agent.types import EnvironmentSnapshot, ExperimentRequest, ReflectionResult, SchemaInfo
 
 
@@ -65,15 +65,30 @@ class AgentReactPlannerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not injectable"):
             planner.plan(req, self.snapshot(), [])
 
+    def test_request_validation_rejects_disabled_excessive_index(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
+        req = ExperimentRequest(
+            target_anomaly="slow_sql/excessive_index",
+            target_database="tpcc",
+            target_path=["excessive_index", "slow_query"],
+            injected_nodes=["excessive_index"],
+        )
+        with self.assertRaisesRegex(ValueError, "not injectable"):
+            planner.plan(req, self.snapshot(), [])
+
     def test_planning_tool_schemas_do_not_expose_config_or_execute(self):
         schemas = planning_tool_schemas()
         names = {item["function"]["name"] for item in schemas}
-        self.assertIn("build_slow_sql_task", names)
-        self.assertIn("get_benchbase_workload_defaults", names)
-        self.assertIn("build_traffic_task", names)
+        self.assertNotIn("build_slow_sql_task", names)
+        self.assertNotIn("get_benchbase_workload_defaults", names)
+        self.assertNotIn("build_traffic_task", names)
+        self.assertIn("probe_schema", names)
+        self.assertIn("explain_sql", names)
+        self.assertIn("build_task_dag", names)
+        self.assertIn("check_safety", names)
         self.assertNotIn("execute_dag", names)
         self.assertNotIn("write_memory", names)
-        self.assertIn("build_slow_sql_task", PLANNING_TOOL_NAMES)
+        self.assertNotIn("build_slow_sql_task", PLANNING_TOOL_NAMES)
         for schema in schemas:
             props = schema["function"]["parameters"]["properties"]
             self.assertNotIn("config", props)
@@ -87,7 +102,7 @@ class AgentReactPlannerTests(unittest.TestCase):
             "task_type": "slow_sql",
             "actions": [
                 {
-                    "kind": "sql_workload",
+                    "kind": "raw_sql_workload",
                     "sql": "SELECT * FROM orders WHERE o_comment LIKE '%abc%' LIMIT 100",
                     "concurrency": 8,
                     "duration_sec": 30,
@@ -105,38 +120,6 @@ class AgentReactPlannerTests(unittest.TestCase):
             },
         }
         responses = [
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "role": "assistant",
-                            "content": None,
-                            "tool_calls": [
-                                {
-                                    "id": "call_1",
-                                    "type": "function",
-                                    "function": {
-                                        "name": "build_slow_sql_task",
-                                        "arguments": json.dumps(
-                                            {
-                                                "database": "tpcc",
-                                                "task_id": "slow_sql_missing_index",
-                                                "root_cause": "missing_index",
-                                                "table": "orders",
-                                                "predicate": "o_comment LIKE '%abc%'",
-                                                "pattern": "weak_predicate",
-                                                "limit": 100,
-                                                "concurrency": 8,
-                                                "duration_sec": 30,
-                                            }
-                                        ),
-                                    },
-                                }
-                            ],
-                        }
-                    }
-                ]
-            },
             {
                 "choices": [
                     {
@@ -182,8 +165,17 @@ class AgentReactPlannerTests(unittest.TestCase):
         self.assertEqual(list(dag.tasks), ["slow_sql_missing_index"])
         self.assertEqual(planner.last_plan_payload["target_path"], req.target_path)
         self.assertEqual(planner.last_plan_payload["injected_nodes"], req.injected_nodes)
-        self.assertTrue(any(step.action == "build_slow_sql_task" for step in trace))
-        self.assertTrue(any(message.get("role") == "tool" for message in captured_payloads[1]["messages"]))
+        self.assertTrue(any(step.action == "final_answer" for step in trace))
+        self.assertFalse(any(message.get("role") == "tool" for message in captured_payloads[0]["messages"]))
+
+    def test_old_builder_tool_call_is_blocked(self):
+        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
+        with self.assertRaisesRegex(ValueError, "not allowed"):
+            call_planning_tool(
+                "build_slow_sql_task",
+                config=config,
+                arguments={"database": "tpcc", "table": "orders"},
+            )
 
     def test_planner_disabled_blocks_fallback(self):
         planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
@@ -318,9 +310,12 @@ class AgentReactPlannerTests(unittest.TestCase):
             "task_id": "traffic",
             "task_type": "traffic_surge",
             "actions": [{"kind": "workload_ramp", "sql": "SELECT 1", "duration_sec": 10}],
+            "expected_metrics": {},
+            "success_criteria": {},
+            "risk_assessment": "medium",
             "metadata": {"root_cause": "traffic_surge"},
         }
-        with self.assertRaisesRegex(ValueError, "benchbase_burst"):
+        with self.assertRaisesRegex(ValueError, "unsupported action kind"):
             planner._filter_task_specs([legacy_spec], req)
 
     def test_traffic_surge_rejects_benchmark_mismatch_with_background_workload(self):
@@ -337,29 +332,175 @@ class AgentReactPlannerTests(unittest.TestCase):
                 "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpch_1SF_config.xml",
             },
         )
-        tpcc_spec = build_traffic_task(
-            RuntimeConfig(),
-            profile={
-                "benchmark": "tpcc",
-                "database": "tpcc_10W",
-                "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
-                "terminals": 4,
-                "rate": 100,
-                "duration_sec": 10,
-                "transaction_mix": {
-                    "NewOrder": 45,
-                    "Payment": 43,
-                    "OrderStatus": 4,
-                    "Delivery": 4,
-                    "StockLevel": 4,
-                },
-                "mix_template": "workload_default",
-                "rationale": "wrong benchmark",
-            },
-            task_id="traffic",
-        )
+        tpcc_spec = {
+            "task_id": "traffic",
+            "task_type": "traffic_surge",
+            "actions": [
+                {
+                    "kind": "benchbase_burst_command",
+                    "benchmark": "tpcc",
+                    "database": "tpcc_10W",
+                    "command": ["java", "-jar", "benchbase.jar", "-b", "tpcc"],
+                    "duration_sec": 10,
+                    "terminals": 4,
+                    "rate": 100,
+                }
+            ],
+            "expected_metrics": {},
+            "success_criteria": {},
+            "risk_assessment": "medium",
+            "metadata": {"root_cause": "traffic_surge"},
+        }
         with self.assertRaisesRegex(ValueError, "benchmark must match background workload"):
             planner._filter_task_specs([tpcc_spec], req)
+
+    def test_resource_rejects_non_chaosblade_raw_command(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False, chaosblade_path="/opt/blade"))
+        req = ExperimentRequest(
+            target_anomaly="resource",
+            target_database="tpcc",
+            target_path=["resource_cpu", "resource_bottleneck_cpu"],
+            injected_nodes=["resource_cpu"],
+        )
+        spec = {
+            "task_id": "resource_cpu_python",
+            "task_type": "resource_cpu",
+            "actions": [
+                {
+                    "kind": "raw_command",
+                    "command": ["python3", "-c", "while True: pass"],
+                    "duration_sec": 10,
+                    "cleanup_command": [],
+                }
+            ],
+            "expected_metrics": {},
+            "success_criteria": {},
+            "risk_assessment": "medium",
+            "metadata": {"root_cause": "resource_cpu"},
+        }
+        with self.assertRaisesRegex(ValueError, "RuntimeConfig\\.chaosblade_path"):
+            planner._filter_task_specs([spec], req)
+
+    def test_resource_accepts_llm_generated_chaosblade_raw_command(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False, chaosblade_path="/opt/blade"))
+        req = ExperimentRequest(
+            target_anomaly="resource",
+            target_database="tpcc",
+            target_path=["resource_cpu", "resource_bottleneck_cpu"],
+            injected_nodes=["resource_cpu"],
+        )
+        spec = {
+            "task_id": "resource_cpu_blade",
+            "task_type": "resource_cpu",
+            "actions": [
+                {
+                    "kind": "raw_command",
+                    "command": ["/opt/blade", "create", "cpu", "load", "--cpu-percent", "80", "--uid", "cpu_uid_1"],
+                    "duration_sec": 10,
+                    "cleanup_command": ["/opt/blade", "destroy", "cpu_uid_1"],
+                }
+            ],
+            "expected_metrics": {},
+            "success_criteria": {},
+            "risk_assessment": "medium",
+            "metadata": {"root_cause": "resource_cpu"},
+        }
+        filtered = planner._filter_task_specs([spec], req)
+        self.assertEqual(filtered[0]["task_id"], "resource_cpu_blade")
+
+    def test_resource_rejects_cleanup_uid_mismatch(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False, chaosblade_path="/opt/blade"))
+        req = ExperimentRequest(
+            target_anomaly="resource",
+            target_database="tpcc",
+            target_path=["resource_io", "resource_bottleneck_io"],
+            injected_nodes=["resource_io"],
+        )
+        spec = {
+            "task_id": "resource_io_blade",
+            "task_type": "resource_io",
+            "actions": [
+                {
+                    "kind": "raw_command",
+                    "command": ["/opt/blade", "create", "disk", "fill", "--path", "/tmp", "--size", "100M", "--uid=io_uid_1"],
+                    "duration_sec": 10,
+                    "cleanup_command": ["/opt/blade", "destroy", "other_uid"],
+                }
+            ],
+            "expected_metrics": {},
+            "success_criteria": {},
+            "risk_assessment": "medium",
+            "metadata": {"root_cause": "resource_io"},
+        }
+        with self.assertRaisesRegex(ValueError, "same ChaosBlade uid"):
+            planner._filter_task_specs([spec], req)
+
+    def test_resource_rejects_bare_blade_command(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False, chaosblade_path="/opt/blade"))
+        req = ExperimentRequest(
+            target_anomaly="resource",
+            target_database="tpcc",
+            target_path=["resource_io", "resource_bottleneck_io"],
+            injected_nodes=["resource_io"],
+        )
+        spec = {
+            "task_id": "resource_io_blade",
+            "task_type": "resource_io",
+            "actions": [
+                {
+                    "kind": "raw_command",
+                    "command": ["blade", "create", "disk", "fill", "--path", "/tmp", "--size", "100M", "--uid=io_uid_1"],
+                    "duration_sec": 10,
+                    "cleanup_command": ["blade", "destroy", "io_uid_1"],
+                }
+            ],
+            "expected_metrics": {},
+            "success_criteria": {},
+            "risk_assessment": "medium",
+            "metadata": {"root_cause": "resource_io"},
+        }
+        with self.assertRaisesRegex(ValueError, "RuntimeConfig\\.chaosblade_path"):
+            planner._filter_task_specs([spec], req)
+
+    def test_resource_rejects_non_raw_command_action_kind(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
+        req = ExperimentRequest(
+            target_anomaly="resource",
+            target_database="tpcc",
+            target_path=["resource_memory", "slow_query"],
+            injected_nodes=["resource_memory"],
+        )
+        spec = {
+            "task_id": "resource_memory_sql",
+            "task_type": "resource_memory",
+            "actions": [{"kind": "raw_sql_workload", "database": "tpcc", "sql": "SELECT 1", "duration_sec": 10}],
+            "expected_metrics": {},
+            "success_criteria": {},
+            "risk_assessment": "medium",
+            "metadata": {"root_cause": "resource_memory"},
+        }
+        with self.assertRaisesRegex(ValueError, "must use raw_command"):
+            planner._filter_task_specs([spec], req)
+
+    def test_non_resource_raw_command_does_not_require_chaosblade(self):
+        planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
+        req = ExperimentRequest(
+            target_anomaly="backup",
+            target_database="tpcc",
+            target_path=["backup", "maintenance_conflict"],
+            injected_nodes=["backup"],
+        )
+        spec = {
+            "task_id": "backup_echo",
+            "task_type": "backup",
+            "actions": [{"kind": "raw_command", "command": ["echo", "ok"], "duration_sec": 1}],
+            "expected_metrics": {},
+            "success_criteria": {},
+            "risk_assessment": "low",
+            "metadata": {"root_cause": "backup"},
+        }
+        filtered = planner._filter_task_specs([spec], req)
+        self.assertEqual(filtered[0]["task_id"], "backup_echo")
 
 
 if __name__ == "__main__":

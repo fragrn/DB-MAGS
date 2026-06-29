@@ -1,0 +1,313 @@
+{
+  "post_understanding": {
+    "summary": "A T-SQL query that joins Always On Availability Groups DMVs to list secondary replicas is taking ~12m38s to return 34 rows on a primary replica. Execution plan shows internal DMVs/TVFs calling cluster APIs, and waits are HADR_CLUSAPI_CALL. Environment has ~53 Availability Groups across multiple subnets; refreshing the AG tree in SSMS is also slow. Materializing sys.availability_groups and sys.availability_replicas into temp tables reduced runtime to ~1m03s.",
+    "symptoms": [
+      "very slow metadata query (~12m38s) returning only 34 rows",
+      "IO and CPU minimal while elapsed time is very high",
+      "wait type HADR_CLUSAPI_CALL dominates",
+      "SSMS Availability Groups node refresh is slow"
+    ],
+    "suspected_root_causes": [
+      "real-time cluster API enumeration by HADR DMVs scaling poorly with many Availability Groups",
+      "cross-subnet network latency inflating cluster API call time",
+      "optimizer timeout and repeated re-enumeration of DMVs during joins"
+    ],
+    "key_evidence": [
+      "Wait type is HADR_CLUSAPI_CALL.",
+      "There are 53 Availability Groups.",
+      "Execution plan shows internal TVFs like DM_HADR_INTERNAL_* and StatementOptmEarlyAbortReason='TimeOut'.",
+      "Statistics IO shows small reads; CPU time 1266 ms vs elapsed 747,852 ms.",
+      "Materializing sys.availability_groups and sys.availability_replicas into temp tables speeds run to ~1m03s."
+    ],
+    "assumptions": [
+      "SQL Server version is 2014 (12.0.2370.0) or similar, running on Windows Server Failover Cluster with Always On enabled.",
+      "Topology consists of 3 nodes (1 primary, 2 secondary replicas) across at least two subnets/sites.",
+      "Roughly 50+ Availability Groups exist, each with at least one database.",
+      "Network latency between subnets is non-trivial (e.g., 50–150 ms RTT), contributing to HADR_CLUSAPI_CALL waits.",
+      "The query is executed on the primary replica and not on a read-only secondary.",
+      "No heavy foreground workload; slowness is dominated by external cluster API calls rather than database contention.",
+      "Security context has permissions to query the DMVs involved."
+    ],
+    "confidence": 0.7
+  },
+  "experiment_environment": {
+    "dbms": "microsoft_sql_server",
+    "target_database": "master",
+    "target_tables": [
+      {
+        "table": "sys.availability_groups",
+        "purpose": "Enumerate Availability Groups for join keys (group_id) and reduce repeated metadata access when materialized to temp table",
+        "columns": [
+          {
+            "name": "group_id",
+            "type": "uniqueidentifier",
+            "role": "join key"
+          },
+          {
+            "name": "name",
+            "type": "sysname",
+            "role": "descriptive"
+          }
+        ],
+        "data_source": "cluster metadata",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "≈53",
+          "distribution": "one row per AG",
+          "key_fields": [
+            "group_id"
+          ],
+          "rationale": "Reproduce high AG cardinality that triggers cluster API enumeration costs"
+        }
+      },
+      {
+        "table": "sys.availability_replicas",
+        "purpose": "Enumerate replicas per AG (replica_id, group_id)",
+        "columns": [
+          {
+            "name": "replica_id",
+            "type": "uniqueidentifier",
+            "role": "join key"
+          },
+          {
+            "name": "group_id",
+            "type": "uniqueidentifier",
+            "role": "join key"
+          },
+          {
+            "name": "replica_server_name",
+            "type": "sysname",
+            "role": "projection"
+          }
+        ],
+        "data_source": "cluster metadata",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "≈159 (≈3 replicas × 53 AGs; adjustable by topology)",
+          "distribution": "uniform across AGs in this setup",
+          "key_fields": [
+            "replica_id",
+            "group_id",
+            "replica_server_name"
+          ],
+          "rationale": "Scale join cardinality to drive internal DMV/TVF invocation"
+        }
+      },
+      {
+        "table": "sys.dm_hadr_availability_group_states",
+        "purpose": "Provide primary_replica per group via cluster API",
+        "columns": [
+          {
+            "name": "group_id",
+            "type": "uniqueidentifier",
+            "role": "join key"
+          },
+          {
+            "name": "primary_replica",
+            "type": "nvarchar(128)",
+            "role": "projection"
+          }
+        ],
+        "data_source": "cluster API via DMV",
+        "generated_data_plan": {
+          "required": false,
+          "row_count": "≈53",
+          "distribution": "one row per AG",
+          "key_fields": [
+            "group_id"
+          ],
+          "rationale": "Populated by the system when AGs present; not user-generated"
+        }
+      },
+      {
+        "table": "sys.dm_hadr_availability_replica_states",
+        "purpose": "Filter non-local replicas (is_local <> 1) to list secondaries",
+        "columns": [
+          {
+            "name": "replica_id",
+            "type": "uniqueidentifier",
+            "role": "join/filter"
+          },
+          {
+            "name": "is_local",
+            "type": "bit",
+            "role": "filter"
+          }
+        ],
+        "data_source": "cluster API via DMV",
+        "generated_data_plan": {
+          "required": false,
+          "row_count": "≈159",
+          "distribution": "one row per replica",
+          "key_fields": [
+            "replica_id",
+            "is_local"
+          ],
+          "rationale": "System-populated based on replica topology"
+        }
+      },
+      {
+        "table": "sys.dm_hadr_database_replica_cluster_states",
+        "purpose": "Return database_name per replica to complete the result set",
+        "columns": [
+          {
+            "name": "replica_id",
+            "type": "uniqueidentifier",
+            "role": "join key"
+          },
+          {
+            "name": "database_name",
+            "type": "sysname",
+            "role": "projection"
+          }
+        ],
+        "data_source": "cluster API via DMV",
+        "generated_data_plan": {
+          "required": false,
+          "row_count": "≈300–400 (depends on DBs/AG; plan showed 350)",
+          "distribution": "approximately (#databases per AG × replicas)",
+          "key_fields": [
+            "replica_id",
+            "database_name"
+          ],
+          "rationale": "System-populated; higher counts amplify DMV enumeration"
+        }
+      }
+    ]
+  },
+  "background_workloads": [
+    {
+      "name": "AG metadata polling query",
+      "inferred_from_post": "The post runs a DMV-heavy SELECT that joins AG metadata to list secondaries; it is the primary workload causing waits.",
+      "simulation_method": "SQL script",
+      "transactions_or_queries": [
+        "SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED; SET STATISTICS TIME, IO ON;",
+        "SELECT ISNULL(agstates.primary_replica, '') AS Primary_AG_Server, dbcs.database_name, ar.replica_server_name",
+        "FROM sys.availability_groups AS AG",
+        "LEFT JOIN sys.dm_hadr_availability_group_states AS agstates ON AG.group_id = agstates.group_id",
+        "INNER JOIN sys.availability_replicas AS AR ON AG.group_id = AR.group_id",
+        "INNER JOIN sys.dm_hadr_availability_replica_states AS arstates ON AR.replica_id = arstates.replica_id AND arstates.is_local <> 1",
+        "INNER JOIN sys.dm_hadr_database_replica_cluster_states AS dbcs ON arstates.replica_id = dbcs.replica_id",
+        "GROUP BY agstates.primary_replica, dbcs.database_name, ar.replica_server_name;"
+      ],
+      "concurrency": "1 session",
+      "duration_sec": 900,
+      "transaction_mix": {
+        "select_metadata": "100%"
+      }
+    },
+    {
+      "name": "SSMS Availability Groups node refresh (optional)",
+      "inferred_from_post": "User reported that refreshing the AG node in SSMS is slow, indicating concurrent cluster API enumeration.",
+      "simulation_method": "manual UI or custom client that enumerates AGs via SMO",
+      "transactions_or_queries": [
+        "Refresh Object Explorer Availability Groups node, or script SMO calls to Enumerate AvailabilityGroups and Replicas"
+      ],
+      "concurrency": "1 user",
+      "duration_sec": 120,
+      "transaction_mix": {
+        "enumeration": "100%"
+      }
+    }
+  ],
+  "anomaly_injection": [
+    {
+      "name": "Create many Availability Groups",
+      "anomaly_type": "metadata_scale",
+      "mapped_dbmags_anomaly": "traffic_surge (on control plane)/metadata_enumeration_cost",
+      "target": "cluster/Always On AG metadata",
+      "method": "Provision a large number of small AGs with one tiny database each across 3 nodes (1 primary, 2 secondaries).",
+      "parameters": {
+        "ag_count": 53,
+        "replicas_per_ag": 3,
+        "dbs_per_ag": 1,
+        "commit_mode": "mix of synchronous and asynchronous acceptable",
+        "database_size_mb": 10
+      },
+      "duration_sec": 0,
+      "safety_notes": [
+        "Creating dozens of AGs consumes WSFC and SQL resources; only run in an isolated lab.",
+        "Ensure automatic seeding or small databases to avoid long data synchronization times."
+      ]
+    },
+    {
+      "name": "Cross-subnet network latency",
+      "anomaly_type": "resource_network",
+      "mapped_dbmags_anomaly": "resource_network",
+      "target": "inter-node WSFC/AG communication",
+      "method": "Introduce controlled latency between AG nodes using a network emulator in the virtualization platform or OS-level network emulation.",
+      "parameters": {
+        "one_way_latency_ms": 100,
+        "jitter_ms": 20,
+        "packet_loss_percent": 0,
+        "affected_links": "site-to-site or secondary node subnets"
+      },
+      "duration_sec": 900,
+      "safety_notes": [
+        "Do not apply to production; network impairment can affect AG health and failover.",
+        "Set health-check timeouts appropriately to avoid unintended failovers in lab."
+      ]
+    },
+    {
+      "name": "Baseline query vs. temp table optimization",
+      "anomaly_type": "slow_sql",
+      "mapped_dbmags_anomaly": "slow_sql",
+      "target": "metadata query plan",
+      "method": "Run the baseline DMV join query, then run variant that preloads sys.availability_groups and sys.availability_replicas into temp tables before the join.",
+      "parameters": {
+        "run_baseline_first": true,
+        "collect_statistics_time_io": true,
+        "repeat_runs": 3
+      },
+      "duration_sec": 1200,
+      "safety_notes": [
+        "Read-only metadata queries; low risk.",
+        "Use READ UNCOMMITTED as in the post to match behavior."
+      ]
+    }
+  ],
+  "expected_result": {
+    "metrics": [
+      {
+        "metric": "query_elapsed_time_sec",
+        "expected_change": "increase to > 600s for baseline under many AGs and latency"
+      },
+      {
+        "metric": "query_cpu_time_ms",
+        "expected_change": "low (<< elapsed), near ~1000–2000 ms"
+      },
+      {
+        "metric": "logical_reads",
+        "expected_change": "low to moderate; not correlated with elapsed"
+      },
+      {
+        "metric": "waits_HADR_CLUSAPI_CALL",
+        "expected_change": "increase; top wait for the session and system during run"
+      },
+      {
+        "metric": "SSMS_AG_refresh_time_sec",
+        "expected_change": "noticeable increase (tens of seconds or minutes)"
+      }
+    ],
+    "query_or_transaction_effects": [
+      "Baseline DMV query takes multiple minutes to return a few dozen rows.",
+      "Execution plan shows internal TVFs (DM_HADR_INTERNAL_*) and optimizer timeout.",
+      "After materializing sys.availability_groups and sys.availability_replicas into temp tables, runtime significantly decreases (e.g., to ~1 minute or less)."
+    ],
+    "validation_criteria": [
+      "During baseline run, sys.dm_exec_requests shows wait_type = HADR_CLUSAPI_CALL for the query for a substantial portion of elapsed time.",
+      "SET STATISTICS TIME, IO shows CPU time in low seconds while elapsed time is high (> 600s) and reads are modest.",
+      "Returned row count in the tens (e.g., ~34) consistent with secondary replicas across AGs and filter is_local <> 1.",
+      "Plan includes DM_HADR_INTERNAL_* TVFs and StatementOptmEarlyAbortReason='TimeOut'.",
+      "Temp table variant measurably reduces elapsed time versus baseline on the same environment."
+    ]
+  },
+  "open_questions": [
+    "Confirm exact SQL Server version and CU/SP level (execution plan shows 12.0.2370.0; is this the test version?).",
+    "How many replicas per AG are configured, and how many databases per AG (to tune row count expectations)?",
+    "What is the approximate inter-site/subnet RTT and bandwidth between AG nodes?",
+    "Is the query executed on the primary or a secondary replica, and is the secondary readable intent enabled?",
+    "Are there any concurrent monitoring tools polling the same DMVs that could amplify cluster API calls?",
+    "Are all AGs healthy and synchronized during the test (to avoid confounding recovery or failover activity)?"
+  ]
+}

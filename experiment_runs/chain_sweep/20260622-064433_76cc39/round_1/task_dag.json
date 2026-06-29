@@ -1,0 +1,49 @@
+{
+  "tasks": {
+    "longtx_lock_tpcc_hotset_12s": {
+      "task_id": "longtx_lock_tpcc_hotset_12s",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "scripts": [
+            "START TRANSACTION",
+            "SELECT w_id FROM warehouse WHERE w_id BETWEEN 1 AND 10 FOR UPDATE",
+            "SELECT d_w_id, d_id FROM district WHERE d_w_id IN (1,2,3,4,5,6,7,8,9,10) AND d_id BETWEEN 1 AND 10 FOR UPDATE",
+            "SELECT s_w_id, s_i_id FROM stock WHERE s_w_id IN (1,2,3,4,5,6,7,8,9,10) AND s_i_id BETWEEN 1 AND 50 FOR UPDATE",
+            "SELECT SLEEP(12)",
+            "COMMIT"
+          ],
+          "duration_sec": 12,
+          "concurrency": 1
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention": {
+          "Innodb_row_lock_waits_delta": 50,
+          "Innodb_row_lock_time_delta_ms": 3000
+        },
+        "slow_query": {
+          "Slow_queries_delta": 1,
+          "p95_latency_ratio": 1.3
+        },
+        "qps_drop": {
+          "qps_ratio_max": 0.8
+        }
+      },
+      "success_criteria": "During and immediately after the task window, observe Innodb_row_lock_waits increase by >=50 and/or Innodb_row_lock_time increase by >=3s; also observe slow_query_count_delta >=1 or p95 latency ratio >=1.3, and QPS ratio <=0.8 vs baseline.",
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "Holds row-level X locks on warehouse(1..10), district(1..10 per w_id), and stock(s_i_id 1..50 per w_id) for ~12s to induce contention against TPCC transactions. Risks: temporary slow queries and throughput dip, potential deadlocks. Mitigations: single-session transaction, consistent lock order (warehouse -> district -> stock), bounded to 12s, explicit COMMIT.",
+      "metadata": {
+        "root_cause": "long_tx"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "longtx_lock_tpcc_hotset_12s": 0.0
+  }
+}

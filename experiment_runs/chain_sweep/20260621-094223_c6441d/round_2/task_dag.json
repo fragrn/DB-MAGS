@@ -1,0 +1,82 @@
+{
+  "tasks": {
+    "hot_update_tpcc_district_lock": {
+      "task_id": "hot_update_tpcc_district_lock",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "scripts": [
+            "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+            "START TRANSACTION",
+            "SELECT d_ytd FROM district WHERE d_w_id=1 AND d_id=1 FOR UPDATE",
+            "SELECT SLEEP(4.0)",
+            "UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id=1 AND d_id=1",
+            "COMMIT"
+          ],
+          "duration_sec": 15,
+          "concurrency": 64
+        }
+      ],
+      "expected_metrics": {
+        "intermediate": {
+          "lock_contention": {
+            "Innodb_row_lock_waits_delta": {
+              ">=": 100
+            },
+            "Innodb_row_lock_time_delta_ms": {
+              ">=": 2000
+            },
+            "Threads_running_avg_increase": {
+              ">=": 2
+            }
+          }
+        },
+        "terminal": {
+          "slow_query": {
+            "Slow_queries_delta": {
+              ">=": 1
+            },
+            "p95_latency_ratio": {
+              ">=": 1.5
+            }
+          },
+          "qps_drop": {
+            "qps_ratio": {
+              "<=": 0.8
+            }
+          }
+        },
+        "observability_window_sec": 15
+      },
+      "success_criteria": [
+        "Innodb_row_lock_waits increased by >= 100 during injection_observe_sec",
+        "AND either Slow_queries increased by >= 1 OR p95 latency ratio >= 1.5 vs baseline",
+        "AND overall QPS ratio <= 0.8 vs baseline during observe window"
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": [
+        "High lock contention on tpcc_10W.district(d_w_id=1,d_id=1) may stall TPCC transactions touching this district",
+        "Potential deadlocks and long lock waits; monitor Innodb_deadlocks and lock wait time",
+        "Duration 15s and 64 concurrent workers aim for impact within observe window; under max_duration_sec=30"
+      ],
+      "metadata": {
+        "root_cause": "hot_update",
+        "target_path": [
+          "hot_update",
+          "lock_contention",
+          "slow_query",
+          "qps_drop"
+        ],
+        "notes": "Concentrates updates on a single hot row and holds the lock for ~4s to induce contention within observe window"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "hot_update_tpcc_district_lock": 0.0
+  }
+}

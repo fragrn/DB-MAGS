@@ -1,0 +1,181 @@
+{
+  "run_id": "20260620-110754_a83fde",
+  "target_path": [
+    "backup",
+    "maintenance_conflict"
+  ],
+  "injected_nodes": [
+    "backup"
+  ],
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  },
+  "task_specs": [
+    {
+      "task_id": "backup_tpcc10w_mysqldump_order_line_lock",
+      "task_type": "logical_backup_command",
+      "actions": [
+        {
+          "kind": "logical_backup_command",
+          "database": "tpcc_10W",
+          "command": [
+            "mysqldump",
+            "--user=root",
+            "--host=127.0.0.1",
+            "--protocol=tcp",
+            "--port=3306",
+            "--lock-tables",
+            "--no-tablespaces",
+            "--set-gtid-purged=OFF",
+            "--where=OL_O_ID<=100000",
+            "--result-file=/tmp/backup_tpcc_10W_order_line_part.sql",
+            "tpcc_10W",
+            "order_line"
+          ],
+          "duration_sec": 15,
+          "output_path": "/tmp/backup_tpcc_10W_order_line_part.sql"
+        }
+      ],
+      "expected_metrics": {
+        "db": {
+          "Threads_running": "increase",
+          "Innodb_row_lock_waits": "increase",
+          "processlist_blocking_states": [
+            "Locked",
+            "Waiting for table metadata lock"
+          ]
+        },
+        "os": {
+          "disk_io_write_bytes": "increase"
+        },
+        "edges": [
+          "backup->maintenance_conflict",
+          "backup->lock_contention"
+        ]
+      },
+      "success_criteria": [
+        "At least one session in SHOW FULL PROCESSLIST shows 'Waiting for table metadata lock' or 'Locked' during action window",
+        "Innodb_row_lock_waits increases by at least 10 over baseline during injection_observe_sec",
+        "Threads_running increases by at least 1 over baseline"
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": {
+        "risk_level": "medium",
+        "impacts": [
+          "Temporary stalls of OLTP writes to order_line",
+          "Potential brief QPS drop or slow queries"
+        ],
+        "mitigations": [
+          "Limit dump with WHERE clause to first 100000 rows",
+          "Bound duration to 15s to align with observation window",
+          "Target single table instead of full DB"
+        ]
+      },
+      "metadata": {
+        "root_cause": "backup"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "backup_tpcc10w_mysqldump_order_line_lock": {
+        "task_id": "backup_tpcc10w_mysqldump_order_line_lock",
+        "task_type": "logical_backup_command",
+        "actions": [
+          {
+            "kind": "logical_backup_command",
+            "database": "tpcc_10W",
+            "command": [
+              "mysqldump",
+              "--user=root",
+              "--host=127.0.0.1",
+              "--protocol=tcp",
+              "--port=3306",
+              "--lock-tables",
+              "--no-tablespaces",
+              "--set-gtid-purged=OFF",
+              "--where=OL_O_ID<=100000",
+              "--result-file=/tmp/backup_tpcc_10W_order_line_part.sql",
+              "tpcc_10W",
+              "order_line"
+            ],
+            "duration_sec": 15,
+            "output_path": "/tmp/backup_tpcc_10W_order_line_part.sql"
+          }
+        ],
+        "expected_metrics": {
+          "db": {
+            "Threads_running": "increase",
+            "Innodb_row_lock_waits": "increase",
+            "processlist_blocking_states": [
+              "Locked",
+              "Waiting for table metadata lock"
+            ]
+          },
+          "os": {
+            "disk_io_write_bytes": "increase"
+          },
+          "edges": [
+            "backup->maintenance_conflict",
+            "backup->lock_contention"
+          ]
+        },
+        "success_criteria": [
+          "At least one session in SHOW FULL PROCESSLIST shows 'Waiting for table metadata lock' or 'Locked' during action window",
+          "Innodb_row_lock_waits increases by at least 10 over baseline during injection_observe_sec",
+          "Threads_running increases by at least 1 over baseline"
+        ],
+        "start_after_sec": 0.0,
+        "dependencies": [],
+        "cleanup_actions": [],
+        "risk_assessment": {
+          "risk_level": "medium",
+          "impacts": [
+            "Temporary stalls of OLTP writes to order_line",
+            "Potential brief QPS drop or slow queries"
+          ],
+          "mitigations": [
+            "Limit dump with WHERE clause to first 100000 rows",
+            "Bound duration to 15s to align with observation window",
+            "Target single table instead of full DB"
+          ]
+        },
+        "metadata": {
+          "root_cause": "backup"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "backup_tpcc10w_mysqldump_order_line_lock": 0.0
+    }
+  },
+  "workload_detection": {
+    "mode": "auto",
+    "probe_interval_sec": 3.0,
+    "qps": 0.0,
+    "tps": 0.0,
+    "existing_workload_detected": false,
+    "started_new_workload": true,
+    "qps_threshold": 0.1
+  },
+  "react_trace_path": "react_trace.json",
+  "plan_path": "plan.json",
+  "task_dag_path": "task_dag.json"
+}

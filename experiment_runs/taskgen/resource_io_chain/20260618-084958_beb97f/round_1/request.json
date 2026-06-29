@@ -1,0 +1,41 @@
+{
+  "target_anomaly": "resource_io_to_qps_drop",
+  "target_database": "tpcc_10W",
+  "dba_description": "Generate an IO resource bottleneck task on TPCC background workload.",
+  "target_path": [
+    "resource_io",
+    "resource_bottleneck_io",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "resource_io"
+  ],
+  "target_chain": [
+    "resource_io",
+    "resource_bottleneck_io",
+    "slow_query",
+    "qps_drop"
+  ],
+  "max_duration_sec": 30,
+  "max_retry_rounds": 2,
+  "risk_level": "medium",
+  "allowed_anomalies": [],
+  "safety_overrides": {},
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  }
+}

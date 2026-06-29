@@ -1,0 +1,113 @@
+{
+  "run_id": "20260620-114008_e3c243",
+  "target_path": [
+    "improper_sql",
+    "sort_hash_spill"
+  ],
+  "injected_nodes": [
+    "improper_sql"
+  ],
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  },
+  "task_specs": [
+    {
+      "task_id": "improper_sql_order_by_sortspill",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000",
+          "concurrency": 1,
+          "duration_sec": 15
+        }
+      ],
+      "expected_metrics": {
+        "sort_hash_spill": {
+          "created_tmp_disk_tables_delta": ">=1",
+          "sort_merge_passes_delta": ">=1"
+        },
+        "slow_query": {
+          "slow_query_count_delta": ">=1",
+          "p95_latency_ratio": ">=1.5"
+        }
+      },
+      "success_criteria": "During injection window, Created_tmp_disk_tables and/or Sort_merge_passes increase by at least 1 and at least one slow query is recorded or p95 latency ratio >= 1.5.",
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "This query performs a full scan and filesort on a large table (order_line) with an unindexed ORDER BY. It can cause CPU spikes, disk I/O from filesort spill to disk, and increased latency for concurrent workload. Bounded duration (15s) and concurrency (1) limit risk.",
+      "metadata": {
+        "root_cause": "improper_sql",
+        "explain_plan": "-> Limit: 100000 row(s)\n    -> Sort: order_line.ol_amount DESC\n        -> Table scan on order_line"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "improper_sql_order_by_sortspill": {
+        "task_id": "improper_sql_order_by_sortspill",
+        "task_type": "injection",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "database": "tpcc_10W",
+            "sql": "SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000",
+            "concurrency": 1,
+            "duration_sec": 15
+          }
+        ],
+        "expected_metrics": {
+          "sort_hash_spill": {
+            "created_tmp_disk_tables_delta": ">=1",
+            "sort_merge_passes_delta": ">=1"
+          },
+          "slow_query": {
+            "slow_query_count_delta": ">=1",
+            "p95_latency_ratio": ">=1.5"
+          }
+        },
+        "success_criteria": "During injection window, Created_tmp_disk_tables and/or Sort_merge_passes increase by at least 1 and at least one slow query is recorded or p95 latency ratio >= 1.5.",
+        "start_after_sec": 0.0,
+        "dependencies": [],
+        "cleanup_actions": [],
+        "risk_assessment": "This query performs a full scan and filesort on a large table (order_line) with an unindexed ORDER BY. It can cause CPU spikes, disk I/O from filesort spill to disk, and increased latency for concurrent workload. Bounded duration (15s) and concurrency (1) limit risk.",
+        "metadata": {
+          "root_cause": "improper_sql",
+          "explain_plan": "-> Limit: 100000 row(s)\n    -> Sort: order_line.ol_amount DESC\n        -> Table scan on order_line"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "improper_sql_order_by_sortspill": 0.0
+    }
+  },
+  "workload_detection": {
+    "mode": "auto",
+    "probe_interval_sec": 3.0,
+    "qps": 0.0,
+    "tps": 0.0,
+    "existing_workload_detected": false,
+    "started_new_workload": true,
+    "qps_threshold": 0.1
+  },
+  "react_trace_path": "react_trace.json",
+  "plan_path": "plan.json",
+  "task_dag_path": "task_dag.json"
+}

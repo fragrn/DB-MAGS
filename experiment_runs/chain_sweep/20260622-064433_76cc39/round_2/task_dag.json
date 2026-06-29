@@ -1,0 +1,58 @@
+{
+  "tasks": {
+    "long_tx_tpcc_lock_hold_w_shard": {
+      "task_id": "long_tx_tpcc_lock_hold_w_shard",
+      "task_type": "anomaly_injection",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "scripts": [
+            "BEGIN",
+            "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+            "SET SESSION innodb_lock_wait_timeout=60",
+            "SET @w := ((CONNECTION_ID() % 4) + 1)",
+            "SELECT d_id FROM district FORCE INDEX(PRIMARY) WHERE d_w_id = @w FOR UPDATE",
+            "SELECT s_i_id FROM stock FORCE INDEX(PRIMARY) WHERE s_w_id = @w AND s_i_id BETWEEN 1 AND 200 FOR UPDATE",
+            "SELECT SLEEP(12)",
+            "ROLLBACK"
+          ],
+          "duration_sec": 14,
+          "concurrency": 4
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention": {
+          "Innodb_row_lock_waits_delta": {
+            ">=": 50
+          },
+          "Innodb_row_lock_time_delta_ms": {
+            ">=": 4000
+          }
+        },
+        "slow_query": {
+          "latency_p95_ratio": {
+            ">=": 1.5
+          }
+        },
+        "qps_drop": {
+          "qps_ratio": {
+            "<=": 0.7
+          }
+        }
+      },
+      "success_criteria": "During or shortly after execution: lock_contention indicators increase and either p95 latency rises by >=50% or QPS drops by >=30%.",
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "Holds row and next-key locks on hot TPC-C rows (district and stock) across up to 4 warehouses for ~12s. Expect lock waits, slow queries, possible deadlocks. Use only in non-production.",
+      "metadata": {
+        "root_cause": "long_tx"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "long_tx_tpcc_lock_hold_w_shard": 0.0
+  }
+}

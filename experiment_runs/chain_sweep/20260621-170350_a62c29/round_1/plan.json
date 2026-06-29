@@ -1,0 +1,34 @@
+{
+  "planning_status": "failed",
+  "failure_type": "planner_fallback_blocked",
+  "reason": "Planner LLM timeout: LLM tool-calling request timed out after 120s at step 1: LLM tool-calling request at step 1 timed out after 120s (attempts=2): The read operation timed out",
+  "target_path": [
+    "resource_memory",
+    "sort_hash_spill",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "resource_memory"
+  ],
+  "fallback_used": false,
+  "fallback_blocked": true,
+  "react_trace": [
+    {
+      "round": 1,
+      "thought": "Environment snapshot collected. Schema has 9 tables. DB version: 9.6.0. Max connections: 151.",
+      "action": "probe_full_snapshot",
+      "observe": "Tables: ['customer', 'district', 'history', 'item', 'new_order']",
+      "decision": "",
+      "timestamp": "2026-06-21T17:04:25+00:00"
+    },
+    {
+      "round": 2,
+      "thought": "Planner LLM timeout: LLM tool-calling request timed out after 120s at step 1: LLM tool-calling request at step 1 timed out after 120s (attempts=2): The read operation timed out",
+      "action": "llm_timeout",
+      "observe": "",
+      "decision": "",
+      "timestamp": "2026-06-21T18:25:29+00:00"
+    }
+  ]
+}

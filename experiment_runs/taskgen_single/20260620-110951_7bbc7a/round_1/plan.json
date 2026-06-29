@@ -1,0 +1,264 @@
+{
+  "target_path": [
+    "hot_update",
+    "lock_contention"
+  ],
+  "injected_nodes": [
+    "hot_update"
+  ],
+  "task_specs": [
+    {
+      "task_id": "hot_update_lock_contention_tpcc_district_1_1",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "duration_sec": 14,
+          "concurrency": 4,
+          "scripts": [
+            {
+              "name": "holder",
+              "weight": 1,
+              "statements": [
+                "SET SESSION autocommit=0",
+                "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+                "SET SESSION innodb_lock_wait_timeout=5",
+                "START TRANSACTION",
+                "SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE",
+                "DO SLEEP(10)",
+                "UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1",
+                "COMMIT"
+              ]
+            },
+            {
+              "name": "waiter",
+              "weight": 3,
+              "statements": [
+                "SET SESSION autocommit=0",
+                "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+                "SET SESSION innodb_lock_wait_timeout=12",
+                "START TRANSACTION",
+                "DO SLEEP(1)",
+                "UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1",
+                "COMMIT"
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "intermediate": {
+          "lock_contention": "Innodb_row_lock_waits_delta >= 2",
+          "threads_concurrency_up": "Threads_running_peak >= baseline+2"
+        },
+        "terminal": {
+          "slow_query": "slow_query_count_delta >= 1",
+          "timeout": "Aborted_connects_delta >= 0"
+        }
+      },
+      "success_criteria": [
+        "Waiter sessions block on row lock for ~8-12s until holder commits",
+        "Innodb_row_lock_waits increases by >= 2 during injection window",
+        "Task completes within 14s without unbounded stalls"
+      ],
+      "risk_assessment": {
+        "impact": "Brief stalls for any TPCC transactions touching district(1,1)",
+        "deadlock_risk": "Low; single-row write hotspot with serializable order",
+        "data_risk": "Minimal; UPDATE is a no-op on d_ytd",
+        "recovery": "Transactions commit and sessions exit automatically at end of duration"
+      },
+      "metadata": {
+        "root_cause": "hot_update",
+        "target_row": {
+          "table": "district",
+          "pk": "(d_w_id=1, d_id=1)"
+        },
+        "path_segment": "hot_update -> lock_contention"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "hot_update_lock_contention_tpcc_district_1_1": {
+        "task_id": "hot_update_lock_contention_tpcc_district_1_1",
+        "task_type": "raw_transaction_script",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "database": "tpcc_10W",
+            "duration_sec": 14,
+            "concurrency": 4,
+            "scripts": [
+              {
+                "name": "holder",
+                "weight": 1,
+                "statements": [
+                  "SET SESSION autocommit=0",
+                  "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+                  "SET SESSION innodb_lock_wait_timeout=5",
+                  "START TRANSACTION",
+                  "SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE",
+                  "DO SLEEP(10)",
+                  "UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1",
+                  "COMMIT"
+                ]
+              },
+              {
+                "name": "waiter",
+                "weight": 3,
+                "statements": [
+                  "SET SESSION autocommit=0",
+                  "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+                  "SET SESSION innodb_lock_wait_timeout=12",
+                  "START TRANSACTION",
+                  "DO SLEEP(1)",
+                  "UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1",
+                  "COMMIT"
+                ]
+              }
+            ]
+          }
+        ],
+        "expected_metrics": {
+          "intermediate": {
+            "lock_contention": "Innodb_row_lock_waits_delta >= 2",
+            "threads_concurrency_up": "Threads_running_peak >= baseline+2"
+          },
+          "terminal": {
+            "slow_query": "slow_query_count_delta >= 1",
+            "timeout": "Aborted_connects_delta >= 0"
+          }
+        },
+        "success_criteria": [
+          "Waiter sessions block on row lock for ~8-12s until holder commits",
+          "Innodb_row_lock_waits increases by >= 2 during injection window",
+          "Task completes within 14s without unbounded stalls"
+        ],
+        "risk_assessment": {
+          "impact": "Brief stalls for any TPCC transactions touching district(1,1)",
+          "deadlock_risk": "Low; single-row write hotspot with serializable order",
+          "data_risk": "Minimal; UPDATE is a no-op on d_ytd",
+          "recovery": "Transactions commit and sessions exit automatically at end of duration"
+        },
+        "metadata": {
+          "root_cause": "hot_update",
+          "target_row": {
+            "table": "district",
+            "pk": "(d_w_id=1, d_id=1)"
+          },
+          "path_segment": "hot_update -> lock_contention"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "hot_update_lock_contention_tpcc_district_1_1": 0.0
+    }
+  },
+  "reasoning": "This task creates lock contention via hot_update by having a holder transaction lock district(1,1) with SELECT ... FOR UPDATE and sleep, while multiple waiter transactions attempt UPDATE on the same primary key and block. This directly realizes hot_update causing lock_contention on a known TPCC hot row within the observe window.",
+  "safety_check": {
+    "approved": true,
+    "reasons": [],
+    "warnings": []
+  },
+  "react_trace": [
+    {
+      "round": 1,
+      "thought": "Environment snapshot collected. Schema has 9 tables. DB version: 9.6.0. Max connections: 151.",
+      "action": "probe_full_snapshot",
+      "observe": "Tables: ['customer', 'district', 'history', 'item', 'new_order']",
+      "decision": "",
+      "timestamp": "2026-06-20T11:10:01+00:00"
+    },
+    {
+      "round": 2,
+      "thought": "LLM requested planning tool",
+      "action": "read_memory",
+      "observe": "[]",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 3,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"EXPLAIN SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE\", \"plan\": [{\"error\": \"(1064, \\\"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'EXPLAIN SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDAT' at line 1\\\")\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 4,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"EXPLAIN UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1\", \"plan\": [{\"error\": \"(1064, \\\"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'EXPLAIN UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1' at line 1\\\")\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 5,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE\", \"plan\": [{\"EXPLAIN\": \"-> Rows fetched before execution  (cost=0..0 rows=1)\\n\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 6,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"hot_update_lock_contention_tpcc_district_1_1\": {\"task_id\": \"hot_update_lock_contention_tpcc_district_1_1\", \"task_type\": \"raw_transaction_script\", \"actions\": [{\"kind\": \"raw_transaction_script\", \"database\": \"tpcc_10W\", \"duration_sec\": 20, \"concurrency\": 4, \"scripts\": [{\"name\": \"holder\", \"weight\": 1, \"statements\": [\"SET SESSION autocommit=0\", \"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\", \"SET SESSION innodb_lock_wait_timeout=5\", \"START TRANSACTION\", \"SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE\", \"DO SLEEP(12)\", \"UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1\", \"COMMIT\"]}, {\"name\": \"waiter\", \"weight\": 3, \"statements\": [\"SET SESSION autocommit=0\", \"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\", \"SET SESSION innodb_lock_wait_timeout=20\", \"START TRANSACTION\", \"UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1\", \"COMMIT\"]}]}], \"expected_metrics\": {\"intermediate\": {\"lock_contention\": \"Innodb_row_lock_waits_delta >= 3\", \"threads_concurrency_up\": \"Threads_running_peak >= baseline+2\"}, \"terminal\": {\"slow_query\": \"slow_query_count_delta >= 1\", \"deadlock\": \"Innodb_deadlocks_delta >= 0\"}}, \"success_criteria\": [\"At least one waiter experiences lock wait > 1s\", \"Innodb_row_lock_waits increases by >= 3 during injection window\", \"No more than 1 deadlock is observed\"], \"risk_assessment\": {\"impact\": \"May cause brief stalls in TPC-C Payment/NewOrder touching district(1,1)\", \"deadlock_risk\": \"Low-to-moderate; mitigated by orderly holder then short waiters\", \"data_risk\": \"Minimal; UPDATE sets column to itself\", \"recovery\": \"All sessions commit/exit automatically after duration\"}, \"metadata\": {\"root_cause\": \"hot_update\", \"target_row\": {\"table\": \"district\", \"pk\": \"(d_w_id=1, d_id=1)\"}, \"path_segment\": \"hot_update -> lock_contention\"}}}, \"edges\": [], \"schedule\": {\"hot_update_lock_contention_tpcc_district_1_1\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 7,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": false, \"reasons\": [\"DAG required duration 20.0s exceeds injection_observe_sec 15.0s\"], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 8,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"hot_update_lock_contention_tpcc_district_1_1\": {\"task_id\": \"hot_update_lock_contention_tpcc_district_1_1\", \"task_type\": \"raw_transaction_script\", \"actions\": [{\"kind\": \"raw_transaction_script\", \"database\": \"tpcc_10W\", \"duration_sec\": 14, \"concurrency\": 4, \"scripts\": [{\"name\": \"holder\", \"weight\": 1, \"statements\": [\"SET SESSION autocommit=0\", \"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\", \"SET SESSION innodb_lock_wait_timeout=5\", \"START TRANSACTION\", \"SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE\", \"DO SLEEP(10)\", \"UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1\", \"COMMIT\"]}, {\"name\": \"waiter\", \"weight\": 3, \"statements\": [\"SET SESSION autocommit=0\", \"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\", \"SET SESSION innodb_lock_wait_timeout=12\", \"START TRANSACTION\", \"DO SLEEP(1)\", \"UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1\", \"COMMIT\"]}]}], \"expected_metrics\": {\"intermediate\": {\"lock_contention\": \"Innodb_row_lock_waits_delta >= 2\", \"threads_concurrency_up\": \"Threads_running_peak >= baseline+2\"}, \"terminal\": {\"slow_query\": \"slow_query_count_delta >= 1\", \"timeout\": \"Aborted_connects_delta >= 0\"}}, \"success_criteria\": [\"Waiter sessions block on row lock for ~8-12s until holder commits\", \"Innodb_row_lock_waits increases by >= 2 during injection window\", \"Task completes within 14s without unbounded stalls\"], \"risk_assessment\": {\"impact\": \"Brief stalls for any TPCC transactions touching district(1,1)\", \"deadlock_risk\": \"Low; single-row write hotspot with serializable order\", \"data_risk\": \"Minimal; UPDATE is a no-op on d_ytd\", \"recovery\": \"Transactions commit and sessions exit automatically at end of duration\"}, \"metadata\": {\"root_cause\": \"hot_update\", \"target_row\": {\"table\": \"district\", \"pk\": \"(d_w_id=1, d_id=1)\"}, \"path_segment\": \"hot_update -> lock_contention\"}}}, \"edges\": [], \"schedule\": {\"hot_update_lock_contention_tpcc_district_1_1\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 9,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": true, \"reasons\": [], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 10,
+      "thought": "LLM returned final plan JSON",
+      "action": "final_answer",
+      "observe": "{\"step\": 9, \"tool\": \"final_answer\", \"content\": \"{\\n  \\\"target_path\\\": [\\\"hot_update\\\", \\\"lock_contention\\\"],\\n  \\\"injected_nodes\\\": [\\\"hot_update\\\"],\\n  \\\"task_specs\\\": [\\n    {\\n      \\\"task_id\\\": \\\"hot_update_lock_contention_tpcc_district_1_1\\\",\\n      \\\"task_type\\\": \\\"raw_transaction_script\\\",\\n      \\\"actions\\\": [\\n        {\\n          \\\"kind\\\": \\\"raw_transaction_script\\\",\\n          \\\"database\\\": \\\"tpcc_10W\\\",\\n          \\\"duration_sec\\\": 14,\\n          \\\"concurrency\\\": 4,\\n          \\\"scripts\\\": [\\n            {\\n              \\\"name\\\": \\\"holder\\\",\\n              \\\"weight\\\": 1,\\n              \\\"statements\\\": [\\n                \\\"SET SESSION autocommit=0\\\",\\n                \\\"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\\\",\\n                \\\"SET SESSION innodb_lock_wait_timeout=5\\\",\\n                \\\"START TRANSACTION\\\",\\n                \\\"SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE\\\",\\n                \\\"DO SLEEP(10)\\\",\\n                \\\"UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1\\\",\\n                \\\"COMMIT\\\"\\n              ]\\n            },\\n            {\\n              \\\"name\\\": \\\"waiter\\\",\\n              \\\"weight\\\": 3,\\n              \\\"statements\\\": [\\n                \\\"SET SESSION autocommit=0\\\",\\n                \\\"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\\\",\\n                \\\"SET SESSION innodb_lock_wait_timeout=12\\\",\\n                \\\"START TRANSACTION\\\",\\n                \\\"DO SLEEP(1)\\\",\\n                \\\"UPDATE district SET d_ytd = d_ytd WHERE d_w_id = 1 AND d_id = 1\\\",\\n                \\\"COMMIT\\\"\\n              ]\\n            }\\n          ]\\n        }\\n      ],\\n      \\\"expected_metrics\\\": {\\n        \\\"intermediate\\\": {\\n          \\\"lock_contention\\\": \\\"Innodb_row_lock_waits_delta >= 2\\\",\\n          \\\"threads_concurrency_up\\\": \\\"Threads_running_peak >= baseline+2\\\"\\n        },\\n        \\\"terminal\\\": {\\n          \\\"slow_query\\\": \\\"slow_query_count_delta >= 1\\\",\\n          \\\"timeout\\\": \\\"Aborted_connects_delta >= 0\\\"\\n        }\\n      },\\n      \\\"success_criteria\\\": [\\n        \\\"Waiter sessions block on row lock for ~8-12s until holder commits\\\",\\n        \\\"Innodb_row_lock_waits increases\"}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 11,
+      "thought": "ReAct generated 1 TaskSpecs for injected nodes ['hot_update']",
+      "action": "final_plan_validation",
+      "observe": "{\"task_ids\": [\"hot_update_lock_contention_tpcc_district_1_1\"]}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    },
+    {
+      "round": 12,
+      "thought": "DAG built with 1 tasks and 0 edges",
+      "action": "build_task_dag",
+      "observe": "Task IDs: ['hot_update_lock_contention_tpcc_district_1_1']",
+      "decision": "",
+      "timestamp": "2026-06-20T11:13:06+00:00"
+    }
+  ]
+}

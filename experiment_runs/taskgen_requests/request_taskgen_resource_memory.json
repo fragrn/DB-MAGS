@@ -1,0 +1,30 @@
+{
+  "target_anomaly": "resource/memory",
+  "target_database": "tpcc_10W",
+  "dba_description": "Taskgen only: generate one resource_memory injection task. The LLM must directly generate a ChaosBlade raw_command TaskSpec for bounded memory pressure, including a unique --uid and matching cleanup_command; command[0] and cleanup_command[0] must be the configured DBMAGS_CHAOSBLADE_PATH/RuntimeConfig.chaosblade_path, not bare blade. Do not execute the task.",
+  "target_path": [
+    "resource_memory",
+    "slow_query"
+  ],
+  "injected_nodes": [
+    "resource_memory"
+  ],
+  "max_duration_sec": 30,
+  "max_retry_rounds": 1,
+  "risk_level": "medium",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "warmup_sec": 5,
+    "baseline_sec": 10,
+    "injection_observe_sec": 15,
+    "recovery_sec": 5,
+    "sample_interval_sec": 5,
+    "duration_sec": 1800,
+    "terminals": 4
+  }
+}

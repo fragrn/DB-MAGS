@@ -1,0 +1,56 @@
+{
+  "config": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  },
+  "events": [
+    {
+      "event": "start_workload",
+      "timestamp": 1781772545.0043561,
+      "pid": 56405,
+      "command": [
+        "/opt/homebrew/opt/openjdk/bin/java",
+        "-jar",
+        "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/.tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+        "-b",
+        "tpcc",
+        "-c",
+        "experiment_runs/taskgen/hot_update_lock_chain/20260618-084901_ba86e1/round_1/runtime_local_tpcc_10W_config.xml",
+        "--create=false",
+        "--load=false",
+        "--execute=true"
+      ],
+      "runtime_config_path": "experiment_runs/taskgen/hot_update_lock_chain/20260618-084901_ba86e1/round_1/runtime_local_tpcc_10W_config.xml"
+    },
+    {
+      "event": "stop_workload",
+      "timestamp": 1781772731.1468558,
+      "running_before_stop": false,
+      "exit_code": 1
+    }
+  ],
+  "samples": [],
+  "source": "started_by_taskgen",
+  "status": {
+    "pid": 56405,
+    "running": false,
+    "start_time": 1781772545.0043561,
+    "elapsed_sec": 186.143,
+    "exit_code": 1,
+    "stdout_tail": "",
+    "stderr_tail": "Exception in thread \"main\" org.apache.commons.configuration2.ex.ConfigurationException: Could not locate: FileLocator [basePath=null, encoding=null, fileName=experiment_runs/taskgen/hot_update_lock_chain/20260618-084901_ba86e1/round_1/runtime_local_tpcc_10W_config.xml, fileSystem=null, locationStrategy=null, sourceURL=null, urlConnectionOptions=null]\n\tat org.apache.commons.configuration2.io.FileLocatorUtils.locateOrThrow(FileLocatorUtils.java:502)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:599)\n\tat org.apache.commons.configuration2.io.FileHandler.load(FileHandler.java:572)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initFileHandler(FileBasedConfigurationBuilder.java:228)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:245)\n\tat org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder.initResultInstance(FileBasedConfigurationBuilder.java:53)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.createResult(BasicConfigurationBuilder.java:297)\n\tat org.apache.commons.configuration2.builder.BasicConfigurationBuilder.getConfiguration(BasicConfigurationBuilder.java:415)\n\tat com.oltpbenchmark.DBWorkload.buildConfiguration(DBWorkload.java:628)\n\tat com.oltpbenchmark.DBWorkload.main(DBWorkload.java:118)\n",
+    "runtime_config_path": "experiment_runs/taskgen/hot_update_lock_chain/20260618-084901_ba86e1/round_1/runtime_local_tpcc_10W_config.xml"
+  }
+}

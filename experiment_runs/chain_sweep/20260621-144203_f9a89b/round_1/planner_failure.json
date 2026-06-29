@@ -1,0 +1,505 @@
+{
+  "status": "failed",
+  "failure_type": "planner_fallback_blocked",
+  "reason": "Planner fallback blocked after tool loop failure: <urlopen error EOF occurred in violation of protocol (_ssl.c:1129)>",
+  "target_path": [
+    "resource_memory",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "resource_memory"
+  ],
+  "react_trace": [
+    {
+      "step": 1,
+      "tool": "read_memory",
+      "arguments": {
+        "anomaly": "resource_memory",
+        "limit": 20
+      },
+      "result": []
+    },
+    {
+      "step": 2,
+      "tool": "probe_os_metrics",
+      "arguments": {},
+      "result": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 4.97,
+          "5m": 7.4,
+          "15m": 7.94
+        },
+        "cpu_usage": {
+          "user_pct": 25.54,
+          "sys_pct": 26.43,
+          "idle_pct": 48.2,
+          "usage_ratio": 0.52
+        },
+        "memory": {
+          "total_kb": 1956164,
+          "active_kb": 1206840,
+          "wired_kb": 701052,
+          "free_kb": 48272,
+          "usage_ratio": 0.9753
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 369125543936,
+          "free_bytes": 125259251712,
+          "usage_ratio": 0.7466
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      }
+    },
+    {
+      "step": 3,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "inject_resource_memory_tpcc_10W",
+            "task_type": "anomaly_injection",
+            "actions": [
+              {
+                "kind": "raw_command",
+                "command": [
+                  "blade",
+                  "create",
+                  "mem",
+                  "load",
+                  "--mode",
+                  "ram",
+                  "--mem-percent",
+                  "15",
+                  "--timeout",
+                  "20",
+                  "--uid",
+                  "mem-uid-9f2c7a84"
+                ],
+                "duration_sec": 20,
+                "cwd": ".",
+                "env": {},
+                "cleanup_command": [
+                  "blade",
+                  "destroy",
+                  "mem-uid-9f2c7a84"
+                ]
+              }
+            ],
+            "expected_metrics": {
+              "os_memory_usage_ratio_delta": ">= 0.01",
+              "slow_query_count_delta": ">= 1",
+              "qps_ratio": "<= 0.7"
+            },
+            "success_criteria": [
+              "Within 15s of injection, observe Slow_queries increase by at least 1 over baseline.",
+              "Within 15s, observe QPS ratio <= 0.7 compared to baseline.",
+              "OS memory usage ratio increases by at least 0.01 during injection window."
+            ],
+            "risk_assessment": "Moderate risk of host memory pressure causing swapping or OOM killer. Bounds applied: 15% memory load, 20s timeout, and explicit cleanup via blade destroy. Monitor system and abort if critical.",
+            "metadata": {
+              "root_cause": "resource_memory"
+            }
+          }
+        ]
+      },
+      "result": {
+        "tasks": {
+          "inject_resource_memory_tpcc_10W": {
+            "task_id": "inject_resource_memory_tpcc_10W",
+            "task_type": "anomaly_injection",
+            "actions": [
+              {
+                "kind": "raw_command",
+                "command": [
+                  "blade",
+                  "create",
+                  "mem",
+                  "load",
+                  "--mode",
+                  "ram",
+                  "--mem-percent",
+                  "15",
+                  "--timeout",
+                  "20",
+                  "--uid",
+                  "mem-uid-9f2c7a84"
+                ],
+                "duration_sec": 20,
+                "cwd": ".",
+                "env": {},
+                "cleanup_command": [
+                  "blade",
+                  "destroy",
+                  "mem-uid-9f2c7a84"
+                ]
+              }
+            ],
+            "expected_metrics": {
+              "os_memory_usage_ratio_delta": ">= 0.01",
+              "slow_query_count_delta": ">= 1",
+              "qps_ratio": "<= 0.7"
+            },
+            "success_criteria": [
+              "Within 15s of injection, observe Slow_queries increase by at least 1 over baseline.",
+              "Within 15s, observe QPS ratio <= 0.7 compared to baseline.",
+              "OS memory usage ratio increases by at least 0.01 during injection window."
+            ],
+            "risk_assessment": "Moderate risk of host memory pressure causing swapping or OOM killer. Bounds applied: 15% memory load, 20s timeout, and explicit cleanup via blade destroy. Monitor system and abort if critical.",
+            "metadata": {
+              "root_cause": "resource_memory"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "inject_resource_memory_tpcc_10W": 0.0
+        }
+      }
+    },
+    {
+      "step": 4,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Threads_connected": 5,
+          "Threads_running": 4,
+          "Slow_queries": 155,
+          "Innodb_row_lock_waits": 2026001
+        },
+        "current_os_metrics": {
+          "platform": "Darwin",
+          "load_average": {
+            "1m": 4.97,
+            "5m": 7.4,
+            "15m": 7.94
+          },
+          "cpu_usage": {
+            "user_pct": 25.54,
+            "sys_pct": 26.43,
+            "idle_pct": 48.2,
+            "usage_ratio": 0.52
+          },
+          "memory": {
+            "total_kb": 1956164,
+            "active_kb": 1206840,
+            "wired_kb": 701052,
+            "free_kb": 48272,
+            "usage_ratio": 0.9753
+          },
+          "disk": {
+            "total_bytes": 494384795648,
+            "used_bytes": 369125543936,
+            "free_bytes": 125259251712,
+            "usage_ratio": 0.7466
+          },
+          "disk_io": {},
+          "network": {},
+          "file_descriptors": {
+            "open_fds": -1
+          }
+        },
+        "expected_workload": {
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "inject_resource_memory_tpcc_10W": {
+              "task_id": "inject_resource_memory_tpcc_10W",
+              "task_type": "anomaly_injection",
+              "actions": [
+                {
+                  "kind": "raw_command",
+                  "command": [
+                    "blade",
+                    "create",
+                    "mem",
+                    "load",
+                    "--mode",
+                    "ram",
+                    "--mem-percent",
+                    "15",
+                    "--timeout",
+                    "20",
+                    "--uid",
+                    "mem-uid-9f2c7a84"
+                  ],
+                  "duration_sec": 20,
+                  "cwd": ".",
+                  "env": {},
+                  "cleanup_command": [
+                    "blade",
+                    "destroy",
+                    "mem-uid-9f2c7a84"
+                  ]
+                }
+              ],
+              "expected_metrics": {
+                "os_memory_usage_ratio_delta": ">= 0.01",
+                "slow_query_count_delta": ">= 1",
+                "qps_ratio": "<= 0.7"
+              },
+              "success_criteria": [
+                "Within 15s of injection, observe Slow_queries increase by at least 1 over baseline.",
+                "Within 15s, observe QPS ratio <= 0.7 compared to baseline.",
+                "OS memory usage ratio increases by at least 0.01 during injection window."
+              ],
+              "risk_assessment": "Moderate risk of host memory pressure causing swapping or OOM killer. Bounds applied: 15% memory load, 20s timeout, and explicit cleanup via blade destroy. Monitor system and abort if critical.",
+              "metadata": {
+                "root_cause": "resource_memory"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "inject_resource_memory_tpcc_10W": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": false,
+        "reasons": [
+          "DAG required duration 20.0s exceeds injection_observe_sec 15.0s"
+        ],
+        "warnings": []
+      }
+    },
+    {
+      "step": 5,
+      "tool": "build_task_dag",
+      "arguments": {
+        "task_specs": [
+          {
+            "task_id": "inject_resource_memory_tpcc_10W",
+            "task_type": "anomaly_injection",
+            "actions": [
+              {
+                "kind": "raw_command",
+                "command": [
+                  "blade",
+                  "create",
+                  "mem",
+                  "load",
+                  "--mode",
+                  "ram",
+                  "--mem-percent",
+                  "2",
+                  "--timeout",
+                  "12",
+                  "--uid",
+                  "mem-uid-3c1f0e5b"
+                ],
+                "duration_sec": 12,
+                "cwd": ".",
+                "env": {},
+                "cleanup_command": [
+                  "blade",
+                  "destroy",
+                  "mem-uid-3c1f0e5b"
+                ]
+              }
+            ],
+            "expected_metrics": {
+              "os_memory_usage_ratio_delta": ">= 0.01",
+              "slow_query_count_delta": ">= 1",
+              "qps_ratio": "<= 0.7"
+            },
+            "success_criteria": [
+              "Within 15s of injection, observe Slow_queries increase by at least 1 over baseline.",
+              "Within 15s, observe QPS ratio <= 0.7 compared to baseline.",
+              "OS memory usage ratio increases by at least 0.01 during injection window."
+            ],
+            "risk_assessment": "Host memory usage is already high (>=97%). Using conservative 2% memory load for 12s with ChaosBlade and explicit cleanup to reduce OOM risk. Abort if system becomes unresponsive.",
+            "metadata": {
+              "root_cause": "resource_memory"
+            }
+          }
+        ]
+      },
+      "result": {
+        "tasks": {
+          "inject_resource_memory_tpcc_10W": {
+            "task_id": "inject_resource_memory_tpcc_10W",
+            "task_type": "anomaly_injection",
+            "actions": [
+              {
+                "kind": "raw_command",
+                "command": [
+                  "blade",
+                  "create",
+                  "mem",
+                  "load",
+                  "--mode",
+                  "ram",
+                  "--mem-percent",
+                  "2",
+                  "--timeout",
+                  "12",
+                  "--uid",
+                  "mem-uid-3c1f0e5b"
+                ],
+                "duration_sec": 12,
+                "cwd": ".",
+                "env": {},
+                "cleanup_command": [
+                  "blade",
+                  "destroy",
+                  "mem-uid-3c1f0e5b"
+                ]
+              }
+            ],
+            "expected_metrics": {
+              "os_memory_usage_ratio_delta": ">= 0.01",
+              "slow_query_count_delta": ">= 1",
+              "qps_ratio": "<= 0.7"
+            },
+            "success_criteria": [
+              "Within 15s of injection, observe Slow_queries increase by at least 1 over baseline.",
+              "Within 15s, observe QPS ratio <= 0.7 compared to baseline.",
+              "OS memory usage ratio increases by at least 0.01 during injection window."
+            ],
+            "risk_assessment": "Host memory usage is already high (>=97%). Using conservative 2% memory load for 12s with ChaosBlade and explicit cleanup to reduce OOM risk. Abort if system becomes unresponsive.",
+            "metadata": {
+              "root_cause": "resource_memory"
+            }
+          }
+        },
+        "edges": [],
+        "schedule": {
+          "inject_resource_memory_tpcc_10W": 0.0
+        }
+      }
+    },
+    {
+      "step": 6,
+      "tool": "check_safety",
+      "arguments": {
+        "current_db_metrics": {
+          "Threads_connected": 5,
+          "Threads_running": 4,
+          "Slow_queries": 155,
+          "Innodb_row_lock_waits": 2026001
+        },
+        "current_os_metrics": {
+          "platform": "Darwin",
+          "load_average": {
+            "1m": 4.97,
+            "5m": 7.4,
+            "15m": 7.94
+          },
+          "cpu_usage": {
+            "user_pct": 25.54,
+            "sys_pct": 26.43,
+            "idle_pct": 48.2,
+            "usage_ratio": 0.52
+          },
+          "memory": {
+            "total_kb": 1956164,
+            "active_kb": 1206840,
+            "wired_kb": 701052,
+            "free_kb": 48272,
+            "usage_ratio": 0.9753
+          },
+          "disk": {
+            "total_bytes": 494384795648,
+            "used_bytes": 369125543936,
+            "free_bytes": 125259251712,
+            "usage_ratio": 0.7466
+          },
+          "disk_io": {},
+          "network": {},
+          "file_descriptors": {
+            "open_fds": -1
+          }
+        },
+        "expected_workload": {
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "terminals": 4
+        },
+        "injection_observe_sec": 15,
+        "max_duration_sec": 30,
+        "task_dag": {
+          "tasks": {
+            "inject_resource_memory_tpcc_10W": {
+              "task_id": "inject_resource_memory_tpcc_10W",
+              "task_type": "anomaly_injection",
+              "actions": [
+                {
+                  "kind": "raw_command",
+                  "command": [
+                    "blade",
+                    "create",
+                    "mem",
+                    "load",
+                    "--mode",
+                    "ram",
+                    "--mem-percent",
+                    "2",
+                    "--timeout",
+                    "12",
+                    "--uid",
+                    "mem-uid-3c1f0e5b"
+                  ],
+                  "duration_sec": 12,
+                  "cwd": ".",
+                  "env": {},
+                  "cleanup_command": [
+                    "blade",
+                    "destroy",
+                    "mem-uid-3c1f0e5b"
+                  ]
+                }
+              ],
+              "expected_metrics": {
+                "os_memory_usage_ratio_delta": ">= 0.01",
+                "slow_query_count_delta": ">= 1",
+                "qps_ratio": "<= 0.7"
+              },
+              "success_criteria": [
+                "Within 15s of injection, observe Slow_queries increase by at least 1 over baseline.",
+                "Within 15s, observe QPS ratio <= 0.7 compared to baseline.",
+                "OS memory usage ratio increases by at least 0.01 during injection window."
+              ],
+              "risk_assessment": "Host memory usage is already high (>=97%). Using conservative 2% memory load for 12s with ChaosBlade and explicit cleanup to reduce OOM risk. Abort if system becomes unresponsive.",
+              "metadata": {
+                "root_cause": "resource_memory"
+              }
+            }
+          },
+          "edges": [],
+          "schedule": {
+            "inject_resource_memory_tpcc_10W": 0.0
+          }
+        }
+      },
+      "result": {
+        "approved": true,
+        "reasons": [],
+        "warnings": []
+      }
+    }
+  ],
+  "context": {
+    "target_path": [
+      "resource_memory",
+      "slow_query",
+      "qps_drop"
+    ],
+    "injected_nodes": [
+      "resource_memory"
+    ],
+    "target_database": "tpcc_10W"
+  },
+  "timestamp": "2026-06-21T17:03:50.204888+00:00"
+}

@@ -1,0 +1,40 @@
+{
+  "tasks": {
+    "resource_io_io_stress_short": {
+      "task_id": "resource_io_io_stress_short",
+      "task_type": "chaos",
+      "actions": [
+        {
+          "kind": "chaosblade",
+          "resource_type": "io",
+          "duration_sec": 15,
+          "intensity": "high",
+          "chaosblade_path": ".tools/chaosblade-1.8.0-darwin_arm64/blade"
+        }
+      ],
+      "expected_metrics": {
+        "io_usage_ratio": ">=1.5"
+      },
+      "success_criteria": {},
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [
+        {
+          "kind": "chaosblade_destroy",
+          "uid": "{resource_io_io_stress_short_uid}"
+        }
+      ],
+      "risk_assessment": "high",
+      "metadata": {
+        "root_cause": "resource_io",
+        "resource_type": "io",
+        "duration_sec": 15,
+        "intensity": "high"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "resource_io_io_stress_short": 0.0
+  }
+}

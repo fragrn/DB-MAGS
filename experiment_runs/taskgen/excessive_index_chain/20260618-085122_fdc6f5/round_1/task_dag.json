@@ -1,0 +1,46 @@
+{
+  "tasks": {
+    "excessive_index_orderline_write_amp": {
+      "task_id": "excessive_index_orderline_write_amp",
+      "task_type": "lock_conflict",
+      "actions": [
+        {
+          "kind": "lock_conflict",
+          "database": "tpcc_10W",
+          "table": "order_line",
+          "key_column": "ol_o_id",
+          "holder_concurrency": 2,
+          "waiter_concurrency": 2,
+          "hold_sec": 15,
+          "lock_type": "record_lock"
+        }
+      ],
+      "expected_metrics": {
+        "lock_waits_ratio": ">=2.0",
+        "blocked_session_count": ">=1"
+      },
+      "success_criteria": {
+        "blocked_session_count": ">=1"
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [
+        {
+          "kind": "kill_blocking_sessions",
+          "database": "tpcc_10W"
+        }
+      ],
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "excessive_index",
+        "table": "order_line",
+        "key_column": "ol_o_id",
+        "lock_type": "record_lock"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "excessive_index_orderline_write_amp": 0.0
+  }
+}

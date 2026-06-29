@@ -1,0 +1,218 @@
+{
+  "target_path": [
+    "traffic_surge",
+    "threads_concurrency_up"
+  ],
+  "injected_nodes": [
+    "traffic_surge"
+  ],
+  "task_specs": [
+    {
+      "task_id": "traffic_surge_tpcc_burst_002",
+      "task_type": "traffic_surge",
+      "actions": [
+        {
+          "kind": "benchbase_burst_command",
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "command": [
+            "/opt/homebrew/opt/openjdk/bin/java",
+            "-jar",
+            ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+            "-b",
+            "tpcc",
+            "-c",
+            ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+            "-d",
+            "tpcc_10W",
+            "execute"
+          ],
+          "duration_sec": 12,
+          "terminals": 10,
+          "rate": 500
+        }
+      ],
+      "expected_metrics": [
+        {
+          "name": "Threads_running",
+          "expected_direction": "up"
+        },
+        {
+          "name": "Threads_connected",
+          "expected_direction": "up"
+        }
+      ],
+      "success_criteria": [
+        "Threads_running increases by >= 4 above pre-burst level during execution window",
+        "Burst completes 12s without fatal errors"
+      ],
+      "risk_assessment": [
+        "Potential CPU and IO pressure; may elevate lock waits",
+        "High OS memory utilization detected; short duration and moderate rate to reduce risk"
+      ],
+      "metadata": {
+        "root_cause": "traffic_surge",
+        "target_path": [
+          "traffic_surge",
+          "threads_concurrency_up"
+        ]
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "traffic_surge_tpcc_burst_002": {
+        "task_id": "traffic_surge_tpcc_burst_002",
+        "task_type": "traffic_surge",
+        "actions": [
+          {
+            "kind": "benchbase_burst_command",
+            "benchmark": "tpcc",
+            "database": "tpcc_10W",
+            "command": [
+              "/opt/homebrew/opt/openjdk/bin/java",
+              "-jar",
+              ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+              "-b",
+              "tpcc",
+              "-c",
+              ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+              "-d",
+              "tpcc_10W",
+              "execute"
+            ],
+            "duration_sec": 12,
+            "terminals": 10,
+            "rate": 500
+          }
+        ],
+        "expected_metrics": [
+          {
+            "name": "Threads_running",
+            "expected_direction": "up"
+          },
+          {
+            "name": "Threads_connected",
+            "expected_direction": "up"
+          }
+        ],
+        "success_criteria": [
+          "Threads_running increases by >= 4 above pre-burst level during execution window",
+          "Burst completes 12s without fatal errors"
+        ],
+        "risk_assessment": [
+          "Potential CPU and IO pressure; may elevate lock waits",
+          "High OS memory utilization detected; short duration and moderate rate to reduce risk"
+        ],
+        "metadata": {
+          "root_cause": "traffic_surge",
+          "target_path": [
+            "traffic_surge",
+            "threads_concurrency_up"
+          ]
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "traffic_surge_tpcc_burst_002": 0.0
+    }
+  },
+  "reasoning": "We inject a traffic_surge aligned with the active TPCC background load using BenchBase in burst mode against tpcc_10W. Parameters (12s, 10 terminals, rate 500) fit within the 15s observation window and 30s max, and should raise Threads_running/Threads_connected, demonstrating the threads_concurrency_up intermediate node without excessive risk given high current memory pressure.",
+  "safety_check": {
+    "approved": true,
+    "reasons": [],
+    "warnings": []
+  },
+  "react_trace": [
+    {
+      "round": 1,
+      "thought": "Environment snapshot collected. Schema has 9 tables. DB version: 9.6.0. Max connections: 151.",
+      "action": "probe_full_snapshot",
+      "observe": "Tables: ['customer', 'district', 'history', 'item', 'new_order']",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:38+00:00"
+    },
+    {
+      "round": 2,
+      "thought": "LLM requested planning tool",
+      "action": "read_memory",
+      "observe": "[]",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    },
+    {
+      "round": 3,
+      "thought": "LLM requested planning tool",
+      "action": "probe_db_metrics",
+      "observe": "{\"Aborted_connects\": \"0\", \"Com_delete\": \"357149\", \"Com_insert\": \"2700273\", \"Com_select\": \"20862534\", \"Com_update\": \"10347266\", \"Created_tmp_disk_tables\": \"2\", \"Innodb_row_lock_time\": \"19291027\", \"Innodb_row_lock_time_avg\": \"14\", \"Innodb_row_lock_waits\": \"1301161\", \"Max_used_connections\": \"105\", \"Slow_queries\": \"46\", \"Sort_merge_passes\": \"0\", \"Threads_connected\": \"5\", \"Threads_running\": \"6\", \"innodb_lock_wait_timeout\": \"50\", \"max_connections\": 151, \"wait_timeout\": \"28800\", \"processlist\": [{\"Id\": 5, \"User\": \"event_scheduler\", \"Host\": \"localhost\", \"db\": null, \"Command\": \"Daemon\", \"Time\": 1920712, \"State\": \"Waiting on empty queue\", \"Info\": null}, {\"Id\": 9227, \"User\": \"root\", \"Host\": \"localhost:52532\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"waiting for handler commit\", \"Info\": \"commit\"}, {\"Id\": 9228, \"User\": \"root\", \"Host\": \"localhost:52533\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"waiting for handler commit\", \"Info\": \"commit\"}, {\"Id\": 9229, \"User\": \"root\", \"Host\": \"localhost:52534\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"waiting for handler commit\", \"Info\": \"commit\"}, {\"Id\": 9230, \"User\": \"root\", \"Host\": \"localhost:52535\", \"db\": \"tpcc_10w\", \"Command\": \"Sleep\", \"Time\": 0, \"State\": \"\", \"Info\": null}, {\"Id\": 9232, \"User\": \"root\", \"Host\": \"localhost:52692\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"init\", \"Info\": \"SHOW FULL PROCESSLIST\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    },
+    {
+      "round": 4,
+      "thought": "LLM requested planning tool",
+      "action": "probe_os_metrics",
+      "observe": "{\"platform\": \"Darwin\", \"load_average\": {\"1m\": 4.53, \"5m\": 5.14, \"15m\": 4.73}, \"cpu_usage\": {\"user_pct\": 19.5, \"sys_pct\": 19.39, \"idle_pct\": 61.1, \"usage_ratio\": 0.389}, \"memory\": {\"total_kb\": 2285460, \"active_kb\": 1473700, \"wired_kb\": 793768, \"free_kb\": 17992, \"usage_ratio\": 0.9921}, \"disk\": {\"total_bytes\": 494384795648, \"used_bytes\": 365702324224, \"free_bytes\": 128682471424, \"usage_ratio\": 0.7397}, \"disk_io\": {}, \"network\": {}, \"file_descriptors\": {\"open_fds\": -1}}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    },
+    {
+      "round": 5,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"traffic_surge_tpcc_burst_001\": {\"task_id\": \"traffic_surge_tpcc_burst_001\", \"task_type\": \"traffic_surge\", \"actions\": [{\"kind\": \"benchbase_burst_command\", \"benchmark\": \"tpcc\", \"database\": \"tpcc_10W\", \"command\": [\"/opt/homebrew/opt/openjdk/bin/java\", \"-jar\", \".tools/benchbase-main/target/benchbase-mysql/benchbase.jar\", \"-b\", \"tpcc\", \"-c\", \".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml\", \"-d\", \"tpcc_10W\", \"execute\"], \"duration_sec\": 20, \"terminals\": 12, \"rate\": 800}], \"expected_metrics\": [{\"name\": \"Threads_running\", \"expected_direction\": \"up\"}, {\"name\": \"Threads_connected\", \"expected_direction\": \"up\"}], \"success_criteria\": [\"Threads_running increases by >= 5 above pre-burst level during execution window\", \"Burst runs the full 20s without fatal errors\"], \"risk_assessment\": [\"Potential CPU and IO pressure; may elevate lock waits\", \"Short duration and limited terminals mitigate risk\"], \"metadata\": {\"root_cause\": \"traffic_surge\", \"target_path\": [\"traffic_surge\", \"threads_concurrency_up\"]}}}, \"edges\": [], \"schedule\": {\"traffic_surge_tpcc_burst_001\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    },
+    {
+      "round": 6,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": false, \"reasons\": [\"DAG required duration 20.0s exceeds injection_observe_sec 15.0s\"], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    },
+    {
+      "round": 7,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"traffic_surge_tpcc_burst_002\": {\"task_id\": \"traffic_surge_tpcc_burst_002\", \"task_type\": \"traffic_surge\", \"actions\": [{\"kind\": \"benchbase_burst_command\", \"benchmark\": \"tpcc\", \"database\": \"tpcc_10W\", \"command\": [\"/opt/homebrew/opt/openjdk/bin/java\", \"-jar\", \".tools/benchbase-main/target/benchbase-mysql/benchbase.jar\", \"-b\", \"tpcc\", \"-c\", \".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml\", \"-d\", \"tpcc_10W\", \"execute\"], \"duration_sec\": 12, \"terminals\": 10, \"rate\": 500}], \"expected_metrics\": [{\"name\": \"Threads_running\", \"expected_direction\": \"up\"}, {\"name\": \"Threads_connected\", \"expected_direction\": \"up\"}], \"success_criteria\": [\"Threads_running increases by >= 4 above pre-burst level during execution window\", \"Burst completes 12s without fatal errors\"], \"risk_assessment\": [\"Potential CPU and IO pressure; may elevate lock waits\", \"High OS memory utilization detected; short duration and moderate rate to reduce risk\"], \"metadata\": {\"root_cause\": \"traffic_surge\", \"target_path\": [\"traffic_surge\", \"threads_concurrency_up\"]}}}, \"edges\": [], \"schedule\": {\"traffic_surge_tpcc_burst_002\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    },
+    {
+      "round": 8,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": true, \"reasons\": [], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    },
+    {
+      "round": 9,
+      "thought": "LLM returned final plan JSON",
+      "action": "final_answer",
+      "observe": "{\"step\": 7, \"tool\": \"final_answer\", \"content\": \"{\\n  \\\"target_path\\\": [\\n    \\\"traffic_surge\\\",\\n    \\\"threads_concurrency_up\\\"\\n  ],\\n  \\\"injected_nodes\\\": [\\n    \\\"traffic_surge\\\"\\n  ],\\n  \\\"task_specs\\\": [\\n    {\\n      \\\"task_id\\\": \\\"traffic_surge_tpcc_burst_002\\\",\\n      \\\"task_type\\\": \\\"traffic_surge\\\",\\n      \\\"actions\\\": [\\n        {\\n          \\\"kind\\\": \\\"benchbase_burst_command\\\",\\n          \\\"benchmark\\\": \\\"tpcc\\\",\\n          \\\"database\\\": \\\"tpcc_10W\\\",\\n          \\\"command\\\": [\\n            \\\"/opt/homebrew/opt/openjdk/bin/java\\\",\\n            \\\"-jar\\\",\\n            \\\".tools/benchbase-main/target/benchbase-mysql/benchbase.jar\\\",\\n            \\\"-b\\\",\\n            \\\"tpcc\\\",\\n            \\\"-c\\\",\\n            \\\".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml\\\",\\n            \\\"-d\\\",\\n            \\\"tpcc_10W\\\",\\n            \\\"execute\\\"\\n          ],\\n          \\\"duration_sec\\\": 12,\\n          \\\"terminals\\\": 10,\\n          \\\"rate\\\": 500\\n        }\\n      ],\\n      \\\"expected_metrics\\\": [\\n        {\\n          \\\"name\\\": \\\"Threads_running\\\",\\n          \\\"expected_direction\\\": \\\"up\\\"\\n        },\\n        {\\n          \\\"name\\\": \\\"Threads_connected\\\",\\n          \\\"expected_direction\\\": \\\"up\\\"\\n        }\\n      ],\\n      \\\"success_criteria\\\": [\\n        \\\"Threads_running increases by >= 4 above pre-burst level during execution window\\\",\\n        \\\"Burst completes 12s without fatal errors\\\"\\n      ],\\n      \\\"risk_assessment\\\": [\\n        \\\"Potential CPU and IO pressure; may elevate lock waits\\\",\\n        \\\"High OS memory utilization detected; short duration and moderate rate to reduce risk\\\"\\n      ],\\n      \\\"metadata\\\": {\\n        \\\"root_cause\\\": \\\"traffic_surge\\\",\\n        \\\"target_path\\\": [\\n          \\\"traffic_surge\\\",\\n          \\\"threads_concurrency_up\\\"\\n        ]\\n      }\\n    }\\n  ],\\n  \\\"dependencies\\\": [],\\n  \\\"dag\\\": {\\n    \\\"tasks\\\": {\\n      \\\"traffic_surge_tpcc_burst_002\\\": {\\n        \\\"task_id\\\": \\\"traffic_surge_tpcc_burst_002\\\",\\n        \\\"task_type\\\": \\\"traffic_surge\\\",\\n        \\\"actions\\\": [\\n          {\\n            \\\"kind\\\": \\\"benchbase_burst_command\\\",\\n            \\\"benchmark\\\": \\\"tpcc\\\",\\n            \\\"database\\\": \\\"tpcc_10W\\\",\\n            \\\"command\\\": [\\n   \"}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    },
+    {
+      "round": 10,
+      "thought": "ReAct generated 1 TaskSpecs for injected nodes ['traffic_surge']",
+      "action": "final_plan_validation",
+      "observe": "{\"task_ids\": [\"traffic_surge_tpcc_burst_002\"]}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    },
+    {
+      "round": 11,
+      "thought": "DAG built with 1 tasks and 0 edges",
+      "action": "build_task_dag",
+      "observe": "Task IDs: ['traffic_surge_tpcc_burst_002']",
+      "decision": "",
+      "timestamp": "2026-06-20T11:44:38+00:00"
+    }
+  ]
+}

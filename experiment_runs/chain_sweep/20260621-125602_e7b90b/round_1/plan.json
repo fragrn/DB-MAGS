@@ -1,0 +1,218 @@
+{
+  "target_path": [
+    "resource_io",
+    "resource_bottleneck_io",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "resource_io"
+  ],
+  "task_specs": [
+    {
+      "task_id": "resource_io_blade_burn_tpcc10w",
+      "task_type": "resource_io",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "blade",
+            "create",
+            "disk",
+            "burn",
+            "--read",
+            "--percent",
+            "90",
+            "--path",
+            "/",
+            "--timeout",
+            "14",
+            "--uid",
+            "io-burn-tpcc10w-0e6e5d86-7e0e-45d7-8c54-5a7c3ad96c1f"
+          ],
+          "duration_sec": 14,
+          "cwd": "/",
+          "env": {},
+          "cleanup_command": [
+            "blade",
+            "destroy",
+            "io-burn-tpcc10w-0e6e5d86-7e0e-45d7-8c54-5a7c3ad96c1f"
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "resource_bottleneck_io": {
+          "io_wait_increase": true,
+          "disk_utilization_ratio": ">=0.85"
+        },
+        "slow_query": {
+          "slow_query_count_delta": ">=1",
+          "p95_latency_ratio": ">=1.5"
+        },
+        "qps_drop": {
+          "qps_ratio": "<=0.7"
+        }
+      },
+      "success_criteria": "Within the 15s observation window: OS shows elevated disk utilization or IO wait; MySQL slow_query count increases or p95 latency degrades by >=50%; QPS drops by >=30% vs baseline.",
+      "risk_assessment": "Applies read-heavy disk burn via ChaosBlade to induce IO saturation. May cause temporary latency and QPS degradation. Cleanup destroys the ChaosBlade experiment UID to restore IO.",
+      "metadata": {
+        "root_cause": "resource_io"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "resource_io_blade_burn_tpcc10w": {
+        "task_id": "resource_io_blade_burn_tpcc10w",
+        "task_type": "resource_io",
+        "actions": [
+          {
+            "kind": "raw_command",
+            "command": [
+              "blade",
+              "create",
+              "disk",
+              "burn",
+              "--read",
+              "--percent",
+              "90",
+              "--path",
+              "/",
+              "--timeout",
+              "14",
+              "--uid",
+              "io-burn-tpcc10w-0e6e5d86-7e0e-45d7-8c54-5a7c3ad96c1f"
+            ],
+            "duration_sec": 14,
+            "cwd": "/",
+            "env": {},
+            "cleanup_command": [
+              "blade",
+              "destroy",
+              "io-burn-tpcc10w-0e6e5d86-7e0e-45d7-8c54-5a7c3ad96c1f"
+            ]
+          }
+        ],
+        "expected_metrics": {
+          "resource_bottleneck_io": {
+            "io_wait_increase": true,
+            "disk_utilization_ratio": ">=0.85"
+          },
+          "slow_query": {
+            "slow_query_count_delta": ">=1",
+            "p95_latency_ratio": ">=1.5"
+          },
+          "qps_drop": {
+            "qps_ratio": "<=0.7"
+          }
+        },
+        "success_criteria": "Within the 15s observation window: OS shows elevated disk utilization or IO wait; MySQL slow_query count increases or p95 latency degrades by >=50%; QPS drops by >=30% vs baseline.",
+        "risk_assessment": "Applies read-heavy disk burn via ChaosBlade to induce IO saturation. May cause temporary latency and QPS degradation. Cleanup destroys the ChaosBlade experiment UID to restore IO.",
+        "metadata": {
+          "root_cause": "resource_io"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "resource_io_blade_burn_tpcc10w": 0.0
+    }
+  },
+  "reasoning": "The resource_io task uses ChaosBlade disk burn with a unique UID to artificially saturate IO, inducing resource_bottleneck_io. This elevated IO wait should slow query execution (slow_query) and reduce throughput (qps_drop) under the TPCC background workload. Duration is aligned to the 15s observation window, and a matching destroy cleanup is provided.",
+  "safety_check": {
+    "approved": true,
+    "reasons": [],
+    "warnings": []
+  },
+  "react_trace": [
+    {
+      "round": 1,
+      "thought": "Environment snapshot collected. Schema has 9 tables. DB version: 9.6.0. Max connections: 151.",
+      "action": "probe_full_snapshot",
+      "observe": "Tables: ['customer', 'district', 'history', 'item', 'new_order']",
+      "decision": "",
+      "timestamp": "2026-06-21T13:12:02+00:00"
+    },
+    {
+      "round": 2,
+      "thought": "LLM requested planning tool",
+      "action": "read_memory",
+      "observe": "[]",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    },
+    {
+      "round": 3,
+      "thought": "LLM requested planning tool",
+      "action": "probe_db_metrics",
+      "observe": "{\"Aborted_connects\": \"0\", \"Com_delete\": \"552770\", \"Com_insert\": \"4151272\", \"Com_select\": \"32247601\", \"Com_update\": \"15995124\", \"Created_tmp_disk_tables\": \"2\", \"Innodb_row_lock_time\": \"52635066\", \"Innodb_row_lock_time_avg\": \"26\", \"Innodb_row_lock_waits\": \"2001834\", \"Max_used_connections\": \"105\", \"Slow_queries\": \"145\", \"Sort_merge_passes\": \"0\", \"Threads_connected\": \"5\", \"Threads_running\": \"5\", \"innodb_lock_wait_timeout\": \"50\", \"max_connections\": 151, \"wait_timeout\": \"28800\", \"processlist\": [{\"Id\": 5, \"User\": \"event_scheduler\", \"Host\": \"localhost\", \"db\": null, \"Command\": \"Daemon\", \"Time\": 2015160, \"State\": \"Waiting on empty queue\", \"Info\": null}, {\"Id\": 9592, \"User\": \"root\", \"Host\": \"localhost:54668\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"waiting for handler commit\", \"Info\": \"commit\"}, {\"Id\": 9593, \"User\": \"root\", \"Host\": \"localhost:54669\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"waiting for handler commit\", \"Info\": \"commit\"}, {\"Id\": 9594, \"User\": \"root\", \"Host\": \"localhost:54670\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"updating\", \"Info\": \"UPDATE warehouse\\n       SET W_YTD = W_YTD + 3216.070068359375\\n     WHERE W_ID = 1\"}, {\"Id\": 9595, \"User\": \"root\", \"Host\": \"localhost:54671\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"updating\", \"Info\": \"UPDATE warehouse\\n       SET W_YTD = W_YTD + 2866.179931640625\\n     WHERE W_ID = 1\"}, {\"Id\": 9609, \"User\": \"root\", \"Host\": \"localhost:56926\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"init\", \"Info\": \"SHOW FULL PROCESSLIST\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    },
+    {
+      "round": 4,
+      "thought": "LLM requested planning tool",
+      "action": "probe_os_metrics",
+      "observe": "{\"platform\": \"Darwin\", \"load_average\": {\"1m\": 4.34, \"5m\": 6.71, \"15m\": 7.93}, \"cpu_usage\": {}, \"memory\": {\"total_kb\": 2055304, \"active_kb\": 1342992, \"wired_kb\": 693448, \"free_kb\": 18864, \"usage_ratio\": 0.9908}, \"disk\": {\"total_bytes\": 494384795648, \"used_bytes\": 368654135296, \"free_bytes\": 125730660352, \"usage_ratio\": 0.7457}, \"disk_io\": {}, \"network\": {}, \"file_descriptors\": {\"open_fds\": -1}}",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    },
+    {
+      "round": 5,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"resource_io_blade_burn_tpcc10w\": {\"task_id\": \"resource_io_blade_burn_tpcc10w\", \"task_type\": \"resource_io\", \"actions\": [{\"kind\": \"raw_command\", \"command\": [\"blade\", \"create\", \"disk\", \"burn\", \"--read\", \"--percent\", \"85\", \"--path\", \"/\", \"--timeout\", \"22\", \"--uid\", \"io-burn-tpcc10w-20260621-8f3c7a1b\"], \"duration_sec\": 22, \"cwd\": \"/\", \"env\": {}, \"cleanup_command\": [\"blade\", \"destroy\", \"io-burn-tpcc10w-20260621-8f3c7a1b\"]}], \"expected_metrics\": {\"resource_bottleneck_io\": {\"disk_usage_ratio_delta\": \">=0.1\", \"io_wait_increase\": true}, \"slow_query\": {\"slow_query_count_delta\": \">=1\", \"p95_latency_ratio\": \">=1.5\"}, \"qps_drop\": {\"qps_ratio\": \"<=0.7\"}}, \"success_criteria\": \"During and within 15s after injection: observe increased IO wait or disk utilization; MySQL slow_query count increases or p95 latency degrades by >=50%; QPS drops by >=30% relative to baseline.\", \"risk_assessment\": \"Creates artificial disk IO pressure via ChaosBlade disk burn (read). May cause temporary query latency spikes and QPS degradation. Ensure cleanup destroys the ChaosBlade experiment UID to restore normal IO.\", \"metadata\": {\"root_cause\": \"resource_io\"}}}, \"edges\": [], \"schedule\": {\"resource_io_blade_burn_tpcc10w\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    },
+    {
+      "round": 6,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": false, \"reasons\": [\"DAG required duration 22.0s exceeds injection_observe_sec 15.0s\"], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    },
+    {
+      "round": 7,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"resource_io_blade_burn_tpcc10w\": {\"task_id\": \"resource_io_blade_burn_tpcc10w\", \"task_type\": \"resource_io\", \"actions\": [{\"kind\": \"raw_command\", \"command\": [\"blade\", \"create\", \"disk\", \"burn\", \"--read\", \"--percent\", \"90\", \"--path\", \"/\", \"--timeout\", \"14\", \"--uid\", \"io-burn-tpcc10w-0e6e5d86-7e0e-45d7-8c54-5a7c3ad96c1f\"], \"duration_sec\": 14, \"cwd\": \"/\", \"env\": {}, \"cleanup_command\": [\"blade\", \"destroy\", \"io-burn-tpcc10w-0e6e5d86-7e0e-45d7-8c54-5a7c3ad96c1f\"]}], \"expected_metrics\": {\"resource_bottleneck_io\": {\"io_wait_increase\": true, \"disk_utilization_ratio\": \">=0.85\"}, \"slow_query\": {\"slow_query_count_delta\": \">=1\", \"p95_latency_ratio\": \">=1.5\"}, \"qps_drop\": {\"qps_ratio\": \"<=0.7\"}}, \"success_criteria\": \"Within the 15s observation window: OS shows elevated disk utilization or IO wait; MySQL slow_query count increases or p95 latency degrades by >=50%; QPS drops by >=30% vs baseline.\", \"risk_assessment\": \"Applies read-heavy disk burn via ChaosBlade to induce IO saturation. May cause temporary latency and QPS degradation. Cleanup destroys the ChaosBlade experiment UID to restore IO.\", \"metadata\": {\"root_cause\": \"resource_io\"}}}, \"edges\": [], \"schedule\": {\"resource_io_blade_burn_tpcc10w\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    },
+    {
+      "round": 8,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": true, \"reasons\": [], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    },
+    {
+      "round": 9,
+      "thought": "LLM returned final plan JSON",
+      "action": "final_answer",
+      "observe": "{\"step\": 7, \"tool\": \"final_answer\", \"content\": \"{\\n  \\\"target_path\\\": [\\\"resource_io\\\", \\\"resource_bottleneck_io\\\", \\\"slow_query\\\", \\\"qps_drop\\\"],\\n  \\\"injected_nodes\\\": [\\\"resource_io\\\"],\\n  \\\"task_specs\\\": [\\n    {\\n      \\\"task_id\\\": \\\"resource_io_blade_burn_tpcc10w\\\",\\n      \\\"task_type\\\": \\\"resource_io\\\",\\n      \\\"actions\\\": [\\n        {\\n          \\\"kind\\\": \\\"raw_command\\\",\\n          \\\"command\\\": [\\\"blade\\\", \\\"create\\\", \\\"disk\\\", \\\"burn\\\", \\\"--read\\\", \\\"--percent\\\", \\\"90\\\", \\\"--path\\\", \\\"/\\\", \\\"--timeout\\\", \\\"14\\\", \\\"--uid\\\", \\\"io-burn-tpcc10w-0e6e5d86-7e0e-45d7-8c54-5a7c3ad96c1f\\\"],\\n          \\\"duration_sec\\\": 14,\\n          \\\"cwd\\\": \\\"/\\\",\\n          \\\"env\\\": {},\\n          \\\"cleanup_command\\\": [\\\"blade\\\", \\\"destroy\\\", \\\"io-burn-tpcc10w-0e6e5d86-7e0e-45d7-8c54-5a7c3ad96c1f\\\"]\\n        }\\n      ],\\n      \\\"expected_metrics\\\": {\\n        \\\"resource_bottleneck_io\\\": {\\n          \\\"io_wait_increase\\\": true,\\n          \\\"disk_utilization_ratio\\\": \\\">=0.85\\\"\\n        },\\n        \\\"slow_query\\\": {\\n          \\\"slow_query_count_delta\\\": \\\">=1\\\",\\n          \\\"p95_latency_ratio\\\": \\\">=1.5\\\"\\n        },\\n        \\\"qps_drop\\\": {\\n          \\\"qps_ratio\\\": \\\"<=0.7\\\"\\n        }\\n      },\\n      \\\"success_criteria\\\": \\\"Within the 15s observation window: OS shows elevated disk utilization or IO wait; MySQL slow_query count increases or p95 latency degrades by >=50%; QPS drops by >=30% vs baseline.\\\",\\n      \\\"risk_assessment\\\": \\\"Applies read-heavy disk burn via ChaosBlade to induce IO saturation. May cause temporary latency and QPS degradation. Cleanup destroys the ChaosBlade experiment UID to restore IO.\\\",\\n      \\\"metadata\\\": {\\n        \\\"root_cause\\\": \\\"resource_io\\\"\\n      }\\n    }\\n  ],\\n  \\\"dependencies\\\": [],\\n  \\\"dag\\\": {\\n    \\\"tasks\\\": {\\n      \\\"resource_io_blade_burn_tpcc10w\\\": {\\n        \\\"task_id\\\": \\\"resource_io_blade_burn_tpcc10w\\\",\\n        \\\"task_type\\\": \\\"resource_io\\\",\\n        \\\"actions\\\": [\\n          {\\n            \\\"kind\\\": \\\"raw_command\\\",\\n            \\\"command\\\": [\\\"blade\\\", \\\"create\\\", \\\"disk\\\", \\\"burn\\\", \\\"--read\\\", \\\"--percent\\\", \\\"90\\\", \\\"--path\\\", \\\"/\\\", \\\"--timeout\\\", \\\"14\\\", \\\"--uid\\\", \\\"io-burn-tpcc10w-0e6e5d86-7e0e-45d7-8c54-5a7c3ad96c1f\\\"],\\n            \\\"duration_sec\\\": 14,\\n            \\\"cw\"}",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    },
+    {
+      "round": 10,
+      "thought": "ReAct generated 1 TaskSpecs for injected nodes ['resource_io']",
+      "action": "final_plan_validation",
+      "observe": "{\"task_ids\": [\"resource_io_blade_burn_tpcc10w\"]}",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    },
+    {
+      "round": 11,
+      "thought": "DAG built with 1 tasks and 0 edges",
+      "action": "build_task_dag",
+      "observe": "Task IDs: ['resource_io_blade_burn_tpcc10w']",
+      "decision": "",
+      "timestamp": "2026-06-21T14:26:10+00:00"
+    }
+  ]
+}

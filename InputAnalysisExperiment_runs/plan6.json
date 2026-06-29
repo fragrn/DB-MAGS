@@ -1,0 +1,195 @@
+{
+  "post_understanding": {
+    "summary": "After routine Windows Updates and reboots on a SQL Server 2008 R2 SP3 machine, backups and queries became ~4–6x slower. Backup throughput dropped from ~192 MB/s to ~32 MB/s for a ~3 TB database on RAID10. Backup-to-NUL testing indicated the bottleneck was read speed. Ultimately, increasing MAXDOP from 4 to 8/16 restored both backup and query performance.",
+    "symptoms": [
+      "backup throughput drop (192 MB/s -> 32 MB/s)",
+      "significantly longer backup duration (3.5h -> 20h)",
+      "general query slowness post-reboot",
+      "NUL backup also slow, indicating read-side bottleneck"
+    ],
+    "suspected_root_causes": [
+      "MAXDOP set too low, limiting backup/compression/read-side parallelism",
+      "configuration change taking effect after reboot",
+      "less likely: network/NIC driver (ruled out by NUL backup)",
+      "less likely: storage/RAID controller behavior change"
+    ],
+    "key_evidence": [
+      "Backups to NUL showed the bottleneck seems to be the read speed",
+      "Changing MAXDOP from 4 to 8 (and 16) restored backup and query performance",
+      "Balanced vs High Performance power plan change did not affect backup speed",
+      "Throughput reduction scale (~6x) consistent across backups and queries"
+    ],
+    "assumptions": [
+      "ASSUMPTION: Backups use WITH COMPRESSION, increasing CPU involvement and potential sensitivity to parallelism.",
+      "ASSUMPTION: Backups are to local or fast destination; for isolation we will use backup to DISK and to NUL to separate read vs write.",
+      "ASSUMPTION: Original slowdown occurred without other heavy workloads; we will limit background noise to isolate effects.",
+      "ASSUMPTION: Database files are spread across multiple underlying disks (or multiple data files) to allow parallel read throughput in the baseline.",
+      "ASSUMPTION: SQL Server 2008 R2 SP3 on Windows Server (version not critical for reproduction), physical or VM with multiple logical CPUs (≥8).",
+      "ASSUMPTION: We will scale the database size down (e.g., 200–500 GB) for practicality; relative throughput changes are the validation target.",
+      "ASSUMPTION: MAXDOP change influences backup/compression/read-ahead behavior sufficiently to produce measurable throughput differences on SQL Server 2008 R2."
+    ],
+    "confidence": 0.63
+  },
+  "experiment_environment": {
+    "dbms": "sqlserver_2008_r2_sp3",
+    "target_database": "DBMAGS_PerfIO",
+    "target_tables": [
+      {
+        "table": "dbo.FactBig",
+        "purpose": "Large heap/clustered table to provide substantial sequential read workload during backup and NUL backup.",
+        "columns": [
+          {
+            "name": "FactID",
+            "type": "BIGINT IDENTITY(1,1) PRIMARY KEY",
+            "role": "primary key"
+          },
+          {
+            "name": "DimA",
+            "type": "INT",
+            "role": "filter"
+          },
+          {
+            "name": "DimB",
+            "type": "INT",
+            "role": "filter"
+          },
+          {
+            "name": "EventDate",
+            "type": "DATETIME",
+            "role": "partitioning/filter (optional)"
+          },
+          {
+            "name": "Payload",
+            "type": "VARBINARY(8000)",
+            "role": "bulk data to inflate size"
+          },
+          {
+            "name": "Filler",
+            "type": "CHAR(2000)",
+            "role": "bulk character data to increase row length"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "approx. 300 million rows (to achieve ~300–500 GB database size depending on payload fill)",
+          "distribution": "uniform for DimA/DimB; EventDate spanning 12 months; Payload/Filler randomly filled to simulate realistic compression ratio",
+          "key_fields": [
+            "FactID",
+            "EventDate"
+          ],
+          "rationale": "Create a sufficiently large dataset to engage sequential read throughput and backup compression behavior, enabling meaningful MB/s measurements and parallel read potential."
+        }
+      }
+    ]
+  },
+  "background_workloads": [
+    {
+      "name": "LightReadWriteNoise",
+      "inferred_from_post": "OP focused on backups; to isolate, we assume minimal background load. However, small concurrent activity simulates typical production.",
+      "simulation_method": "SQL script",
+      "transactions_or_queries": [
+        "BEGIN TRAN; UPDATE TOP (1000) dbo.FactBig SET DimB = DimB + 1 WHERE DimA BETWEEN @a AND @b; COMMIT;",
+        "SELECT COUNT(*) FROM dbo.FactBig WHERE EventDate BETWEEN @start AND @end;",
+        "SELECT SUM(CAST(SUBSTRING(Filler,1,10) AS INT)) FROM dbo.FactBig WITH (NOLOCK) WHERE DimA=@x;"
+      ],
+      "concurrency": "5 worker connections",
+      "duration_sec": 3600,
+      "transaction_mix": {
+        "read": "70%",
+        "write": "30%"
+      }
+    }
+  ],
+  "anomaly_injection": [
+    {
+      "name": "LimitParallelism_MAXDOP1",
+      "anomaly_type": "configuration_change",
+      "mapped_dbmags_anomaly": "slow_sql",
+      "target": "SQL Server instance (MAXDOP)",
+      "method": "Set MAXDOP to a low value to constrain parallelism that can impact backup/compression/read-side throughput on SQL Server 2008 R2.",
+      "parameters": {
+        "precheck": "Capture current MAXDOP via sys.configurations; record CPU count and NUMA layout.",
+        "set_maxdop": "EXEC sp_configure 'show advanced options', 1; RECONFIGURE; EXEC sp_configure 'max degree of parallelism', 1; RECONFIGURE;",
+        "backup_command_to_NUL": "BACKUP DATABASE DBMAGS_PerfIO TO DISK = 'NUL' WITH COMPRESSION, STATS=5;",
+        "backup_command_to_DISK": "BACKUP DATABASE DBMAGS_PerfIO TO DISK = 'C:\\SQLBackups\\DBMAGS_PerfIO_FULL.bak' WITH COMPRESSION, STATS=5;",
+        "metrics_to_collect": [
+          "Backup throughput (MB/sec) from msdb.dbo.backupset and errorlog output",
+          "sys.dm_io_virtual_file_stats latencies and bytes read during backup",
+          "PerfMon: SQLServer:Backup Device Throughput/sec, PhysicalDisk Read/sec, Avg. Disk sec/Read",
+          "CPU Utilization and context switches",
+          "wait stats during backup (e.g., BACKUPIO, ASYNC_IO_COMPLETION, SOS_SCHEDULER_YIELD)"
+        ]
+      },
+      "duration_sec": 54000,
+      "safety_notes": [
+        "Do not run on production. Changing MAXDOP affects all queries.",
+        "Revert MAXDOP to previous value after test.",
+        "Ensure sufficient disk space for on-disk backup runs; prefer NUL for read-isolation.",
+        "Limit test database size to available resources."
+      ]
+    },
+    {
+      "name": "Optional_DisableReadAhead_TF652",
+      "anomaly_type": "io_path_change",
+      "mapped_dbmags_anomaly": "slow_sql",
+      "target": "SQL Server instance (read-ahead behavior)",
+      "method": "Use undocumented trace flag 652 to disable read-ahead for the database to amplify read throttling (optional, only if MAXDOP alone does not yield a ~4x slowdown).",
+      "parameters": {
+        "enable": "DBCC TRACEON(652, -1);",
+        "disable": "DBCC TRACEOFF(652, -1);",
+        "scope": "Validate on isolated instance only; measure backup to NUL throughput before/after."
+      },
+      "duration_sec": 3600,
+      "safety_notes": [
+        "Trace flags affect engine behavior; only on non-production.",
+        "Revert trace flag after measurement."
+      ]
+    }
+  ],
+  "expected_result": {
+    "metrics": [
+      {
+        "metric": "Backup throughput (MB/sec) to NUL",
+        "expected_change": "decrease by 3–6x when MAXDOP=1 vs baseline (MAXDOP=8–16)"
+      },
+      {
+        "metric": "Backup throughput (MB/sec) to DISK",
+        "expected_change": "decrease by similar factor (assuming destination not bottlenecked)"
+      },
+      {
+        "metric": "CPU utilization during backup",
+        "expected_change": "lower overall CPU usage with MAXDOP=1 due to limited compression/read parallelism; higher with MAXDOP increased"
+      },
+      {
+        "metric": "PhysicalDisk Avg. Disk sec/Read",
+        "expected_change": "may increase under constrained read parallelism; total Read/sec decreases markedly"
+      },
+      {
+        "metric": "Wait stats (BACKUPIO, ASYNC_IO_COMPLETION)",
+        "expected_change": "increased waits indicating slower read progress when MAXDOP=1"
+      }
+    ],
+    "query_or_transaction_effects": [
+      "With MAXDOP=1, long-running analytical queries will also slow due to forced serial plans, reflecting post symptoms.",
+      "After restoring MAXDOP to 8–16, both backup and query performance return to baseline throughput levels."
+    ],
+    "validation_criteria": [
+      "Under low MAXDOP, backup to NUL throughput drops by approximately the same factor as described (~4–6x) compared to higher MAXDOP.",
+      "Reverting MAXDOP to higher value restores throughput close to baseline.",
+      "Network destination does not influence NUL backup, confirming read-side bottleneck reproduction.",
+      "Observed behavior aligns with msdb backup history and PerfMon/DMV measurements collected during tests."
+    ]
+  },
+  "open_questions": [
+    "Were backups performed WITH COMPRESSION at the time of slowdown and at baseline? If so, what was the compression ratio?",
+    "How many CPU cores/logical processors and NUMA nodes does the server have? What was the original MAXDOP value when backups slowed?",
+    "Were backups written to local disk, SAN, or network share? How many backup stripes were used?",
+    "How are database files laid out (number of data files, filegroups, LUNs)? Are they spread across multiple disks/LUNs?",
+    "Was max worker threads set to a non-default value? Any other instance-level settings changed around the reboot?",
+    "Is the server physical or virtual? Any concurrent host-level resource contention after the reboot?",
+    "What RAID controller, driver/firmware versions, and cache settings are in place? Any changes coinciding with Windows updates?",
+    "Did power plan or CPU frequency scaling change post-reboot despite attempting High Performance?",
+    "Were any trace flags enabled before/after the updates that could affect read-ahead or backup behavior?"
+  ]
+}

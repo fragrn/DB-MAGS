@@ -1,0 +1,48 @@
+{
+  "failure_reason": "The hot_update workload did not create sustained row-level lock contention on a single hot record, so Innodb_row_lock_waits did not increase. As a result, no slow queries were generated (lock waits did not exceed the slow query threshold), and the background QPS did not drop. Likely causes: (1) updates were spread across many keys or committed too quickly (autocommit-like behavior) without an explicit lock hold, (2) concurrency and hold time were too low to create measurable waits, and/or (3) the TPCC workload was not focused on the same hot row/warehouse, making collisions rare. If your current set of injected_nodes does not include a background TPCC load or a way to concentrate terminals on the same warehouse/district, you will need to add such injected_nodes for the chain to propagate.",
+  "suggested_changes": [
+    "Pin hot_update to a single hot row to guarantee contention: target the TPC-C district primary key (d_w_id=1, d_id=1).",
+    "Use an explicit lock-holding transaction in hot_update so other workers are forced to wait: BEGIN; SELECT ... FOR UPDATE; sleep for 3–5 seconds; UPDATE; COMMIT.",
+    "Increase hot_update concurrency to >= 64 workers, with zero think time and a high request rate (>= 800 ops/s) to generate a backlog waiting on the held lock.",
+    "Run the hot_update action for at least 180–300 seconds to ensure Innodb_row_lock_waits and slow query counters have time to move and be sampled.",
+    "Ensure the TPCC workload is active and focuses on the same hotspot (e.g., warehouse_id=1, district_id=1) with enough terminals (>= 64). If your current injected_nodes do not include a TPCC load node or cannot skew warehouse selection, you will need to add such an injected node.",
+    "Align with slow query detection: if long_query_time is 1s, hold the lock for >= 3s so blocked statements are logged; otherwise lower long_query_time to <= 1s or extend the hold time further.",
+    "Verify the workload is hitting the primary/writer instance (not a replica) and that the isolation level is at least REPEATABLE READ so row locks are effective.",
+    "Start with a brief warm-up (e.g., 30–60s) before injection to establish a baseline, then inject hot_update to clearly observe the ratio increases and QPS drop."
+  ],
+  "task_parameter_updates": {
+    "hot_update": {
+      "table": "district",
+      "predicate": "d_w_id=1 AND d_id=1",
+      "transaction_script_steps": [
+        "BEGIN",
+        "SELECT d_ytd FROM district WHERE d_w_id=1 AND d_id=1 FOR UPDATE",
+        "DO SLEEP(3.0)",
+        "UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id=1 AND d_id=1",
+        "COMMIT"
+      ],
+      "concurrency": 64,
+      "rate": 1000,
+      "duration_sec": 240,
+      "think_time_ms": 0,
+      "isolation_level": "REPEATABLE READ"
+    }
+  },
+  "risk_warning": "This adjustment intentionally creates heavy lock contention on a TPC-C hotspot and will block New-Order/Payment transactions that touch the same district row. Expect significant QPS drops, possible deadlocks, and long transaction waits. Undo logs may grow during the hold; ensure adequate disk space and run in a non-production environment. Updating d_ytd changes financial counters; restore from snapshot or discard data after testing.",
+  "memory_update": [
+    {
+      "anomaly": "hot_update_lock_contention_chain",
+      "path": [
+        "hot_update",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "outcome": "Propagation chain NOT fully reproduced. 0/4 nodes hit. Failure at: terminal_not_hit:qps_drop",
+      "success": false,
+      "round": 0,
+      "node_hit_ratio": 0.0
+    }
+  ],
+  "raw_text": "{\n  \"failure_reason\": \"The hot_update workload did not create sustained row-level lock contention on a single hot record, so Innodb_row_lock_waits did not increase. As a result, no slow queries were generated (lock waits did not exceed the slow query threshold), and the background QPS did not drop. Likely causes: (1) updates were spread across many keys or committed too quickly (autocommit-like behavior) without an explicit lock hold, (2) concurrency and hold time were too low to create measurable waits, and/or (3) the TPCC workload was not focused on the same hot row/warehouse, making collisions rare. If your current set of injected_nodes does not include a background TPCC load or a way to concentrate terminals on the same warehouse/district, you will need to add such injected_nodes for the chain to propagate.\",\n  \"suggested_changes\": [\n    \"Pin hot_update to a single hot row to guarantee contention: target the TPC-C district primary key (d_w_id=1, d_id=1).\",\n    \"Use an explicit lock-holding transaction in hot_update so other workers are forced to wait: BEGIN; SELECT ... FOR UPDATE; sleep for 3–5 seconds; UPDATE; COMMIT.\",\n    \"Increase hot_update concurrency to >= 64 workers, with zero think time and a high request rate (>= 800 ops/s) to generate a backlog waiting on the held lock.\",\n    \"Run the hot_update action for at least 180–300 seconds to ensure Innodb_row_lock_waits and slow query counters have time to move and be sampled.\",\n    \"Ensure the TPCC workload is active and focuses on the same hotspot (e.g., warehouse_id=1, district_id=1) with enough terminals (>= 64). If your current injected_nodes do not include a TPCC load node or cannot skew warehouse selection, you will need to add such an injected node.\",\n    \"Align with slow query detection: if long_query_time is 1s, hold the lock for >= 3s so blocked statements are logged; otherwise lower long_query_time to <= 1s or extend the hold time further.\",\n    \"Verify the workload is hitting the primary/writer instance (not a replica) and that the isolation level is at least REPEATABLE READ so row locks are effective.\",\n    \"Start with a brief warm-up (e.g., 30–60s) before injection to establish a baseline, then inject hot_update to clearly observe the ratio increases and QPS drop.\"\n  ],\n  \"task_parameter_updates\": {\n    \"hot_update\": {\n      \"table\": \"district\",\n      \"predicate\": \"d_w_id=1 AND d_id=1\",\n      \"transaction_script_steps\": [\n        \"BEGIN\",\n        \"SELECT d_ytd FROM district WHERE d_w_id=1 AND d_id=1 FOR UPDATE\",\n        \"DO SLEEP(3.0)\",\n        \"UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id=1 AND d_id=1\",\n        \"COMMIT\"\n      ],\n      \"concurrency\": 64,\n      \"rate\": 1000,\n      \"duration_sec\": 240,\n      \"think_time_ms\": 0,\n      \"isolation_level\": \"REPEATABLE READ\"\n    }\n  },\n  \"risk_warning\": \"This adjustment intentionally creates heavy lock contention on a TPC-C hotspot and will block New-Order/Payment transactions that touch the same district row. Expect significant QPS drops, possible deadlocks, and long transaction waits. Undo logs may grow during the hold; ensure adequate disk space and run in a non-production environment. Updating d_ytd changes financial counters; restore from snapshot or discard data after testing.\"\n}"
+}

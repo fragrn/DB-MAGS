@@ -1,0 +1,71 @@
+{
+  "failure_reason": "Contention was created but not sustained on the TPCC critical path. The hot updates likely locked too many distinct keys (diluting wait time) and/or used short autocommit updates that released locks quickly. As a result, Innodb_row_lock_time_avg did not rise enough, slow queries did not register (no waits exceeding slow threshold), and the overall workload QPS did not drop. To hit slow_query and qps_drop, you need fewer, truly hot keys on a TPCC-critical row and hold the lock longer within explicit transactions so other sessions block for >1s. If QPS_drop still does not trigger, the current set of injected_nodes may be insufficient to depress cluster-wide QPS and you may need to add more coverage with additional injected hot_update(s) targeting multiple warehouses.",
+  "suggested_changes": [
+    "Concentrate contention on TPCC-critical rows: target tpcc.district (PK: d_w_id, d_id) which NewOrder updates every time. Lock d_id=1 for multiple warehouses rather than many disparate rows.",
+    "Hold the lock explicitly: run BEGIN; SELECT ... FOR UPDATE; then SELECT SLEEP(2); before COMMIT. This guarantees >2s waits for contending updates, raising Innodb_row_lock_time_avg and creating slow queries.",
+    "Increase hot_update concurrency to 80–128 threads, but restrict hot keys to a small set (e.g., 5 warehouses: w_id in (1..5), d_id=1). This creates a deep lock wait queue and increases average wait time without diffusing contention.",
+    "Extend run duration to >=180s so metrics aggregators capture enough slow queries and QPS impact.",
+    "Prevent premature timeouts and ensure slow query attribution: set SESSION innodb_lock_wait_timeout=50 and SESSION long_query_time=0.5 within the hot_update connections.",
+    "Disable autocommit and use explicit transactions to keep the row locked while sleeping.",
+    "If the QPS drop still does not reach the 0.7 ratio, you likely need to add additional injected_nodes (for example, another hot_update covering more warehouses) to broaden impact; the current single hot_update may not depress overall QPS enough on tpcc_10W."
+  ],
+  "task_parameter_updates": {
+    "hot_update": {
+      "concurrency": 80,
+      "duration_sec": 180,
+      "table": "tpcc.district",
+      "target_keys_note": "Target a small hot set: d_id=1 and d_w_id in (1,2,3,4,5). Each worker selects one of these warehouses uniformly.",
+      "transaction_steps": [
+        "SET SESSION autocommit=0",
+        "SET SESSION innodb_lock_wait_timeout=50",
+        "SET SESSION long_query_time=0.5",
+        "BEGIN",
+        "/* choose w_id from {1,2,3,4,5} per iteration */",
+        "SELECT d_next_o_id FROM tpcc.district WHERE d_w_id = ${w_id} AND d_id = 1 FOR UPDATE",
+        "SELECT SLEEP(2.0)",
+        "UPDATE tpcc.district SET d_ytd = d_ytd /* no-op update to retain exclusive lock */ WHERE d_w_id = ${w_id} AND d_id = 1",
+        "COMMIT"
+      ],
+      "terminals": 80,
+      "hot_keys": [
+        {
+          "d_w_id": 1,
+          "d_id": 1
+        },
+        {
+          "d_w_id": 2,
+          "d_id": 1
+        },
+        {
+          "d_w_id": 3,
+          "d_id": 1
+        },
+        {
+          "d_w_id": 4,
+          "d_id": 1
+        },
+        {
+          "d_w_id": 5,
+          "d_id": 1
+        }
+      ]
+    }
+  },
+  "risk_warning": "These changes intentionally create long-held row locks on tpcc.district, which will stall NewOrder transactions for the targeted warehouses. Expect slow queries, possible lock wait timeouts if other clients use low timeouts, deadlock detector activity, thread pool saturation, and a noticeable QPS drop. Ensure you can tolerate a temporary throughput reduction and monitor for replication lag if any. Keep the duration bounded (180s) and be ready to abort the task to release locks if the system becomes unstable.",
+  "memory_update": [
+    {
+      "anomaly": "hot_update_lock_contention_chain",
+      "path": [
+        "hot_update",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "outcome": "Propagation chain NOT fully reproduced. 2/4 nodes hit. Failure at: terminal_not_hit:qps_drop",
+      "success": false,
+      "round": 0,
+      "node_hit_ratio": 0.5
+    }
+  ],
+  "raw_text": "{\n  \"failure_reason\": \"Contention was created but not sustained on the TPCC critical path. The hot updates likely locked too many distinct keys (diluting wait time) and/or used short autocommit updates that released locks quickly. As a result, Innodb_row_lock_time_avg did not rise enough, slow queries did not register (no waits exceeding slow threshold), and the overall workload QPS did not drop. To hit slow_query and qps_drop, you need fewer, truly hot keys on a TPCC-critical row and hold the lock longer within explicit transactions so other sessions block for >1s. If QPS_drop still does not trigger, the current set of injected_nodes may be insufficient to depress cluster-wide QPS and you may need to add more coverage with additional injected hot_update(s) targeting multiple warehouses.\",\n  \"suggested_changes\": [\n    \"Concentrate contention on TPCC-critical rows: target tpcc.district (PK: d_w_id, d_id) which NewOrder updates every time. Lock d_id=1 for multiple warehouses rather than many disparate rows.\",\n    \"Hold the lock explicitly: run BEGIN; SELECT ... FOR UPDATE; then SELECT SLEEP(2); before COMMIT. This guarantees >2s waits for contending updates, raising Innodb_row_lock_time_avg and creating slow queries.\",\n    \"Increase hot_update concurrency to 80–128 threads, but restrict hot keys to a small set (e.g., 5 warehouses: w_id in (1..5), d_id=1). This creates a deep lock wait queue and increases average wait time without diffusing contention.\",\n    \"Extend run duration to >=180s so metrics aggregators capture enough slow queries and QPS impact.\",\n    \"Prevent premature timeouts and ensure slow query attribution: set SESSION innodb_lock_wait_timeout=50 and SESSION long_query_time=0.5 within the hot_update connections.\",\n    \"Disable autocommit and use explicit transactions to keep the row locked while sleeping.\",\n    \"If the QPS drop still does not reach the 0.7 ratio, you likely need to add additional injected_nodes (for example, another hot_update covering more warehouses) to broaden impact; the current single hot_update may not depress overall QPS enough on tpcc_10W.\"\n  ],\n  \"task_parameter_updates\": {\n    \"hot_update\": {\n      \"concurrency\": 80,\n      \"duration_sec\": 180,\n      \"table\": \"tpcc.district\",\n      \"target_keys_note\": \"Target a small hot set: d_id=1 and d_w_id in (1,2,3,4,5). Each worker selects one of these warehouses uniformly.\",\n      \"transaction_steps\": [\n        \"SET SESSION autocommit=0\",\n        \"SET SESSION innodb_lock_wait_timeout=50\",\n        \"SET SESSION long_query_time=0.5\",\n        \"BEGIN\",\n        \"/* choose w_id from {1,2,3,4,5} per iteration */\",\n        \"SELECT d_next_o_id FROM tpcc.district WHERE d_w_id = ${w_id} AND d_id = 1 FOR UPDATE\",\n        \"SELECT SLEEP(2.0)\",\n        \"UPDATE tpcc.district SET d_ytd = d_ytd /* no-op update to retain exclusive lock */ WHERE d_w_id = ${w_id} AND d_id = 1\",\n        \"COMMIT\"\n      ],\n      \"terminals\": 80,\n      \"hot_keys\": [\n        { \"d_w_id\": 1, \"d_id\": 1 },\n        { \"d_w_id\": 2, \"d_id\": 1 },\n        { \"d_w_id\": 3, \"d_id\": 1 },\n        { \"d_w_id\": 4, \"d_id\": 1 },\n        { \"d_w_id\": 5, \"d_id\": 1 }\n      ]\n    }\n  },\n  \"risk_warning\": \"These changes intentionally create long-held row locks on tpcc.district, which will stall NewOrder transactions for the targeted warehouses. Expect slow queries, possible lock wait timeouts if other clients use low timeouts, deadlock detector activity, thread pool saturation, and a noticeable QPS drop. Ensure you can tolerate a temporary throughput reduction and monitor for replication lag if any. Keep the duration bounded (180s) and be ready to abort the task to release locks if the system becomes unstable.\"\n}"
+}

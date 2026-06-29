@@ -1,0 +1,69 @@
+{
+  "tasks": {
+    "improper_sql_groupby_001": {
+      "task_id": "improper_sql_groupby_001",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT ol_i_id, SUM(ol_amount) AS total_amount FROM order_line GROUP BY ol_i_id ORDER BY total_amount DESC",
+          "concurrency": 3,
+          "duration_sec": 15
+        }
+      ],
+      "expected_metrics": {
+        "intermediate": [
+          "sort_hash_spill"
+        ],
+        "mysql_status_increase": [
+          "Created_tmp_disk_tables",
+          "Sort_merge_passes"
+        ],
+        "query_plan_signals": [
+          "Table scan",
+          "Aggregate using temporary table",
+          "Sort: total_amount DESC"
+        ],
+        "latency": [
+          "p95_increase"
+        ],
+        "errors": []
+      },
+      "success_criteria": [
+        {
+          "metric": "Created_tmp_disk_tables.delta",
+          "condition": ">=",
+          "threshold": 1
+        },
+        {
+          "metric": "Sort_merge_passes.delta",
+          "condition": ">=",
+          "threshold": 1
+        },
+        {
+          "metric": "slow_query_count.delta",
+          "condition": ">=",
+          "threshold": 1,
+          "optional": true
+        }
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": {
+        "impact": "May increase disk I/O and temporary table usage causing latency spikes",
+        "blast_radius": "Read-only aggregate on order_line; no data modifications",
+        "mitigations": "Short duration (15s), moderate concurrency (3) to limit impact"
+      },
+      "metadata": {
+        "root_cause": "improper_sql",
+        "notes": "EXPLAIN shows table scan and aggregate using temporary table on order_line; expected to cause sort/hash spill under background TPCC load"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "improper_sql_groupby_001": 0.0
+  }
+}

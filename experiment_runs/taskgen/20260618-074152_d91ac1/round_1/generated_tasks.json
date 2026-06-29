@@ -1,0 +1,183 @@
+{
+  "run_id": "20260618-074152_d91ac1",
+  "target_path": [
+    "traffic_surge",
+    "threads_concurrency_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "traffic_surge"
+  ],
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  },
+  "task_specs": [
+    {
+      "task_id": "traffic_surge_tpcc_burst",
+      "task_type": "traffic_surge",
+      "actions": [
+        {
+          "kind": "benchbase_burst",
+          "profile": {
+            "benchmark": "tpcc",
+            "database": "tpcc_10W",
+            "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+            "terminals": 1,
+            "rate": 10000.0,
+            "duration_sec": 15.0,
+            "transaction_mix": {
+              "NewOrder": 45.0,
+              "Payment": 43.0,
+              "OrderStatus": 4.0,
+              "Delivery": 4.0,
+              "StockLevel": 4.0
+            },
+            "mix_template": "default",
+            "rationale": "Default TPCC mix with high target rate to surge concurrency alongside the background 4-terminal run. This should increase Threads_running, introduce lock waits in NewOrder/Payment, slow queries, and drive a QPS drop within the observe window, matching traffic_surge→threads_concurrency_up→lock_contention→slow_query→qps_drop."
+          },
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+          "terminals": 1,
+          "rate": 10000.0,
+          "duration_sec": 15.0,
+          "transaction_mix": {
+            "NewOrder": 45.0,
+            "Payment": 43.0,
+            "OrderStatus": 4.0,
+            "Delivery": 4.0,
+            "StockLevel": 4.0
+          }
+        }
+      ],
+      "expected_metrics": {
+        "threads_connected_ratio": ">=1.5",
+        "threads_running_ratio": ">=1.5"
+      },
+      "success_criteria": {
+        "threads_connected_ratio": ">=1.5"
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "traffic_surge",
+        "traffic_surge_profile": {
+          "benchmark": "tpcc",
+          "database": "tpcc_10W",
+          "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+          "terminals": 1,
+          "rate": 10000.0,
+          "duration_sec": 15.0,
+          "transaction_mix": {
+            "NewOrder": 45.0,
+            "Payment": 43.0,
+            "OrderStatus": 4.0,
+            "Delivery": 4.0,
+            "StockLevel": 4.0
+          },
+          "mix_template": "default",
+          "rationale": "Default TPCC mix with high target rate to surge concurrency alongside the background 4-terminal run. This should increase Threads_running, introduce lock waits in NewOrder/Payment, slow queries, and drive a QPS drop within the observe window, matching traffic_surge→threads_concurrency_up→lock_contention→slow_query→qps_drop."
+        }
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "traffic_surge_tpcc_burst": {
+        "task_id": "traffic_surge_tpcc_burst",
+        "task_type": "traffic_surge",
+        "actions": [
+          {
+            "kind": "benchbase_burst",
+            "profile": {
+              "benchmark": "tpcc",
+              "database": "tpcc_10W",
+              "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+              "terminals": 1,
+              "rate": 10000.0,
+              "duration_sec": 15.0,
+              "transaction_mix": {
+                "NewOrder": 45.0,
+                "Payment": 43.0,
+                "OrderStatus": 4.0,
+                "Delivery": 4.0,
+                "StockLevel": 4.0
+              },
+              "mix_template": "default",
+              "rationale": "Default TPCC mix with high target rate to surge concurrency alongside the background 4-terminal run. This should increase Threads_running, introduce lock waits in NewOrder/Payment, slow queries, and drive a QPS drop within the observe window, matching traffic_surge→threads_concurrency_up→lock_contention→slow_query→qps_drop."
+            },
+            "benchmark": "tpcc",
+            "database": "tpcc_10W",
+            "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+            "terminals": 1,
+            "rate": 10000.0,
+            "duration_sec": 15.0,
+            "transaction_mix": {
+              "NewOrder": 45.0,
+              "Payment": 43.0,
+              "OrderStatus": 4.0,
+              "Delivery": 4.0,
+              "StockLevel": 4.0
+            }
+          }
+        ],
+        "expected_metrics": {
+          "threads_connected_ratio": ">=1.5",
+          "threads_running_ratio": ">=1.5"
+        },
+        "success_criteria": {
+          "threads_connected_ratio": ">=1.5"
+        },
+        "start_after_sec": 0.0,
+        "dependencies": [],
+        "cleanup_actions": [],
+        "risk_assessment": "medium",
+        "metadata": {
+          "root_cause": "traffic_surge",
+          "traffic_surge_profile": {
+            "benchmark": "tpcc",
+            "database": "tpcc_10W",
+            "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+            "terminals": 1,
+            "rate": 10000.0,
+            "duration_sec": 15.0,
+            "transaction_mix": {
+              "NewOrder": 45.0,
+              "Payment": 43.0,
+              "OrderStatus": 4.0,
+              "Delivery": 4.0,
+              "StockLevel": 4.0
+            },
+            "mix_template": "default",
+            "rationale": "Default TPCC mix with high target rate to surge concurrency alongside the background 4-terminal run. This should increase Threads_running, introduce lock waits in NewOrder/Payment, slow queries, and drive a QPS drop within the observe window, matching traffic_surge→threads_concurrency_up→lock_contention→slow_query→qps_drop."
+          }
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "traffic_surge_tpcc_burst": 0.0
+    }
+  },
+  "react_trace_path": "react_trace.json",
+  "plan_path": "plan.json",
+  "task_dag_path": "task_dag.json"
+}

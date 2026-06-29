@@ -1,0 +1,77 @@
+Title:​ mysql - Slow SQL query with LEFT JOIN - Database Administrators Stack Exchange
+Asked:​ 10 years, 10 months ago
+Modified:​ 7 years, 11 months ago
+Viewed:​ 2k times
+Question (kentor)
+What my query is doing:
+I have two SQL tables and I want to copy data rows from the one table to the other table. I am doing this for statistics. The source table includes all current member-sessions/logins and with my statistics table I also want to see member-logins of the past. Thus I want to store these data into my bot_sessions_statisticstable as well to make sure they are not being updated anymore.
+The original query:
+INSERT INTO bot_sessions_statistics (member_id, session_token, username, ip_address)
+SELECT sessions.member_id, sessions.session_token, sessions.username, sessions.ip_address
+FROM bot_sessions AS sessions
+LEFT JOIN (
+    SELECT stats.member_id, stats.session_token, stats.username, stats.ip_address
+    FROM bot_sessions_statistics as stats
+    WHERE date_active >= date(NOW())
+) AS stats ON sessions.member_id = stats.member_id
+WHERE latest_renewal >= date(NOW())
+AND stats.member_id IS NULL;
+The performance of the original query:
+Query_time: 86.364613
+Lock_time: 0.000085
+Rows_sent: 0
+Rows_examined: 1088312551
+The table structures:
+Table bot_sessions:(Structure shown in screenshot)
+Table bot_sessions_statistics:(Structure shown in screenshot)
+SHOW CREATE of both tables:​ http://pastebin.com/UUzEPX5v
+The performance of single queries:
+SELECT sessions.member_id, sessions.session_token, sessions.username, sessions.ip_address
+FROM bot_sessions AS sessions
+WHERE latest_renewal >= date(NOW());
+Returns 44.2k rows (Duration: 0.078s / Fetch: 1.607s)
+SELECT stats.member_id, stats.session_token, stats.username, stats.ip_address
+FROM bot_sessions_statistics as stats
+WHERE date_active >= date(NOW());
+Returns 23.3k rows (Duration: 0.047s / Fetch 0.920s)
+Tags:​ mysql, performance, query-performance
+Comments on Question
+card:​ Have you considered partitioning your table by YEAR(date_active)or something? This will split the data files into specific file sets. I use it extensively for time series based analysis in mysql. (Aug 26, 2015 at 19:16)
+kentor:​ I can't do this because of other reasons/queries. (Aug 26, 2015 at 20:18)
+Vérace:​ Could you please post your table definitions as the result of "SHOW CREATE TABLE My_Table\G"- this makes it easy to cut and paste, thanks. (Aug 26, 2015 at 20:27)
+kentor:​ @Vérace I have edited my thread and added this :) (Aug 26, 2015 at 20:33)
+Answer 1 (watery)
+As a general rule, run (and post the results here) an EXPLAINon your query to see if indexes are being used or not. At first, I see there are no other indexes on the sessionstable except PKs, this will almost surely make your query run slow, since the WHEREwill cause the RDBMS to do a full table scan to find the rows.
+I guess your query will at least require an index on latest_renewal(but, again, check with EXPLAIN).
+This is my understanding of your query, on which I based my simplification:
+Your query logic essentially tries to find sessions that do not have a corresponding active statistics record today. However, the LEFT JOINcombined with stats.member_id IS NULLfilters out all rows where the subquery finds a match.
+At first sight (if I'm not mistaken) I think your SELECTquery can be rewritten without the LEFT JOIN, like this:
+SELECT sessions.member_id, sessions.session_token, sessions.username, sessions.ip_address
+FROM bot_sessions AS sessions
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM bot_sessions_statistics
+    WHERE date_active >= date(NOW())
+    AND latest_renewal >= date(NOW())
+);
+If the above is really correct, compare the results of EXPLAINon both.
+Comments on this answer:
+kentor:​ Thank you very much for that answer, I haven't seen EXPLAINso far but I will provide the information for my query as well. I also checked the performance of your query which is much better (0.5s). Can you explain what SELECT 1is doing? I also tried to perform a query with WHERE member_id IS NOT IN (SELECT...)but it was even worse than my current query is. (Aug 27, 2015 at 0:28)
+kentor:​ By the way I am using MyISAM as Storage engine, as far as I know I can't create more than PKs with MyISAM or? (Aug 27, 2015 at 0:30)
+watery:​ @kentor Then thisand thisother link will give you lots of information. SELECT 1just returns 1 from each row satisfying the WHERE, instead of the actual row data (that may be provided by an index or, worse from a performance point of view, could require physical access to the row), since you're not using that data—notice, however, that the optimizer could already be doing that for you. Nice, but please check carefully that my rewritten version is really correct. (Aug 27, 2015 at 0:35)
+watery:​ @kentor About your second comment, you can add other indexes with MyISAM too—you're already doing that on the bot_sessions_statisticstable :) (Aug 27, 2015 at 0:37)
+Answer 2 (GREENLIT)
+Based on the explain image above, the query is doing a table scan. (possible keyand keyare Null). Rows_examined: 1,088,312,551(1 billion rows examined, that's quite a lot, looks like a cross join to me).
+The second query (NOT EXISTS) might not be right as it will exclude all data from bot_sessions_statisticswhere date_active >= date(NOW())compared to a LEFT JOIN(original query) which usually returns all rows, including the ones not matching the parent table criteria query.
+Also for your sub-query, since you don't need session_token, username, you don't need it:
+SELECT stats.member_id, stats.session_token, stats.username, stats.ip_address
+FROM bot_sessions_statistics as stats
+WHERE date_active >= date(NOW())
+should be:
+SELECT stats.member_id
+FROM bot_sessions_statistics as stats
+WHERE date_active >= date(NOW())
+Tips:
+Try to avoid date >or date >=(and <, <=). MySQL will scan the table. Use BETWEENinstead.
+Make sure you have index on these date fields.
+Partitioning could also be a good solution. It's great for queries and for purging data.

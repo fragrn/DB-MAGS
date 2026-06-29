@@ -1,0 +1,64 @@
+{
+  "tasks": {
+    "long_tx_hold_tpcc_hot_rows_15s": {
+      "task_id": "long_tx_hold_tpcc_hot_rows_15s",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "scripts": [
+            "SET SESSION autocommit=0",
+            "SET SESSION innodb_lock_wait_timeout=120",
+            "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+            "START TRANSACTION",
+            "SELECT W_TAX FROM warehouse WHERE W_ID = 1 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 2 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 3 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 4 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 5 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 6 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 7 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 8 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 9 FOR UPDATE",
+            "SELECT d_next_o_id FROM district WHERE d_w_id = 1 AND d_id = 10 FOR UPDATE",
+            "SELECT c_balance FROM customer WHERE c_w_id = 1 AND c_d_id = 1 AND c_id = 1 FOR UPDATE",
+            "DO SLEEP(12)",
+            "COMMIT"
+          ],
+          "duration_sec": 15,
+          "concurrency": 1
+        }
+      ],
+      "expected_metrics": {
+        "intermediate": {
+          "lock_contention": {
+            "Innodb_row_lock_waits_delta": ">=50",
+            "Innodb_row_lock_time_delta_ms": ">=3000"
+          }
+        },
+        "terminal": {
+          "slow_query": {
+            "Slow_queries_delta": ">=1"
+          },
+          "qps_drop": {
+            "QPS_ratio": "<=0.7"
+          }
+        }
+      },
+      "success_criteria": "During the action window, Innodb_row_lock_waits and Innodb_row_lock_time increase versus baseline; at least one slow query occurs (or p95 latency rises by 1.5x); and a transient QPS drop is observed.",
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "Holds exclusive locks on hot TPCC rows (warehouse 1 and districts 1..10, plus a customer row) for ~12s within a 15s window. This is expected to block new-order and payment transactions, increasing lock wait time, possibly logging slow queries, and causing a brief QPS dip. Limited to 15s to satisfy safety constraints.",
+      "metadata": {
+        "root_cause": "long_tx"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "long_tx_hold_tpcc_hot_rows_15s": 0.0
+  }
+}

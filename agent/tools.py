@@ -5,7 +5,7 @@ Each tool is a plain function (not an Agent) that the LLM calls via the
 ReAct loop.  Tools are grouped into three categories:
 
   1. Environment probe tools   — read-only introspection
-  2. TaskSpec builder tools     — replace the former SpecialistAgents
+  2. Orchestration helpers      — DAG/safety/memory helpers
   3. Orchestration tools        — DAG, safety, memory, execute
 """
 
@@ -38,14 +38,9 @@ PLANNING_TOOL_NAMES = {
     "probe_table_stats",
     "probe_db_metrics",
     "probe_os_metrics",
+    "probe_workload",
     "explain_sql",
     "latency_sample",
-    "build_slow_sql_task",
-    "get_benchbase_workload_defaults",
-    "build_traffic_task",
-    "build_lock_task",
-    "build_chaos_task",
-    "build_backup_task",
     "build_task_dag",
     "check_safety",
     "read_memory",
@@ -988,7 +983,7 @@ def chat_tool_calling_loop(
     system_prompt: str,
     user_prompt: str,
     *,
-    max_steps: int = 12,
+    max_steps: int = 15,
     temperature: float = 0.2,
 ) -> dict[str, Any]:
     """

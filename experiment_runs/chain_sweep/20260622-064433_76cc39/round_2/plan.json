@@ -1,0 +1,236 @@
+{
+  "target_path": [
+    "long_tx",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "long_tx"
+  ],
+  "task_specs": [
+    {
+      "task_id": "long_tx_tpcc_lock_hold_w_shard",
+      "task_type": "anomaly_injection",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "scripts": [
+            "BEGIN",
+            "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+            "SET SESSION innodb_lock_wait_timeout=60",
+            "SET @w := ((CONNECTION_ID() % 4) + 1)",
+            "SELECT d_id FROM district FORCE INDEX(PRIMARY) WHERE d_w_id = @w FOR UPDATE",
+            "SELECT s_i_id FROM stock FORCE INDEX(PRIMARY) WHERE s_w_id = @w AND s_i_id BETWEEN 1 AND 200 FOR UPDATE",
+            "SELECT SLEEP(12)",
+            "ROLLBACK"
+          ],
+          "duration_sec": 14,
+          "concurrency": 4
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention": {
+          "Innodb_row_lock_waits_delta": {
+            ">=": 50
+          },
+          "Innodb_row_lock_time_delta_ms": {
+            ">=": 4000
+          }
+        },
+        "slow_query": {
+          "latency_p95_ratio": {
+            ">=": 1.5
+          }
+        },
+        "qps_drop": {
+          "qps_ratio": {
+            "<=": 0.7
+          }
+        }
+      },
+      "success_criteria": "During or shortly after execution: lock_contention indicators increase and either p95 latency rises by >=50% or QPS drops by >=30%.",
+      "risk_assessment": "Holds row and next-key locks on hot TPC-C rows (district and stock) across up to 4 warehouses for ~12s. Expect lock waits, slow queries, possible deadlocks. Use only in non-production.",
+      "metadata": {
+        "root_cause": "long_tx"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "long_tx_tpcc_lock_hold_w_shard": {
+        "task_id": "long_tx_tpcc_lock_hold_w_shard",
+        "task_type": "anomaly_injection",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "database": "tpcc_10W",
+            "scripts": [
+              "BEGIN",
+              "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+              "SET SESSION innodb_lock_wait_timeout=60",
+              "SET @w := ((CONNECTION_ID() % 4) + 1)",
+              "SELECT d_id FROM district FORCE INDEX(PRIMARY) WHERE d_w_id = @w FOR UPDATE",
+              "SELECT s_i_id FROM stock FORCE INDEX(PRIMARY) WHERE s_w_id = @w AND s_i_id BETWEEN 1 AND 200 FOR UPDATE",
+              "SELECT SLEEP(12)",
+              "ROLLBACK"
+            ],
+            "duration_sec": 14,
+            "concurrency": 4
+          }
+        ],
+        "expected_metrics": {
+          "lock_contention": {
+            "Innodb_row_lock_waits_delta": {
+              ">=": 50
+            },
+            "Innodb_row_lock_time_delta_ms": {
+              ">=": 4000
+            }
+          },
+          "slow_query": {
+            "latency_p95_ratio": {
+              ">=": 1.5
+            }
+          },
+          "qps_drop": {
+            "qps_ratio": {
+              "<=": 0.7
+            }
+          }
+        },
+        "success_criteria": "During or shortly after execution: lock_contention indicators increase and either p95 latency rises by >=50% or QPS drops by >=30%.",
+        "risk_assessment": "Holds row and next-key locks on hot TPC-C rows (district and stock) across up to 4 warehouses for ~12s. Expect lock waits, slow queries, possible deadlocks. Use only in non-production.",
+        "metadata": {
+          "root_cause": "long_tx"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "long_tx_tpcc_lock_hold_w_shard": 0.0
+    }
+  },
+  "reasoning": "The long_tx task opens transactions at REPEATABLE READ and acquires FOR UPDATE locks on hot TPC-C keys: all districts of a chosen warehouse and the first 200 stock items in that warehouse. Four concurrent sessions shard by warehouse using CONNECTION_ID() to cover w_id 1–4, increasing the likelihood that background New-Order and Payment transactions block on district and stock rows. Holding these locks for ~12 seconds is designed to elevate Innodb_row_lock_waits/time (lock_contention), inflate p95 latency (slow_query), and potentially reduce QPS (qps_drop), matching the specified propagation path.",
+  "safety_check": {
+    "approved": true,
+    "reasons": [],
+    "warnings": []
+  },
+  "react_trace": [
+    {
+      "round": 1,
+      "thought": "Environment snapshot collected. Schema has 9 tables. DB version: 9.6.0. Max connections: 151.",
+      "action": "probe_full_snapshot",
+      "observe": "Tables: ['customer', 'district', 'history', 'item', 'new_order']",
+      "decision": "",
+      "timestamp": "2026-06-22T06:52:30+00:00"
+    },
+    {
+      "round": 2,
+      "thought": "LLM requested planning tool",
+      "action": "read_memory",
+      "observe": "[]",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 3,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"SELECT d_id FROM district FORCE INDEX(PRIMARY) WHERE d_w_id IN (1,2) FOR UPDATE\", \"plan\": [{\"EXPLAIN\": \"-> Filter: (district.d_w_id in (1,2))  (cost=3.75 rows=10)\\n    -> Covering index scan on district using PRIMARY  (cost=3.75 rows=10)\\n\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 4,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"SELECT s_i_id FROM stock FORCE INDEX(PRIMARY) WHERE s_w_id IN (1,2) AND s_i_id BETWEEN 1 AND 200 FOR UPDATE\", \"plan\": [{\"EXPLAIN\": \"-> Filter: ((stock.s_w_id in (1,2)) and (stock.s_i_id between 1 and 200))  (cost=1.4 rows=2)\\n    -> Covering index range scan on stock using PRIMARY over (s_w_id = 1 AND 1 <= s_i_id <= 200) OR (s_w_id = 2 AND 1 <= s_i_id <= 200)  (cost=1.4 rows=2)\\n\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 5,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"SELECT d_id FROM district FORCE INDEX(PRIMARY) WHERE d_w_id = 1 FOR UPDATE\", \"plan\": [{\"EXPLAIN\": \"-> Covering index lookup on district using PRIMARY (d_w_id = 1)  (cost=1.25 rows=10)\\n\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 6,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"SELECT d_id FROM district FORCE INDEX(PRIMARY) WHERE d_w_id IN (1,2,3,4) FOR UPDATE\", \"plan\": [{\"EXPLAIN\": \"-> Filter: (district.d_w_id in (1,2,3,4))  (cost=3.75 rows=10)\\n    -> Covering index scan on district using PRIMARY  (cost=3.75 rows=10)\\n\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 7,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"long_tx_tpcc_lock_hold_w_shard\": {\"task_id\": \"long_tx_tpcc_lock_hold_w_shard\", \"task_type\": \"anomaly_injection\", \"actions\": [{\"kind\": \"raw_transaction_script\", \"database\": \"tpcc_10W\", \"scripts\": [\"BEGIN\", \"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\", \"SET SESSION innodb_lock_wait_timeout=60\", \"SET @w := ((CONNECTION_ID() % 4) + 1)\", \"SELECT d_id FROM district FORCE INDEX(PRIMARY) WHERE d_w_id = @w FOR UPDATE\", \"SELECT s_i_id FROM stock FORCE INDEX(PRIMARY) WHERE s_w_id = @w AND s_i_id BETWEEN 1 AND 200 FOR UPDATE\", \"SELECT SLEEP(22)\", \"ROLLBACK\"], \"duration_sec\": 30, \"concurrency\": 4}], \"expected_metrics\": {\"lock_contention\": {\"Innodb_row_lock_waits_delta\": {\">=\": 50}, \"Innodb_row_lock_time_delta_ms\": {\">=\": 5000}}, \"slow_query\": {\"Slow_queries_delta\": {\">=\": 1}, \"latency_p95_ratio\": {\">=\": 1.5}}, \"qps_drop\": {\"qps_ratio\": {\"<=\": 0.7}}}, \"success_criteria\": \"During or shortly after execution: lock_contention indicators increase and at least one of slow_query or qps_drop thresholds is met.\", \"risk_assessment\": \"This task opens long transactions that hold exclusive row locks on hot TPC-C rows (district and stock) for ~22s across up to 4 warehouses. It may cause significant lock waits, slow queries, and potential deadlocks in the background workload. Run only in non-production.\", \"metadata\": {\"root_cause\": \"long_tx\"}}}, \"edges\": [], \"schedule\": {\"long_tx_tpcc_lock_hold_w_shard\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 8,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": false, \"reasons\": [\"DAG required duration 30.0s exceeds injection_observe_sec 15.0s\"], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 9,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"SELECT no_o_id FROM new_order FORCE INDEX(PRIMARY) WHERE no_w_id = 1 AND no_d_id BETWEEN 1 AND 10 AND no_o_id > 0 FOR UPDATE\", \"plan\": [{\"EXPLAIN\": \"-> Filter: ((new_order.no_w_id = 1) and (new_order.no_d_id between 1 and 10) and (new_order.no_o_id > 0))  (cost=0.46 rows=0.333)\\n    -> Covering index range scan on new_order using PRIMARY over (no_w_id = 1 AND 1 <= no_d_id <= 10 AND 0 < no_o_id)  (cost=0.46 rows=1)\\n\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 10,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"long_tx_tpcc_lock_hold_w_shard\": {\"task_id\": \"long_tx_tpcc_lock_hold_w_shard\", \"task_type\": \"anomaly_injection\", \"actions\": [{\"kind\": \"raw_transaction_script\", \"database\": \"tpcc_10W\", \"scripts\": [\"BEGIN\", \"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\", \"SET SESSION innodb_lock_wait_timeout=60\", \"SET @w := ((CONNECTION_ID() % 4) + 1)\", \"SELECT d_id FROM district FORCE INDEX(PRIMARY) WHERE d_w_id = @w FOR UPDATE\", \"SELECT s_i_id FROM stock FORCE INDEX(PRIMARY) WHERE s_w_id = @w AND s_i_id BETWEEN 1 AND 200 FOR UPDATE\", \"SELECT SLEEP(12)\", \"ROLLBACK\"], \"duration_sec\": 14, \"concurrency\": 4}], \"expected_metrics\": {\"lock_contention\": {\"Innodb_row_lock_waits_delta\": {\">=\": 50}, \"Innodb_row_lock_time_delta_ms\": {\">=\": 4000}}, \"slow_query\": {\"latency_p95_ratio\": {\">=\": 1.5}}, \"qps_drop\": {\"qps_ratio\": {\"<=\": 0.7}}}, \"success_criteria\": \"During or shortly after execution: lock_contention indicators increase and either p95 latency rises by >=50% or QPS drops by >=30%.\", \"risk_assessment\": \"Holds row and next-key locks on hot TPC-C rows (district and stock) across up to 4 warehouses for ~12s. Expect lock waits, slow queries, possible deadlocks. Use only in non-production.\", \"metadata\": {\"root_cause\": \"long_tx\"}}}, \"edges\": [], \"schedule\": {\"long_tx_tpcc_lock_hold_w_shard\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 11,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": true, \"reasons\": [], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 12,
+      "thought": "LLM returned final plan JSON",
+      "action": "final_answer",
+      "observe": "{\"step\": 11, \"tool\": \"final_answer\", \"content\": \"{\\n  \\\"target_path\\\": [\\\"long_tx\\\", \\\"lock_contention\\\", \\\"slow_query\\\", \\\"qps_drop\\\"],\\n  \\\"injected_nodes\\\": [\\\"long_tx\\\"],\\n  \\\"task_specs\\\": [\\n    {\\n      \\\"task_id\\\": \\\"long_tx_tpcc_lock_hold_w_shard\\\",\\n      \\\"task_type\\\": \\\"anomaly_injection\\\",\\n      \\\"actions\\\": [\\n        {\\n          \\\"kind\\\": \\\"raw_transaction_script\\\",\\n          \\\"database\\\": \\\"tpcc_10W\\\",\\n          \\\"scripts\\\": [\\n            \\\"BEGIN\\\",\\n            \\\"SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ\\\",\\n            \\\"SET SESSION innodb_lock_wait_timeout=60\\\",\\n            \\\"SET @w := ((CONNECTION_ID() % 4) + 1)\\\",\\n            \\\"SELECT d_id FROM district FORCE INDEX(PRIMARY) WHERE d_w_id = @w FOR UPDATE\\\",\\n            \\\"SELECT s_i_id FROM stock FORCE INDEX(PRIMARY) WHERE s_w_id = @w AND s_i_id BETWEEN 1 AND 200 FOR UPDATE\\\",\\n            \\\"SELECT SLEEP(12)\\\",\\n            \\\"ROLLBACK\\\"\\n          ],\\n          \\\"duration_sec\\\": 14,\\n          \\\"concurrency\\\": 4\\n        }\\n      ],\\n      \\\"expected_metrics\\\": {\\n        \\\"lock_contention\\\": {\\n          \\\"Innodb_row_lock_waits_delta\\\": {\\n            \\\">=\\\": 50\\n          },\\n          \\\"Innodb_row_lock_time_delta_ms\\\": {\\n            \\\">=\\\": 4000\\n          }\\n        },\\n        \\\"slow_query\\\": {\\n          \\\"latency_p95_ratio\\\": {\\n            \\\">=\\\": 1.5\\n          }\\n        },\\n        \\\"qps_drop\\\": {\\n          \\\"qps_ratio\\\": {\\n            \\\"<=\\\": 0.7\\n          }\\n        }\\n      },\\n      \\\"success_criteria\\\": \\\"During or shortly after execution: lock_contention indicators increase and either p95 latency rises by >=50% or QPS drops by >=30%.\\\",\\n      \\\"risk_assessment\\\": \\\"Holds row and next-key locks on hot TPC-C rows (district and stock) across up to 4 warehouses for ~12s. Expect lock waits, slow queries, possible deadlocks. Use only in non-production.\\\",\\n      \\\"metadata\\\": {\\n        \\\"root_cause\\\": \\\"long_tx\\\"\\n      }\\n    }\\n  ],\\n  \\\"dependencies\\\": [],\\n  \\\"dag\\\": {\\n    \\\"tasks\\\": {\\n      \\\"long_tx_tpcc_lock_hold_w_shard\\\": {\\n        \\\"task_id\\\": \\\"long_tx_tpcc_lock_hold_w_shard\\\",\\n        \\\"task_type\\\": \\\"anomaly_injection\\\",\\n        \\\"actions\\\": [\\n          {\\n \"}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 13,
+      "thought": "ReAct generated 1 TaskSpecs for injected nodes ['long_tx']",
+      "action": "final_plan_validation",
+      "observe": "{\"task_ids\": [\"long_tx_tpcc_lock_hold_w_shard\"]}",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    },
+    {
+      "round": 14,
+      "thought": "DAG built with 1 tasks and 0 edges",
+      "action": "build_task_dag",
+      "observe": "Task IDs: ['long_tx_tpcc_lock_hold_w_shard']",
+      "decision": "",
+      "timestamp": "2026-06-22T06:57:24+00:00"
+    }
+  ]
+}

@@ -1,0 +1,995 @@
+AlwaysON Availability group query very slow
+Asked 10 years, 3 months ago
+Modified 10 years, 3 months ago
+Viewed 5k times
+0
+
+I am running below tsql to find the secondary AlwaysON servers from the primary replica :
+
+set transaction isolation level read uncommitted 
+set statistics time, io on
+SELECT  
+ISNULL(agstates.primary_replica, '') AS [Primary_AG_Server],
+dbcs.database_name AS [DatabaseName]
+ ,ar.replica_server_name as [Secondary_AG_Servers]
+
+   FROM master.sys.availability_groups AS AG
+LEFT OUTER JOIN master.sys.dm_hadr_availability_group_states as agstates
+   ON AG.group_id = agstates.group_id
+INNER JOIN master.sys.availability_replicas AS AR
+   ON AG.group_id = AR.group_id
+INNER JOIN master.sys.dm_hadr_availability_replica_states AS arstates
+   ON AR.replica_id = arstates.replica_id AND arstates.is_local <> 1 -- is_local is not 1 .. so we get secondary server names
+INNER JOIN master.sys.dm_hadr_database_replica_cluster_states AS dbcs
+   ON arstates.replica_id = dbcs.replica_id
+    group by agstates.primary_replica, dbcs.database_name, ar.replica_server_name
+    set statistics time, io off
+The above query takes 12 mins and 38 secs to run and returns 34 rows. Below is the statistics IO and time output:
+
+SQL Server parse and compile time: 
+   CPU time = 0 ms, elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+SQL Server parse and compile time: 
+   CPU time = 10 ms, elapsed time = 10 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+ SQL Server Execution Times:
+   CPU time = 0 ms,  elapsed time = 0 ms.
+
+(34 row(s) affected)
+Table 'Workfile'. Scan count 0, logical reads 0, physical reads 0, read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob read-ahead reads 0.
+Table 'Worktable'. Scan count 0, logical reads 0, physical reads 0, read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob read-ahead reads 0.
+Table 'sysguidrefs'. Scan count 0, logical reads 212, physical reads 0, read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob read-ahead reads 0.
+Table 'sysclsobjs'. Scan count 1, logical reads 2, physical reads 0, read-ahead reads 0, lob logical reads 0, lob physical reads 0, lob read-ahead reads 0.
+
+(1 row(s) affected)
+
+ SQL Server Execution Times:
+   CPU time = 1266 ms,  elapsed time = 747852 ms.
+Here is the link to actual execution plan.
+
+{<?xml version="1.0" encoding="utf-16"?>
+<ShowPlanXML xmlns="http://schemas.microsoft.com/sqlserver/2004/07/showplan" Version="1.2" Build="12.0.2370.0">
+  <BatchSequence>
+    <Batch>
+      <Statements>
+        <StmtSimple StatementText="SELECT  &#xD;&#xA;ISNULL(agstates.primary_replica, '') AS [Primary_AG_Server],&#xD;&#xA;dbcs.database_name AS [DatabaseName]&#xD;&#xA; ,ar.replica_server_name as [Secondary_AG_Servers]&#xD;&#xA;&#xD;&#xA;   FROM master.sys.availability_groups AS AG&#xD;&#xA;LEFT OUTER JOIN master.sys.dm_hadr_availability_group_states as agstates&#xD;&#xA;   ON AG.group_id = agstates.group_id&#xD;&#xA;INNER JOIN master.sys.availability_replicas AS AR&#xD;&#xA;   ON AG.group_id = AR.group_id&#xD;&#xA;INNER JOIN master.sys.dm_hadr_availability_replica_states AS arstates&#xD;&#xA;   ON AR.replica_id = arstates.replica_id AND arstates.is_local &lt;&gt; 1 -- is_local is not 1 .. so we get secondary server names&#xD;&#xA;INNER JOIN master.sys.dm_hadr_database_replica_cluster_states AS dbcs&#xD;&#xA;   ON arstates.replica_id = dbcs.replica_id&#xD;&#xA;    group by agstates.primary_replica, dbcs.database_name, ar.replica_server_name" StatementId="1" StatementCompId="1" StatementType="SELECT" RetrievedFromCache="true" StatementSubTreeCost="0.320397" StatementEstRows="322.256" StatementOptmLevel="FULL" QueryHash="0xCA05A7D2BF52E151" QueryPlanHash="0x1A0FCDBE0D796156" StatementOptmEarlyAbortReason="TimeOut" CardinalityEstimationModelVersion="120">
+          <StatementSetOptions QUOTED_IDENTIFIER="true" ARITHABORT="false" CONCAT_NULL_YIELDS_NULL="true" ANSI_NULLS="true" ANSI_PADDING="true" ANSI_WARNINGS="true" NUMERIC_ROUNDABORT="false" />
+          <QueryPlan DegreeOfParallelism="0" MemoryGrant="6800" NonParallelPlanReason="CouldNotGenerateValidParallelPlan" CachedPlanSize="176" CompileTime="10" CompileCPU="10" CompileMemory="2104">
+            <MemoryGrantInfo SerialRequiredMemory="4096" SerialDesiredMemory="6800" RequiredMemory="4096" DesiredMemory="6800" RequestedMemory="6800" GrantWaitTime="0" GrantedMemory="6800" MaxUsedMemory="1384" />
+            <OptimizerHardwareDependentProperties EstimatedAvailableMemoryGrant="2188307" EstimatedPagesCached="2188307" EstimatedAvailableDegreeOfParallelism="4" />
+            <RelOp NodeId="0" PhysicalOp="Compute Scalar" LogicalOp="Compute Scalar" EstimateRows="322.256" EstimateIO="0" EstimateCPU="3.22256e-005" AvgRowSize="527" EstimatedTotalSubtreeCost="0.320397" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+              <OutputList>
+                <ColumnReference Column="Expr1039" />
+                <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="database_name" />
+                <ColumnReference Column="Expr1057" />
+              </OutputList>
+              <ComputeScalar>
+                <DefinedValues>
+                  <DefinedValue>
+                    <ColumnReference Column="Expr1057" />
+                    <ScalarOperator ScalarString="isnull([Expr1025],N'')">
+                      <Intrinsic FunctionName="isnull">
+                        <ScalarOperator>
+                          <Identifier>
+                            <ColumnReference Column="Expr1025" />
+                          </Identifier>
+                        </ScalarOperator>
+                        <ScalarOperator>
+                          <Const ConstValue="N''" />
+                        </ScalarOperator>
+                      </Intrinsic>
+                    </ScalarOperator>
+                  </DefinedValue>
+                </DefinedValues>
+                <RelOp NodeId="1" PhysicalOp="Sort" LogicalOp="Distinct Sort" EstimateRows="322.256" EstimateIO="0.0112613" EstimateCPU="0.0252348" AvgRowSize="527" EstimatedTotalSubtreeCost="0.320364" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                  <OutputList>
+                    <ColumnReference Column="Expr1025" />
+                    <ColumnReference Column="Expr1039" />
+                    <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="database_name" />
+                  </OutputList>
+                  <MemoryFractions Input="0.633136" Output="1" />
+                  <RunTimeInformation>
+                    <RunTimeCountersPerThread Thread="0" ActualRows="34" ActualRebinds="1" ActualRewinds="0" ActualEndOfScans="1" ActualExecutions="1" />
+                  </RunTimeInformation>
+                  <Sort Distinct="1">
+                    <OrderBy>
+                      <OrderByColumn Ascending="1">
+                        <ColumnReference Column="Expr1025" />
+                      </OrderByColumn>
+                      <OrderByColumn Ascending="1">
+                        <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="database_name" />
+                      </OrderByColumn>
+                      <OrderByColumn Ascending="1">
+                        <ColumnReference Column="Expr1039" />
+                      </OrderByColumn>
+                    </OrderBy>
+                    <RelOp NodeId="2" PhysicalOp="Compute Scalar" LogicalOp="Compute Scalar" EstimateRows="1523.79" EstimateIO="0" EstimateCPU="0.000152379" AvgRowSize="527" EstimatedTotalSubtreeCost="0.283868" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                      <OutputList>
+                        <ColumnReference Column="Expr1025" />
+                        <ColumnReference Column="Expr1039" />
+                        <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="database_name" />
+                      </OutputList>
+                      <ComputeScalar>
+                        <DefinedValues>
+                          <DefinedValue>
+                            <ColumnReference Column="Expr1039" />
+                            <ScalarOperator ScalarString="CASE WHEN [master].[sys].[sysguidrefs].[guid] as [sgr2].[guid] IS NOT NULL AND DM_HADR_INTERNAL_WSFC_AG_REPLICAS.[ag_replica_name] IS NULL THEN [Expr1038] ELSE DM_HADR_INTERNAL_WSFC_AG_REPLICAS.[ag_replica_name] END">
+                              <IF>
+                                <Condition>
+                                  <ScalarOperator>
+                                    <Logical Operation="AND">
+                                      <ScalarOperator>
+                                        <Compare CompareOp="IS NOT">
+                                          <ScalarOperator>
+                                            <Identifier>
+                                              <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                            </Identifier>
+                                          </ScalarOperator>
+                                          <ScalarOperator>
+                                            <Const ConstValue="NULL" />
+                                          </ScalarOperator>
+                                        </Compare>
+                                      </ScalarOperator>
+                                      <ScalarOperator>
+                                        <Compare CompareOp="IS">
+                                          <ScalarOperator>
+                                            <Identifier>
+                                              <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                            </Identifier>
+                                          </ScalarOperator>
+                                          <ScalarOperator>
+                                            <Const ConstValue="NULL" />
+                                          </ScalarOperator>
+                                        </Compare>
+                                      </ScalarOperator>
+                                    </Logical>
+                                  </ScalarOperator>
+                                </Condition>
+                                <Then>
+                                  <ScalarOperator>
+                                    <Identifier>
+                                      <ColumnReference Column="Expr1038" />
+                                    </Identifier>
+                                  </ScalarOperator>
+                                </Then>
+                                <Else>
+                                  <ScalarOperator>
+                                    <Identifier>
+                                      <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                    </Identifier>
+                                  </ScalarOperator>
+                                </Else>
+                              </IF>
+                            </ScalarOperator>
+                          </DefinedValue>
+                        </DefinedValues>
+                        <RelOp NodeId="3" PhysicalOp="Hash Match" LogicalOp="Inner Join" EstimateRows="1523.79" EstimateIO="0" EstimateCPU="0.190602" AvgRowSize="673" EstimatedTotalSubtreeCost="0.283716" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                          <OutputList>
+                            <ColumnReference Column="Expr1025" />
+                            <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                            <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                            <ColumnReference Column="Expr1038" />
+                            <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="database_name" />
+                          </OutputList>
+                          <MemoryFractions Input="0.805195" Output="0.366864" />
+                          <RunTimeInformation>
+                            <RunTimeCountersPerThread Thread="0" ActualRows="34" ActualEndOfScans="1" ActualExecutions="1" />
+                          </RunTimeInformation>
+                          <Hash>
+                            <DefinedValues />
+                            <HashKeysBuild>
+                              <ColumnReference Column="Expr1058" />
+                            </HashKeysBuild>
+                            <HashKeysProbe>
+                              <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="replica_id" />
+                            </HashKeysProbe>
+                            <ProbeResidual>
+                              <ScalarOperator ScalarString="DM_HADR_DATABASE_REPLICA_CLUSTER_STATES.[replica_id]=[Expr1058]">
+                                <Compare CompareOp="EQ">
+                                  <ScalarOperator>
+                                    <Identifier>
+                                      <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="replica_id" />
+                                    </Identifier>
+                                  </ScalarOperator>
+                                  <ScalarOperator>
+                                    <Identifier>
+                                      <ColumnReference Column="Expr1058" />
+                                    </Identifier>
+                                  </ScalarOperator>
+                                </Compare>
+                              </ScalarOperator>
+                            </ProbeResidual>
+                            <RelOp NodeId="4" PhysicalOp="Hash Match" LogicalOp="Inner Join" EstimateRows="433.872" EstimateIO="0" EstimateCPU="0.0269974" AvgRowSize="559" EstimatedTotalSubtreeCost="0.0921105" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                              <OutputList>
+                                <ColumnReference Column="Expr1025" />
+                                <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                <ColumnReference Column="Expr1038" />
+                                <ColumnReference Column="Expr1058" />
+                              </OutputList>
+                              <MemoryFractions Input="0.6" Output="0.116883" />
+                              <RunTimeInformation>
+                                <RunTimeCountersPerThread Thread="0" ActualRows="9" ActualEndOfScans="1" ActualExecutions="1" />
+                              </RunTimeInformation>
+                              <Hash>
+                                <DefinedValues />
+                                <HashKeysBuild>
+                                  <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES]" Column="replica_id" />
+                                </HashKeysBuild>
+                                <HashKeysProbe>
+                                  <ColumnReference Column="Expr1058" />
+                                </HashKeysProbe>
+                                <ProbeResidual>
+                                  <ScalarOperator ScalarString="DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES.[replica_id]=[Expr1058]">
+                                    <Compare CompareOp="EQ">
+                                      <ScalarOperator>
+                                        <Identifier>
+                                          <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES]" Column="replica_id" />
+                                        </Identifier>
+                                      </ScalarOperator>
+                                      <ScalarOperator>
+                                        <Identifier>
+                                          <ColumnReference Column="Expr1058" />
+                                        </Identifier>
+                                      </ScalarOperator>
+                                    </Compare>
+                                  </ScalarOperator>
+                                </ProbeResidual>
+                                <RelOp NodeId="5" PhysicalOp="Filter" LogicalOp="Filter" EstimateRows="255" EstimateIO="0" EstimateCPU="0.00024" AvgRowSize="23" EstimatedTotalSubtreeCost="0.000740157" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                  <OutputList>
+                                    <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES]" Column="replica_id" />
+                                  </OutputList>
+                                  <RunTimeInformation>
+                                    <RunTimeCountersPerThread Thread="0" ActualRows="9" ActualEndOfScans="1" ActualExecutions="1" />
+                                  </RunTimeInformation>
+                                  <Filter StartupExpression="0">
+                                    <RelOp NodeId="6" PhysicalOp="Table-valued function" LogicalOp="Table-valued function" EstimateRows="500" EstimateIO="0" EstimateCPU="0.000500157" AvgRowSize="24" EstimatedTotalSubtreeCost="0.000500157" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                      <OutputList>
+                                        <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES]" Column="replica_id" />
+                                        <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES]" Column="is_local" />
+                                      </OutputList>
+                                      <RunTimeInformation>
+                                        <RunTimeCountersPerThread Thread="0" ActualRows="62" ActualRebinds="1" ActualRewinds="0" ActualEndOfScans="1" ActualExecutions="1" />
+                                      </RunTimeInformation>
+                                      <TableValuedFunction>
+                                        <DefinedValues>
+                                          <DefinedValue>
+                                            <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES]" Column="replica_id" />
+                                          </DefinedValue>
+                                          <DefinedValue>
+                                            <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES]" Column="is_local" />
+                                          </DefinedValue>
+                                        </DefinedValues>
+                                        <Object Table="[DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES]" />
+                                      </TableValuedFunction>
+                                    </RelOp>
+                                    <Predicate>
+                                      <ScalarOperator ScalarString="DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES.[is_local]&lt;&gt;(1)">
+                                        <Compare CompareOp="NE">
+                                          <ScalarOperator>
+                                            <Identifier>
+                                              <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_REPLICA_STATES]" Column="is_local" />
+                                            </Identifier>
+                                          </ScalarOperator>
+                                          <ScalarOperator>
+                                            <Const ConstValue="(1)" />
+                                          </ScalarOperator>
+                                        </Compare>
+                                      </ScalarOperator>
+                                    </Predicate>
+                                  </Filter>
+                                </RelOp>
+                                <RelOp NodeId="8" PhysicalOp="Nested Loops" LogicalOp="Inner Join" EstimateRows="484.46" EstimateIO="0" EstimateCPU="0.00202504" AvgRowSize="559" EstimatedTotalSubtreeCost="0.0643699" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                  <OutputList>
+                                    <ColumnReference Column="Expr1025" />
+                                    <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                    <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                    <ColumnReference Column="Expr1038" />
+                                    <ColumnReference Column="Expr1058" />
+                                  </OutputList>
+                                  <RunTimeInformation>
+                                    <RunTimeCountersPerThread Thread="0" ActualRows="108" ActualEndOfScans="1" ActualExecutions="1" />
+                                  </RunTimeInformation>
+                                  <NestedLoops Optimized="0">
+                                    <PassThru>
+                                      <ScalarOperator ScalarString="IsFalseOrNull [master].[sys].[sysguidrefs].[guid] as [sgr2].[guid] IS NOT NULL AND DM_HADR_INTERNAL_WSFC_AG_REPLICAS.[ag_replica_name] IS NULL">
+                                        <Logical Operation="IsFalseOrNull">
+                                          <ScalarOperator>
+                                            <Logical Operation="AND">
+                                              <ScalarOperator>
+                                                <Compare CompareOp="IS NOT">
+                                                  <ScalarOperator>
+                                                    <Identifier>
+                                                      <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                    </Identifier>
+                                                  </ScalarOperator>
+                                                  <ScalarOperator>
+                                                    <Const ConstValue="NULL" />
+                                                  </ScalarOperator>
+                                                </Compare>
+                                              </ScalarOperator>
+                                              <ScalarOperator>
+                                                <Compare CompareOp="IS">
+                                                  <ScalarOperator>
+                                                    <Identifier>
+                                                      <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                                    </Identifier>
+                                                  </ScalarOperator>
+                                                  <ScalarOperator>
+                                                    <Const ConstValue="NULL" />
+                                                  </ScalarOperator>
+                                                </Compare>
+                                              </ScalarOperator>
+                                            </Logical>
+                                          </ScalarOperator>
+                                        </Logical>
+                                      </ScalarOperator>
+                                    </PassThru>
+                                    <RelOp NodeId="9" PhysicalOp="Nested Loops" LogicalOp="Left Outer Join" EstimateRows="484.46" EstimateIO="0" EstimateCPU="0.00202504" AvgRowSize="429" EstimatedTotalSubtreeCost="0.0614727" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                      <OutputList>
+                                        <ColumnReference Column="Expr1025" />
+                                        <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                        <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                        <ColumnReference Column="Expr1058" />
+                                      </OutputList>
+                                      <RunTimeInformation>
+                                        <RunTimeCountersPerThread Thread="0" ActualRows="108" ActualEndOfScans="1" ActualExecutions="1" />
+                                      </RunTimeInformation>
+                                      <NestedLoops Optimized="0">
+                                        <OuterReferences>
+                                          <ColumnReference Table="[DM_AVAILABILITY_GROUPS]" Column="group_id" />
+                                        </OuterReferences>
+                                        <RelOp NodeId="10" PhysicalOp="Hash Match" LogicalOp="Inner Join" EstimateRows="48.446" EstimateIO="0" EstimateCPU="0.0210433" AvgRowSize="315" EstimatedTotalSubtreeCost="0.051793" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                          <OutputList>
+                                            <ColumnReference Table="[DM_AVAILABILITY_GROUPS]" Column="group_id" />
+                                            <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                            <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                            <ColumnReference Column="Expr1058" />
+                                          </OutputList>
+                                          <MemoryFractions Input="0.266667" Output="0.0519481" />
+                                          <RunTimeInformation>
+                                            <RunTimeCountersPerThread Thread="0" ActualRows="108" ActualEndOfScans="1" ActualExecutions="1" />
+                                          </RunTimeInformation>
+                                          <Hash>
+                                            <DefinedValues />
+                                            <HashKeysBuild>
+                                              <ColumnReference Table="[DM_AVAILABILITY_GROUPS]" Column="group_id" />
+                                            </HashKeysBuild>
+                                            <HashKeysProbe>
+                                              <ColumnReference Column="Expr1059" />
+                                            </HashKeysProbe>
+                                            <ProbeResidual>
+                                              <ScalarOperator ScalarString="DM_AVAILABILITY_GROUPS.[group_id]=[Expr1059]">
+                                                <Compare CompareOp="EQ">
+                                                  <ScalarOperator>
+                                                    <Identifier>
+                                                      <ColumnReference Table="[DM_AVAILABILITY_GROUPS]" Column="group_id" />
+                                                    </Identifier>
+                                                  </ScalarOperator>
+                                                  <ScalarOperator>
+                                                    <Identifier>
+                                                      <ColumnReference Column="Expr1059" />
+                                                    </Identifier>
+                                                  </ScalarOperator>
+                                                </Compare>
+                                              </ScalarOperator>
+                                            </ProbeResidual>
+                                            <RelOp NodeId="11" PhysicalOp="Table-valued function" LogicalOp="Table-valued function" EstimateRows="100" EstimateIO="0" EstimateCPU="0.000100157" AvgRowSize="23" EstimatedTotalSubtreeCost="0.000100157" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                              <OutputList>
+                                                <ColumnReference Table="[DM_AVAILABILITY_GROUPS]" Column="group_id" />
+                                              </OutputList>
+                                              <RunTimeInformation>
+                                                <RunTimeCountersPerThread Thread="0" ActualRows="53" ActualRebinds="1" ActualRewinds="0" ActualEndOfScans="1" ActualExecutions="1" />
+                                              </RunTimeInformation>
+                                              <TableValuedFunction>
+                                                <DefinedValues>
+                                                  <DefinedValue>
+                                                    <ColumnReference Table="[DM_AVAILABILITY_GROUPS]" Column="group_id" />
+                                                  </DefinedValue>
+                                                </DefinedValues>
+                                                <Object Table="[DM_AVAILABILITY_GROUPS]" />
+                                              </TableValuedFunction>
+                                            </RelOp>
+                                            <RelOp NodeId="12" PhysicalOp="Compute Scalar" LogicalOp="Compute Scalar" EstimateRows="159.392" EstimateIO="0" EstimateCPU="1.59392e-005" AvgRowSize="315" EstimatedTotalSubtreeCost="0.0306465" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                              <OutputList>
+                                                <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                                <ColumnReference Column="Expr1058" />
+                                                <ColumnReference Column="Expr1059" />
+                                              </OutputList>
+                                              <ComputeScalar>
+                                                <DefinedValues>
+                                                  <DefinedValue>
+                                                    <ColumnReference Column="Expr1059" />
+                                                    <ScalarOperator ScalarString="CASE WHEN [master].[sys].[sysguidrefs].[guid] as [sgr2].[guid] IS NULL THEN DM_HADR_INTERNAL_WSFC_AGS.[ag_id] ELSE [master].[sys].[sysguidrefs].[guid] as [sgr].[guid] END">
+                                                      <IF>
+                                                        <Condition>
+                                                          <ScalarOperator>
+                                                            <Compare CompareOp="IS">
+                                                              <ScalarOperator>
+                                                                <Identifier>
+                                                                  <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                                </Identifier>
+                                                              </ScalarOperator>
+                                                              <ScalarOperator>
+                                                                <Const ConstValue="NULL" />
+                                                              </ScalarOperator>
+                                                            </Compare>
+                                                          </ScalarOperator>
+                                                        </Condition>
+                                                        <Then>
+                                                          <ScalarOperator>
+                                                            <Identifier>
+                                                              <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                            </Identifier>
+                                                          </ScalarOperator>
+                                                        </Then>
+                                                        <Else>
+                                                          <ScalarOperator>
+                                                            <Identifier>
+                                                              <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                            </Identifier>
+                                                          </ScalarOperator>
+                                                        </Else>
+                                                      </IF>
+                                                    </ScalarOperator>
+                                                  </DefinedValue>
+                                                </DefinedValues>
+                                                <RelOp NodeId="13" PhysicalOp="Compute Scalar" LogicalOp="Compute Scalar" EstimateRows="159.392" EstimateIO="0" EstimateCPU="1.59392e-005" AvgRowSize="331" EstimatedTotalSubtreeCost="0.0306306" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                                  <OutputList>
+                                                    <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                    <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                    <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                    <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                                    <ColumnReference Column="Expr1058" />
+                                                  </OutputList>
+                                                  <ComputeScalar>
+                                                    <DefinedValues>
+                                                      <DefinedValue>
+                                                        <ColumnReference Column="Expr1058" />
+                                                        <ScalarOperator ScalarString="CASE WHEN [master].[sys].[sysguidrefs].[guid] as [sgr2].[guid] IS NULL THEN DM_HADR_INTERNAL_WSFC_AG_REPLICAS.[ag_replica_id] ELSE [master].[sys].[sysguidrefs].[guid] as [sgr2].[guid] END">
+                                                          <IF>
+                                                            <Condition>
+                                                              <ScalarOperator>
+                                                                <Compare CompareOp="IS">
+                                                                  <ScalarOperator>
+                                                                    <Identifier>
+                                                                      <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                                    </Identifier>
+                                                                  </ScalarOperator>
+                                                                  <ScalarOperator>
+                                                                    <Const ConstValue="NULL" />
+                                                                  </ScalarOperator>
+                                                                </Compare>
+                                                              </ScalarOperator>
+                                                            </Condition>
+                                                            <Then>
+                                                              <ScalarOperator>
+                                                                <Identifier>
+                                                                  <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_id" />
+                                                                </Identifier>
+                                                              </ScalarOperator>
+                                                            </Then>
+                                                            <Else>
+                                                              <ScalarOperator>
+                                                                <Identifier>
+                                                                  <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                                </Identifier>
+                                                              </ScalarOperator>
+                                                            </Else>
+                                                          </IF>
+                                                        </ScalarOperator>
+                                                      </DefinedValue>
+                                                    </DefinedValues>
+                                                    <RelOp NodeId="14" PhysicalOp="Hash Match" LogicalOp="Full Outer Join" EstimateRows="159.392" EstimateIO="0" EstimateCPU="0.0190833" AvgRowSize="331" EstimatedTotalSubtreeCost="0.0306146" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                                      <OutputList>
+                                                        <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                        <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                        <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                        <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_id" />
+                                                        <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                                      </OutputList>
+                                                      <MemoryFractions Input="0.133333" Output="0.025974" />
+                                                      <RunTimeInformation>
+                                                        <RunTimeCountersPerThread Thread="0" ActualRows="108" ActualEndOfScans="1" ActualExecutions="1" />
+                                                      </RunTimeInformation>
+                                                      <Hash>
+                                                        <DefinedValues />
+                                                        <HashKeysBuild>
+                                                          <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                          <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                        </HashKeysBuild>
+                                                        <HashKeysProbe>
+                                                          <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                          <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_id" />
+                                                        </HashKeysProbe>
+                                                        <ProbeResidual>
+                                                          <ScalarOperator ScalarString="[master].[sys].[sysguidrefs].[guid] as [sgr].[guid]=DM_HADR_INTERNAL_WSFC_AGS.[ag_id] AND [master].[sys].[sysguidrefs].[guid] as [sgr2].[guid]=DM_HADR_INTERNAL_WSFC_AG_REPLICAS.[ag_replica_id]">
+                                                            <Logical Operation="AND">
+                                                              <ScalarOperator>
+                                                                <Compare CompareOp="EQ">
+                                                                  <ScalarOperator>
+                                                                    <Identifier>
+                                                                      <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                                    </Identifier>
+                                                                  </ScalarOperator>
+                                                                  <ScalarOperator>
+                                                                    <Identifier>
+                                                                      <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                                    </Identifier>
+                                                                  </ScalarOperator>
+                                                                </Compare>
+                                                              </ScalarOperator>
+                                                              <ScalarOperator>
+                                                                <Compare CompareOp="EQ">
+                                                                  <ScalarOperator>
+                                                                    <Identifier>
+                                                                      <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                                    </Identifier>
+                                                                  </ScalarOperator>
+                                                                  <ScalarOperator>
+                                                                    <Identifier>
+                                                                      <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_id" />
+                                                                    </Identifier>
+                                                                  </ScalarOperator>
+                                                                </Compare>
+                                                              </ScalarOperator>
+                                                            </Logical>
+                                                          </ScalarOperator>
+                                                        </ProbeResidual>
+                                                        <RelOp NodeId="15" PhysicalOp="Nested Loops" LogicalOp="Left Outer Join" EstimateRows="3.41566" EstimateIO="0" EstimateCPU="1.42775e-005" AvgRowSize="39" EstimatedTotalSubtreeCost="0.0106474" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                                          <OutputList>
+                                                            <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                            <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                          </OutputList>
+                                                          <RunTimeInformation>
+                                                            <RunTimeCountersPerThread Thread="0" ActualRows="53" ActualEndOfScans="1" ActualExecutions="1" />
+                                                          </RunTimeInformation>
+                                                          <NestedLoops Optimized="0">
+                                                            <OuterReferences>
+                                                              <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="id" />
+                                                            </OuterReferences>
+                                                            <RelOp NodeId="16" PhysicalOp="Nested Loops" LogicalOp="Left Outer Join" EstimateRows="3.41566" EstimateIO="0" EstimateCPU="1.42775e-005" AvgRowSize="27" EstimatedTotalSubtreeCost="0.00696806" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                                              <OutputList>
+                                                                <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="id" />
+                                                                <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                              </OutputList>
+                                                              <RunTimeInformation>
+                                                                <RunTimeCountersPerThread Thread="0" ActualRows="53" ActualEndOfScans="1" ActualExecutions="1" />
+                                                              </RunTimeInformation>
+                                                              <NestedLoops Optimized="0">
+                                                                <OuterReferences>
+                                                                  <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="id" />
+                                                                </OuterReferences>
+                                                                <RelOp NodeId="17" PhysicalOp="Filter" LogicalOp="Filter" EstimateRows="3.41566" EstimateIO="0" EstimateCPU="3.00578e-006" AvgRowSize="11" EstimatedTotalSubtreeCost="0.00328876" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                                                  <OutputList>
+                                                                    <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="id" />
+                                                                  </OutputList>
+                                                                  <RunTimeInformation>
+                                                                    <RunTimeCountersPerThread Thread="0" ActualRows="53" ActualEndOfScans="1" ActualExecutions="1" />
+                                                                  </RunTimeInformation>
+                                                                  <Filter StartupExpression="0">
+                                                                    <RelOp NodeId="18" PhysicalOp="Clustered Index Seek" LogicalOp="Clustered Index Seek" EstimateRows="3.41566" EstimateIO="0.003125" EstimateCPU="0.000160757" AvgRowSize="11" EstimatedTotalSubtreeCost="0.00328576" TableCardinality="81" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                                                      <OutputList>
+                                                                        <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="id" />
+                                                                      </OutputList>
+                                                                      <RunTimeInformation>
+                                                                        <RunTimeCountersPerThread Thread="0" ActualRows="53" ActualEndOfScans="1" ActualExecutions="1" />
+                                                                      </RunTimeInformation>
+                                                                      <IndexScan Ordered="1" ScanDirection="FORWARD" ForcedIndex="0" ForceSeek="0" ForceScan="0" NoExpandHint="0" Storage="RowStore">
+                                                                        <DefinedValues>
+                                                                          <DefinedValue>
+                                                                            <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="id" />
+                                                                          </DefinedValue>
+                                                                        </DefinedValues>
+                                                                        <Object Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Index="[clst]" Alias="[co]" IndexKind="Clustered" Storage="RowStore" />
+                                                                        <SeekPredicates>
+                                                                          <SeekPredicateNew>
+                                                                            <SeekKeys>
+                                                                              <Prefix ScanType="EQ">
+                                                                                <RangeColumns>
+                                                                                  <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="class" />
+                                                                                </RangeColumns>
+                                                                                <RangeExpressions>
+                                                                                  <ScalarOperator ScalarString="(67)">
+                                                                                    <Const ConstValue="(67)" />
+                                                                                  </ScalarOperator>
+                                                                                </RangeExpressions>
+                                                                              </Prefix>
+                                                                            </SeekKeys>
+                                                                          </SeekPredicateNew>
+                                                                        </SeekPredicates>
+                                                                      </IndexScan>
+                                                                    </RelOp>
+                                                                    <Predicate>
+                                                                      <ScalarOperator ScalarString="has_access('AG',[master].[sys].[sysclsobjs].[id] as [co].[id])=(1)">
+                                                                        <Compare CompareOp="EQ">
+                                                                          <ScalarOperator>
+                                                                            <Intrinsic FunctionName="has_access">
+                                                                              <ScalarOperator>
+                                                                                <Const ConstValue="'AG'" />
+                                                                              </ScalarOperator>
+                                                                              <ScalarOperator>
+                                                                                <Identifier>
+                                                                                  <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="id" />
+                                                                                </Identifier>
+                                                                              </ScalarOperator>
+                                                                              <ScalarOperator>
+                                                                                <Const ConstValue="" />
+                                                                              </ScalarOperator>
+                                                                              <ScalarOperator>
+                                                                                <Const ConstValue="" />
+                                                                              </ScalarOperator>
+                                                                            </Intrinsic>
+                                                                          </ScalarOperator>
+                                                                          <ScalarOperator>
+                                                                            <Const ConstValue="(1)" />
+                                                                          </ScalarOperator>
+                                                                        </Compare>
+                                                                      </ScalarOperator>
+                                                                    </Predicate>
+                                                                  </Filter>
+                                                                </RelOp>
+                                                                <RelOp NodeId="20" PhysicalOp="Clustered Index Seek" LogicalOp="Clustered Index Seek" EstimateRows="1" EstimateIO="0.003125" EstimateCPU="0.0001581" AvgRowSize="23" EstimatedTotalSubtreeCost="0.00366502" TableCardinality="282" Parallel="0" EstimateRebinds="0" EstimateRewinds="2.41566" EstimatedExecutionMode="Row">
+                                                                  <OutputList>
+                                                                    <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                                  </OutputList>
+                                                                  <Warnings>
+                                                                    <ColumnsWithNoStatistics>
+                                                                      <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                                    </ColumnsWithNoStatistics>
+                                                                  </Warnings>
+                                                                  <RunTimeInformation>
+                                                                    <RunTimeCountersPerThread Thread="0" ActualRows="53" ActualEndOfScans="0" ActualExecutions="53" />
+                                                                  </RunTimeInformation>
+                                                                  <IndexScan Ordered="1" ScanDirection="FORWARD" ForcedIndex="0" ForceSeek="0" ForceScan="0" NoExpandHint="0" Storage="RowStore">
+                                                                    <DefinedValues>
+                                                                      <DefinedValue>
+                                                                        <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="guid" />
+                                                                      </DefinedValue>
+                                                                    </DefinedValues>
+                                                                    <Object Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Index="[cl]" Alias="[sgr]" IndexKind="Clustered" Storage="RowStore" />
+                                                                    <SeekPredicates>
+                                                                      <SeekPredicateNew>
+                                                                        <SeekKeys>
+                                                                          <Prefix ScanType="EQ">
+                                                                            <RangeColumns>
+                                                                              <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="id" />
+                                                                              <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="class" />
+                                                                              <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr]" Column="subid" />
+                                                                            </RangeColumns>
+                                                                            <RangeExpressions>
+                                                                              <ScalarOperator ScalarString="[master].[sys].[sysclsobjs].[id] as [co].[id]">
+                                                                                <Identifier>
+                                                                                  <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="id" />
+                                                                                </Identifier>
+                                                                              </ScalarOperator>
+                                                                              <ScalarOperator ScalarString="(8)">
+                                                                                <Const ConstValue="(8)" />
+                                                                              </ScalarOperator>
+                                                                              <ScalarOperator ScalarString="(0)">
+                                                                                <Const ConstValue="(0)" />
+                                                                              </ScalarOperator>
+                                                                            </RangeExpressions>
+                                                                          </Prefix>
+                                                                        </SeekKeys>
+                                                                      </SeekPredicateNew>
+                                                                    </SeekPredicates>
+                                                                  </IndexScan>
+                                                                </RelOp>
+                                                              </NestedLoops>
+                                                            </RelOp>
+                                                            <RelOp NodeId="21" PhysicalOp="Clustered Index Seek" LogicalOp="Clustered Index Seek" EstimateRows="1" EstimateIO="0.003125" EstimateCPU="0.0001581" AvgRowSize="23" EstimatedTotalSubtreeCost="0.00366502" TableCardinality="282" Parallel="0" EstimateRebinds="0" EstimateRewinds="2.41566" EstimatedExecutionMode="Row">
+                                                              <OutputList>
+                                                                <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                              </OutputList>
+                                                              <Warnings>
+                                                                <ColumnsWithNoStatistics>
+                                                                  <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                                </ColumnsWithNoStatistics>
+                                                              </Warnings>
+                                                              <RunTimeInformation>
+                                                                <RunTimeCountersPerThread Thread="0" ActualRows="53" ActualEndOfScans="0" ActualExecutions="53" />
+                                                              </RunTimeInformation>
+                                                              <IndexScan Ordered="1" ScanDirection="FORWARD" ForcedIndex="0" ForceSeek="0" ForceScan="0" NoExpandHint="0" Storage="RowStore">
+                                                                <DefinedValues>
+                                                                  <DefinedValue>
+                                                                    <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="guid" />
+                                                                  </DefinedValue>
+                                                                </DefinedValues>
+                                                                <Object Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Index="[cl]" Alias="[sgr2]" IndexKind="Clustered" Storage="RowStore" />
+                                                                <SeekPredicates>
+                                                                  <SeekPredicateNew>
+                                                                    <SeekKeys>
+                                                                      <Prefix ScanType="EQ">
+                                                                        <RangeColumns>
+                                                                          <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="id" />
+                                                                          <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="class" />
+                                                                          <ColumnReference Database="[master]" Schema="[sys]" Table="[sysguidrefs]" Alias="[sgr2]" Column="subid" />
+                                                                        </RangeColumns>
+                                                                        <RangeExpressions>
+                                                                          <ScalarOperator ScalarString="[master].[sys].[sysclsobjs].[id] as [co].[id]">
+                                                                            <Identifier>
+                                                                              <ColumnReference Database="[master]" Schema="[sys]" Table="[sysclsobjs]" Alias="[co]" Column="id" />
+                                                                            </Identifier>
+                                                                          </ScalarOperator>
+                                                                          <ScalarOperator ScalarString="(8)">
+                                                                            <Const ConstValue="(8)" />
+                                                                          </ScalarOperator>
+                                                                          <ScalarOperator ScalarString="(1)">
+                                                                            <Const ConstValue="(1)" />
+                                                                          </ScalarOperator>
+                                                                        </RangeExpressions>
+                                                                      </Prefix>
+                                                                    </SeekKeys>
+                                                                  </SeekPredicateNew>
+                                                                </SeekPredicates>
+                                                              </IndexScan>
+                                                            </RelOp>
+                                                          </NestedLoops>
+                                                        </RelOp>
+                                                        <RelOp NodeId="22" PhysicalOp="Nested Loops" LogicalOp="Inner Join" EstimateRows="159" EstimateIO="0" EstimateCPU="0.00066462" AvgRowSize="299" EstimatedTotalSubtreeCost="0.000876934" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                                          <OutputList>
+                                                            <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                            <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_id" />
+                                                            <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                                          </OutputList>
+                                                          <RunTimeInformation>
+                                                            <RunTimeCountersPerThread Thread="0" ActualRows="108" ActualEndOfScans="1" ActualExecutions="1" />
+                                                          </RunTimeInformation>
+                                                          <NestedLoops Optimized="0">
+                                                            <OuterReferences>
+                                                              <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                            </OuterReferences>
+                                                            <RelOp NodeId="23" PhysicalOp="Table-valued function" LogicalOp="Table-valued function" EstimateRows="53" EstimateIO="0" EstimateCPU="5.3157e-005" AvgRowSize="23" EstimatedTotalSubtreeCost="5.3157e-005" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                                                              <OutputList>
+                                                                <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                              </OutputList>
+                                                              <RunTimeInformation>
+                                                                <RunTimeCountersPerThread Thread="0" ActualRows="53" ActualRebinds="1" ActualRewinds="0" ActualEndOfScans="1" ActualExecutions="1" />
+                                                              </RunTimeInformation>
+                                                              <TableValuedFunction>
+                                                                <DefinedValues>
+                                                                  <DefinedValue>
+                                                                    <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                                  </DefinedValue>
+                                                                </DefinedValues>
+                                                                <Object Table="[DM_HADR_INTERNAL_WSFC_AGS]" />
+                                                              </TableValuedFunction>
+                                                            </RelOp>
+                                                            <RelOp NodeId="24" PhysicalOp="Table-valued function" LogicalOp="Table-valued function" EstimateRows="3" EstimateIO="0" EstimateCPU="3.157e-006" AvgRowSize="283" EstimatedTotalSubtreeCost="0.000159157" Parallel="0" EstimateRebinds="45.7199" EstimateRewinds="6.28011" EstimatedExecutionMode="Row">
+                                                              <OutputList>
+                                                                <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_id" />
+                                                                <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                                              </OutputList>
+                                                              <RunTimeInformation>
+                                                                <RunTimeCountersPerThread Thread="0" ActualRows="108" ActualRebinds="53" ActualRewinds="0" ActualEndOfScans="53" ActualExecutions="53" />
+                                                              </RunTimeInformation>
+                                                              <TableValuedFunction>
+                                                                <DefinedValues>
+                                                                  <DefinedValue>
+                                                                    <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_id" />
+                                                                  </DefinedValue>
+                                                                  <DefinedValue>
+                                                                    <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" Column="ag_replica_name" />
+                                                                  </DefinedValue>
+                                                                </DefinedValues>
+                                                                <Object Table="[DM_HADR_INTERNAL_WSFC_AG_REPLICAS]" />
+                                                                <ParameterList>
+                                                                  <ScalarOperator ScalarString="DM_HADR_INTERNAL_WSFC_AGS.[ag_id]">
+                                                                    <Identifier>
+                                                                      <ColumnReference Table="[DM_HADR_INTERNAL_WSFC_AGS]" Column="ag_id" />
+                                                                    </Identifier>
+                                                                  </ScalarOperator>
+                                                                </ParameterList>
+                                                              </TableValuedFunction>
+                                                            </RelOp>
+                                                          </NestedLoops>
+                                                        </RelOp>
+                                                      </Hash>
+                                                    </RelOp>
+                                                  </ComputeScalar>
+                                                </RelOp>
+                                              </ComputeScalar>
+                                            </RelOp>
+                                          </Hash>
+                                        </RelOp>
+                                        <RelOp NodeId="34" PhysicalOp="Filter" LogicalOp="Filter" EstimateRows="10" EstimateIO="0" EstimateCPU="4.8e-005" AvgRowSize="139" EstimatedTotalSubtreeCost="0.00765463" Parallel="0" EstimateRebinds="43.6014" EstimateRewinds="3.8446" EstimatedExecutionMode="Row">
+                                          <OutputList>
+                                            <ColumnReference Column="Expr1025" />
+                                          </OutputList>
+                                          <RunTimeInformation>
+                                            <RunTimeCountersPerThread Thread="0" ActualRows="108" ActualEndOfScans="108" ActualExecutions="108" />
+                                          </RunTimeInformation>
+                                          <Filter StartupExpression="0">
+                                            <RelOp NodeId="35" PhysicalOp="Compute Scalar" LogicalOp="Compute Scalar" EstimateRows="100" EstimateIO="0" EstimateCPU="1e-005" AvgRowSize="155" EstimatedTotalSubtreeCost="0.00532922" Parallel="0" EstimateRebinds="0" EstimateRewinds="47.446" EstimatedExecutionMode="Row">
+                                              <OutputList>
+                                                <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES]" Column="group_id" />
+                                                <ColumnReference Column="Expr1025" />
+                                              </OutputList>
+                                              <ComputeScalar>
+                                                <DefinedValues>
+                                                  <DefinedValue>
+                                                    <ColumnReference Column="Expr1025" />
+                                                    <ScalarOperator ScalarString="CONVERT(nvarchar(128),DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES.[primary_replica],0)">
+                                                      <Convert DataType="nvarchar" Length="256" Style="0" Implicit="0">
+                                                        <ScalarOperator>
+                                                          <Identifier>
+                                                            <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES]" Column="primary_replica" />
+                                                          </Identifier>
+                                                        </ScalarOperator>
+                                                      </Convert>
+                                                    </ScalarOperator>
+                                                  </DefinedValue>
+                                                </DefinedValues>
+                                                <RelOp NodeId="36" PhysicalOp="Table-valued function" LogicalOp="Table-valued function" EstimateRows="100" EstimateIO="0" EstimateCPU="0.000100157" AvgRowSize="283" EstimatedTotalSubtreeCost="0.00484476" Parallel="0" EstimateRebinds="0" EstimateRewinds="47.446" EstimatedExecutionMode="Row">
+                                                  <OutputList>
+                                                    <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES]" Column="group_id" />
+                                                    <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES]" Column="primary_replica" />
+                                                  </OutputList>
+                                                  <RunTimeInformation>
+                                                    <RunTimeCountersPerThread Thread="0" ActualRows="5724" ActualRebinds="1" ActualRewinds="107" ActualEndOfScans="108" ActualExecutions="108" />
+                                                  </RunTimeInformation>
+                                                  <TableValuedFunction>
+                                                    <DefinedValues>
+                                                      <DefinedValue>
+                                                        <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES]" Column="group_id" />
+                                                      </DefinedValue>
+                                                      <DefinedValue>
+                                                        <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES]" Column="primary_replica" />
+                                                      </DefinedValue>
+                                                    </DefinedValues>
+                                                    <Object Table="[DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES]" />
+                                                  </TableValuedFunction>
+                                                </RelOp>
+                                              </ComputeScalar>
+                                            </RelOp>
+                                            <Predicate>
+                                              <ScalarOperator ScalarString="DM_AVAILABILITY_GROUPS.[group_id]=DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES.[group_id]">
+                                                <Compare CompareOp="EQ">
+                                                  <ScalarOperator>
+                                                    <Identifier>
+                                                      <ColumnReference Table="[DM_AVAILABILITY_GROUPS]" Column="group_id" />
+                                                    </Identifier>
+                                                  </ScalarOperator>
+                                                  <ScalarOperator>
+                                                    <Identifier>
+                                                      <ColumnReference Table="[DM_HADR_INTERNAL_AVAILABILITY_GROUP_STATES]" Column="group_id" />
+                                                    </Identifier>
+                                                  </ScalarOperator>
+                                                </Compare>
+                                              </ScalarOperator>
+                                            </Predicate>
+                                          </Filter>
+                                        </RelOp>
+                                      </NestedLoops>
+                                    </RelOp>
+                                    <RelOp NodeId="41" PhysicalOp="Constant Scan" LogicalOp="Constant Scan" EstimateRows="1" EstimateIO="0" EstimateCPU="1.157e-006" AvgRowSize="139" EstimatedTotalSubtreeCost="0.000484617" Parallel="0" EstimateRebinds="0" EstimateRewinds="483.46" EstimatedExecutionMode="Row">
+                                      <OutputList>
+                                        <ColumnReference Column="Expr1038" />
+                                      </OutputList>
+                                      <RunTimeInformation>
+                                        <RunTimeCountersPerThread Thread="0" ActualRows="0" ActualEndOfScans="0" ActualExecutions="0" />
+                                      </RunTimeInformation>
+                                      <ConstantScan>
+                                        <Values>
+                                          <Row>
+                                            <ScalarOperator ScalarString="@@servername">
+                                              <Intrinsic FunctionName="@@servername" />
+                                            </ScalarOperator>
+                                          </Row>
+                                        </Values>
+                                      </ConstantScan>
+                                    </RelOp>
+                                  </NestedLoops>
+                                </RelOp>
+                              </Hash>
+                            </RelOp>
+                            <RelOp NodeId="44" PhysicalOp="Table-valued function" LogicalOp="Table-valued function" EstimateRows="1000" EstimateIO="0" EstimateCPU="0.00100016" AvgRowSize="155" EstimatedTotalSubtreeCost="0.00100016" Parallel="0" EstimateRebinds="0" EstimateRewinds="0" EstimatedExecutionMode="Row">
+                              <OutputList>
+                                <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="replica_id" />
+                                <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="database_name" />
+                              </OutputList>
+                              <RunTimeInformation>
+                                <RunTimeCountersPerThread Thread="0" ActualRows="350" ActualRebinds="1" ActualRewinds="0" ActualEndOfScans="1" ActualExecutions="1" />
+                              </RunTimeInformation>
+                              <TableValuedFunction>
+                                <DefinedValues>
+                                  <DefinedValue>
+                                    <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="replica_id" />
+                                  </DefinedValue>
+                                  <DefinedValue>
+                                    <ColumnReference Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" Column="database_name" />
+                                  </DefinedValue>
+                                </DefinedValues>
+                                <Object Table="[DM_HADR_DATABASE_REPLICA_CLUSTER_STATES]" />
+                              </TableValuedFunction>
+                            </RelOp>
+                          </Hash>
+                        </RelOp>
+                      </ComputeScalar>
+                    </RelOp>
+                  </Sort>
+                </RelOp>
+              </ComputeScalar>
+            </RelOp>
+          </QueryPlan>
+        </StmtSimple>
+      </Statements>
+    </Batch>
+  </BatchSequence>
+</ShowPlanXML>}
+
+
+Anything that can be done to make it faster ?
+
+Below is from Plan Explorer
+以下是图片中的表格内容提取：
+
+CPU Est CPU Cost Reads Writes Est IO Cost Est Rows Actual Rows Sort Opera... Hash Matr... Start Time End Time
+
+1,688 100.0 % 47,074 0 100.0 % 322 34 1 4 2016-03-08 14:38:39.413 2016-03-08 14:51:04.103
+
+AG is over multiple subnets but in the same domain - NY-LD-HK. I did check for blocking and there is no blocking - 100% sure. The wait type is HADR_CLUSAPI_CALL. I am not sure how to get info about Is your network saturated?. The thing is that refreshing the Availablity groups node takes quiet a long time as well. There are 53 Availablity Groups ! – 
+Kin Shah
+ CommentedMar 8, 2016 at 20:41 
+Add a comment
+1 Answer
+Sorted by:
+
+Highest score (default)
+1
+
+Answering my own question that might be helpful to future visitors ..
+
+Aaron's comment made me thinking if we dump the data into temp table would it speed up ?
+
+Yes it indeed speed up as due to large number of Availablity groups 53 (I know thats a lot and we have plans to offload them soon), sys.availability_groups and sys.availability_replicas selects were taking considerably long time.
+
+Below tsql runs in 1 min and 03 secs :-)
+
+set transaction isolation level read uncommitted 
+set statistics time, io on
+
+--- get data into temp tables 
+
+select * into #availability_groups from sys.availability_groups
+select * into #availability_replicas from sys.availability_replicas
+
+SELECT  
+ISNULL(agstates.primary_replica, '') AS [Primary_AG_Server],
+dbcs.database_name AS [DatabaseName]
+ ,ar.replica_server_name as [Secondary_AG_Servers]
+
+   FROM #availability_groups AS AG
+LEFT OUTER JOIN master.sys.dm_hadr_availability_group_states as agstates
+   ON AG.group_id = agstates.group_id
+INNER JOIN #availability_replicas AS AR
+   ON AG.group_id = AR.group_id
+INNER JOIN master.sys.dm_hadr_availability_replica_states AS arstates
+   ON AR.replica_id = arstates.replica_id AND arstates.is_local <> 1 -- is_local is not 1 .. so we get secondary server names
+INNER JOIN master.sys.dm_hadr_database_replica_cluster_states AS dbcs
+   ON arstates.replica_id = dbcs.replica_id
+    group by agstates.primary_replica, dbcs.database_name, ar.replica_server_name
+    set statistics time, io off
+enter image description here
+
+Share
+Improve this answer
+Follow
+answered Mar 8, 2016 at 23:01
+Kin Shah's user avatar
+Kin Shah
+62.6k77 gold badges125125 silver badges253253 bronze badges
+I can expand this to an answer if you want. The basis of the slowness is that these DMVs are calling in real-time cluster apis and getting information about the AGs. Because information about the AGs are stored as properties, enumerating many of these runs into a scalability issue. That's the basics of WHY it's taking so long. The short answer is stop polling the information so often, it's not needed. Instead, rely on extended events and other internal mechanisms that only fire when an event happens. – 
+Sean Gallardy
+ CommentedMar 9, 2016 at 2:38
+@SeanGallardy Thanks for the info. I am not polling that frequently. The job runs twice a day, but since it is taking considerably long time, I wanted to find out the reason. BTW, the SQL is part of a monitoring script, so would be difficult to have XEvents integrated to it. – 
+Kin Shah
+ CommentedMar 9, 2016 at 15:52
+Add a comment

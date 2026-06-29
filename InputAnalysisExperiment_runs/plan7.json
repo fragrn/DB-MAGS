@@ -1,0 +1,246 @@
+{
+  "post_understanding": {
+    "summary": "A MySQL INSERT...SELECT with a LEFT JOIN to a derived subquery runs extremely slowly and examines ~1.09B rows. The single component queries are fast, but the combined query causes a nested-loop-like scan due to missing indexes and the use of a derived (materialized) stats subquery, effectively multiplying the filtered row counts.",
+    "symptoms": [
+      "slow query (~86 seconds)",
+      "very high Rows_examined (~1,088,312,551)",
+      "EXPLAIN shows table scans (possible_keys/key are NULL)",
+      "single component SELECTs are fast",
+      "MyISAM storage engine in use"
+    ],
+    "suspected_root_causes": [
+      "missing indexes on join and filter columns (member_id, latest_renewal, date_active)",
+      "LEFT JOIN against a derived table (materialized subquery) preventing index use",
+      "nested-loop evaluation multiplying today’s filtered sets (sessions_today * stats_today) leading to ~1B examined rows",
+      "reading from and inserting into the same table (stats) forcing derived-table materialization"
+    ],
+    "key_evidence": [
+      "Query_time: 86.364613",
+      "Rows_examined: 1088312551",
+      "Single queries: sessions filter returns ~44.2k rows; stats filter returns ~23.3k rows (product ~1.03B)",
+      "Answer notes: possible_key and key are NULL; looks like a cross join",
+      "MyISAM engine confirmed by OP",
+      "Few or no secondary indexes on bot_sessions aside from PKs"
+    ],
+    "assumptions": [
+      "MySQL version is 5.6/5.7 era (approximate to the post timeline) [ASSUMPTION]",
+      "Both tables use ENGINE=MyISAM [ASSUMPTION]",
+      "No secondary index exists on member_id in either table; only an auto-increment PK on an id column [ASSUMPTION]",
+      "latest_renewal and date_active are DATETIME columns [ASSUMPTION]",
+      "The INSERT reads from bot_sessions_statistics via a derived subquery while inserting into the same table, causing subquery materialization [ASSUMPTION]",
+      "Data distributions yield roughly 44k sessions and 23k stats rows for 'today' filter in the test dataset to match the post’s counts [ASSUMPTION]",
+      "No significant concurrent background workload affects this query in the reproduction [ASSUMPTION]"
+    ],
+    "confidence": 0.67
+  },
+  "experiment_environment": {
+    "dbms": "mysql",
+    "target_database": "dbmags_repro",
+    "target_tables": [
+      {
+        "table": "bot_sessions",
+        "purpose": "Source of current member sessions to insert into statistics; contains latest_renewal used to filter today's sessions.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT",
+            "role": "primary key"
+          },
+          {
+            "name": "member_id",
+            "type": "INT NOT NULL",
+            "role": "join key (no index to reproduce issue)"
+          },
+          {
+            "name": "session_token",
+            "type": "VARCHAR(64)",
+            "role": "copied attribute"
+          },
+          {
+            "name": "username",
+            "type": "VARCHAR(64)",
+            "role": "copied attribute"
+          },
+          {
+            "name": "ip_address",
+            "type": "VARCHAR(45)",
+            "role": "copied attribute"
+          },
+          {
+            "name": "latest_renewal",
+            "type": "DATETIME NOT NULL",
+            "role": "date filter (no index to reproduce issue)"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "1,000,000",
+          "distribution": "Skewed by date: ~44,200 rows with latest_renewal >= DATE(NOW()); remainder spread uniformly over prior 90 days. member_id values uniformly random from 1..200,000; session_token/username/ip_address random strings.",
+          "key_fields": [
+            "member_id",
+            "latest_renewal"
+          ],
+          "rationale": "Match the post’s filtered row count (~44.2k today) and lack of helpful indexes to trigger nested-loop scans."
+        }
+      },
+      {
+        "table": "bot_sessions_statistics",
+        "purpose": "Destination statistics table; also read in the derived subquery filtering by date_active.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "BIGINT UNSIGNED NOT NULL AUTO_INCREMENT",
+            "role": "primary key"
+          },
+          {
+            "name": "member_id",
+            "type": "INT NOT NULL",
+            "role": "join key (no index to reproduce issue)"
+          },
+          {
+            "name": "session_token",
+            "type": "VARCHAR(64)",
+            "role": "copied attribute"
+          },
+          {
+            "name": "username",
+            "type": "VARCHAR(64)",
+            "role": "copied attribute"
+          },
+          {
+            "name": "ip_address",
+            "type": "VARCHAR(45)",
+            "role": "copied attribute"
+          },
+          {
+            "name": "date_active",
+            "type": "DATETIME NOT NULL",
+            "role": "date filter (no index to reproduce issue)"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "5,000,000",
+          "distribution": "Skewed by date: ~23,300 rows with date_active >= DATE(NOW()); remainder spread uniformly over prior 180 days. member_id values uniformly random from 1..200,000 with low overlap with sessions_today to keep join selectivity low.",
+          "key_fields": [
+            "member_id",
+            "date_active"
+          ],
+          "rationale": "Match the post’s filtered row count (~23.3k today) so the nested loop over the derived stats set approximates ~1B examined rows."
+        }
+      }
+    ]
+  },
+  "background_workloads": [
+    {
+      "name": "idle_baseline",
+      "inferred_from_post": "No mention of concurrent load or lock waits; Lock_time is near zero.",
+      "simulation_method": "none",
+      "transactions_or_queries": [],
+      "concurrency": "0",
+      "duration_sec": 0,
+      "transaction_mix": {}
+    }
+  ],
+  "anomaly_injection": [
+    {
+      "name": "create_schema_without_helpful_indexes",
+      "anomaly_type": "missing_index",
+      "mapped_dbmags_anomaly": "missing_index",
+      "target": "bot_sessions, bot_sessions_statistics",
+      "method": "Create MyISAM tables with only a surrogate PK id; do not add secondary indexes on member_id or date columns.",
+      "parameters": {
+        "engine": "MyISAM",
+        "schema_sql": "CREATE TABLE bot_sessions (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, member_id INT NOT NULL, session_token VARCHAR(64), username VARCHAR(64), ip_address VARCHAR(45), latest_renewal DATETIME NOT NULL) ENGINE=MyISAM; CREATE TABLE bot_sessions_statistics (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, member_id INT NOT NULL, session_token VARCHAR(64), username VARCHAR(64), ip_address VARCHAR(45), date_active DATETIME NOT NULL) ENGINE=MyISAM;"
+      },
+      "duration_sec": 0,
+      "safety_notes": [
+        "Run in an isolated test database.",
+        "No foreign keys/triggers assumed; MyISAM does not enforce FKs."
+      ]
+    },
+    {
+      "name": "load_synthetic_data",
+      "anomaly_type": "data_volume",
+      "mapped_dbmags_anomaly": "hot_read_scan",
+      "target": "bot_sessions, bot_sessions_statistics",
+      "method": "Bulk-insert generated rows to achieve target distributions for latest_renewal and date_active.",
+      "parameters": {
+        "sessions_rows": 1000000,
+        "sessions_today_rows": 44200,
+        "stats_rows": 5000000,
+        "stats_today_rows": 23300,
+        "date_window_days_sessions": 90,
+        "date_window_days_stats": 180
+      },
+      "duration_sec": 0,
+      "safety_notes": [
+        "Use batched inserts to avoid excessive transaction size.",
+        "Ensure NOW() is captured consistently for data generation and query execution to keep 'today' buckets aligned."
+      ]
+    },
+    {
+      "name": "run_slow_insert_select_with_left_join_on_derived",
+      "anomaly_type": "slow_sql",
+      "mapped_dbmags_anomaly": "slow_sql",
+      "target": "bot_sessions_statistics (destination) and bot_sessions (source)",
+      "method": "Execute the INSERT...SELECT that LEFT JOINs a derived stats subquery filtered by date_active and filters sessions by latest_renewal, then excludes matches via IS NULL.",
+      "parameters": {
+        "sql": "INSERT INTO bot_sessions_statistics (member_id, session_token, username, ip_address)\nSELECT sessions.member_id, sessions.session_token, sessions.username, sessions.ip_address\nFROM bot_sessions AS sessions\nLEFT JOIN (\n    SELECT stats.member_id, stats.session_token, stats.username, stats.ip_address\n    FROM bot_sessions_statistics AS stats\n    WHERE date_active >= DATE(NOW())\n) AS stats ON sessions.member_id = stats.member_id\nWHERE latest_renewal >= DATE(NOW())\nAND stats.member_id IS NULL;",
+        "explain_before": true,
+        "slow_query_log_enabled": true
+      },
+      "duration_sec": 0,
+      "safety_notes": [
+        "Inserting into and selecting from the same table may cause unexpected growth; run in test DB.",
+        "MyISAM applies table-level write locks; ensure no other workload uses these tables."
+      ]
+    }
+  ],
+  "expected_result": {
+    "metrics": [
+      {
+        "metric": "Rows_examined (from slow query log or performance_schema)",
+        "expected_change": "increase to approximately the product of sessions_today (~44k) and stats_today (~23k), around 1e9"
+      },
+      {
+        "metric": "Query_time",
+        "expected_change": "increase to tens of seconds (e.g., >30s)"
+      },
+      {
+        "metric": "EXPLAIN output",
+        "expected_change": "shows derived table for stats with type=ALL (full scan), possible_keys=NULL, Using temporary; sessions filtered by latest_renewal with type=ALL or range depending on lack of index"
+      },
+      {
+        "metric": "Handler_read_rnd_next",
+        "expected_change": "significant increase during query indicating table scans"
+      },
+      {
+        "metric": "Lock_time",
+        "expected_change": "remains low (~milliseconds), consistent with the post"
+      }
+    ],
+    "query_or_transaction_effects": [
+      "INSERT...SELECT completes slowly but without lock waits.",
+      "No rows are sent to client; destination table receives new rows (statistics for sessions without a 'today' stats record)."
+    ],
+    "validation_criteria": [
+      "The two standalone SELECTs produce approximately 44k and 23k rows for today’s filters.",
+      "The INSERT...SELECT shows Rows_examined close to the product of those counts (within ~20%).",
+      "EXPLAIN indicates lack of index usage on the derived stats table (possible_keys/key = NULL; type=ALL; Using temporary).",
+      "Total runtime is markedly slower than either single SELECT (e.g., >30s on modest hardware)."
+    ]
+  },
+  "open_questions": [
+    "Please confirm exact MySQL version used when the issue occurred (5.5/5.6/5.7?).",
+    "Confirm both tables used ENGINE=MyISAM and whether that is required for the reproduction.",
+    "What are the exact CREATE TABLE definitions (especially indexes) for bot_sessions and bot_sessions_statistics?",
+    "Are there any existing secondary indexes on member_id, latest_renewal, or date_active in either table?",
+    "What are the exact data types for latest_renewal and date_active (DATE vs DATETIME)?",
+    "Roughly how many total rows exist in each table in production?",
+    "Is inserting into bot_sessions_statistics while reading it in the subquery essential to the workflow, or can a temporary table be used?",
+    "Is the date boundary DATE(NOW()) intended (midnight cutoff), and is the server time zone consistent with data timestamps?"
+  ]
+}

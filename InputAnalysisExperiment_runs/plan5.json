@@ -1,0 +1,239 @@
+{
+  "post_understanding": {
+    "summary": "A view in SQL Server 2012 using a correlated subquery against BidHistory to find the latest DTStamp per (SKU, campaginid) and a WHERE predicate on a left-joined column runs slowly. Comments note the WHERE predicate converts the left joins to inner joins, and the accepted answer suggests rewriting with ROW_NUMBER and moving the predicate into the join.",
+    "symptoms": [
+      "slow query from a view",
+      "execution plan indicates optimizer treats left joins as inner joins",
+      "derived table uses correlated MAX(DTStamp) per (SKU, campaginid)"
+    ],
+    "suspected_root_causes": [
+      "inefficient pattern for 'latest per group' using a correlated subquery against BidHistory",
+      "missing composite index on BidHistory (SKU, campaginid, DTStamp DESC) to support latest lookup",
+      "filter on a left-joined column in WHERE effectively forcing inner join semantics",
+      "possible data skew with many BidHistory rows per (SKU, campaginid)"
+    ],
+    "key_evidence": [
+      "Original view: correlated subquery SELECT MAX(DTStamp) FROM BidHistory WHERE campaginid = ph1.campaginid AND ph1.SKU = SKU",
+      "Comment: 'WHERE (maxcpc - dervtable.Bid <> 0) converts your left joins back to inner joins'",
+      "Answer suggests ROW_NUMBER() OVER (PARTITION BY SKU, campaginid ORDER BY DTStamp DESC) and moving predicate to join"
+    ],
+    "assumptions": [
+      "DBMS is SQL Server 2012 or compatible (based on tags).",
+      "No suitable composite index exists on BidHistory to support the 'latest per group' lookup.",
+      "BidHistory is significantly larger than the other tables and contains many rows per (SKU, campaginid).",
+      "Data cardinalities are large enough to make the correlated subquery expensive (e.g., 1M+ BidHistory rows).",
+      "The slow query is run as a standalone report/workload without heavy concurrent background activity.",
+      "Column names and the misspelling 'campaginid' are as shown and used consistently in schema.",
+      "Numeric types: maxcpc and Bid are decimals and comparisons are sargable; time type is datetime/datetime2."
+    ],
+    "confidence": 0.66
+  },
+  "experiment_environment": {
+    "dbms": "sqlserver",
+    "target_database": "AdwordsDB_Test",
+    "target_tables": [
+      {
+        "table": "dbo.currentadwordsmaxbid",
+        "purpose": "Represents current max CPC bids and provides webid and campaginid used to join to SKU and history.",
+        "columns": [
+          {
+            "name": "webid",
+            "type": "int",
+            "role": "join key to WebSkuLookup"
+          },
+          {
+            "name": "maxcpc",
+            "type": "decimal(10,2)",
+            "role": "value compared to latest Bid"
+          },
+          {
+            "name": "adgroupid",
+            "type": "bigint",
+            "role": "payload"
+          },
+          {
+            "name": "keywordid",
+            "type": "bigint",
+            "role": "payload"
+          },
+          {
+            "name": "campaginid",
+            "type": "int",
+            "role": "join key to BidHistory via dervtable"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "100,000",
+          "distribution": "webid unique per row; campaginid uniformly distributed across ~100 campaigns; maxcpc random 0.10-5.00",
+          "key_fields": [
+            "webid",
+            "campaginid",
+            "maxcpc"
+          ],
+          "rationale": "Sufficient size to drive many lookups into BidHistory and exercise join/filter behavior."
+        }
+      },
+      {
+        "table": "dbo.WebSkuLookup",
+        "purpose": "Maps webid to SKU to connect currentadwordsmaxbid with BidHistory.",
+        "columns": [
+          {
+            "name": "webid",
+            "type": "int",
+            "role": "primary key/join key from currentadwordsmaxbid"
+          },
+          {
+            "name": "sku",
+            "type": "varchar(64)",
+            "role": "join key to BidHistory"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "100,000",
+          "distribution": "one row per webid; sku chosen from a pool of ~50,000 distinct SKUs with some reuse",
+          "key_fields": [
+            "webid",
+            "sku"
+          ],
+          "rationale": "Guarantees joinability and realistic SKU reuse to increase BidHistory matches."
+        }
+      },
+      {
+        "table": "dbo.BidHistory",
+        "purpose": "Historical bids by SKU and campaign with timestamps; source of latest Bid per (SKU, campaginid).",
+        "columns": [
+          {
+            "name": "SKU",
+            "type": "varchar(64)",
+            "role": "partition key for history"
+          },
+          {
+            "name": "campaginid",
+            "type": "int",
+            "role": "partition key for history"
+          },
+          {
+            "name": "Bid",
+            "type": "decimal(10,2)",
+            "role": "value to compare with maxcpc"
+          },
+          {
+            "name": "Channel",
+            "type": "varchar(32)",
+            "role": "payload (unused for join)"
+          },
+          {
+            "name": "DTStamp",
+            "type": "datetime2(0)",
+            "role": "ordering to find latest per group"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "1,000,000",
+          "distribution": "for ~50,000 SKUs × ~2 campaigns average × 10 DTStamp entries each; DTStamp increasing per (SKU,campaginid)",
+          "key_fields": [
+            "SKU",
+            "campaginid",
+            "DTStamp",
+            "Bid"
+          ],
+          "rationale": "Creates many history rows per group so the correlated MAX pattern is expensive without a supporting index."
+        }
+      }
+    ]
+  },
+  "background_workloads": [
+    {
+      "name": "view_select_workload",
+      "inferred_from_post": "The reported issue is a single slow query against a view; no mention of other workloads.",
+      "simulation_method": "SQL script",
+      "transactions_or_queries": [
+        "SELECT * FROM dbo.ReSyncAdwords OPTION (RECOMPILE);"
+      ],
+      "concurrency": "1 connection",
+      "duration_sec": 120,
+      "transaction_mix": {
+        "SELECT view": "100%"
+      }
+    }
+  ],
+  "anomaly_injection": [
+    {
+      "name": "define_view_with_correlated_max_and_where_filter",
+      "anomaly_type": "slow_sql",
+      "mapped_dbmags_anomaly": "slow_sql",
+      "target": "dbo.ReSyncAdwords view over dbo.currentadwordsmaxbid, dbo.WebSkuLookup, dbo.BidHistory",
+      "method": "Create a schemabound view that left-joins to a derived table built via a correlated subquery selecting MAX(DTStamp) for each (SKU, campaginid), and applies WHERE (maxcpc - dervtable.Bid <> 0).",
+      "parameters": {
+        "view_definition": "CREATE VIEW dbo.ReSyncAdwords WITH SCHEMABINDING AS SELECT cab.maxcpc - d.Bid AS Expr1, cab.webid, cab.maxcpc, cab.adgroupid, cab.keywordid, d.SKU, d.Bid, cab.campaginid FROM dbo.currentadwordsmaxbid AS cab LEFT OUTER JOIN dbo.WebSkuLookup AS wsl ON cab.webid = wsl.webid LEFT OUTER JOIN ( SELECT ph1.SKU, ph1.Bid, ph1.Channel, ph1.DTStamp, ph1.campaginid FROM dbo.BidHistory AS ph1 WHERE ph1.DTStamp = ( SELECT MAX(ph2.DTStamp) FROM dbo.BidHistory AS ph2 WHERE ph2.campaginid = ph1.campaginid AND ph2.SKU = ph1.SKU ) ) AS d ON wsl.sku = d.SKU AND cab.campaginid = d.campaginid WHERE (cab.maxcpc - d.Bid <> 0);",
+        "note": "This mirrors the original slow pattern and WHERE predicate that effectively enforces inner join semantics."
+      },
+      "duration_sec": 0,
+      "safety_notes": [
+        "Use a dedicated test database.",
+        "Ensure view creation is reversible (DROP VIEW) after testing."
+      ]
+    },
+    {
+      "name": "omit_supporting_composite_index_on_BidHistory",
+      "anomaly_type": "slow_sql",
+      "mapped_dbmags_anomaly": "slow_sql",
+      "target": "dbo.BidHistory indexes",
+      "method": "Do not create a composite index on (SKU, campaginid, DTStamp DESC) to force scans/inefficient lookups for latest rows.",
+      "parameters": {
+        "indexes_to_omit": [
+          "(SKU, campaginid, DTStamp DESC) INCLUDE(Bid, Channel)"
+        ]
+      },
+      "duration_sec": 0,
+      "safety_notes": [
+        "If any default or pre-existing indexes exist in the test environment, drop them only in the test database.",
+        "Avoid altering production systems."
+      ]
+    }
+  ],
+  "expected_result": {
+    "metrics": [
+      {
+        "metric": "query_duration_ms",
+        "expected_change": "increase (e.g., > 5000 ms on the generated dataset)"
+      },
+      {
+        "metric": "cpu_time_ms",
+        "expected_change": "increase relative to a ROW_NUMBER/indexed approach"
+      },
+      {
+        "metric": "logical_reads_BidHistory",
+        "expected_change": "increase significantly (indicative of scans/repeated lookups)"
+      },
+      {
+        "metric": "execution_plan_shape",
+        "expected_change": "plan shows expensive operations deriving latest per group (e.g., Nested Loops with repeated scans or Hash/Stream Aggregate feeding a join)"
+      }
+    ],
+    "query_or_transaction_effects": [
+      "SELECT from dbo.ReSyncAdwords completes slowly due to high CPU and I/O work on BidHistory.",
+      "The WHERE predicate (maxcpc - d.Bid <> 0) causes the optimizer to treat left joins as inner joins, so rows with no matching BidHistory are excluded."
+    ],
+    "validation_criteria": [
+      "On the defined dataset without the composite index, the view query takes noticeably longer than 5 seconds and shows high logical reads from BidHistory.",
+      "The actual execution plan indicates that the derived table for latest per (SKU, campaginid) causes large scans/aggregations.",
+      "Adding a composite index on BidHistory (SKU, campaginid, DTStamp DESC) INCLUDE (Bid, Channel) and/or rewriting with ROW_NUMBER should reduce duration and logical reads by a large factor (>3x), confirming the root cause was the inefficient pattern/missing index."
+    ]
+  },
+  "open_questions": [
+    "What are the exact row counts and cardinalities for each table (currentadwordsmaxbid, WebSkuLookup, BidHistory)?",
+    "Which indexes currently exist on BidHistory, WebSkuLookup, and currentadwordsmaxbid (especially any composite index on (SKU, campaginid, DTStamp))?",
+    "Is 'campaginid' the actual column name (misspelling) everywhere, or is it 'campaignid' in the real schema?",
+    "How slow is 'slow' (duration, CPU time, logical reads) and what is the acceptable target?",
+    "Can you provide the actual (not estimated) execution plan for the slow query?",
+    "Are there any other predicates (e.g., additional filters) applied when the view is used in the application?",
+    "Which SQL Server edition and compatibility level are in use, and are parallel plans enabled?"
+  ]
+}

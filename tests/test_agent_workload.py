@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -16,6 +18,7 @@ from agent.types import (
     ExperimentRequest,
     SafetyResult,
     TaskSpec,
+    to_jsonable,
 )
 from agent.planner import PlannerFallbackError
 from agent.reflection import ReflectionFallbackError
@@ -184,6 +187,9 @@ class AgentWorkloadTests(unittest.TestCase):
                 start = runner.start()
                 stop = runner.stop()
         self.assertEqual(start["pid"], 1234)
+        self.assertTrue(Path(start["runtime_config_path"]).is_absolute())
+        command = popen.call_args.args[0]
+        self.assertTrue(Path(command[command.index("-c") + 1]).is_absolute())
         self.assertEqual(stop["exit_code"], 0)
         self.assertTrue(process.terminated)
         self.assertTrue(popen.called)
@@ -306,6 +312,23 @@ class AgentWorkloadTests(unittest.TestCase):
         self.assertIn("jdbc:mysql://127.0.0.1/tpch_1SF?x=1", tpch_xml)
         self.assertIn("jdbc:mysql://127.0.0.1/tatp?x=1", tatp_xml)
 
+    def test_executor_runs_raw_command_and_fails_on_nonzero_exit(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            executor = Executor(RuntimeConfig(), round_dir=tmpdir)
+            ok = executor._run_action(
+                "raw_command",
+                {"kind": "raw_command", "command": [sys.executable, "-c", "print('raw-ok')"], "duration_sec": 1},
+                "raw_ok",
+            )
+            self.assertEqual(ok["exit_code"], 0)
+            self.assertIn("raw-ok", ok["stdout_tail"])
+            with self.assertRaisesRegex(RuntimeError, "exited with 3"):
+                executor._run_action(
+                    "raw_command",
+                    {"kind": "raw_command", "command": [sys.executable, "-c", "import sys; sys.exit(3)"], "duration_sec": 1},
+                    "raw_bad",
+                )
+
     def test_safety_rejects_burst_duration_outside_injection_window(self):
         task = build_traffic_task(RuntimeConfig(), profile=_traffic_profile(duration_sec=30), task_id="traffic")
         dag = {"tasks": {"traffic": task}, "edges": [], "schedule": {}}
@@ -379,6 +402,285 @@ class AgentWorkloadTests(unittest.TestCase):
         )
         self.assertFalse(result.approved)
         self.assertIn("does not match background workload", "; ".join(result.reasons))
+
+    def test_safety_rejects_invalid_benchbase_burst_command_executable(self):
+        dag = {
+            "tasks": {
+                "traffic": {
+                    "task_id": "traffic",
+                    "task_type": "traffic_surge",
+                    "actions": [
+                        {
+                            "kind": "benchbase_burst_command",
+                            "benchmark": "tpcc",
+                            "database": "tpcc_10W",
+                            "command": [
+                                ".tools/benchbase-main/target/benchbase-mysql/benchbase-mysql",
+                                "-b",
+                                "tpcc",
+                                "-c",
+                                ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+                                "-s",
+                                "execute",
+                            ],
+                            "duration_sec": 5,
+                            "terminals": 2,
+                        }
+                    ],
+                }
+            },
+            "edges": [],
+            "schedule": {},
+        }
+        result = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0)).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=30,
+            injection_observe_sec=10,
+            expected_workload={"benchmark": "tpcc", "database": "tpcc_10W"},
+        )
+        self.assertFalse(result.approved)
+        reasons = "; ".join(result.reasons)
+        self.assertIn("must invoke java/java_bin", reasons)
+        self.assertIn("java -jar benchbase.jar", reasons)
+
+    def test_safety_allows_valid_benchbase_burst_command(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            java_path = root / "java"
+            jar_path = root / "benchbase.jar"
+            config_path = root / "tpcc.xml"
+            java_path.write_text("")
+            jar_path.write_text("")
+            config_path.write_text("<parameters/>")
+            dag = {
+                "tasks": {
+                    "traffic": {
+                        "task_id": "traffic",
+                        "task_type": "traffic_surge",
+                        "actions": [
+                            {
+                                "kind": "benchbase_burst_command",
+                                "benchmark": "tpcc",
+                                "database": "tpcc_10W",
+                                "command": [
+                                    str(java_path),
+                                    "-jar",
+                                    str(jar_path),
+                                    "-b",
+                                    "tpcc",
+                                    "-c",
+                                    str(config_path),
+                                    "--execute=true",
+                                ],
+                                "duration_sec": 5,
+                                "terminals": 2,
+                            }
+                        ],
+                    }
+                },
+                "edges": [],
+                "schedule": {},
+            }
+            result = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0)).check(
+                dag,
+                current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+                max_duration_sec=30,
+                injection_observe_sec=10,
+                expected_workload={"benchmark": "tpcc", "database": "tpcc_10W"},
+            )
+        self.assertTrue(result.approved, result.reasons)
+
+    def test_safety_checks_raw_actions(self):
+        dag = {
+            "tasks": {
+                "sql": {
+                    "task_id": "sql",
+                    "task_type": "slow_sql",
+                    "actions": [{"kind": "raw_sql_workload", "duration_sec": 5, "concurrency": 1, "sql": "DROP TABLE orders"}],
+                },
+                "cmd": {
+                    "task_id": "cmd",
+                    "task_type": "resource",
+                    "actions": [{"kind": "raw_command", "duration_sec": 5, "command": ["rm", "-rf", "/tmp/nope"]}],
+                },
+                "burst": {
+                    "task_id": "burst",
+                    "task_type": "traffic_surge",
+                    "actions": [
+                        {
+                            "kind": "benchbase_burst_command",
+                            "benchmark": "tpcc",
+                            "database": "tpcc_10W",
+                            "command": ["java", "-jar", "benchbase.jar"],
+                            "duration_sec": 20,
+                            "terminals": 2,
+                        }
+                    ],
+                },
+            },
+            "edges": [],
+            "schedule": {},
+        }
+        result = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0)).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=30,
+            injection_observe_sec=10,
+            expected_workload={"benchmark": "tpch", "database": "tpch_1SF"},
+        )
+        reasons = "; ".join(result.reasons)
+        self.assertFalse(result.approved)
+        self.assertIn("DROP", reasons)
+        self.assertIn("rm\\s+-rf", reasons)
+        self.assertIn("injection_observe_sec", reasons)
+        self.assertIn("does not match background workload", reasons)
+
+    def test_safety_allows_resource_chaosblade_raw_command(self):
+        dag = {
+            "tasks": {
+                "resource": {
+                    "task_id": "resource",
+                    "task_type": "resource_cpu",
+                    "actions": [
+                        {
+                            "kind": "raw_command",
+                            "command": ["/opt/blade", "create", "cpu", "load", "--cpu-percent", "80", "--uid", "cpu_uid_1"],
+                            "duration_sec": 5,
+                            "cleanup_command": ["/opt/blade", "destroy", "cpu_uid_1"],
+                        }
+                    ],
+                    "metadata": {"root_cause": "resource_cpu"},
+                }
+            },
+            "edges": [],
+            "schedule": {},
+        }
+        result = SafetyChecker(RuntimeConfig(chaosblade_path="/opt/blade")).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=30,
+            injection_observe_sec=10,
+        )
+        self.assertTrue(result.approved, result.reasons)
+
+    def test_safety_rejects_resource_non_chaosblade_raw_command(self):
+        dag = {
+            "tasks": {
+                "resource": {
+                    "task_id": "resource",
+                    "task_type": "resource_io",
+                    "actions": [
+                        {
+                            "kind": "raw_command",
+                            "command": ["fio", "--name", "io"],
+                            "duration_sec": 5,
+                            "cleanup_command": ["blade", "destroy", "io_uid_1"],
+                        }
+                    ],
+                    "metadata": {"root_cause": "resource_io"},
+                }
+            },
+            "edges": [],
+            "schedule": {},
+        }
+        result = SafetyChecker(RuntimeConfig(chaosblade_path="/opt/blade")).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=30,
+            injection_observe_sec=10,
+        )
+        self.assertFalse(result.approved)
+        self.assertIn("RuntimeConfig.chaosblade_path", "; ".join(result.reasons))
+
+    def test_safety_rejects_resource_bare_blade_command(self):
+        dag = {
+            "tasks": {
+                "resource": {
+                    "task_id": "resource",
+                    "task_type": "resource_io",
+                    "actions": [
+                        {
+                            "kind": "raw_command",
+                            "command": ["blade", "create", "disk", "fill", "--path", "/tmp", "--size", "100M", "--uid", "io_uid_1"],
+                            "duration_sec": 5,
+                            "cleanup_command": ["blade", "destroy", "io_uid_1"],
+                        }
+                    ],
+                    "metadata": {"root_cause": "resource_io"},
+                }
+            },
+            "edges": [],
+            "schedule": {},
+        }
+        result = SafetyChecker(RuntimeConfig(chaosblade_path="/opt/blade")).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=30,
+            injection_observe_sec=10,
+        )
+        self.assertFalse(result.approved)
+        reasons = "; ".join(result.reasons)
+        self.assertIn("resource command must invoke RuntimeConfig.chaosblade_path", reasons)
+        self.assertIn("resource cleanup_command must invoke RuntimeConfig.chaosblade_path", reasons)
+
+    def test_safety_rejects_resource_cleanup_uid_mismatch(self):
+        dag = {
+            "tasks": {
+                "resource": {
+                    "task_id": "resource",
+                    "task_type": "resource_memory",
+                    "actions": [
+                        {
+                            "kind": "raw_command",
+                            "command": ["/opt/blade", "create", "mem", "load", "--mem-percent", "70", "--uid=mem_uid_1"],
+                            "duration_sec": 5,
+                            "cleanup_command": ["/opt/blade", "destroy", "other_uid"],
+                        }
+                    ],
+                    "metadata": {"root_cause": "resource_memory"},
+                }
+            },
+            "edges": [],
+            "schedule": {},
+        }
+        result = SafetyChecker(RuntimeConfig(chaosblade_path="/opt/blade")).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=30,
+            injection_observe_sec=10,
+        )
+        self.assertFalse(result.approved)
+        self.assertIn("same ChaosBlade uid", "; ".join(result.reasons))
+
+    def test_safety_rejects_resource_non_create_command(self):
+        dag = {
+            "tasks": {
+                "resource": {
+                    "task_id": "resource",
+                    "task_type": "resource_network",
+                    "actions": [
+                        {
+                            "kind": "raw_command",
+                            "command": ["/opt/blade", "status", "network", "--uid", "net_uid_1"],
+                            "duration_sec": 5,
+                            "cleanup_command": ["/opt/blade", "destroy", "net_uid_1"],
+                        }
+                    ],
+                    "metadata": {"root_cause": "resource_network"},
+                }
+            },
+            "edges": [],
+            "schedule": {},
+        }
+        result = SafetyChecker(RuntimeConfig(chaosblade_path="/opt/blade")).check(
+            dag,
+            current_db_metrics={"max_connections": 100, "Threads_connected": 1},
+            max_duration_sec=30,
+            injection_observe_sec=10,
+        )
+        self.assertFalse(result.approved)
+        self.assertIn("must use create", "; ".join(result.reasons))
 
     def test_runtime_timing_validation_rejects_short_workload_duration(self):
         req = ExperimentRequest(
@@ -669,6 +971,324 @@ class AgentWorkloadTests(unittest.TestCase):
             text = (round_dir / "reflection_failure.json").read_text()
         self.assertIn("reflection_fallback_blocked", text)
         self.assertIn("LLM failed", text)
+
+    def _install_fake_taskgen_planner(self, runtime: DBMAGSRuntime, events: list[str]) -> None:
+        runtime.planner.inspect = lambda request: (  # type: ignore[method-assign]
+            events.append("inspect") or EnvironmentSnapshot(database=request.target_database, db_metrics={"max_connections": 100})
+        )
+        task = TaskSpec(
+            task_id="traffic",
+            task_type="traffic_surge",
+            actions=[{"kind": "benchbase_burst", "duration_sec": 10}],
+            metadata={"root_cause": "traffic_surge"},
+        )
+        dag = ExecutableTaskDAG(tasks={"traffic": task}, schedule={"traffic": 0.0})
+
+        def fake_plan(request, snapshot, memory_items, reflection=None):
+            events.append("plan")
+            runtime.planner.last_plan_payload = {
+                "target_path": request.target_path,
+                "injected_nodes": request.injected_nodes,
+                "task_specs": [to_jsonable(task)],
+                "dependencies": [],
+            }
+            return dag, snapshot, []
+
+        runtime.planner.plan = fake_plan  # type: ignore[method-assign]
+
+    def test_taskgen_auto_reuses_existing_workload_when_qps_positive(self):
+        events: list[str] = []
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+            workload={"enabled": True, "runner": "benchbase", "benchmark": "tpcc", "database": "tpcc"},
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig(planner_enabled=True, openai_api_key="key"))
+        runtime._make_workload_runner = lambda request, round_dir: (_ for _ in ()).throw(AssertionError("runner should not be created"))  # type: ignore[method-assign]
+        runtime._detect_taskgen_workload = lambda **kwargs: {  # type: ignore[method-assign]
+            "mode": "auto",
+            "probe_interval_sec": 3.0,
+            "qps": 12.0,
+            "tps": 5.0,
+            "existing_workload_detected": True,
+            "started_new_workload": False,
+        }
+        self._install_fake_taskgen_planner(runtime, events)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = runtime.generate_tasks_only(req, output_root=tmpdir)
+            round_dir = Path(result["round_dir"])
+            generated = json.loads((round_dir / "generated_tasks.json").read_text())
+            trace = json.loads((round_dir / "workload_trace.json").read_text())
+            detection = json.loads((round_dir / "taskgen_workload_detection.json").read_text())
+
+        self.assertEqual(events, ["inspect", "plan"])
+        self.assertEqual(trace["source"], "existing")
+        self.assertTrue(detection["existing_workload_detected"])
+        self.assertFalse(generated["workload_detection"]["started_new_workload"])
+
+    def test_taskgen_auto_starts_workload_when_qps_zero(self):
+        events: list[str] = []
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+            workload={
+                "enabled": True,
+                "runner": "benchbase",
+                "benchmark": "tpcc",
+                "database": "tpcc",
+                "warmup_sec": 60,
+                "baseline_sec": 30,
+                "injection_observe_sec": 60,
+                "recovery_sec": 30,
+                "sample_interval_sec": 5,
+            },
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig(planner_enabled=True, openai_api_key="key"))
+        runtime._make_workload_runner = lambda request, round_dir: FakeRunner(events)  # type: ignore[method-assign]
+        runtime._detect_taskgen_workload = lambda **kwargs: {  # type: ignore[method-assign]
+            "mode": "auto",
+            "probe_interval_sec": 3.0,
+            "qps": 0.0,
+            "tps": 0.0,
+            "existing_workload_detected": False,
+            "started_new_workload": False,
+        }
+        runtime._make_metrics_collector = lambda request, runner: (_ for _ in ()).throw(AssertionError("collector should not be used"))  # type: ignore[method-assign]
+        runtime._sleep_phase = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("warmup should not run"))  # type: ignore[method-assign]
+        runtime._safety_check = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("safety should not run"))  # type: ignore[method-assign]
+        runtime._execute = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("execute should not run"))  # type: ignore[method-assign]
+        runtime._evaluate = lambda **kwargs: (_ for _ in ()).throw(AssertionError("evaluate should not run"))  # type: ignore[method-assign]
+        runtime._reflect = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("reflection should not run"))  # type: ignore[method-assign]
+        self._install_fake_taskgen_planner(runtime, events)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = runtime.generate_tasks_only(req, output_root=tmpdir)
+            round_dir = Path(result["round_dir"])
+            generated = json.loads((round_dir / "generated_tasks.json").read_text())
+            detection = json.loads((round_dir / "taskgen_workload_detection.json").read_text())
+
+            self.assertTrue((round_dir / "request.json").exists())
+            self.assertTrue((round_dir / "workload_config.json").exists())
+            self.assertTrue((round_dir / "workload_trace.json").exists())
+            self.assertTrue((round_dir / "static_snapshot.json").exists())
+            self.assertTrue((round_dir / "snapshot.json").exists())
+            self.assertTrue((round_dir / "react_trace.json").exists())
+            self.assertTrue((round_dir / "plan.json").exists())
+            self.assertTrue((round_dir / "task_dag.json").exists())
+            self.assertEqual(generated["target_path"], req.target_path)
+            self.assertEqual(generated["injected_nodes"], req.injected_nodes)
+            self.assertEqual(generated["task_specs"][0]["task_id"], "traffic")
+            self.assertIn("workload", generated)
+            self.assertTrue(detection["started_new_workload"])
+
+        self.assertEqual(events, ["start_workload", "inspect", "plan", "stop_workload"])
+
+    def test_taskgen_fails_if_started_workload_exits_before_planning(self):
+        events: list[str] = []
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+            workload={"enabled": True, "runner": "benchbase", "benchmark": "tpcc", "database": "tpcc"},
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig(planner_enabled=True, openai_api_key="key"))
+        runtime._make_workload_runner = lambda request, round_dir: StopAfterStartRunner(events)  # type: ignore[method-assign]
+        runtime._detect_taskgen_workload = lambda **kwargs: {  # type: ignore[method-assign]
+            "mode": "auto",
+            "probe_interval_sec": 3.0,
+            "qps": 0.0,
+            "tps": 0.0,
+            "existing_workload_detected": False,
+            "started_new_workload": False,
+        }
+        runtime.planner.inspect = lambda request: (  # type: ignore[method-assign]
+            events.append("inspect") or EnvironmentSnapshot(database=request.target_database)
+        )
+        runtime.planner.plan = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("planner should not run"))  # type: ignore[method-assign]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(RuntimeError, "Background workload exited before Phase 10"):
+                runtime.generate_tasks_only(req, output_root=tmpdir)
+            run_dir = next(Path(tmpdir).iterdir())
+            round_dir = run_dir / "round_1"
+            trace_text = (round_dir / "workload_trace.json").read_text()
+
+        self.assertEqual(events, ["start_workload", "stop_workload"])
+        self.assertIn("taskgen_before_inspect", trace_text)
+        self.assertIn("workload_exited_before_phase10", trace_text)
+
+    def test_taskgen_requires_workload_enabled(self):
+        runtime = DBMAGSRuntime(RuntimeConfig())
+        req = ExperimentRequest(target_database="tpcc", workload={"enabled": False})
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(ValueError, "workload.enabled=true"):
+                runtime.generate_tasks_only(req, output_root=tmpdir)
+
+    def test_taskgen_reuse_fails_when_no_existing_workload(self):
+        events: list[str] = []
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+            workload={"enabled": True, "benchmark": "tpcc", "database": "tpcc"},
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig(planner_enabled=True, openai_api_key="key"))
+        runtime._make_workload_runner = lambda request, round_dir: FakeRunner(events)  # type: ignore[method-assign]
+        runtime._detect_taskgen_workload = lambda **kwargs: {  # type: ignore[method-assign]
+            "mode": "reuse",
+            "probe_interval_sec": 3.0,
+            "qps": 0.0,
+            "tps": 0.0,
+            "existing_workload_detected": False,
+            "started_new_workload": False,
+        }
+        runtime.planner.plan = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("planner should not run"))  # type: ignore[method-assign]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(RuntimeError, "requires an existing workload"):
+                runtime.generate_tasks_only(req, output_root=tmpdir, workload_mode="reuse")
+            run_dir = next(Path(tmpdir).iterdir())
+            round_dir = run_dir / "round_1"
+            detection = json.loads((round_dir / "taskgen_workload_detection.json").read_text())
+            trace = json.loads((round_dir / "workload_trace.json").read_text())
+
+        self.assertFalse(detection["existing_workload_detected"])
+        self.assertEqual(trace["events"], [])
+        self.assertEqual(events, [])
+
+    def test_taskgen_start_always_starts_workload(self):
+        events: list[str] = []
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+            workload={"enabled": True, "benchmark": "tpcc", "database": "tpcc"},
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig(planner_enabled=True, openai_api_key="key"))
+        runtime._make_workload_runner = lambda request, round_dir: FakeRunner(events)  # type: ignore[method-assign]
+        runtime._detect_taskgen_workload = lambda **kwargs: {  # type: ignore[method-assign]
+            "mode": "start",
+            "probe_interval_sec": 0,
+            "qps": 0.0,
+            "tps": 0.0,
+            "existing_workload_detected": False,
+            "started_new_workload": False,
+            "skipped_probe": True,
+        }
+        self._install_fake_taskgen_planner(runtime, events)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            runtime.generate_tasks_only(req, output_root=tmpdir, workload_mode="start")
+
+        self.assertEqual(events, ["start_workload", "inspect", "plan", "stop_workload"])
+
+    def test_taskgen_none_does_not_probe_or_start_workload(self):
+        events: list[str] = []
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+            workload={"enabled": False, "benchmark": "tpcc", "database": "tpcc"},
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig(planner_enabled=True, openai_api_key="key"))
+        runtime._make_workload_runner = lambda request, round_dir: (_ for _ in ()).throw(AssertionError("runner should not be created"))  # type: ignore[method-assign]
+        runtime._detect_taskgen_workload = lambda **kwargs: {  # type: ignore[method-assign]
+            "mode": "none",
+            "probe_interval_sec": 0,
+            "qps": 0.0,
+            "tps": 0.0,
+            "existing_workload_detected": False,
+            "started_new_workload": False,
+            "skipped_probe": True,
+        }
+        self._install_fake_taskgen_planner(runtime, events)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = runtime.generate_tasks_only(req, output_root=tmpdir, workload_mode="none")
+            trace = json.loads((Path(result["round_dir"]) / "workload_trace.json").read_text())
+
+        self.assertEqual(events, ["inspect", "plan"])
+        self.assertEqual(trace["source"], "none")
+
+    def test_taskgen_blocks_planner_fallback_and_stops_workload(self):
+        events: list[str] = []
+        req = ExperimentRequest(
+            target_anomaly="traffic",
+            target_database="tpcc",
+            target_path=["traffic_surge", "slow_query"],
+            injected_nodes=["traffic_surge"],
+            workload={"enabled": True, "benchmark": "tpcc", "database": "tpcc"},
+        )
+        runtime = DBMAGSRuntime(RuntimeConfig(planner_enabled=True, openai_api_key="key"))
+        runtime._make_workload_runner = lambda request, round_dir: FakeRunner(events)  # type: ignore[method-assign]
+        runtime._detect_taskgen_workload = lambda **kwargs: {  # type: ignore[method-assign]
+            "mode": "auto",
+            "probe_interval_sec": 3.0,
+            "qps": 0.0,
+            "tps": 0.0,
+            "existing_workload_detected": False,
+            "started_new_workload": False,
+        }
+        runtime.planner.inspect = lambda request: EnvironmentSnapshot(database=request.target_database)  # type: ignore[method-assign]
+        runtime.planner.plan = lambda request, snapshot, memory_items, reflection=None: (  # type: ignore[method-assign]
+            (_ for _ in ()).throw(PlannerFallbackError(
+                "Planner fallback blocked after tool loop failure: timeout",
+                trace=[{"step": 1, "tool": "read_memory"}],
+            ))
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaisesRegex(RuntimeError, "Planner fallback blocked"):
+                runtime.generate_tasks_only(req, output_root=tmpdir)
+            run_dir = next(Path(tmpdir).iterdir())
+            round_dir = run_dir / "round_1"
+            self.assertTrue((round_dir / "planner_failure.json").exists())
+            self.assertTrue((round_dir / "workload_trace.json").exists())
+
+        self.assertIn("stop_workload", events)
+
+    def test_cli_taskgen_invokes_runtime(self):
+        from agent import cli
+
+        payload = {
+            "target_database": "tpcc",
+            "workload": {"enabled": True, "benchmark": "tpcc", "database": "tpcc"},
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            request_path = Path(tmpdir) / "request.json"
+            request_path.write_text(json.dumps(payload))
+            captured = {}
+
+            def fake_generate(self, request, output_root="experiment_runs/taskgen", workload_mode="auto"):
+                captured["request"] = request
+                captured["output_root"] = output_root
+                captured["workload_mode"] = workload_mode
+                return {"output_dir": str(Path(tmpdir) / "out"), "task_specs": [{"task_id": "t"}]}
+
+            with patch.object(DBMAGSRuntime, "generate_tasks_only", fake_generate):
+                code = cli.main([
+                    "taskgen",
+                    "--request",
+                    str(request_path),
+                    "--output-root",
+                    str(Path(tmpdir) / "taskgen"),
+                    "--workload-mode",
+                    "reuse",
+                ])
+
+        self.assertEqual(code, 0)
+        self.assertEqual(captured["request"].target_database, "tpcc")
+        self.assertTrue(str(captured["output_root"]).endswith("taskgen"))
+        self.assertEqual(captured["workload_mode"], "reuse")
 
 def _traffic_profile(**overrides):
     profile = {

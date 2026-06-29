@@ -1,0 +1,182 @@
+{
+  "target_path": [
+    "improper_sql",
+    "sort_hash_spill"
+  ],
+  "injected_nodes": [
+    "improper_sql"
+  ],
+  "task_specs": [
+    {
+      "task_id": "improper_sql_order_by_sortspill",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000",
+          "concurrency": 1,
+          "duration_sec": 15
+        }
+      ],
+      "expected_metrics": {
+        "sort_hash_spill": {
+          "created_tmp_disk_tables_delta": ">=1",
+          "sort_merge_passes_delta": ">=1"
+        },
+        "slow_query": {
+          "slow_query_count_delta": ">=1",
+          "p95_latency_ratio": ">=1.5"
+        }
+      },
+      "success_criteria": "During injection window, Created_tmp_disk_tables and/or Sort_merge_passes increase by at least 1 and at least one slow query is recorded or p95 latency ratio >= 1.5.",
+      "risk_assessment": "This query performs a full scan and filesort on a large table (order_line) with an unindexed ORDER BY. It can cause CPU spikes, disk I/O from filesort spill to disk, and increased latency for concurrent workload. Bounded duration (15s) and concurrency (1) limit risk.",
+      "metadata": {
+        "root_cause": "improper_sql",
+        "explain_plan": "-> Limit: 100000 row(s)\n    -> Sort: order_line.ol_amount DESC\n        -> Table scan on order_line"
+      }
+    }
+  ],
+  "dependencies": [],
+  "dag": {
+    "tasks": {
+      "improper_sql_order_by_sortspill": {
+        "task_id": "improper_sql_order_by_sortspill",
+        "task_type": "injection",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "database": "tpcc_10W",
+            "sql": "SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000",
+            "concurrency": 1,
+            "duration_sec": 15
+          }
+        ],
+        "expected_metrics": {
+          "sort_hash_spill": {
+            "created_tmp_disk_tables_delta": ">=1",
+            "sort_merge_passes_delta": ">=1"
+          },
+          "slow_query": {
+            "slow_query_count_delta": ">=1",
+            "p95_latency_ratio": ">=1.5"
+          }
+        },
+        "success_criteria": "During injection window, Created_tmp_disk_tables and/or Sort_merge_passes increase by at least 1 and at least one slow query is recorded or p95 latency ratio >= 1.5.",
+        "risk_assessment": "This query performs a full scan and filesort on a large table (order_line) with an unindexed ORDER BY. It can cause CPU spikes, disk I/O from filesort spill to disk, and increased latency for concurrent workload. Bounded duration (15s) and concurrency (1) limit risk.",
+        "metadata": {
+          "root_cause": "improper_sql",
+          "explain_plan": "-> Limit: 100000 row(s)\n    -> Sort: order_line.ol_amount DESC\n        -> Table scan on order_line"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "improper_sql_order_by_sortspill": 0.0
+    }
+  },
+  "reasoning": "The improper_sql node is injected by running a full table scan on order_line with an unindexed ORDER BY ol_amount DESC, which forces a filesort and is likely to spill to disk on large TPCC datasets. The EXPLAIN confirms a table scan followed by a sort. This directly targets sort_hash_spill and should also elevate slow_query metrics under background TPCC load. Parameters are bounded to 15s and concurrency 1 to respect the observe window and limit impact.",
+  "safety_check": {
+    "approved": true,
+    "reasons": [],
+    "warnings": []
+  },
+  "react_trace": [
+    {
+      "round": 1,
+      "thought": "Environment snapshot collected. Schema has 9 tables. DB version: 9.6.0. Max connections: 151.",
+      "action": "probe_full_snapshot",
+      "observe": "Tables: ['customer', 'district', 'history', 'item', 'new_order']",
+      "decision": "",
+      "timestamp": "2026-06-20T11:40:19+00:00"
+    },
+    {
+      "round": 2,
+      "thought": "LLM requested planning tool",
+      "action": "read_memory",
+      "observe": "[]",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 3,
+      "thought": "LLM requested planning tool",
+      "action": "explain_sql",
+      "observe": "{\"sql\": \"SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000\", \"plan\": [{\"EXPLAIN\": \"-> Limit: 100000 row(s)  (cost=705024 rows=100000)\\n    -> Sort: order_line.ol_amount DESC, limit input to 100000 row(s) per chunk  (cost=705024 rows=6.72e+6)\\n        -> Table scan on order_line  (cost=705024 rows=6.72e+6)\\n\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 4,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"improper_sql_order_by_sortspill\": {\"task_id\": \"improper_sql_order_by_sortspill\", \"task_type\": \"injection\", \"actions\": [{\"kind\": \"raw_sql_workload\", \"database\": \"tpcc_10W\", \"sql\": \"SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000\", \"concurrency\": 2, \"duration_sec\": 20}], \"expected_metrics\": {\"sort_hash_spill\": {\"created_tmp_disk_tables_delta\": \">=1\", \"sort_merge_passes_delta\": \">=1\"}, \"slow_query\": {\"slow_query_count_delta\": \">=1\", \"p95_latency_ratio\": \">=1.5\"}}, \"success_criteria\": \"During injection window, Created_tmp_disk_tables and/or Sort_merge_passes increase by at least 1 and at least one slow query is recorded or p95 latency ratio >= 1.5.\", \"risk_assessment\": \"This query performs a full scan and filesort on a large table (order_line) with an unindexed ORDER BY. It can cause CPU spikes, disk I/O from filesort spill to disk, and increased latency for concurrent workload. Bounded duration (20s) and low concurrency (2) limit risk.\", \"metadata\": {\"root_cause\": \"improper_sql\", \"explain_plan\": \"-> Limit: 100000 row(s)\\n    -> Sort: order_line.ol_amount DESC\\n        -> Table scan on order_line\"}}}, \"edges\": [], \"schedule\": {\"improper_sql_order_by_sortspill\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 5,
+      "thought": "LLM requested planning tool",
+      "action": "probe_db_metrics",
+      "observe": "{\"Aborted_connects\": \"0\", \"Com_delete\": \"351475\", \"Com_insert\": \"2658599\", \"Com_select\": \"20535882\", \"Com_update\": \"10185254\", \"Created_tmp_disk_tables\": \"2\", \"Innodb_row_lock_time\": \"19037622\", \"Innodb_row_lock_time_avg\": \"14\", \"Innodb_row_lock_waits\": \"1281081\", \"Max_used_connections\": \"105\", \"Slow_queries\": \"46\", \"Sort_merge_passes\": \"0\", \"Threads_connected\": \"5\", \"Threads_running\": \"6\", \"innodb_lock_wait_timeout\": \"50\", \"max_connections\": 151, \"wait_timeout\": \"28800\", \"processlist\": [{\"Id\": 5, \"User\": \"event_scheduler\", \"Host\": \"localhost\", \"db\": null, \"Command\": \"Daemon\", \"Time\": 1920595, \"State\": \"Waiting on empty queue\", \"Info\": null}, {\"Id\": 9211, \"User\": \"root\", \"Host\": \"localhost:52006\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"statistics\", \"Info\": \"SELECT W_TAX\\n      FROM warehouse\\n     WHERE W_ID = 1\"}, {\"Id\": 9212, \"User\": \"root\", \"Host\": \"localhost:52007\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"updating\", \"Info\": \"UPDATE warehouse\\n       SET W_YTD = W_YTD + 368.69000244140625\\n     WHERE W_ID = 1\"}, {\"Id\": 9213, \"User\": \"root\", \"Host\": \"localhost:52008\", \"db\": \"tpcc_10w\", \"Command\": \"Sleep\", \"Time\": 0, \"State\": \"\", \"Info\": null}, {\"Id\": 9214, \"User\": \"root\", \"Host\": \"localhost:52010\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"executing\", \"Info\": \"SELECT SUM(OL_AMOUNT) AS OL_TOTAL\\n      FROM order_line\\n     WHERE OL_O_ID = 60088\\n       AND OL_D_ID = 2\\n       AND OL_W_ID = 1\"}, {\"Id\": 9217, \"User\": \"root\", \"Host\": \"localhost:52307\", \"db\": \"tpcc_10w\", \"Command\": \"Query\", \"Time\": 0, \"State\": \"init\", \"Info\": \"SHOW FULL PROCESSLIST\"}]}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 6,
+      "thought": "LLM requested planning tool",
+      "action": "probe_os_metrics",
+      "observe": "{\"platform\": \"Darwin\", \"load_average\": {\"1m\": 5.15, \"5m\": 5.02, \"15m\": 4.62}, \"cpu_usage\": {\"user_pct\": 24.51, \"sys_pct\": 21.71, \"idle_pct\": 53.77, \"usage_ratio\": 0.462}, \"memory\": {\"total_kb\": 2279876, \"active_kb\": 1432200, \"wired_kb\": 830456, \"free_kb\": 17220, \"usage_ratio\": 0.9924}, \"disk\": {\"total_bytes\": 494384795648, \"used_bytes\": 365561573376, \"free_bytes\": 128823222272, \"usage_ratio\": 0.7394}, \"disk_io\": {}, \"network\": {}, \"file_descriptors\": {\"open_fds\": -1}}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 7,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": false, \"reasons\": [\"DAG required duration 20.0s exceeds injection_observe_sec 15.0s\"], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 8,
+      "thought": "LLM requested planning tool",
+      "action": "build_task_dag",
+      "observe": "{\"tasks\": {\"improper_sql_order_by_sortspill\": {\"task_id\": \"improper_sql_order_by_sortspill\", \"task_type\": \"injection\", \"actions\": [{\"kind\": \"raw_sql_workload\", \"database\": \"tpcc_10W\", \"sql\": \"SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000\", \"concurrency\": 1, \"duration_sec\": 15}], \"expected_metrics\": {\"sort_hash_spill\": {\"created_tmp_disk_tables_delta\": \">=1\", \"sort_merge_passes_delta\": \">=1\"}, \"slow_query\": {\"slow_query_count_delta\": \">=1\", \"p95_latency_ratio\": \">=1.5\"}}, \"success_criteria\": \"During injection window, Created_tmp_disk_tables and/or Sort_merge_passes increase by at least 1 and at least one slow query is recorded or p95 latency ratio >= 1.5.\", \"risk_assessment\": \"This query performs a full scan and filesort on a large table (order_line) with an unindexed ORDER BY. It can cause CPU spikes, disk I/O from filesort spill to disk, and increased latency for concurrent workload. Bounded duration (15s) and concurrency (1) limit risk.\", \"metadata\": {\"root_cause\": \"improper_sql\", \"explain_plan\": \"-> Limit: 100000 row(s)\\n    -> Sort: order_line.ol_amount DESC\\n        -> Table scan on order_line\"}}}, \"edges\": [], \"schedule\": {\"improper_sql_order_by_sortspill\": 0.0}}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 9,
+      "thought": "LLM requested planning tool",
+      "action": "check_safety",
+      "observe": "{\"approved\": true, \"reasons\": [], \"warnings\": []}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 10,
+      "thought": "LLM returned final plan JSON",
+      "action": "final_answer",
+      "observe": "{\"step\": 9, \"tool\": \"final_answer\", \"content\": \"{\\n  \\\"target_path\\\": [\\\"improper_sql\\\", \\\"sort_hash_spill\\\"],\\n  \\\"injected_nodes\\\": [\\\"improper_sql\\\"],\\n  \\\"task_specs\\\": [\\n    {\\n      \\\"task_id\\\": \\\"improper_sql_order_by_sortspill\\\",\\n      \\\"task_type\\\": \\\"injection\\\",\\n      \\\"actions\\\": [\\n        {\\n          \\\"kind\\\": \\\"raw_sql_workload\\\",\\n          \\\"database\\\": \\\"tpcc_10W\\\",\\n          \\\"sql\\\": \\\"SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000\\\",\\n          \\\"concurrency\\\": 1,\\n          \\\"duration_sec\\\": 15\\n        }\\n      ],\\n      \\\"expected_metrics\\\": {\\n        \\\"sort_hash_spill\\\": {\\n          \\\"created_tmp_disk_tables_delta\\\": \\\">=1\\\",\\n          \\\"sort_merge_passes_delta\\\": \\\">=1\\\"\\n        },\\n        \\\"slow_query\\\": {\\n          \\\"slow_query_count_delta\\\": \\\">=1\\\",\\n          \\\"p95_latency_ratio\\\": \\\">=1.5\\\"\\n        }\\n      },\\n      \\\"success_criteria\\\": \\\"During injection window, Created_tmp_disk_tables and/or Sort_merge_passes increase by at least 1 and at least one slow query is recorded or p95 latency ratio >= 1.5.\\\",\\n      \\\"risk_assessment\\\": \\\"This query performs a full scan and filesort on a large table (order_line) with an unindexed ORDER BY. It can cause CPU spikes, disk I/O from filesort spill to disk, and increased latency for concurrent workload. Bounded duration (15s) and concurrency (1) limit risk.\\\",\\n      \\\"metadata\\\": {\\n        \\\"root_cause\\\": \\\"improper_sql\\\",\\n        \\\"explain_plan\\\": \\\"-> Limit: 100000 row(s)\\\\n    -> Sort: order_line.ol_amount DESC\\\\n        -> Table scan on order_line\\\"\\n      }\\n    }\\n  ],\\n  \\\"dependencies\\\": [],\\n  \\\"dag\\\": {\\n    \\\"tasks\\\": {\\n      \\\"improper_sql_order_by_sortspill\\\": {\\n        \\\"task_id\\\": \\\"improper_sql_order_by_sortspill\\\",\\n        \\\"task_type\\\": \\\"injection\\\",\\n        \\\"actions\\\": [\\n          {\\n            \\\"kind\\\": \\\"raw_sql_workload\\\",\\n            \\\"database\\\": \\\"tpcc_10W\\\",\\n            \\\"sql\\\": \\\"SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000\\\",\\n            \\\"concurrency\\\": 1,\\n            \\\"duration_sec\\\": 15\\n          }\\n        ],\\n        \\\"expected_metrics\\\": {\\n  \"}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 11,
+      "thought": "ReAct generated 1 TaskSpecs for injected nodes ['improper_sql']",
+      "action": "final_plan_validation",
+      "observe": "{\"task_ids\": [\"improper_sql_order_by_sortspill\"]}",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    },
+    {
+      "round": 12,
+      "thought": "DAG built with 1 tasks and 0 edges",
+      "action": "build_task_dag",
+      "observe": "Task IDs: ['improper_sql_order_by_sortspill']",
+      "decision": "",
+      "timestamp": "2026-06-20T11:42:27+00:00"
+    }
+  ]
+}

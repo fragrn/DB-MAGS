@@ -1,0 +1,192 @@
+{
+  "post_understanding": {
+    "summary": "MySQL slow query log is recording many fast queries with Query_time well below the long_query_time threshold. The configuration shows log-queries-not-using-indexes=ON, which causes queries that do not use indexes to be logged regardless of execution time.",
+    "symptoms": [
+      "slow log contains sub-second queries",
+      "unexpectedly high volume of entries in slow log",
+      "Query_time values far below long_query_time threshold"
+    ],
+    "suspected_root_causes": [
+      "log_queries_not_using_indexes enabled causing logging regardless of time",
+      "min_examined_row_limit at default 0 so all non-indexed queries are logged",
+      "extended slow log verbosity enabled (Percona/MariaDB), increasing visibility of non-slow events",
+      "slow admin/slave statements options may add more noise (less likely the primary cause)"
+    ],
+    "key_evidence": [
+      "Config includes: log-queries-not-using-indexes = ON",
+      "Config includes: long_query_time = 2",
+      "Slow log samples show Query_time around 0.0003–0.0023 seconds",
+      "Rows_examined values (e.g., 423, 1456, 1727) consistent with full scans or LIMIT 1 scans without indexes"
+    ],
+    "assumptions": [
+      "Assumption: The server is MySQL-compatible (MariaDB or Percona Server) supporting log_queries_not_using_indexes and log_slow_verbosity.",
+      "Assumption: min_examined_row_limit is at its default 0.",
+      "Assumption: The posted my.cnf values reflect active runtime variables for the test.",
+      "Assumption: Queries being logged are not using indexes (e.g., WHERE on non-indexed columns or LIMIT 1 scans).",
+      "Assumption: The slow log format includes Query_time lines similar to the post (Percona/MariaDB extended slow log)."
+    ],
+    "confidence": 0.78
+  },
+  "experiment_environment": {
+    "dbms": "mysql",
+    "target_database": "slowlog_repro",
+    "target_tables": [
+      {
+        "table": "items",
+        "purpose": "Generate fast queries that do not use indexes so they are logged due to log_queries_not_using_indexes=ON despite being under long_query_time.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INT UNSIGNED",
+            "role": "primary key"
+          },
+          {
+            "name": "tag",
+            "type": "VARCHAR(32)",
+            "role": "filter (no index to force table scan)"
+          },
+          {
+            "name": "status",
+            "type": "VARCHAR(16)",
+            "role": "filter (no index to force table scan)"
+          },
+          {
+            "name": "payload",
+            "type": "VARCHAR(255)",
+            "role": "filler for minor I/O"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "2000",
+          "distribution": "Uniform random tags and statuses to make LIMIT 1 scans stop at varying positions",
+          "key_fields": [
+            "tag",
+            "status"
+          ],
+          "rationale": "A small table (≈2000 rows) allows sub-millisecond to few-millisecond scans that still examine hundreds to thousands of rows, matching the post's Rows_examined values while keeping Query_time well under long_query_time."
+        }
+      },
+      {
+        "table": "items_indexed",
+        "purpose": "Control table to demonstrate that indexed queries are not logged unless actually slow, contrasting behavior.",
+        "columns": [
+          {
+            "name": "id",
+            "type": "INT UNSIGNED",
+            "role": "primary key"
+          },
+          {
+            "name": "category",
+            "type": "VARCHAR(32)",
+            "role": "indexed filter"
+          },
+          {
+            "name": "payload",
+            "type": "VARCHAR(255)",
+            "role": "filler"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "2000",
+          "distribution": "Uniform categories across rows; add an index on category",
+          "key_fields": [
+            "category"
+          ],
+          "rationale": "Shows that when an index is used, queries do not get logged under the same configuration unless truly slow."
+        }
+      }
+    ]
+  },
+  "background_workloads": [
+    {
+      "name": "unindexed_point_lookups_with_limit",
+      "inferred_from_post": "Rows_examined values vary and are < table size; this matches LIMIT 1 scans over non-indexed predicates yielding fast but non-index-using queries.",
+      "simulation_method": "SQL script",
+      "transactions_or_queries": [
+        "SELECT id FROM items WHERE tag = ? AND status = 'active' LIMIT 1",
+        "SELECT id FROM items WHERE status = ? LIMIT 1"
+      ],
+      "concurrency": "3 client threads",
+      "duration_sec": 120,
+      "transaction_mix": {
+        "unindexed_SELECT_with_LIMIT": "80%",
+        "unindexed_SIMPLE_SELECT_no_limit": "20%"
+      }
+    },
+    {
+      "name": "indexed_point_lookups_control",
+      "inferred_from_post": "To confirm that only non-indexed fast queries are logged due to the setting, include indexed queries as a control.",
+      "simulation_method": "SQL script",
+      "transactions_or_queries": [
+        "SELECT id FROM items_indexed WHERE category = ? LIMIT 1",
+        "SELECT id FROM items_indexed WHERE id = ?"
+      ],
+      "concurrency": "2 client threads",
+      "duration_sec": 120,
+      "transaction_mix": {
+        "indexed_SELECT_on_category": "50%",
+        "indexed_SELECT_on_pk": "50%"
+      }
+    }
+  ],
+  "anomaly_injection": [
+    {
+      "name": "enable_logging_of_non_indexed_queries",
+      "anomaly_type": "config_misconfiguration",
+      "mapped_dbmags_anomaly": "verbose_slowlog",
+      "target": "mysqld slow query logging subsystem",
+      "method": "Apply runtime variables to mimic the provided configuration",
+      "parameters": {
+        "slow_query_log": "ON",
+        "long_query_time": "2",
+        "log_queries_not_using_indexes": "ON",
+        "min_examined_row_limit": "0",
+        "log_slow_admin_statements": "ON",
+        "log_slow_slave_statements": "ON",
+        "log_slow_verbosity": "full (if supported; otherwise omit)"
+      },
+      "duration_sec": 120,
+      "safety_notes": [
+        "Run on a non-production instance; enabling logging can grow files quickly.",
+        "Ensure slow log rotation and disk space limits are in place."
+      ]
+    }
+  ],
+  "expected_result": {
+    "metrics": [
+      {
+        "metric": "slow_log_entries_per_minute",
+        "expected_change": "increase due to logging of non-indexed queries regardless of duration"
+      },
+      {
+        "metric": "percentage_of_slow_log_entries_with_Query_time_below_2s",
+        "expected_change": "greater than 80%"
+      },
+      {
+        "metric": "rows_examined_in_logged_entries",
+        "expected_change": "values vary (e.g., 300–1800) consistent with table scans or early-stop LIMIT scans"
+      }
+    ],
+    "query_or_transaction_effects": [
+      "Unindexed SELECTs appear in the slow log even when Query_time is far less than long_query_time.",
+      "Indexed SELECTs do not appear in the slow log unless they exceed long_query_time."
+    ],
+    "validation_criteria": [
+      "With log_queries_not_using_indexes=ON and min_examined_row_limit=0, the slow log contains many entries where Query_time < 2 seconds.",
+      "Turning log_queries_not_using_indexes OFF (post-test) stops logging of these fast unindexed queries, confirming the cause.",
+      "Sample slow log lines include Query_time around milliseconds and Rows_examined in the hundreds to low thousands."
+    ]
+  },
+  "open_questions": [
+    "Which exact MySQL flavor and version is used (Oracle MySQL, Percona Server, or MariaDB)?",
+    "What is the runtime value of min_examined_row_limit?",
+    "Are there any session-level overrides (e.g., SET SESSION long_query_time) in your application?",
+    "Do the logged queries use non-indexed predicates (e.g., WHERE on columns without indexes or functions on indexed columns)?",
+    "Is log_slow_verbosity supported/enabled on your server (Percona/MariaDB feature)?",
+    "Are general_log or any third-party proxies/collectors also writing to the slow log path via rotation or symlinks?"
+  ]
+}

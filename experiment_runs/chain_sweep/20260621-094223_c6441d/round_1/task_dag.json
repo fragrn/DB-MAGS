@@ -1,0 +1,52 @@
+{
+  "tasks": {
+    "hot_update_tpcc_district_lock": {
+      "task_id": "hot_update_tpcc_district_lock",
+      "task_type": "anomaly_injection",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "scripts": [
+            "SET SESSION innodb_lock_wait_timeout = 5",
+            "START TRANSACTION",
+            "UPDATE district SET d_ytd = d_ytd + 0 WHERE d_w_id = 1 AND d_id BETWEEN 1 AND 10",
+            "SELECT SLEEP(2)",
+            "ROLLBACK"
+          ],
+          "duration_sec": 12,
+          "concurrency": 6
+        }
+      ],
+      "expected_metrics": {
+        "intermediate": {
+          "lock_contention": {
+            "Innodb_row_lock_waits_delta": ">=50",
+            "Innodb_row_lock_time_delta_ms": ">=3000"
+          }
+        },
+        "terminal": {
+          "slow_query": {
+            "Slow_queries_delta": ">=1",
+            "p95_latency_ratio": ">=1.5"
+          },
+          "qps_drop": {
+            "qps_ratio": "<=0.8"
+          }
+        }
+      },
+      "success_criteria": "During and shortly after injection: Innodb_row_lock_waits increases by at least 50 and lock wait time by >=3s; and either Slow_queries increases by >=1 or p95 latency ratio >=1.5; and QPS drops to <=80% of baseline.",
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "May cause transaction timeouts or deadlocks in TPCC workload; temporary QPS degradation expected; mitigated by 12s duration and per-session innodb_lock_wait_timeout=5; ROLLBACK ensures no persistent data changes.",
+      "metadata": {
+        "root_cause": "hot_update"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "hot_update_tpcc_district_lock": 0.0
+  }
+}

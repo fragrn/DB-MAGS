@@ -1,0 +1,70 @@
+{
+  "tasks": {
+    "inj_resource_io_fio": {
+      "task_id": "inj_resource_io_fio",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "fio",
+            "--name",
+            "ga_resource_io",
+            "--filename",
+            "/tmp/ga_io_stress.bin",
+            "--rw",
+            "randrw",
+            "--rwmixread",
+            "60",
+            "--bs",
+            "128k",
+            "--iodepth",
+            "8",
+            "--ioengine",
+            "sync",
+            "--size",
+            "1024m",
+            "--direct",
+            "1",
+            "--time_based",
+            "--runtime",
+            "15",
+            "--rate",
+            "60m",
+            "--numjobs",
+            "1"
+          ],
+          "duration_sec": 15,
+          "cwd": "/tmp",
+          "env": {},
+          "cleanup_command": [
+            "rm",
+            "-f",
+            "/tmp/ga_io_stress.bin"
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "resource_bottleneck_io": {
+          "disk_bw_saturated": true,
+          "io_wait_increase": true
+        }
+      },
+      "success_criteria": [
+        "OS disk IO utilization increases during injection_observe_sec",
+        "BenchBase p95 latency increases or QPS decreases during injection window"
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "Bounded disk IO pressure using fio capped to 60MB/s for 15s, temp file size 1 GiB in /tmp; cleanup removes the file. Risk: slower queries, QPS drop; bounded duration and rate to avoid severe impact.",
+      "metadata": {
+        "root_cause": "resource_io"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "inj_resource_io_fio": 0.0
+  }
+}

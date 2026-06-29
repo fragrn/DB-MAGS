@@ -1,0 +1,301 @@
+{
+  "post_understanding": {
+    "summary": "A MySQL INNER JOIN with GROUP BY on a large fact table (13.7M rows) joined to a small dimension table (334 rows) takes ~30 seconds. EXPLAIN shows scanning the country_detail index and probing statistic_detail via an index, leading to many index lookups and effectively touching most rows in the large table.",
+    "symptoms": [
+      "slow query (~30 seconds)",
+      "large table involved in join (13,731,253 rows)",
+      "EXPLAIN shows index scan on small table and ref on large table",
+      "no explicit temporary/filesort shown in EXPLAIN"
+    ],
+    "suspected_root_causes": [
+      "suboptimal join order/plan causing nested-loop expansion over most of the 13.7M rows",
+      "GROUP BY after join prevents early de-duplication, forcing many index reads",
+      "cold buffer pool or I/O-bound access on first run",
+      "high per-row cost due to utf8mb4 string comparisons on join keys"
+    ],
+    "key_evidence": [
+      "Query: SELECT country_detail.country_name FROM statistic_detail INNER JOIN country_detail ON statistic_detail.country = country_detail.country_code GROUP BY 1",
+      "statistic_detail has 13731253 rows; country_detail has 334 rows",
+      "EXPLAIN shows: country_detail type=index using country_name_idx; statistic_detail type=ref using an index on country (key_len 82); Extra: Using index; Using where",
+      "Observed runtime: 30 seconds"
+    ],
+    "assumptions": [
+      "DBMS is MySQL/InnoDB (syntax and EXPLAIN format indicate MySQL 5.7/8.0).",
+      "Both tables use default utf8mb4 collation and compatible collations (no implicit conversions).",
+      "Optimizer chooses country_detail as the driving table and statistic_detail via ref lookup as shown.",
+      "Distribution of statistic_detail.country values spans most/all 334 country codes (average ~41k rows per country).",
+      "System is otherwise idle; no significant concurrent workload during the observed slow query.",
+      "Buffer pool may not fully cache the 13.7M-row index, causing I/O on first run.",
+      "country_name is effectively unique per country_code (common in dimensions), though not enforced."
+    ],
+    "confidence": 0.68
+  },
+  "experiment_environment": {
+    "dbms": "mysql",
+    "target_database": "repro_db",
+    "target_tables": [
+      {
+        "table": "country_detail",
+        "purpose": "dimension table providing country_code to country_name mapping; acts as the small side of the join",
+        "columns": [
+          {
+            "name": "country_code",
+            "type": "varchar(20)",
+            "role": "primary key / join key"
+          },
+          {
+            "name": "country_name",
+            "type": "varchar(16)",
+            "role": "group-by key / projection"
+          },
+          {
+            "name": "region_code",
+            "type": "varchar(16)",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "region_name",
+            "type": "varchar(16)",
+            "role": "irrelevant to query"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "334",
+          "distribution": "distinct country_code values; country_name mostly unique; region fields arbitrary",
+          "key_fields": [
+            "country_code",
+            "country_name"
+          ],
+          "rationale": "Reproduce small dimension (334 rows) and provide join targets and group-by values"
+        }
+      },
+      {
+        "table": "statistic_detail",
+        "purpose": "large fact table joined by country; main source of volume causing slow nested-loop behavior",
+        "columns": [
+          {
+            "name": "date",
+            "type": "varchar(10)",
+            "role": "part of PK; not used by query"
+          },
+          {
+            "name": "os",
+            "type": "varchar(10)",
+            "role": "part of PK; not used by query"
+          },
+          {
+            "name": "ver",
+            "type": "varchar(16)",
+            "role": "part of PK; not used by query"
+          },
+          {
+            "name": "country",
+            "type": "varchar(16)",
+            "role": "join key; first column of PK; has secondary index country_idx"
+          },
+          {
+            "name": "utype",
+            "type": "varchar(8)",
+            "role": "part of PK; not used by query"
+          },
+          {
+            "name": "stype",
+            "type": "varchar(32)",
+            "role": "part of PK; not used by query"
+          },
+          {
+            "name": "language",
+            "type": "varchar(16)",
+            "role": "part of PK; not used by query"
+          },
+          {
+            "name": "num0",
+            "type": "bigint",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num1",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num2",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num3",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num4",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num5",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num6",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num7",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num8",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num9",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num10",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num11",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num12",
+            "type": "double",
+            "role": "irrelevant to query"
+          },
+          {
+            "name": "num13",
+            "type": "double",
+            "role": "irrelevant to query"
+          }
+        ],
+        "data_source": "generated data",
+        "generated_data_plan": {
+          "required": true,
+          "row_count": "13,731,253 (±5% acceptable)",
+          "distribution": "country values distributed across all 334 country codes (uniform or mildly skewed); other PK columns varied to ensure many distinct rows per country",
+          "key_fields": [
+            "country (join key)",
+            "PK columns for clustering",
+            "country_idx for covering reads"
+          ],
+          "rationale": "Large volume on join key creates many index lookups in nested-loop and reproduces slow behavior"
+        }
+      }
+    ]
+  },
+  "background_workloads": [
+    {
+      "name": "idle_system",
+      "inferred_from_post": "No concurrent workload or lock waits mentioned; focus is on single slow query behavior.",
+      "simulation_method": "none",
+      "transactions_or_queries": [],
+      "concurrency": "0",
+      "duration_sec": 0,
+      "transaction_mix": {}
+    }
+  ],
+  "anomaly_injection": [
+    {
+      "name": "slow_query_group_by_join",
+      "anomaly_type": "slow_sql",
+      "mapped_dbmags_anomaly": "slow_sql",
+      "target": "repro_db/statistic_detail + repro_db/country_detail",
+      "method": "Execute the join with GROUP BY as posted to trigger nested-loop over large fact table with grouping",
+      "parameters": {
+        "query": "SELECT c.country_name AS country_name FROM statistic_detail s INNER JOIN country_detail c ON (s.country = c.country_code) GROUP BY 1",
+        "indexes": {
+          "statistic_detail": [
+            "PRIMARY(country, ver, language, utype, stype, os, date)",
+            "country_idx(country)"
+          ],
+          "country_detail": [
+            "PRIMARY(country_code)",
+            "country_name_idx(country_name)"
+          ]
+        },
+        "optimizer_hints": "none (allow default join order, expected to drive from country_detail and probe statistic_detail)",
+        "session_settings": {
+          "sql_mode": "default",
+          "collation_connection": "match table collations (assumed utf8mb4 default)"
+        }
+      },
+      "duration_sec": 120,
+      "safety_notes": [
+        "Executing on a large dataset may be I/O intensive; ensure test environment has sufficient disk space and is isolated.",
+        "Cap execution at 2 minutes to prevent runaway tests."
+      ]
+    },
+    {
+      "name": "cold_buffer_pool_optional",
+      "anomaly_type": "resource_io",
+      "mapped_dbmags_anomaly": "resource_io",
+      "target": "InnoDB buffer pool / disk I/O",
+      "method": "Ensure cold cache prior to running the query to amplify index read costs",
+      "parameters": {
+        "approach": "restart mysqld or flush OS cache (platform dependent) before running query",
+        "note": "This step is optional and only if reproducing ~30s latency requires cold cache"
+      },
+      "duration_sec": 60,
+      "safety_notes": [
+        "Restarting MySQL disrupts other workloads; perform only in isolated environment.",
+        "Flushing OS caches requires elevated privileges; avoid on shared systems."
+      ]
+    }
+  ],
+  "expected_result": {
+    "metrics": [
+      {
+        "metric": "query_time_sec",
+        "expected_change": "increase to tens of seconds (e.g., >=20s) on cold cache; lower but still significant on warm cache"
+      },
+      {
+        "metric": "rows_examined",
+        "expected_change": "approximately equals the number of matching statistic_detail rows (on the order of total 13.7M)"
+      },
+      {
+        "metric": "Handler_read_next (status)",
+        "expected_change": "increase significantly, indicating many index leaf reads"
+      },
+      {
+        "metric": "InnoDB buffer pool read requests",
+        "expected_change": "increase during query"
+      },
+      {
+        "metric": "physical_reads",
+        "expected_change": "increase if buffer pool is cold"
+      }
+    ],
+    "query_or_transaction_effects": [
+      "The SELECT returns at most 334 distinct country_name rows.",
+      "EXPLAIN shows country_detail scanned via country_name_idx and statistic_detail accessed via ref on country (country_idx or PK prefix).",
+      "No lock waits or deadlocks; CPU and I/O used by the single query."
+    ],
+    "validation_criteria": [
+      "Reproduced query plan matches: first table country_detail (type=index on country_name_idx), second table statistic_detail (type=ref on index with key_len ~length of country), Extras show Using index/Using where.",
+      "Slow query log shows rows_examined in the multi-million range and latency approximating the reported 30s on similar hardware when cache is cold.",
+      "Result set cardinality is <=334 rows as expected."
+    ]
+  },
+  "open_questions": [
+    "Which MySQL version and exact InnoDB/charset/collation settings are in use for both tables and the connection?",
+    "Are the InnoDB buffer pool size and server caches cold or warm when the 30-second runtime is observed?",
+    "Is country_name unique per country_code, or can multiple country_codes share the same country_name?",
+    "What is the actual index chosen on statistic_detail (country_idx vs PK prefix); can you share the full EXPLAIN in JSON format?",
+    "Are table/index statistics up-to-date (ANALYZE TABLE recently run)?",
+    "Is there any concurrent workload or I/O contention during the slow run?",
+    "What is the slow query log rows_examined and Handler_* counters for this statement?"
+  ]
+}

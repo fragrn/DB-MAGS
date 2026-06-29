@@ -173,7 +173,7 @@ NODES: dict[str, AnomalyNode] = {
         label="Excessive Indexes",
         description="Too many indexes causing write amplification during DML.",
         category=NodeCategory.INJECTABLE,
-        injectable=True,
+        injectable=False,
         default_tool="build_slow_sql_task",
         planner_notes=(
             "INSERT/UPDATE on a table with many redundant indexes. "

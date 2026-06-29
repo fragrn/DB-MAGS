@@ -1,0 +1,64 @@
+{
+  "tasks": {
+    "improper_sql_large_table_scan_order_line": {
+      "task_id": "improper_sql_large_table_scan_order_line",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT /* large_table_scan */ COUNT(*) FROM order_line WHERE ol_amount >= 0",
+          "concurrency": 1,
+          "duration_sec": 15
+        }
+      ],
+      "expected_metrics": {
+        "intermediate": [
+          "poor_plan",
+          "rows_examined_ratio"
+        ],
+        "terminals": [
+          "slow_query"
+        ],
+        "plan_expectation": "full table scan on order_line (type=ALL), rows_estimated ~6M",
+        "db_indicators": {
+          "Com_select_delta": ">0",
+          "Rows_examined_delta": ">5e6",
+          "Slow_queries_delta": ">=0"
+        },
+        "latency_expectation": {
+          "p95_ratio": ">=1.5"
+        }
+      },
+      "success_criteria": {
+        "improper_sql_triggered": true,
+        "evidence": [
+          "EXPLAIN shows table scan on order_line",
+          "Rows examined per execution is in the millions"
+        ],
+        "symptom_observation": [
+          "slow_query_count_delta >= 0 OR p95 latency ratio >= 1.5 during injection window"
+        ]
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": {
+        "impact": "Moderate CPU and IO from scanning ~6M rows; possible increased lock waits due to shared buffer pool pressure",
+        "mitigations": [
+          "concurrency=1",
+          "duration<=15s",
+          "no DML performed"
+        ]
+      },
+      "metadata": {
+        "root_cause": "improper_sql",
+        "sql_verified_explain": "-> Aggregate: count(0) -> Filter: (order_line.ol_amount >= 0.00) -> Table scan on order_line"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "improper_sql_large_table_scan_order_line": 0.0
+  }
+}

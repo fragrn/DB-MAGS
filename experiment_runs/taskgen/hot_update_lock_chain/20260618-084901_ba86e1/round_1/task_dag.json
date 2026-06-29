@@ -1,0 +1,46 @@
+{
+  "tasks": {
+    "hot_update_tpcc_warehouse_wid": {
+      "task_id": "hot_update_tpcc_warehouse_wid",
+      "task_type": "lock_conflict",
+      "actions": [
+        {
+          "kind": "lock_conflict",
+          "database": "tpcc_10W",
+          "table": "warehouse",
+          "key_column": "w_id",
+          "holder_concurrency": 2,
+          "waiter_concurrency": 8,
+          "hold_sec": 12,
+          "lock_type": "record_lock"
+        }
+      ],
+      "expected_metrics": {
+        "lock_waits_ratio": ">=2.0",
+        "blocked_session_count": ">=1"
+      },
+      "success_criteria": {
+        "blocked_session_count": ">=1"
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [
+        {
+          "kind": "kill_blocking_sessions",
+          "database": "tpcc_10W"
+        }
+      ],
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "hot_update",
+        "table": "warehouse",
+        "key_column": "w_id",
+        "lock_type": "record_lock"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "hot_update_tpcc_warehouse_wid": 0.0
+  }
+}

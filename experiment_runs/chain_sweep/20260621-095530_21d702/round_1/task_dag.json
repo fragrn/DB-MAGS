@@ -1,0 +1,49 @@
+{
+  "tasks": {
+    "long_tx_tpcc_lock_hold_v2": {
+      "task_id": "long_tx_tpcc_lock_hold_v2",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "scripts": [
+            "START TRANSACTION; SELECT * FROM district WHERE d_w_id IN (1,2,3,4) FOR UPDATE; SELECT * FROM stock WHERE s_w_id IN (1,2) AND s_i_id BETWEEN 1 AND 100 FOR UPDATE; SELECT * FROM warehouse WHERE w_id IN (1,2,3,4) FOR UPDATE; SELECT SLEEP(10); COMMIT;"
+          ],
+          "duration_sec": 14,
+          "concurrency": 3
+        }
+      ],
+      "expected_metrics": {
+        "intermediate": {
+          "threads_concurrency_up": true,
+          "lock_contention": true
+        },
+        "terminal": {
+          "slow_query": true,
+          "qps_drop": true
+        }
+      },
+      "success_criteria": {
+        "lock_contention": "Innodb_row_lock_waits delta >= 20 during injection window",
+        "slow_query": "slow_query_count_delta >= 1 OR p95_latency_ratio >= 1.5",
+        "qps_drop": "QPS_ratio <= 0.7 vs baseline"
+      },
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": {
+        "impact": "Induces lock waits and slow queries; bounded by 14s and limited concurrency",
+        "blast_radius_controls": "Read-only row locks via SELECT ... FOR UPDATE; consistent lock order across statements; COMMIT releases locks",
+        "rollback_plan": "Locks released automatically on COMMIT; no cleanup needed"
+      },
+      "metadata": {
+        "root_cause": "long_tx"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "long_tx_tpcc_lock_hold_v2": 0.0
+  }
+}

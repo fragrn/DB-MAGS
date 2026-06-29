@@ -1,0 +1,40 @@
+{
+  "tasks": {
+    "improper_sql_order_by_sortspill": {
+      "task_id": "improper_sql_order_by_sortspill",
+      "task_type": "injection",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "tpcc_10W",
+          "sql": "SELECT ol_o_id, ol_d_id, ol_w_id, ol_amount FROM order_line ORDER BY ol_amount DESC LIMIT 100000",
+          "concurrency": 1,
+          "duration_sec": 15
+        }
+      ],
+      "expected_metrics": {
+        "sort_hash_spill": {
+          "created_tmp_disk_tables_delta": ">=1",
+          "sort_merge_passes_delta": ">=1"
+        },
+        "slow_query": {
+          "slow_query_count_delta": ">=1",
+          "p95_latency_ratio": ">=1.5"
+        }
+      },
+      "success_criteria": "During injection window, Created_tmp_disk_tables and/or Sort_merge_passes increase by at least 1 and at least one slow query is recorded or p95 latency ratio >= 1.5.",
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "This query performs a full scan and filesort on a large table (order_line) with an unindexed ORDER BY. It can cause CPU spikes, disk I/O from filesort spill to disk, and increased latency for concurrent workload. Bounded duration (15s) and concurrency (1) limit risk.",
+      "metadata": {
+        "root_cause": "improper_sql",
+        "explain_plan": "-> Limit: 100000 row(s)\n    -> Sort: order_line.ol_amount DESC\n        -> Table scan on order_line"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "improper_sql_order_by_sortspill": 0.0
+  }
+}
