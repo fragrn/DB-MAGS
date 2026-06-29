@@ -9,9 +9,15 @@ from pathlib import Path
 from typing import Any
 
 from InputAnalysisAgent.analyzer import InputAnalysisError, analyze_post
+from InputAnalysisAgent.hitl import HumanDecision, HumanGateRequired, WAITING_EXIT_CODE
+from InputAnalysisAgent.runtime import ReproductionRuntime
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = list(argv if argv is not None else sys.argv[1:])
+    if argv and argv[0] in {"run", "resume"}:
+        return _reproduction_main(argv)
+
     parser = argparse.ArgumentParser(
         prog="python -m InputAnalysisAgent.cli",
         description="Generate a database anomaly reproduction design from a DBA forum post.",
@@ -39,6 +45,59 @@ def main(argv: list[str] | None = None) -> int:
             print(f"InputAnalysisAgent failed: {exc}", file=sys.stderr)
             return 1
         raise
+
+
+def _reproduction_main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(
+        prog="python -m InputAnalysisAgent.cli",
+        description="Analyze a DBA post and run a resumable anomaly reproduction.",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    run_parser = subparsers.add_parser("run", help="Plan and run a post-driven reproduction")
+    run_parser.add_argument("--input", required=True, help="Input txt or JSON post")
+    run_parser.add_argument("--output-root", default="InputAnalysisExperiment_runs")
+    run_parser.add_argument("--interaction", choices=["interactive", "checkpoint"], default="checkpoint")
+
+    resume_parser = subparsers.add_parser("resume", help="Respond to a human gate and resume")
+    resume_parser.add_argument("--run-dir", required=True)
+    resume_parser.add_argument("--decision", choices=["approve", "reject", "revise", "feedback", "retry"], required=True)
+    resume_parser.add_argument("--patch", help="JSON Merge Patch file, required for revise")
+    resume_parser.add_argument("--feedback", default="")
+    args = parser.parse_args(argv)
+
+    runtime = ReproductionRuntime()
+    try:
+        if args.command == "run":
+            description, metadata = _load_input(Path(args.input))
+            result = runtime.run(
+                description,
+                metadata=metadata,
+                output_root=args.output_root,
+                interaction=args.interaction,
+            )
+        else:
+            patch = None
+            if args.patch:
+                patch_value = json.loads(Path(args.patch).read_text())
+                if not isinstance(patch_value, dict):
+                    raise ValueError("patch file must contain a JSON object")
+                patch = patch_value
+            result = runtime.resume(
+                args.run_dir,
+                HumanDecision(args.decision, patch=patch, feedback=args.feedback),
+            )
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result.get("status") == "completed" else 1
+    except HumanGateRequired as exc:
+        print(
+            f"Human approval required. Run directory: {exc.run_dir}\n"
+            f"Review: {exc.run_dir / 'hitl_request.json'}",
+            file=sys.stderr,
+        )
+        return WAITING_EXIT_CODE
+    except Exception as exc:
+        print(f"InputAnalysisAgent reproduction failed: {exc}", file=sys.stderr)
+        return 1
 
 
 def _load_input(path: Path) -> tuple[str, dict[str, Any]]:

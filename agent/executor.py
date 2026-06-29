@@ -613,7 +613,24 @@ class Executor:
     # -------------------------------------------------------------------------
 
     def _run_cleanup(self, task_dag: dict, trace: ExecutionTrace) -> None:
-        """Destroy ChaosBlade UIDs created during execution."""
+        """Run supported TaskSpec cleanup actions, then destroy ChaosBlade UIDs."""
+        supported = {
+            "raw_sql_workload",
+            "raw_transaction_script",
+            "raw_command",
+            "logical_backup_command",
+            "benchbase_burst_command",
+        }
+        tasks = task_dag.get("tasks", {}) or {}
+        for task_id, task in reversed(list(tasks.items())):
+            for action in reversed(list(task.get("cleanup_actions", []) or [])):
+                kind = str(action.get("kind") or "")
+                if kind not in supported:
+                    continue
+                try:
+                    self._run_action(kind, action, f"{task_id}_cleanup")
+                except Exception as exc:
+                    trace.cleanup_errors.append(f"Cleanup failed for {task_id} kind={kind}: {exc}")
         for uid in self._chaosblade_uids:
             try:
                 blade_path = self.config.chaosblade_path

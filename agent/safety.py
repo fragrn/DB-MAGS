@@ -152,7 +152,8 @@ class SafetyChecker:
         # Dangerous SQL / command check
         # -------------------------------------------------------------------------
         for task_id, task in tasks.items():
-            for action in task.get("actions", []):
+            task_actions = list(task.get("actions", []) or []) + list(task.get("cleanup_actions", []) or [])
+            for action in task_actions:
                 if action.get("kind") in {"sql_workload", "raw_sql_workload"}:
                     sql = action.get("sql", "")
                     _append_dangerous_sql_reasons(reasons, task_id, sql)

@@ -40,6 +40,8 @@ class RuntimeConfig:
     openai_model: str = "gpt-4o"
     planner_temperature: float = 0.2
     planner_enabled: bool = True
+    input_analysis_llm_timeout_sec: int = 180
+    input_analysis_llm_max_attempts: int = 2
 
     # MySQL
     default_database: str = "testdb"
@@ -71,6 +73,8 @@ class RuntimeConfig:
             "OPENAI_MODEL": "openai_model",
             "OPENAI_PLANNER_TEMPERATURE": "planner_temperature",
             "ENABLE_OPENAI_PLANNER": "planner_enabled",
+            "INPUT_ANALYSIS_LLM_TIMEOUT_SEC": "input_analysis_llm_timeout_sec",
+            "INPUT_ANALYSIS_LLM_MAX_ATTEMPTS": "input_analysis_llm_max_attempts",
             "DBMAGS_DEFAULT_DATABASE": "default_database",
             "DBMAGS_MYSQL_HOST": "mysql_host",
             "DBMAGS_MYSQL_PORT": "mysql_port",
