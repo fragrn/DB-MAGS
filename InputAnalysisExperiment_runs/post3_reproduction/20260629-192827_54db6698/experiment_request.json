@@ -1,0 +1,22 @@
+{
+  "target_anomaly": "MySQL slow log contains very low `Query_time` entries despite `long_query_time = 2`",
+  "target_database": "mysql_slowlog_repro",
+  "dba_description": "MySQL slow log logs every query instead of just slow queries because low-latency statements with many examined rows are still appearing in the slow log.",
+  "target_path": [
+    "slow_query_log",
+    "long_query_time",
+    "log_queries_not_using_indexes",
+    "scan_vs_indexed_query_behavior"
+  ],
+  "injected_nodes": [
+    "toggle `log_queries_not_using_indexes` on/off",
+    "compare scan-style query to indexed point lookup"
+  ],
+  "max_duration_sec": 60,
+  "max_retry_rounds": 2,
+  "risk_level": "low",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": false
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "validation_criteria": [
+    "A non-indexed or scan-style query is written to the slow log even when `Query_time` is below `long_query_time`",
+    "An indexed point-lookup query does not exhibit the same slow-log behavior",
+    "Disabling `log_queries_not_using_indexes` suppresses the low-latency scan query from the slow log"
+  ],
+  "symptom_evidence": [
+    "Slow-log entries with `Query_time` far below 2 seconds",
+    "Rows examined substantially larger for the logged entries"
+  ],
+  "mechanism_evidence": [
+    "Behavior changes when `log_queries_not_using_indexes` is toggled",
+    "EXPLAIN shows the scan-style query is not a tight primary-key lookup"
+  ],
+  "minimum_plan_similarity": 0.6
+}

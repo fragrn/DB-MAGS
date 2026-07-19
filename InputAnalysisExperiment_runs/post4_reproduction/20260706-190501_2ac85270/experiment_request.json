@@ -1,0 +1,14 @@
+{
+  "target_anomaly": "Slow SELECT due to non-sargable LIKE and correlated authorization checks on large issues table",
+  "target_database": "dba_repro_slow_issues",
+  "dba_description": "Query takes ~15s; EXPLAIN shows PRIMARY scan on issues with filter; enabled_modules checked via per-row index lookup; members NOT IN may be materialized/deduplicated and probed per row. Hints enforce issues-first scan.",
+  "target_path": [],
+  "injected_nodes": [],
+  "max_duration_sec": 60,
+  "max_retry_rounds": 2,
+  "risk_level": "low",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": false
+  }
+}

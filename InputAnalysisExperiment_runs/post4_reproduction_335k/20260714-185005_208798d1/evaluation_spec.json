@@ -1,0 +1,32 @@
+{
+  "validation_criteria": [
+    "EXPLAIN or EXPLAIN ANALYZE still shows issues as the main access path.",
+    "LOWER(issues.subject) LIKE '%255392%' remains non-sargable in the reproduced setup.",
+    "The plan shows more rows scanned than rows returned, with a long descending PK walk if EXPLAIN ANALYZE is available.",
+    "The permission and module checks remain visible, but the query is dominated by issues candidate enumeration."
+  ],
+  "symptom_evidence": [
+    "The query remains expensive even though the dataset is synthetic and read-only.",
+    "The number of candidate issues rows considered should substantially exceed the final LIMIT 10 output.",
+    "The sparse token placement should make high-id rows mostly fail the subject filter."
+  ],
+  "mechanism_evidence": [
+    "The forced descending primary-key access path is retained.",
+    "The token distribution is skewed toward lower ids, causing long scan distance before enough matches are found.",
+    "Permission filtering reduces the effective hit rate among scanned rows."
+  ],
+  "minimum_plan_similarity": 0.6,
+  "success_metrics": [
+    "target query executes without errors",
+    "latency distribution is captured for the 335k-row scale",
+    "EXPLAIN/calibration still supports the sparse low-id token scan mechanism"
+  ],
+  "thresholds": {
+    "target_query_compare_scale": 335000
+  },
+  "evidence": {
+    "latency": "Executor raw_sql_workload latency statistics",
+    "plan": "Calibration EXPLAIN and validate_query_plan_shape output",
+    "data_distribution": "DataSpec places token 255392 only in low-id rows"
+  }
+}

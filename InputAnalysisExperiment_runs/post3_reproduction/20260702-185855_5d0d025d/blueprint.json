@@ -1,0 +1,482 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MySQL slow query logging can record fast queries when they do not use an index and `log_queries_not_using_indexes` is enabled, so `Query_time` can be far below `long_query_time` while the statement still appears in the slow log.",
+    "symptoms": [
+      "Slow log entries show `Query_time` around 0.0003-0.0023 seconds even though `long_query_time` is 2 seconds.",
+      "The logged statements also show nontrivial `Rows_examined` values, consistent with scan-like access.",
+      "The user expected only slow queries, but sees many entries in the slow log."
+    ],
+    "mechanism": "In MySQL, `slow_query_log` can emit statements that do not use indexes when `log_queries_not_using_indexes=ON`; this logging path is independent of `long_query_time`, so a fast full scan or other unindexed predicate query can be written to the slow log even when `Query_time` is tiny.",
+    "facts": [
+      {
+        "key": "mysql_slow_log_enabled_in_post",
+        "value": {
+          "slow_query_log": "ON"
+        },
+        "source": "explicit_post",
+        "evidence": "The config block in the post includes `slow-query-log = ON`.",
+        "confidence": 0.99
+      },
+      {
+        "key": "threshold_configured_to_two_seconds",
+        "value": {
+          "long_query_time": 2
+        },
+        "source": "explicit_post",
+        "evidence": "The config block in the post includes `long_query_time = 2`.",
+        "confidence": 0.99
+      },
+      {
+        "key": "unindexed_query_logging_enabled",
+        "value": {
+          "log_queries_not_using_indexes": "ON"
+        },
+        "source": "explicit_post",
+        "evidence": "The config block in the post includes `log-queries-not-using-indexes = ON`.",
+        "confidence": 0.99
+      },
+      {
+        "key": "slow_log_entries_are_below_threshold",
+        "value": {
+          "query_time_range_sec": [
+            0.000302,
+            0.002353
+          ],
+          "rows_examined_range": [
+            330,
+            1731
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "The pasted slow-log lines show `Query_time` values in the sub-millisecond to millisecond range, far below 2 seconds.",
+        "confidence": 0.99
+      },
+      {
+        "key": "user_assumption_about_query_time",
+        "value": {
+          "interpretation": "Query_time is the runtime and should be compared directly to long_query_time"
+        },
+        "source": "post_hypothesis",
+        "evidence": "The post says, 'To my knowledge, the Query_time in the log file denotes the time query took to run, but it defers the log time mentioned in the config file.'",
+        "confidence": 0.82
+      },
+      {
+        "key": "current_mysql_defaults_differ_from_post",
+        "value": {
+          "slow_query_log": "OFF",
+          "log_queries_not_using_indexes": "OFF",
+          "long_query_time": "10.000000"
+        },
+        "source": "agent_inference",
+        "evidence": "Local inspected MySQL globals differ from the post, so the reproduction must explicitly enable and later restore these settings.",
+        "confidence": 0.91
+      }
+    ],
+    "assumptions": [
+      "The logged statements are ordinary SELECTs or similar statements that can be reproduced on a synthetic table.",
+      "The key missing ingredient is an unindexed predicate or full scan, not a special storage-engine or replication-only behavior.",
+      "The slow-log excerpt is representative of the behavior the user observed."
+    ],
+    "unknowns": [
+      "Exact original schema, index layout, and data distribution.",
+      "Exact MySQL minor version and any version-specific slow-log formatting differences.",
+      "Whether the original workload was read-only, mixed, or included administrative statements."
+    ],
+    "confidence": 0.93
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The MySQL adapter is available and the slow-log behavior is a documented server mechanism that can be reproduced with synthetic data. The original production dataset is unavailable, so the exact accident cannot be duplicated, but the mechanism and symptom can be reproduced closely.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact production table sizes and skew",
+      "Exact original query text",
+      "Exact slow-log file naming and rotation state"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "slowlog_repro",
+    "requirements": [
+      "Dedicated test database",
+      "Permission to change MySQL global variables for the test window",
+      "Ability to read the server slow-query log file after the workload"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "slowlog_repro",
+    "schema_sql": [
+      "CREATE DATABASE IF NOT EXISTS slowlog_repro",
+      "CREATE TABLE IF NOT EXISTS slowlog_repro.repro_events (id BIGINT UNSIGNED NOT NULL, category VARCHAR(16) NOT NULL, payload VARCHAR(128) NOT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB"
+    ],
+    "generation_sql": [
+      "INSERT IGNORE INTO slowlog_repro.repro_events (id, category, payload, created_at) SELECT nums.n + 1, CASE WHEN MOD(nums.n, 100) < 10 THEN CONCAT('rare_', MOD(nums.n, 10)) ELSE 'common' END, RPAD(CONCAT('payload-', nums.n), 64, 'x'), TIMESTAMP('2024-01-01 00:00:00') + INTERVAL MOD(nums.n, 86400) SECOND FROM (SELECT a.d + b.d * 10 + c.d * 100 + d.d * 1000 + e.d * 10000 + f.d * 100000 AS n FROM (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) c CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) e CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) f) nums WHERE nums.n < 100000",
+      "ANALYZE TABLE slowlog_repro.repro_events"
+    ],
+    "tables": [
+      {
+        "name": "repro_events",
+        "primary_key": [
+          "id"
+        ],
+        "secondary_indexes": [],
+        "row_count": 100000
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "repro_events": 100000
+      },
+      "value_skew": {
+        "category": {
+          "common": 0.9,
+          "rare_0": 0.01,
+          "rare_1": 0.01,
+          "rare_2": 0.01,
+          "rare_3": 0.01,
+          "rare_4": 0.01,
+          "rare_5": 0.01,
+          "rare_6": 0.01,
+          "rare_7": 0.01,
+          "rare_8": 0.01,
+          "rare_9": 0.01
+        }
+      },
+      "predicate_selectivity": {
+        "category='rare_0'": 0.01,
+        "category='common'": 0.9,
+        "id=1": 1e-05
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "slowlog_repro.repro_events"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'rare_0'",
+        "conditions": [
+          {
+            "source": "explain",
+            "metric": "access_method",
+            "operator": "eq",
+            "expected": "ALL",
+            "tolerance": 0.2,
+            "required": true,
+            "rationale": "The repro query must read the table by scan so it can be logged as an unindexed query."
+          },
+          {
+            "source": "explain",
+            "metric": "table",
+            "operator": "eq",
+            "expected": "repro_events",
+            "tolerance": 0.2,
+            "required": true,
+            "rationale": "Confirms the plan is against the synthetic table."
+          },
+          {
+            "source": "explain",
+            "metric": "estimated_rows",
+            "operator": "approx",
+            "expected": 100000,
+            "tolerance": 0.2,
+            "required": true,
+            "rationale": "A near-full-table scan is the mechanism that makes the query appear in the slow log when unindexed logging is enabled."
+          },
+          {
+            "source": "explain",
+            "metric": "key_used",
+            "operator": "eq",
+            "expected": "NULL",
+            "tolerance": 0.2,
+            "required": true,
+            "rationale": "There is no index on `category`, so the optimizer should not use a key."
+          }
+        ],
+        "max_probe_sec": 10
+      },
+      {
+        "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE id = 1",
+        "conditions": [
+          {
+            "source": "explain",
+            "metric": "access_method",
+            "operator": "eq",
+            "expected": "const",
+            "tolerance": 0.2,
+            "required": true,
+            "rationale": "This indexed control query should be access-efficient and serve as a contrast to the scan case."
+          },
+          {
+            "source": "explain",
+            "metric": "table",
+            "operator": "eq",
+            "expected": "repro_events",
+            "tolerance": 0.2,
+            "required": true,
+            "rationale": "Confirms the control query is on the same table."
+          },
+          {
+            "source": "explain",
+            "metric": "estimated_rows",
+            "operator": "approx",
+            "expected": 1,
+            "tolerance": 0.5,
+            "required": true,
+            "rationale": "The primary-key lookup should be highly selective."
+          },
+          {
+            "source": "explain",
+            "metric": "key_used",
+            "operator": "eq",
+            "expected": "PRIMARY",
+            "tolerance": 0.2,
+            "required": true,
+            "rationale": "Confirms the optimizer uses the primary key for the indexed control query."
+          }
+        ],
+        "max_probe_sec": 10
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "The unindexed predicate query is logged in the slow log while `Query_time` remains far below `long_query_time`.",
+      "EXPLAIN for the unindexed predicate query shows a scan-like plan with no key used.",
+      "The indexed control query uses the primary key and does not represent the mechanism that causes the extra slow-log entries."
+    ],
+    "symptom_evidence": [
+      "Slow-log lines contain sub-second `Query_time` values.",
+      "Slow-log lines contain `Rows_examined` values much larger than `Rows_sent`."
+    ],
+    "mechanism_evidence": [
+      "The repro query has no usable secondary index on the filter column.",
+      "The slow log records the query only when `log_queries_not_using_indexes` is enabled."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "MySQL slow log records fast queries that do not use indexes, even though `long_query_time` is 2 seconds.",
+    "target_database": "slowlog_repro",
+    "dba_description": "The forum post shows slow-log entries with millisecond `Query_time` values and asks why they are logged despite `long_query_time = 2` while `log-queries-not-using-indexes = ON`.",
+    "target_path": [
+      "slow_query_log",
+      "log_queries_not_using_indexes",
+      "unindexed predicate scan"
+    ],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_schema",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS slowlog_repro"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS slowlog_repro.repro_events (id BIGINT UNSIGNED NOT NULL, category VARCHAR(16) NOT NULL, payload VARCHAR(128) NOT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO slowlog_repro.repro_events (id, category, payload, created_at) SELECT nums.n + 1, CASE WHEN MOD(nums.n, 100) < 10 THEN CONCAT('rare_', MOD(nums.n, 10)) ELSE 'common' END, RPAD(CONCAT('payload-', nums.n), 64, 'x'), TIMESTAMP('2024-01-01 00:00:00') + INTERVAL MOD(nums.n, 86400) SECOND FROM (SELECT a.d + b.d * 10 + c.d * 100 + d.d * 1000 + e.d * 10000 + f.d * 100000 AS n FROM (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) c CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) e CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) f) nums WHERE nums.n < 100000"
+                },
+                {
+                  "sql": "ANALYZE TABLE slowlog_repro.repro_events"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "rows": 100000,
+        "tables": 1
+      },
+      "success_criteria": {
+        "table_exists": "slowlog_repro.repro_events",
+        "row_count_gte": 100000
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "unindexed_predicate_scan"
+      }
+    },
+    {
+      "task_id": "enable_slow_log",
+      "task_type": "configuration",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = ON"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 2"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = ON"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "cleanup_actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 10.000000"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "slow_query_log": "ON",
+        "long_query_time": 2,
+        "log_queries_not_using_indexes": "ON"
+      },
+      "success_criteria": {
+        "variables_set": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "slow_log_logs_unindexed_queries_below_threshold"
+      }
+    },
+    {
+      "task_id": "run_repro_workload",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'rare_0'",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "queries": "many",
+        "slow_log_entries": "many"
+      },
+      "success_criteria": {
+        "completed": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "full_table_scan_logged_as_slow"
+      }
+    },
+    {
+      "task_id": "verify_slow_log",
+      "task_type": "verification",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "grep",
+            "-n",
+            "repro_events",
+            "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+          ],
+          "duration_sec": 1,
+          "cleanup_command": [
+            "true"
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "matches": ">0"
+      },
+      "success_criteria": {
+        "matches_found": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "slow_log_contains_fast_scan_queries"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_schema",
+      "enable_slow_log"
+    ],
+    [
+      "enable_slow_log",
+      "run_repro_workload"
+    ],
+    [
+      "run_repro_workload",
+      "verify_slow_log"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The post already contains the key evidence: `long_query_time` is 2 seconds, `log_queries_not_using_indexes` is ON, and the slow log shows sub-second `Query_time` values. A synthetic MySQL table with no index on the filtered column reproduces the mechanism that makes fast scans appear in the slow log. The task plan enables the relevant globals, runs the scan query, and verifies the slow-log entry, while restoring the pre-experiment global values in cleanup."
+}

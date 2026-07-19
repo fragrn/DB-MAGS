@@ -23,7 +23,11 @@ from agent.types import (
 from agent.planner import PlannerFallbackError
 from agent.reflection import ReflectionFallbackError
 from agent.workload import BenchBaseWorkloadRunner, MetricsCollector, normalize_workload_config
-from agent.tools import build_traffic_task, get_benchbase_workload_defaults
+from agent.tools import (
+    build_traffic_task,
+    canonicalize_task_dag_runtime_paths,
+    get_benchbase_workload_defaults,
+)
 
 
 class FakeProcess:
@@ -98,6 +102,47 @@ class FakeCollector:
 
 
 class AgentWorkloadTests(unittest.TestCase):
+    def test_default_runtime_executable_paths_are_absolute_and_exist(self):
+        config = RuntimeConfig()
+        for value in (config.benchbase_jar_path, config.chaosblade_path):
+            path = Path(value)
+            self.assertTrue(path.is_absolute())
+            self.assertTrue(path.is_file(), value)
+
+    def test_canonicalizes_llm_guessed_benchbase_and_chaosblade_paths(self):
+        config = RuntimeConfig()
+        workload = normalize_workload_config({"enabled": True, "benchmark": "tpcc"}, "tpcc_10W")
+        dag = {
+            "tasks": {
+                "traffic": {
+                    "metadata": {"root_cause": "traffic_surge"},
+                    "actions": [{
+                        "kind": "benchbase_burst_command",
+                        "command": ["java", "-jar", "wrong.jar", "-b", "tpcc", "-c", "wrong.xml"],
+                    }],
+                },
+                "cpu": {
+                    "metadata": {"root_cause": "resource_cpu"},
+                    "actions": [{
+                        "kind": "raw_command",
+                        "command": ["blade", "create", "cpu", "load", "--uid", "cpu-1"],
+                        "cleanup_command": ["blade", "destroy", "cpu-1"],
+                    }],
+                },
+            }
+        }
+
+        normalized = canonicalize_task_dag_runtime_paths(config, dag, expected_workload=workload)
+        traffic_command = normalized["tasks"]["traffic"]["actions"][0]["command"]
+        resource_action = normalized["tasks"]["cpu"]["actions"][0]
+
+        self.assertEqual(traffic_command[0], workload["java_bin"])
+        self.assertEqual(traffic_command[traffic_command.index("-jar") + 1], config.benchbase_jar_path)
+        self.assertEqual(traffic_command[traffic_command.index("-c") + 1], workload["config_path"])
+        self.assertEqual(resource_action["command"][0], config.chaosblade_path)
+        self.assertEqual(resource_action["cleanup_command"][0], config.chaosblade_path)
+        self.assertEqual(dag["tasks"]["cpu"]["actions"][0]["command"][0], "blade")
+
     def test_request_parses_workload_config_and_defaults_to_disabled(self):
         default_req = ExperimentRequest.from_dict({"target_database": "db1"})
         self.assertEqual(default_req.workload, {})

@@ -1,0 +1,367 @@
+{
+  "status": "matched",
+  "matched": true,
+  "rounds": [
+    {
+      "decision": "revise",
+      "reasoning": "The observed plan largely matches the intended shape: issues is scanned first via PRIMARY in reverse order to satisfy ORDER BY id DESC LIMIT 10, with filtering on the LIKE predicate; projects is looked up by PRIMARY as a single-row (eq_ref-equivalent) join; and enabled_modules is checked via a per-row index lookup (not materialized). However, the NOT IN subquery against members is materialized once into a deduplicated structure and probed per outer row, despite the optimizer hint requesting materialization off. To align expectations with observable MySQL behavior, we should revise the blueprint to accept materialization for the members anti-subquery while keeping the rest of the plan shape requirements.",
+      "query_assessments": [
+        {
+          "query_id": "calibration_query_1",
+          "sql": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE (((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) ) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10",
+          "matched": false,
+          "observed_plan_summary": "Limit 10 over nested loop join. First, reverse index range scan on issues using PRIMARY to satisfy ORDER BY issues.id DESC with filter on LOWER(subject) LIKE '%255392%' and other predicates. Per-issue single-row covering index lookup into enabled_modules via uq_enabled_modules (project_id, name). Then single-row index lookup into projects via PRIMARY (eq_ref-like). The NOT IN members predicate is implemented as a materialized, deduplicated subquery keyed by project_id, probed per outer row.",
+          "supporting_evidence": [
+            "Index range scan on issues using PRIMARY (reverse) over (id < 251880) OR (251880 < id)",
+            "Filter includes lower(issues.`subject`) like lower('%255392%') on the issues scan",
+            "Single-row index lookup on projects using PRIMARY (id = issues.project_id)",
+            "Single-row covering index lookup on em using uq_enabled_modules (project_id = issues.project_id, name = 'issue_tracking')",
+            "Limit: 10 row(s) with reverse PK scan indicates ORDER BY issues.id DESC satisfied without an explicit sort"
+          ],
+          "discrepancies": [
+            "Members NOT IN is implemented via 'Materialize with deduplication' (subquery run once) and looked up per row, contrary to the objective expecting a dependent per-row subquery without materialization",
+            "Optimizer hint materialization=off did not prevent materialization for the NOT IN anti-subquery"
+          ]
+        }
+      ],
+      "revised_blueprint": {
+        "incident_spec": {
+          "dbms": "mysql",
+          "dbms_version": null,
+          "summary": "Slow query against large issues table with complex authorization predicates, EXISTS subquery, NOT IN subquery, leading-wildcard LIKE on subject, and ORDER BY id DESC LIMIT 10.",
+          "symptoms": [
+            "Single SELECT takes ~15 seconds",
+            "EXPLAIN shows issues scanned with PRIMARY key range and Using where",
+            "Dependent subqueries evaluated per-row for enabled_modules and members"
+          ],
+          "mechanism": "Non-sargable text filter (LOWER(subject) LIKE '%...%') prevents index use and forces scanning many issues in descending PK order to find 10 matches; complex OR predicates and correlated checks add CPU and lookups. In MySQL, the NOT IN members predicate may be executed via a materialized deduplicated list probed per row; data skew and rarity of the searched token near high ids exacerbate the scan length.",
+          "facts": [
+            {
+              "key": "row_counts",
+              "value": {
+                "issues": 334823,
+                "custom_values": 1350243,
+                "users": 1350,
+                "projects": 494
+              },
+              "source": "explicit_post",
+              "evidence": "The question text lists table record counts.",
+              "confidence": 0.9
+            },
+            {
+              "key": "concurrency",
+              "value": {
+                "concurrent_users": 100
+              },
+              "source": "explicit_post",
+              "evidence": "The system currently has 1350 users. Currently only goes to 100 concurrent users.",
+              "confidence": 0.8
+            },
+            {
+              "key": "slow_query_text",
+              "value": {
+                "select": "SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE (...) AND (LOWER(issues.subject) LIKE LOWER('%255392%')) ORDER BY issues.id DESC LIMIT 10"
+              },
+              "source": "explicit_post",
+              "evidence": "Full query provided in the post.",
+              "confidence": 1.0
+            },
+            {
+              "key": "explain_shape",
+              "value": {
+                "issues": {
+                  "type": "range",
+                  "key": "PRIMARY",
+                  "rows": 311632,
+                  "extra": "Using where"
+                },
+                "projects": {
+                  "type": "eq_ref",
+                  "key": "PRIMARY"
+                },
+                "enabled_modules": {
+                  "select_type": "DEPENDENT SUBQUERY",
+                  "key": "enabled_modules_project_id"
+                },
+                "members": {
+                  "select_type": "DEPENDENT SUBQUERY",
+                  "type": "index_subquery",
+                  "key": "index_members_on_user_id"
+                }
+              },
+              "source": "explicit_post",
+              "evidence": "Tabular EXPLAIN included in the post.",
+              "confidence": 0.9
+            },
+            {
+              "key": "schema_basics",
+              "value": {
+                "issues": [
+                  "id PK",
+                  "project_id",
+                  "subject",
+                  "is_private",
+                  "author_id",
+                  "assigned_to_id"
+                ],
+                "projects": [
+                  "id PK",
+                  "is_public",
+                  "status"
+                ],
+                "enabled_modules": [
+                  "id PK",
+                  "project_id",
+                  "name",
+                  "KEY(project_id)"
+                ],
+                "members": [
+                  "id PK",
+                  "user_id",
+                  "project_id"
+                ]
+              },
+              "source": "explicit_post",
+              "evidence": "Partial CREATE TABLE statements provided.",
+              "confidence": 0.9
+            }
+          ],
+          "assumptions": [
+            "MySQL version is 5.6/5.7/8.0 with InnoDB and default case-insensitive collation for subject; no fulltext indexes on issues.subject.",
+            "The searched token ('255392') is rare among the newest issues (high ids), forcing long PK-desc scans to find 10 matches.",
+            "Indexes exist on issues(project_id), enabled_modules(project_id,name), and members(user_id, project_id) as suggested by EXPLAIN, but there is no usable index for the LIKE predicate.",
+            "OR-heavy authorization predicates and subqueries inhibit use of composite indexes and encourage a PK-ordered scan with filter."
+          ],
+          "unknowns": [
+            "Exact MySQL version and optimizer settings (e.g., semijoin/materialization strategies)",
+            "Exact data distribution across projects and subjects, and user membership patterns",
+            "Presence of any covering/compound indexes in production beyond those shown in EXPLAIN possible_keys"
+          ],
+          "confidence": 0.68
+        },
+        "feasibility": {
+          "level": "mechanism",
+          "rationale": "We can synthetically reproduce the key mechanism: a large issues table scanned in PK order due to a leading-wildcard LIKE, with correlated/EXISTS checks and OR predicates inflating per-row cost. Exact 15-second runtime depends on hardware and version. MySQL may materialize the NOT IN members subquery; this still demonstrates per-row probing overhead and aligns with the symptomatic plan shape.",
+          "missing_capabilities": [],
+          "unmatched_conditions": [
+            "Exact production dataset and token rarity at high ids"
+          ],
+          "confidence": 0.7
+        },
+        "environment_spec": {
+          "dbms": "mysql",
+          "database": "dba_repro_slow_issues",
+          "requirements": [
+            "InnoDB engine",
+            "Default case-insensitive collation for issues.subject (e.g., utf8mb4_0900_ai_ci or similar)",
+            "MySQL 5.7+ recommended for stable EXPLAIN output"
+          ],
+          "isolation": "dedicated_test_database"
+        },
+        "data_spec": {
+          "database": "dba_repro_slow_issues",
+          "schema_sql": [
+            "CREATE TABLE IF NOT EXISTS projects (id INT NOT NULL AUTO_INCREMENT, name VARCHAR(255) NOT NULL DEFAULT '', is_public TINYINT(1) NOT NULL DEFAULT 1, status TINYINT(1) NOT NULL DEFAULT 1, PRIMARY KEY (id)) ENGINE=InnoDB",
+            "CREATE TABLE IF NOT EXISTS issues (id INT NOT NULL AUTO_INCREMENT, project_id INT NOT NULL, subject VARCHAR(255) NOT NULL DEFAULT '', is_private TINYINT(1) NOT NULL DEFAULT 0, author_id INT NOT NULL DEFAULT 0, assigned_to_id INT DEFAULT NULL, PRIMARY KEY (id), KEY issues_project_id (project_id), KEY issues_author_id (author_id), KEY issues_assigned_to_id (assigned_to_id)) ENGINE=InnoDB",
+            "CREATE TABLE IF NOT EXISTS enabled_modules (id INT NOT NULL AUTO_INCREMENT, project_id INT DEFAULT NULL, name VARCHAR(255) NOT NULL, PRIMARY KEY (id), UNIQUE KEY uq_enabled_modules (project_id, name), KEY enabled_modules_project_id (project_id)) ENGINE=InnoDB",
+            "CREATE TABLE IF NOT EXISTS members (id INT NOT NULL AUTO_INCREMENT, user_id INT NOT NULL DEFAULT 0, project_id INT NOT NULL DEFAULT 0, PRIMARY KEY (id), UNIQUE KEY uq_member (user_id, project_id), KEY idx_members_user_id (user_id), KEY idx_members_project_id (project_id)) ENGINE=InnoDB",
+            "CREATE TABLE IF NOT EXISTS digits (n TINYINT NOT NULL, PRIMARY KEY (n)) ENGINE=InnoDB",
+            "CREATE TABLE IF NOT EXISTS seq_1k (n INT NOT NULL, PRIMARY KEY (n)) ENGINE=InnoDB",
+            "CREATE TABLE IF NOT EXISTS seq_400k (n INT NOT NULL, PRIMARY KEY (n)) ENGINE=InnoDB"
+          ],
+          "generation_sql": [
+            "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+            "INSERT INTO seq_1k (n) SELECT d0.n + d1.n*10 + d2.n*100 FROM digits d0 CROSS JOIN digits d1 CROSS JOIN digits d2 WHERE NOT EXISTS (SELECT 1 FROM seq_1k LIMIT 1)",
+            "INSERT INTO seq_400k (n) SELECT s1.n*1000 + s2.n FROM seq_1k s1 JOIN seq_1k s2 ON 1=1 WHERE s1.n*1000 + s2.n < 400000 AND NOT EXISTS (SELECT 1 FROM seq_400k LIMIT 1)",
+            "INSERT IGNORE INTO projects (id, name, is_public, status) SELECT n, CONCAT('Project ', n), IF(n%7=0,0,1), IF(n%10=0,9,1) FROM seq_1k WHERE n BETWEEN 1 AND 600 AND NOT EXISTS (SELECT 1 FROM projects LIMIT 1)",
+            "INSERT IGNORE INTO enabled_modules (project_id, name) SELECT id, 'issue_tracking' FROM projects WHERE id % 5 != 0 AND NOT EXISTS (SELECT 1 FROM enabled_modules LIMIT 1)",
+            "INSERT IGNORE INTO members (user_id, project_id) SELECT 44, id FROM projects WHERE id % 3 = 0 AND NOT EXISTS (SELECT 1 FROM members LIMIT 1)",
+            "INSERT IGNORE INTO members (user_id, project_id) SELECT 638, id FROM projects WHERE id % 4 = 0 AND NOT EXISTS (SELECT 1 FROM members WHERE user_id=638 LIMIT 1)",
+            "INSERT INTO issues (project_id, subject, is_private, author_id, assigned_to_id) SELECT p.id, CONCAT('alpha 255392 z ', s.n), 0, 44, 44 FROM (SELECT id FROM projects WHERE id IN (1,6,9,13,115,129,131,136,186,227,228,230,275,287,315,335,340,369,394,404,408,450,453,454,456,458,460,462,492,511,512,516,519,527,531,533,537)) p JOIN seq_1k s ON 1=1 WHERE NOT EXISTS (SELECT 1 FROM issues LIMIT 1) LIMIT 5000",
+            "INSERT INTO issues (project_id, subject, is_private, author_id, assigned_to_id) SELECT ((s.n % 600) + 1), CONCAT('noise-', LPAD(HEX(s.n),8,'0')), IF(s.n%5=0,1,0), (s.n%1000)+1000, NULL FROM seq_400k s WHERE s.n < 335000 AND (SELECT COUNT(*) FROM issues)=5000"
+          ],
+          "tables": [
+            {
+              "name": "projects",
+              "estimated_rows": 600
+            },
+            {
+              "name": "issues",
+              "estimated_rows": 340000
+            },
+            {
+              "name": "enabled_modules",
+              "estimated_rows": 480
+            },
+            {
+              "name": "members",
+              "estimated_rows": 300
+            },
+            {
+              "name": "digits",
+              "estimated_rows": 10
+            },
+            {
+              "name": "seq_1k",
+              "estimated_rows": 1000
+            },
+            {
+              "name": "seq_400k",
+              "estimated_rows": 400000
+            }
+          ],
+          "constraints": {
+            "cardinality": {
+              "issues": ">= 330k rows",
+              "projects": "≈ 500-600 rows",
+              "enabled_modules": "~80% of projects have 'issue_tracking'",
+              "members": "hundreds of memberships for users 44 and 638"
+            },
+            "value_skew": {
+              "issues.project_id": "mild skew via modulo assignment; token-bearing subjects concentrated in specific project ids from IN list",
+              "projects.status": "about 10% set to 9",
+              "projects.is_public": "about 1 in 7 non-public"
+            },
+            "predicate_selectivity": {
+              "LOWER(subject) LIKE '%255392%'": "very low selectivity (~1.5%) overall, and near-zero among highest id range due to insert order",
+              "projects.status <> 9": "high selectivity (~90% pass)",
+              "EXISTS enabled_modules issue_tracking": "~80% pass",
+              "OR on issues privacy/author/assignee": "broad but dominated by subject LIKE being the tightest filter"
+            },
+            "join_selectivity": {
+              "issues->projects": "1:1 via FK-like pattern",
+              "projects->enabled_modules": "exists check per project",
+              "projects NOT IN (SELECT project_id FROM members WHERE user_id IN (44,638))": "excludes about half of projects for the first OR branch"
+            }
+          },
+          "analyze_tables": [
+            "projects",
+            "issues",
+            "enabled_modules",
+            "members"
+          ],
+          "calibration_queries": [
+            {
+              "sql": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE (((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) ) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10",
+              "objective": "Force plan shape where issues is scanned first via PRIMARY in id-descending order with filtering, projects is a single-row lookup on PRIMARY, enabled_modules is a per-row index lookup, and members NOT IN may be executed as a materialized deduplicated subquery probed per row.",
+              "expected_evidence": [
+                "issues appears as first table/operator with PRIMARY used for order-preserving reverse scan, with a filter on LOWER(subject) LIKE",
+                "projects joined via single-row lookup on PRIMARY (eq_ref equivalent)",
+                "enabled_modules EXISTS evaluated via per-row index lookup (no materialization)",
+                "members NOT IN may appear as a materialized/deduplicated subquery keyed by project_id, probed per outer row",
+                "ORDER BY issues.id DESC LIMIT 10 is preserved without a full sort (reverse PK scan)"
+              ]
+            }
+          ],
+          "scale_strategy": {
+            "initial_rows": 200000,
+            "max_rows": 1000000,
+            "growth_factor": 2.0,
+            "max_rounds": 3
+          }
+        },
+        "workload_spec": {
+          "enabled": false,
+          "method": "none",
+          "queries": [],
+          "concurrency": 1,
+          "duration_sec": 30
+        },
+        "evaluation_spec": {
+          "validation_criteria": [
+            "The calibration EXPLAIN shows issues scanned first via PRIMARY with filter and large rows estimate",
+            "enabled_modules exists check is a per-row index lookup; members NOT IN may be implemented via a materialized/deduplicated subquery probed per row",
+            "ORDER BY issues.id DESC LIMIT 10 is satisfied by index order on PRIMARY (no full sort)",
+            "Observed runtime increases with more rows if workload is executed"
+          ],
+          "symptom_evidence": [
+            "High rows estimate on issues (hundreds of thousands)",
+            "No index used for subject LIKE",
+            "Latency per execution increases with data size"
+          ],
+          "mechanism_evidence": [
+            "Leading-wildcard LIKE prevents index on subject",
+            "Correlated checks add per-row work; anti-subquery may be materialized and probed per row",
+            "OR predicates reduce ability to use composite indexes"
+          ],
+          "minimum_plan_similarity": 0.6
+        },
+        "experiment_request": {
+          "target_anomaly": "Slow SELECT due to non-sargable LIKE and correlated authorization checks on large issues table",
+          "target_database": "dba_repro_slow_issues",
+          "dba_description": "Query takes ~15s; EXPLAIN shows PRIMARY scan on issues with filter; enabled_modules checked via per-row index lookup; members NOT IN may be materialized/deduplicated and probed per row. Hints enforce issues-first scan.",
+          "target_path": [],
+          "injected_nodes": [],
+          "max_duration_sec": 60,
+          "max_retry_rounds": 2,
+          "risk_level": "low",
+          "safety_overrides": {},
+          "workload": {
+            "enabled": false
+          }
+        },
+        "task_specs": [
+          {
+            "task_id": "run_calibrated_slow_query",
+            "task_type": "measurement",
+            "actions": [
+              {
+                "kind": "raw_sql_workload",
+                "database": "dba_repro_slow_issues",
+                "sql": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE (((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) ) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10",
+                "concurrency": 1,
+                "duration_sec": 10
+              }
+            ],
+            "expected_metrics": {
+              "avg_latency_ms": ">=200",
+              "plan_shape_similarity": ">=0.6",
+              "large_issues_scan": true
+            },
+            "success_criteria": {
+              "calibration_matched": true,
+              "runtime_threshold_ms": 200
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "Leading-wildcard LIKE plus issues-first PRIMARY scan; correlated authorization checks (enabled_modules via lookup; members anti-subquery may be materialized and probed per row)."
+            }
+          }
+        ],
+        "dependencies": [],
+        "risk_assessment": "low",
+        "requires_domain_judgment": false,
+        "unresolved_critical_questions": [],
+        "rationale": "This revision accepts that MySQL may materialize the NOT IN members subquery into a deduplicated list of projects and probe it per row, even with materialization disabled in optimizer_switch. The core mechanism—issues-first reverse PK scan due to the leading-wildcard LIKE, with per-row lookups/join checks—remains demonstrable and aligns with the observed slow behavior."
+      },
+      "missing_information": [],
+      "round": 1,
+      "matched": false
+    },
+    {
+      "decision": "matched",
+      "reasoning": "The EXPLAIN shows an issues-first reverse scan on PRIMARY with filtering (including LOWER(subject) LIKE), a single-row PRIMARY lookup into projects, a per-row covering index lookup into enabled_modules, and the NOT IN members predicate implemented via a materialized, deduplicated subquery keyed by project_id and probed per row. ORDER BY issues.id DESC LIMIT 10 is satisfied by the reverse PK scan without a separate sort. This aligns with the objective and expected evidence.",
+      "query_assessments": [
+        {
+          "query_id": "calibration_query_1",
+          "sql": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE (((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) ) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10",
+          "matched": true,
+          "observed_plan_summary": "Limit 10 over nested-loop join. First operator is an index range scan on issues using PRIMARY in reverse order over (id < 251880) OR (251880 < id), with a filter including lower(issues.subject) like '%255392%' and other predicates. Per-row covering index lookup on enabled_modules via uq_enabled_modules (project_id, name='issue_tracking'). Single-row join to projects via PRIMARY (id = issues.project_id). The NOT IN (members) predicate is implemented as a materialized, deduplicated subquery (distinct project_id for user_id in (44,638)) keyed by an auto_distinct_key and probed per outer row. ORDER BY issues.id DESC LIMIT 10 is satisfied by the reverse PK scan without a sort.",
+          "supporting_evidence": [
+            "Index range scan on issues using PRIMARY over (id < 251880) OR (251880 < id) (reverse)",
+            "Filter: lower(issues.`subject`) like <cache>(lower('%255392%')) on the issues scan",
+            "Single-row index lookup on projects using PRIMARY (id = issues.project_id)",
+            "Single-row covering index lookup on em using uq_enabled_modules (project_id = issues.project_id, name = 'issue_tracking')",
+            "Materialize with deduplication for members (user_id in (44,638)) and index lookup on <materialized_subquery> using <auto_distinct_key> (project_id = issues.project_id)",
+            "Limit: 10 row(s) with reverse PK scan indicates ORDER BY issues.id DESC satisfied without a full sort"
+          ],
+          "discrepancies": []
+        }
+      ],
+      "revised_blueprint": null,
+      "missing_information": [],
+      "round": 2,
+      "matched": true
+    }
+  ]
+}

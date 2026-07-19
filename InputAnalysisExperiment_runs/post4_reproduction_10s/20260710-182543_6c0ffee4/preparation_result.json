@@ -1,0 +1,19 @@
+{
+  "database": "incident_repro_post4_10s",
+  "statement_count": 13,
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY)",
+    "CREATE TABLE IF NOT EXISTS users (id INT NOT NULL PRIMARY KEY, login VARCHAR(255) NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS projects (id INT NOT NULL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', description TEXT, homepage VARCHAR(255) DEFAULT '', is_public TINYINT(1) NOT NULL DEFAULT 1, status INT NOT NULL DEFAULT 1, parent_id INT DEFAULT NULL, created_on DATETIME DEFAULT NULL)",
+    "CREATE TABLE IF NOT EXISTS enabled_modules (id INT NOT NULL PRIMARY KEY, project_id INT DEFAULT NULL, name VARCHAR(255) NOT NULL, KEY enabled_modules_project_id (project_id), KEY enabled_modules_name_project_id (name, project_id))",
+    "CREATE TABLE IF NOT EXISTS members (id INT NOT NULL PRIMARY KEY, user_id INT NOT NULL DEFAULT 0, project_id INT NOT NULL DEFAULT 0, created_on DATETIME DEFAULT NULL, mail_notification TINYINT(1) NOT NULL DEFAULT 0, KEY index_members_on_user_id (user_id), KEY members_project_id (project_id))",
+    "CREATE TABLE IF NOT EXISTS issues (id INT NOT NULL PRIMARY KEY, tracker_id INT NOT NULL, project_id INT NOT NULL, subject VARCHAR(255) NOT NULL DEFAULT '', description LONGTEXT, due_date DATE DEFAULT NULL, category_id INT DEFAULT NULL, is_private TINYINT(1) NOT NULL DEFAULT 0, author_id INT NOT NULL, assigned_to_id INT DEFAULT NULL, KEY issues_project_id (project_id), KEY issues_author_id (author_id), KEY issues_assigned_to_id (assigned_to_id))",
+    "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT IGNORE INTO users (id, login) SELECT n, CONCAT('user_', n) FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 <= 1350) seq",
+    "INSERT IGNORE INTO projects (id, name, description, homepage, is_public, status, parent_id, created_on) SELECT n, CONCAT('project_', n), '', '', 1, 1, NULL, '2020-01-01 00:00:00' FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 WHERE d1.d + 10*d2.d + 100*d3.d + 1 <= 494) seq",
+    "INSERT IGNORE INTO enabled_modules (id, project_id, name) SELECT id, id, 'issue_tracking' FROM projects",
+    "INSERT IGNORE INTO members (id, user_id, project_id, created_on, mail_notification) SELECT n, CASE WHEN n <= 20 THEN 44 ELSE 638 END, n, '2020-01-01 00:00:00', 0 FROM (SELECT d1.d + 10*d2.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 WHERE d1.d + 10*d2.d + 1 <= 40) seq",
+    "INSERT IGNORE INTO issues (id, project_id, subject, is_private, author_id, assigned_to_id)\nSELECT\n  n,\n  CASE WHEN n IN (50,100,150,200,250,300,350,400,450,500)\n       THEN 41 + MOD(n, 454)\n       ELSE 1 + MOD(n - 1, 494)\n  END AS project_id,\n  CASE WHEN n IN (50,100,150,200,250,300,350,400,450,500)\n       THEN CONCAT('old production incident ', n, ' token 255392 target match')\n       ELSE CONCAT('ordinary issue ', n, ' ', RPAD('x', 180, 'x'))\n  END AS subject,\n  0 AS is_private,\n  1 + MOD(n, 900) AS author_id,\n  1 + MOD(n * 7, 900) AS assigned_to_id\nFROM (\n  SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1000000*d7.d + 1 AS n\n  FROM digits d1\n  CROSS JOIN digits d2\n  CROSS JOIN digits d3\n  CROSS JOIN digits d4\n  CROSS JOIN digits d5\n  CROSS JOIN digits d6\n  CROSS JOIN digits d7\n) seq\nWHERE n <= 2500000;",
+    "ANALYZE TABLE users, projects, enabled_modules, members, issues"
+  ]
+}

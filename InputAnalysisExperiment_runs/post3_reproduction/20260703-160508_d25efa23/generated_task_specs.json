@@ -1,0 +1,98 @@
+{
+  "task_specs": [
+    {
+      "task_id": "reproduce_fast_unindexed_slow_log",
+      "task_type": "observability",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure_slow_log",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = ON"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 2"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = ON"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT id FROM slowlog_repro.scan_330 WHERE tag = 'rare_1'",
+          "concurrency": 1,
+          "duration_sec": 5
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT id FROM slowlog_repro.scan_423 WHERE tag = 'rare_1'",
+          "concurrency": 1,
+          "duration_sec": 5
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT id FROM slowlog_repro.scan_1456 WHERE tag = 'group_7'",
+          "concurrency": 1,
+          "duration_sec": 5
+        }
+      ],
+      "cleanup_actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "restore_slow_log",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 10.000000"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "slow_log_entries": "present",
+        "query_time_below_threshold": true,
+        "rows_examined_near_table_cardinality": true
+      },
+      "success_criteria": {
+        "fast_unindexed_queries_recorded_in_slow_log": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "log_queries_not_using_indexes logs fast scan-based SELECT statements below long_query_time"
+      }
+    }
+  ],
+  "dependencies": []
+}

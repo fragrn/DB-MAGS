@@ -1,0 +1,11 @@
+{
+  "level": "mechanism",
+  "rationale": "A MySQL adapter is available, and the core mechanism is reproducible with synthetic tables that have a primary key but no secondary index on the filtered column. That lets us reproduce the key symptom: fast queries with low `Query_time` still appear in the slow log when `log_queries_not_using_indexes` is enabled. The original production data and exact query text are unavailable, so this is mechanism-level rather than exact reproduction.",
+  "missing_capabilities": [],
+  "unmatched_conditions": [
+    "Original production data is unavailable",
+    "Exact workload text is only partially known",
+    "Exact server minor version is not provided"
+  ],
+  "confidence": 0.9
+}

@@ -1,0 +1,241 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "dbms_adapters": [
+        "mysql"
+      ],
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "No SQL Server/PostgreSQL execution adapter in v1",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_mysql_global_variables",
+    "arguments": {},
+    "result": {
+      "variables": {
+        "log_output": "FILE",
+        "log_queries_not_using_indexes": "OFF",
+        "long_query_time": "10.000000",
+        "min_examined_row_limit": "0",
+        "slow_query_log": "OFF",
+        "slow_query_log_file": "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+      },
+      "error": ""
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "mysql_slowlog_repro"
+    },
+    "result": {
+      "schema": {
+        "events": {
+          "columns": [
+            {
+              "name": "id",
+              "type": "bigint",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "bigint",
+              "default": null
+            },
+            {
+              "name": "status",
+              "type": "varchar",
+              "nullable": false,
+              "key": "MUL",
+              "column_type": "varchar(16)",
+              "default": null
+            },
+            {
+              "name": "created_at",
+              "type": "timestamp",
+              "nullable": true,
+              "key": "",
+              "column_type": "timestamp",
+              "default": null
+            },
+            {
+              "name": "payload",
+              "type": "varchar",
+              "nullable": true,
+              "key": "",
+              "column_type": "varchar(64)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "idx_status",
+              "column": "status",
+              "non_unique": true,
+              "seq": 1
+            },
+            {
+              "index_name": "PRIMARY",
+              "column": "id",
+              "non_unique": false,
+              "seq": 1
+            }
+          ]
+        }
+      },
+      "table_stats": [
+        {
+          "TABLE_NAME": "events",
+          "TABLE_ROWS": 1,
+          "DATA_LENGTH": 16384,
+          "INDEX_LENGTH": 16384,
+          "AVG_ROW_LENGTH": 16384,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        }
+      ],
+      "db_metrics": {
+        "Aborted_connects": "0",
+        "Com_delete": "857391",
+        "Com_insert": "6400553",
+        "Com_select": "49902518",
+        "Com_update": "24756141",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "106902345",
+        "Innodb_row_lock_time_avg": "34",
+        "Innodb_row_lock_waits": "3089764",
+        "Max_used_connections": "105",
+        "Slow_queries": "226",
+        "Sort_merge_passes": "636",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 2702010,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 10157,
+            "User": "root",
+            "Host": "localhost:63627",
+            "db": "mysql_slowlog_repro",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 2.58,
+          "5m": 2.66,
+          "15m": 2.81
+        },
+        "cpu_usage": {
+          "user_pct": 20.5,
+          "sys_pct": 17.14,
+          "idle_pct": 62.35,
+          "usage_ratio": 0.376
+        },
+        "memory": {
+          "total_kb": 2220548,
+          "active_kb": 1294064,
+          "wired_kb": 880208,
+          "free_kb": 46276,
+          "usage_ratio": 0.9792
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 382868787200,
+          "free_bytes": 111516008448,
+          "usage_ratio": 0.7744
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      }
+    }
+  },
+  {
+    "step": 2,
+    "event": "request_timeout",
+    "attempt": 1,
+    "timeout_sec": 180,
+    "error": "The read operation timed out"
+  },
+  {
+    "step": 2,
+    "tool": "explain_sql",
+    "arguments": {
+      "database": "mysql_slowlog_repro",
+      "sql": "SELECT COUNT(*) FROM events WHERE payload = 'payload_1'"
+    },
+    "result": {
+      "sql": "SELECT COUNT(*) FROM events WHERE payload = 'payload_1'",
+      "plan": [
+        {
+          "EXPLAIN": "-> Aggregate: count(0)  (cost=1.33 rows=1)\n    -> Filter: (`events`.payload = 'payload_1')  (cost=1.1 rows=1)\n        -> Table scan on events  (cost=1.1 rows=1)\n"
+        }
+      ]
+    }
+  },
+  {
+    "step": 2,
+    "tool": "explain_sql",
+    "arguments": {
+      "database": "mysql_slowlog_repro",
+      "sql": "SELECT id FROM events WHERE id = 42"
+    },
+    "result": {
+      "sql": "SELECT id FROM events WHERE id = 42",
+      "plan": [
+        {
+          "EXPLAIN": "-> Zero rows (no matching row in const table)  (cost=0..0 rows=0)\n"
+        }
+      ]
+    }
+  },
+  {
+    "step": 3,
+    "event": "request_timeout",
+    "attempt": 1,
+    "timeout_sec": 180,
+    "error": "The read operation timed out"
+  },
+  {
+    "step": 3,
+    "event": "request_timeout",
+    "attempt": 2,
+    "timeout_sec": 180,
+    "error": "The read operation timed out"
+  }
+]

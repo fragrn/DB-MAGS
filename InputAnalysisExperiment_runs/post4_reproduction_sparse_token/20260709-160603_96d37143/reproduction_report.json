@@ -1,0 +1,49 @@
+{
+  "run_id": "20260709-160603_96d37143",
+  "reproduction_level": "mechanism",
+  "original_data_available": false,
+  "evaluation": {
+    "symptom_hit": true,
+    "mechanism_hit": true,
+    "plan_similarity": 0.94,
+    "success": true,
+    "reason": "The reproduction hit the reported plan shape and slow-query behavior: the target query executed successfully 44 times with no errors, EXPLAIN shows `issues` as the driving table via a reverse PRIMARY index range scan with a large row estimate (299024), and the `members` and `enabled_modules` checks remain visible as dependent/materialized subqueries. The non-sargable `LOWER(issues.subject) LIKE LOWER('%255392%')` predicate is still present as a filter, and the workload produced nontrivial latency (p95 1567 ms, max 1893 ms), consistent with the intended slowdown mechanism.",
+    "unmatched_conditions": [
+      "The observed latency did not reproduce the anecdotal ~15 second production runtime.",
+      "The trace does not directly report scanned-vs-returned row counts, so the long-distance PK walk is inferred from the reverse scan plan and data design rather than measured explicitly."
+    ],
+    "evidence": {
+      "workload": {
+        "executions": 44,
+        "error_count": 0,
+        "latency_ms": {
+          "min": 364.398,
+          "p50": 480.993,
+          "p95": 1567.11,
+          "max": 1893.725
+        }
+      },
+      "explain": {
+        "main_access_path": "Index range scan on issues using PRIMARY ... (reverse)",
+        "main_rows_estimate": 299024,
+        "subqueries": [
+          "members materialized subquery",
+          "enabled_modules index lookup / dependent subplan"
+        ],
+        "subject_filter": "lower(issues.`subject`) like <cache>(lower('%255392%'))"
+      },
+      "plan_shape_match": {
+        "issues_driven": true,
+        "dependent_subqueries_visible": true,
+        "non_sargable_subject_predicate": true,
+        "order_by_limit_preserved": true
+      }
+    }
+  },
+  "unmatched_conditions": [
+    "No production dump is available.",
+    "Only partial schema and index information is provided.",
+    "Exact optimizer statistics from the incident are unavailable."
+  ],
+  "decision_history": "decision_history.jsonl"
+}

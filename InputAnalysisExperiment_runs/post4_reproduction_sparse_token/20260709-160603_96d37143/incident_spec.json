@@ -1,0 +1,118 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "A Redmine-like MySQL query is slow because MySQL must evaluate a large issues-driven access path, correlated permission checks, and a non-sargable substring predicate while honoring ORDER BY issues.id DESC LIMIT 10. The reproduction should model the mechanism with sparse token hits concentrated in older/lower-id rows so the descending primary-key scan must walk a long distance before finding 10 matches.",
+  "symptoms": [
+    "The reported query takes about 15 seconds in production.",
+    "EXPLAIN shows issues as the primary driving table with a large row estimate.",
+    "Dependent subqueries appear for enabled_modules and members.",
+    "The query filters on LOWER(issues.subject) LIKE LOWER('%255392%') and orders by issues.id DESC with LIMIT 10."
+  ],
+  "mechanism": "MySQL scans issues by PRIMARY key in descending order to satisfy ORDER BY ... DESC LIMIT 10, but the token match is sparse and concentrated in low-id/old rows, so the scan must inspect many non-matching rows before enough qualifying rows are found. The join to projects and the permission subqueries remain post-filters, and LOWER(subject) LIKE '%255392%' is non-sargable, so the optimizer cannot use a subject index to jump directly to matching rows.",
+  "facts": [
+    {
+      "key": "issues_row_count",
+      "value": {
+        "count": 334823
+      },
+      "source": "explicit_post",
+      "evidence": "The post says issues has more than 334,823 records.",
+      "confidence": 1.0
+    },
+    {
+      "key": "custom_values_row_count",
+      "value": {
+        "count": 1350243
+      },
+      "source": "explicit_post",
+      "evidence": "The post says custom_values has over 1,350,243 records.",
+      "confidence": 1.0
+    },
+    {
+      "key": "projects_row_count",
+      "value": {
+        "count": 494
+      },
+      "source": "explicit_post",
+      "evidence": "The post says projects has 494 records.",
+      "confidence": 1.0
+    },
+    {
+      "key": "users_row_count",
+      "value": {
+        "count": 1350
+      },
+      "source": "explicit_post",
+      "evidence": "The post says the system currently has 1350 users.",
+      "confidence": 1.0
+    },
+    {
+      "key": "slowest_query_runtime",
+      "value": {
+        "seconds": 15
+      },
+      "source": "explicit_post",
+      "evidence": "The author says the slowest query takes about 15 seconds.",
+      "confidence": 1.0
+    },
+    {
+      "key": "query_shape",
+      "value": {
+        "joins": [
+          "issues",
+          "projects"
+        ],
+        "subqueries": [
+          "enabled_modules EXISTS",
+          "members NOT IN"
+        ],
+        "final_filter": "LOWER(issues.subject) LIKE LOWER('%255392%')"
+      },
+      "source": "explicit_post",
+      "evidence": "The post includes the full SELECT with an inner join to projects, EXISTS on enabled_modules, NOT IN on members, and a LOWER(subject) substring predicate.",
+      "confidence": 1.0
+    },
+    {
+      "key": "posted_explain_shape",
+      "value": {
+        "main_table": "issues",
+        "main_type": "range",
+        "estimated_rows": 311632,
+        "project_access": "eq_ref",
+        "subqueries": [
+          "members dependent subquery",
+          "enabled_modules dependent subquery"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The Tabular Explain in the post lists issues as PRIMARY with type range and rows 311632, projects as eq_ref, and dependent subqueries for members and enabled_modules.",
+      "confidence": 0.97
+    },
+    {
+      "key": "token_sparsity_mechanism",
+      "value": {
+        "token": "255392",
+        "placement": "mostly in low-id/older issues rows",
+        "effect": "descending PK scan must inspect many rows before LIMIT 10 is satisfied"
+      },
+      "source": "human_input",
+      "evidence": "The human feedback explicitly identifies sparse token placement on the issues.id DESC path as the key mechanism and asks to model token position distribution and effective hit rate.",
+      "confidence": 0.96
+    }
+  ],
+  "assumptions": [
+    "The slow query is dominated by the issues scan and post-filtering rather than by custom_values, which is mentioned in the post but not used in the shown SQL.",
+    "The partial schema and EXPLAIN are sufficient to recreate the optimizer shape even if the exact production schema differs.",
+    "issues.subject does not have an index that can make LIKE '%255392%' sargable in the reproduction.",
+    "Most projects have issue_tracking enabled so the EXISTS predicate remains visible but not highly selective.",
+    "The production incident may have additional statistics quirks that cannot be exactly reconstructed without a dump."
+  ],
+  "unknowns": [
+    "Exact MySQL version.",
+    "Exact full schema and all indexes on issues and projects.",
+    "Whether the production data had histograms or stale statistics.",
+    "The exact distribution of subject values and visibility flags in production.",
+    "Whether session settings or application role affected the original plan."
+  ],
+  "confidence": 0.92
+}

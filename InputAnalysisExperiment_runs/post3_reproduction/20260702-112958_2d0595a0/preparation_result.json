@@ -1,0 +1,16 @@
+{
+  "database": "slowlog_repro",
+  "statement_count": 10,
+  "statements": [
+    "CREATE DATABASE IF NOT EXISTS `slowlog_repro`;",
+    "CREATE TABLE IF NOT EXISTS `slowlog_repro`.`digits` (n TINYINT NOT NULL PRIMARY KEY) ENGINE=InnoDB;",
+    "CREATE TABLE IF NOT EXISTS `slowlog_repro`.`scan_330` (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB;",
+    "CREATE TABLE IF NOT EXISTS `slowlog_repro`.`scan_423` (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB;",
+    "CREATE TABLE IF NOT EXISTS `slowlog_repro`.`scan_1456` (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB;",
+    "INSERT IGNORE INTO `slowlog_repro`.`digits` (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);",
+    "INSERT IGNORE INTO `slowlog_repro`.`scan_330` (id, tag, pad) SELECT seq, CASE WHEN seq <= 7 THEN 'hit' ELSE 'cold' END, RPAD(CONCAT('scan_330-', seq), 32, 'x') FROM (SELECT 1 + a.n + b.n * 10 + c.n * 100 + d.n * 1000 AS seq FROM `slowlog_repro`.`digits` a CROSS JOIN `slowlog_repro`.`digits` b CROSS JOIN `slowlog_repro`.`digits` c CROSS JOIN `slowlog_repro`.`digits` d) AS s WHERE seq <= 330;",
+    "INSERT IGNORE INTO `slowlog_repro`.`scan_423` (id, tag, pad) SELECT seq, CASE WHEN seq <= 1 THEN 'hit' ELSE 'cold' END, RPAD(CONCAT('scan_423-', seq), 32, 'x') FROM (SELECT 1 + a.n + b.n * 10 + c.n * 100 + d.n * 1000 AS seq FROM `slowlog_repro`.`digits` a CROSS JOIN `slowlog_repro`.`digits` b CROSS JOIN `slowlog_repro`.`digits` c CROSS JOIN `slowlog_repro`.`digits` d) AS s WHERE seq <= 423;",
+    "INSERT IGNORE INTO `slowlog_repro`.`scan_1456` (id, tag, pad) SELECT seq, CASE WHEN seq <= 1 THEN 'hit' ELSE 'cold' END, RPAD(CONCAT('scan_1456-', seq), 32, 'x') FROM (SELECT 1 + a.n + b.n * 10 + c.n * 100 + d.n * 1000 AS seq FROM `slowlog_repro`.`digits` a CROSS JOIN `slowlog_repro`.`digits` b CROSS JOIN `slowlog_repro`.`digits` c CROSS JOIN `slowlog_repro`.`digits` d) AS s WHERE seq <= 1456;",
+    "ANALYZE TABLE `slowlog_repro`.`digits`, `slowlog_repro`.`scan_330`, `slowlog_repro`.`scan_423`, `slowlog_repro`.`scan_1456`;"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "symptom_hit": true,
+  "mechanism_hit": true,
+  "plan_similarity": 0.95,
+  "success": true,
+  "reason": "The reproduction matches the reported query shape and optimizer behavior: `EXPLAIN` shows `issues` as the driving table with a large row estimate, dependent subqueries for `members` and `enabled_modules`, and a reverse PRIMARY index range scan to satisfy `ORDER BY issues.id DESC LIMIT 10`. The non-sargable `LOWER(issues.subject) LIKE LOWER('%255392%')` filter is preserved, and the synthetic token distribution places matches only in low-id rows, which forces a long descending scan before enough hits are found. The workload also remains expensive under the synthetic dataset, with per-execution latencies around 1.9-2.5s.",
+  "unmatched_conditions": [
+    "Exact ~15s production latency was not reproduced; observed latencies were lower on the synthetic dataset.",
+    "Production dump and exact optimizer statistics were not available."
+  ],
+  "evidence": {
+    "workload_latency_ms": {
+      "executions": 25,
+      "min": 1898.234,
+      "p50": 2018.384,
+      "p95": 2209.801,
+      "max": 2498.503
+    },
+    "explain_plan": {
+      "main_access": "Index range scan on issues using PRIMARY over (id < 251880) OR (251880 < id) (reverse)",
+      "row_estimate": 346296,
+      "joins": [
+        "projects"
+      ],
+      "dependent_subqueries": [
+        "members",
+        "enabled_modules"
+      ],
+      "subject_filter": "lower(issues.`subject`) like <cache>(lower('%255392%'))"
+    },
+    "token_distribution": {
+      "token": "255392",
+      "placement": "ids 50,100,150,200,250,300,350,400,450,500 only",
+      "scan_effect": "high-id rows mostly fail the subject filter, so descending PK scan walks many rows before LIMIT 10 is satisfied"
+    }
+  }
+}

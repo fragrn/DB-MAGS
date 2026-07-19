@@ -1,0 +1,22 @@
+{
+  "target_anomaly": "MySQL slow log logs fast non-indexed queries even when they do not exceed `long_query_time`.",
+  "target_database": "slowlog_repro",
+  "dba_description": "Slow log entries show sub-second `Query_time` values, yet the server is configured with `long_query_time = 2`. The most likely explanation is that non-indexed queries are being logged by policy rather than by duration alone.",
+  "target_path": [
+    "slow_query_log",
+    "log_queries_not_using_indexes",
+    "scan-based SELECT predicates"
+  ],
+  "injected_nodes": [
+    "SET GLOBAL slow_query_log = ON",
+    "SET GLOBAL log_queries_not_using_indexes = ON",
+    "SELECT ... WHERE tag = 'rare_1'"
+  ],
+  "max_duration_sec": 60,
+  "max_retry_rounds": 2,
+  "risk_level": "low",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": false
+  }
+}

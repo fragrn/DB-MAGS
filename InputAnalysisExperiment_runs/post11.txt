@@ -1,0 +1,142 @@
+https://dba.stackexchange.com/questions/4358/improving-slow-queries-slow-query-log-attached
+
+Improving slow queries. Slow query log attached
+Asked 14 years, 11 months ago
+Modified 6 years, 6 months ago
+Viewed 1k times
+4
+
+Below is the Slow Query Log when my .NET application was running. Please let me know how to improve the performance of the queries:
+TCP Port: 3306, Named Pipe: (null)
+Time                 Id Command    Argument
+# Time: 110805 13:25:39
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.015625  Lock_time: 0.000000 Rows_sent: 1  Rows_examined: 1373
+use stockist;
+SET timestamp=1312530939;
+SELECT SUM(GROSSAMOUNT) FROM BILLDETAILS WHERE MONTH(BILLDATE) = 8 AND YEAR(BILLDATE) = 2011;
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.000000  Lock_time: 0.000000 Rows_sent: 1  Rows_examined: 1373
+SET timestamp=1312530939;
+SELECT COUNT(BILLNO) FROM BILLDETAILS WHERE MONTH(BILLDATE) = 8 AND YEAR(BILLDATE) = 2011;
+# Time: 110805 13:30:32
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.078125  Lock_time: 0.046875 Rows_sent: 1  Rows_examined: 1374
+SET timestamp=1312531232;
+SELECT A.BILLNO AS BILL_NO, DATE_FORMAT(A.BILLDATE,'%d/%m/%Y') AS BILL_DATE, B.PARTYNAME AS PARTY_NAME, A.NETAMOUNT AS NET_AMOUNT FROM BILLDETAILS A, PARTYMASTER B WHERE A.PARTYID = B.PARTYID AND MONTH(A.BILLDATE) = 8 AND YEAR(A.BILLDATE) = 2011 ORDER BY A.BILLNO, A.BILLDATE;
+# Time: 110805 13:30:44
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.296875  Lock_time: 0.031250 Rows_sent: 407  Rows_examined: 19552
+SET timestamp=1312531244;
+select a.itemcode as Item_Code, a.itemname as Item_Name, a.stockinhand as Stock_In_Hand, b.mrp As MRP, round((a.stockinhand * b.mrp),2) As Value, date_format(b.invoicedate,'%d/%m/%Y') As Stock_Date from itemmaster a, stockentry b where a.itemid = b.itemid and invoicedate = (select max(invoicedate) from stockentry where itemid = b.itemid) group by a.itemname order by a.itemname;
+# Time: 110805 13:30:55
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.000000  Lock_time: 0.000000 Rows_sent: 1  Rows_examined: 1
+SET timestamp=1312531255;
+SELECT * FROM REMARKSETTINGS;
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.000000  Lock_time: 0.000000 Rows_sent: 1  Rows_examined: 1
+SET timestamp=1312531255;
+SELECT * FROM BILLINGSETTINGS;
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.015625  Lock_time: 0.015625 Rows_sent: 1  Rows_examined: 1373
+SET timestamp=1312531255;
+SELECT MAX(BILLNO) FROM BILLDETAILS WHERE YEAR(BILLDATE) = 2011;
+# Time: 110805 13:30:58
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.031250  Lock_time: 0.000000 Rows_sent: 184  Rows_examined: 3266
+SET timestamp=1312531258;
+SELECT B.RECORDID, A.ITEMCODE, A.ITEMNAME, A.STOCKINHAND, B.SALEPRICE FROM ITEMMASTER A, STOCKENTRY B WHERE A.ITEMID = B.ITEMID AND RECORDID = (SELECT MAX(RECORDID) FROM STOCKENTRY WHERE ITEMID = A.ITEMID) AND A.STOCKINHAND > 0 AND B.SALEPRICE > 0 AND B.INVOICEDATE IS NOT NULL ORDER BY A.ITEMNAME, B.INVOICEDATE;
+# Time: 110805 13:31:21
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.031250  Lock_time: 0.000000 Rows_sent: 184  Rows_examined: 2898
+SET timestamp=1312531281;
+SELECT B.RECORDID, A.ITEMCODE, A.ITEMNAME, A.STOCKINHAND, B.SALEPRICE FROM ITEMMASTER A, STOCKENTRY B WHERE A.ITEMID = B.ITEMID AND RECORDID = (SELECT MAX(RECORDID) FROM STOCKENTRY WHERE ITEMID = A.ITEMID) AND A.STOCKINHAND > 0 AND B.SALEPRICE > 0 AND B.INVOICEDATE IS NOT NULL AND A.ITEMNAME LIKE '%';
+# Time: 110805 13:36:31
+# User@Host: root[root] @ localhost [127.0.0.1]
+# Query_time: 0.250000  Lock_time: 0.000000 Rows_sent: 407  Rows_examined: 20367
+SET timestamp=1312531591;
+select c.categoryname, a.itemcode as Item_Code, a.itemname as Item_Name, a.stockinhand as Stock_In_Hand, b.mrp As MRP, round((a.stockinhand * b.mrp),2) As Value, date_format(b.invoicedate,'%d/%m/%Y') As Stock_Date, D.TradeName, D.OwnerAddress, D.OwnerTinNo from itemmaster a, stockentry b, categorymaster c, OwnerDetails D where a.itemid = b.itemid and a.categoryid = c.categoryid and invoicedate = (select max(invoicedate) from stockentry where itemid = b.itemid) group by a.categoryid, a.itemname order by a.itemname;
+
+
+
+3 Answers
+answer1:
+One area that stands out is the way you are accessing the BillDetails table. All queries appear to be using MONTH and YEAR operators on BillDate. For example:
+
+SELECT SUM(GROSSAMOUNT) FROM BILLDETAILS WHERE MONTH(BILLDATE) = 8 AND YEAR(BILLDATE) = 2011;
+This approach requires accessing every record in BillDetails. A better approach would be to index BillDate and query as follows:
+
+SELECT SUM(GROSSAMOUNT) FROM BILLDETAILS WHERE BILLDATE BETWEEN '2011-08-01' AND '2011-08-31';
+Looks like you don't have much data in there at the moment (1373 rows) so the difference in the above will be minimal at the moment, more significant when the volume grows.
+
+Share
+Improve this answer
+Follow
+answered Aug 5, 2011 at 9:34
+Mark Storey-Smith's user avatar
+Mark Storey-Smith
+31.9k99 gold badges9292 silver badges127
+I notice Slow Query logs still filled even after changing queries. – 
+RPK
+ CommentedAug 6, 2011 at 16:55
+
+
+ 
+answer2:
+First off, most of these seem to be 'slow' because they're not using indexes. You need to analyze how you're accessing the data in your tables to determine proper indexes. But a few pointers from this file:
+
+SELECT * FROM REMARKSETTINGS;
+and
+
+SELECT * FROM BILLINGSETTINGS;
+These currently only have 1 row, but if they ever grow, you're asking for slowdown. A couple things you can do here is add a WHERE clause (I can't make a recommendation without knowing the DDL) or at the very least only select the columns you need instead of '*'.
+
+For
+
+SELECT B.RECORDID, A.ITEMCODE, A.ITEMNAME, A.STOCKINHAND, B.SALEPRICE 
+FROM ITEMMASTER A, STOCKENTRY B 
+WHERE A.ITEMID = B.ITEMID 
+  AND RECORDID = (SELECT MAX(RECORDID) FROM STOCKENTRY 
+                  WHERE ITEMID = A.ITEMID) 
+  AND A.STOCKINHAND > 0 
+  AND B.SALEPRICE > 0 
+  AND B.INVOICEDATE IS NOT NULL 
+ORDER BY A.ITEMNAME, B.INVOICEDATE;
+From first glance, make sure you have an index on recordID.
+
+May I make a suggestion and read up on indexing? Indexing is a great help, but if you over-index, it's as bad as under-indexing.
+
+Share
+Improve this answer
+Follow
+answered Aug 5, 2011 at 13:40
+Derek Downey's user avatar
+Derek Downey
+23.6k1212 gold badges8080 silver badges104104 bronze badges
+The tables, BillingSettings and RemarkSettings, will not ever contain more than one row. For the last query, I do have an index on RecordID. This is the link of the indexes I have: postimage.org/image/2k015uuck – 
+RPK
+ CommentedAug 5, 2011 at 14:33
+@RPK try adding EXPLAIN before that query to see how mysql parses it. – 
+Derek Downey
+ CommentedAug 5, 2011 at 14:40
+
+
+answer3
+A variation of @Mark Storey-Smith's solution is to store specific date information in a calendar table. This table may contain as fields: * day field for all affected calendar dates, ie. 1990-01-01 to 2020-12-31. This field will be joined
+
+year number field
+month number field
+day in month
+day of week
+week in month (there are several definitions)
+public holiday
+Depending on query, you need to index all of these columns (and maybe have some multiple column ones)
+
+Share
+Improve this answer
+Follow
+answered Aug 6, 2011 at 3:30
+automatem's user avatar
+automatem
+16122 silver badges13

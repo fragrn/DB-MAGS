@@ -1,0 +1,98 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "MySQL is writing fast statements into the slow query log because `log_queries_not_using_indexes=ON` expands logging beyond the `long_query_time=2` threshold.",
+  "symptoms": [
+    "Slow-log lines show `Query_time` values around 0.0003 to 0.0023 seconds, far below the configured 2-second threshold.",
+    "The same log lines show `Rows_examined` values in the hundreds to low thousands.",
+    "The user expected only slow queries in the slow log but observed many fast statements there."
+  ],
+  "mechanism": "With `slow_query_log=ON`, MySQL logs statements that exceed `long_query_time` and also logs statements that do not use indexes when `log_queries_not_using_indexes=ON`. That means a fast full scan on an unindexed predicate can appear in the slow log even when it is nowhere near the time threshold.",
+  "facts": [
+    {
+      "key": "posted slow-query configuration",
+      "value": {
+        "slow_query_log": "ON",
+        "long_query_time": 2,
+        "log_queries_not_using_indexes": "ON",
+        "log_slow_verbosity": "full",
+        "log_slow_admin_statements": 1,
+        "log_slow_slave_statements": 1,
+        "general_log": "OFF"
+      },
+      "source": "explicit_post",
+      "evidence": "The my.cnf excerpt in the post shows these values.",
+      "confidence": 1.0
+    },
+    {
+      "key": "observed sub-second query times in the slow log",
+      "value": {
+        "query_time_range_sec": [
+          0.000296,
+          0.002353
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The pasted slow-log lines all show `Query_time` values in the sub-millisecond to low-millisecond range.",
+      "confidence": 1.0
+    },
+    {
+      "key": "observed rows examined in the slow log",
+      "value": {
+        "rows_examined_examples": [
+          330,
+          423,
+          1456,
+          1723,
+          1727,
+          1731
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The pasted slow-log lines include these `Rows_examined` values.",
+      "confidence": 1.0
+    },
+    {
+      "key": "current test schema has no index on tag",
+      "value": {
+        "tables": [
+          "scan_330",
+          "scan_423",
+          "scan_1456"
+        ],
+        "indexed_columns": [
+          "PRIMARY(id)"
+        ],
+        "unindexed_predicate_column": "tag"
+      },
+      "source": "agent_inference",
+      "evidence": "Schema inspection shows each probe table has only a primary key on `id`; `tag` is not indexed.",
+      "confidence": 1.0
+    },
+    {
+      "key": "current MySQL globals before any experiment",
+      "value": {
+        "log_output": "FILE",
+        "log_queries_not_using_indexes": "OFF",
+        "long_query_time": "10.000000",
+        "min_examined_row_limit": "0",
+        "slow_query_log": "OFF",
+        "slow_query_log_file": "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+      },
+      "source": "agent_inference",
+      "evidence": "Inspector output from the local MySQL instance.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The pasted file is the slow query log, not the general log.",
+    "The exact production SQL text is unavailable, so the reproduction targets the logging mechanism rather than an exact workload replay.",
+    "The relevant statements are non-indexed scans, not admin or replication statements."
+  ],
+  "unknowns": [
+    "Exact production SQL text.",
+    "Exact MySQL minor version.",
+    "Whether any entries were additionally logged because of admin/slave-statement settings."
+  ],
+  "confidence": 0.96
+}

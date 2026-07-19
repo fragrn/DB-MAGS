@@ -1,0 +1,81 @@
+{
+  "round": 1,
+  "matched": false,
+  "observations": [
+    {
+      "sql": "SELECT id FROM `slowlog_repro`.`scan_330` WHERE tag = 'hit'",
+      "explain": {
+        "sql": "SELECT id FROM `slowlog_repro`.`scan_330` WHERE tag = 'hit'",
+        "plan": [
+          {
+            "EXPLAIN": "-> Filter: (scan_330.tag = 'hit')  (cost=33.8 rows=33)\n    -> Table scan on scan_330  (cost=33.8 rows=330)\n"
+          }
+        ]
+      },
+      "expected_plan_features": [
+        "type=all or equivalent full scan",
+        "rows examined approximately 330",
+        "no usable index on `tag`",
+        "eligible for slow-log entry when `log_queries_not_using_indexes` is on"
+      ],
+      "matched_features": [],
+      "matched": false,
+      "probe": {
+        "completed": true,
+        "row_count": 7,
+        "error": ""
+      },
+      "elapsed_sec": 0.01329116599999991
+    },
+    {
+      "sql": "SELECT id FROM `slowlog_repro`.`scan_423` WHERE tag = 'hit'",
+      "explain": {
+        "sql": "SELECT id FROM `slowlog_repro`.`scan_423` WHERE tag = 'hit'",
+        "plan": [
+          {
+            "EXPLAIN": "-> Filter: (scan_423.tag = 'hit')  (cost=43.3 rows=42.3)\n    -> Table scan on scan_423  (cost=43.3 rows=423)\n"
+          }
+        ]
+      },
+      "expected_plan_features": [
+        "type=all or equivalent full scan",
+        "rows examined approximately 423",
+        "sub-second runtime",
+        "eligible for slow-log entry when `log_queries_not_using_indexes` is on"
+      ],
+      "matched_features": [],
+      "matched": false,
+      "probe": {
+        "completed": true,
+        "row_count": 1,
+        "error": ""
+      },
+      "elapsed_sec": 0.011033208999999933
+    },
+    {
+      "sql": "SELECT id FROM `slowlog_repro`.`scan_1456` WHERE tag = 'hit'",
+      "explain": {
+        "sql": "SELECT id FROM `slowlog_repro`.`scan_1456` WHERE tag = 'hit'",
+        "plan": [
+          {
+            "EXPLAIN": "-> Filter: (scan_1456.tag = 'hit')  (cost=148 rows=146)\n    -> Table scan on scan_1456  (cost=148 rows=1456)\n"
+          }
+        ]
+      },
+      "expected_plan_features": [
+        "type=all or equivalent full scan",
+        "rows examined approximately 1456",
+        "sub-second runtime",
+        "eligible for slow-log entry when `log_queries_not_using_indexes` is on"
+      ],
+      "matched_features": [],
+      "matched": false,
+      "probe": {
+        "completed": true,
+        "row_count": 1,
+        "error": ""
+      },
+      "elapsed_sec": 0.012116541000000036
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "MySQL slow query logging can record fast queries when they do not use an index and `log_queries_not_using_indexes` is enabled, so `Query_time` can be far below `long_query_time` while the statement still appears in the slow log.",
+  "symptoms": [
+    "Slow log entries show `Query_time` around 0.0003-0.0023 seconds even though `long_query_time` is 2 seconds.",
+    "The logged statements also show nontrivial `Rows_examined` values, consistent with scan-like access.",
+    "The user expected only slow queries, but sees many entries in the slow log."
+  ],
+  "mechanism": "In MySQL, `slow_query_log` can emit statements that do not use indexes when `log_queries_not_using_indexes=ON`; this logging path is independent of `long_query_time`, so a fast full scan or other unindexed predicate query can be written to the slow log even when `Query_time` is tiny.",
+  "facts": [
+    {
+      "key": "mysql_slow_log_enabled_in_post",
+      "value": {
+        "slow_query_log": "ON"
+      },
+      "source": "explicit_post",
+      "evidence": "The config block in the post includes `slow-query-log = ON`.",
+      "confidence": 0.99
+    },
+    {
+      "key": "threshold_configured_to_two_seconds",
+      "value": {
+        "long_query_time": 2
+      },
+      "source": "explicit_post",
+      "evidence": "The config block in the post includes `long_query_time = 2`.",
+      "confidence": 0.99
+    },
+    {
+      "key": "unindexed_query_logging_enabled",
+      "value": {
+        "log_queries_not_using_indexes": "ON"
+      },
+      "source": "explicit_post",
+      "evidence": "The config block in the post includes `log-queries-not-using-indexes = ON`.",
+      "confidence": 0.99
+    },
+    {
+      "key": "slow_log_entries_are_below_threshold",
+      "value": {
+        "query_time_range_sec": [
+          0.000302,
+          0.002353
+        ],
+        "rows_examined_range": [
+          330,
+          1731
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The pasted slow-log lines show `Query_time` values in the sub-millisecond to millisecond range, far below 2 seconds.",
+      "confidence": 0.99
+    },
+    {
+      "key": "user_assumption_about_query_time",
+      "value": {
+        "interpretation": "Query_time is the runtime and should be compared directly to long_query_time"
+      },
+      "source": "post_hypothesis",
+      "evidence": "The post says, 'To my knowledge, the Query_time in the log file denotes the time query took to run, but it defers the log time mentioned in the config file.'",
+      "confidence": 0.82
+    },
+    {
+      "key": "current_mysql_defaults_differ_from_post",
+      "value": {
+        "slow_query_log": "OFF",
+        "log_queries_not_using_indexes": "OFF",
+        "long_query_time": "10.000000"
+      },
+      "source": "agent_inference",
+      "evidence": "Local inspected MySQL globals differ from the post, so the reproduction must explicitly enable and later restore these settings.",
+      "confidence": 0.91
+    }
+  ],
+  "assumptions": [
+    "The logged statements are ordinary SELECTs or similar statements that can be reproduced on a synthetic table.",
+    "The key missing ingredient is an unindexed predicate or full scan, not a special storage-engine or replication-only behavior.",
+    "The slow-log excerpt is representative of the behavior the user observed."
+  ],
+  "unknowns": [
+    "Exact original schema, index layout, and data distribution.",
+    "Exact MySQL minor version and any version-specific slow-log formatting differences.",
+    "Whether the original workload was read-only, mixed, or included administrative statements."
+  ],
+  "confidence": 0.93
+}

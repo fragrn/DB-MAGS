@@ -1,0 +1,12 @@
+{
+  "database": "slowlog_repro",
+  "statement_count": 6,
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS slowlog_repro.scan_330 (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS slowlog_repro.scan_423 (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS slowlog_repro.scan_1456 (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB",
+    "INSERT IGNORE INTO slowlog_repro.scan_330 (id, tag, pad) SELECT rn, CASE WHEN rn = 1 THEN 'rare_1' WHEN rn <= 8 THEN 'group_7' WHEN MOD(rn, 17) = 0 THEN 'medium' ELSE 'common' END, RPAD('x', 32, 'x') FROM (SELECT ROW_NUMBER() OVER (ORDER BY d1.n, d2.n, d3.n, d4.n) AS rn FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4) seq WHERE rn <= 330",
+    "INSERT IGNORE INTO slowlog_repro.scan_423 (id, tag, pad) SELECT rn, CASE WHEN rn = 1 THEN 'rare_1' WHEN rn <= 8 THEN 'group_7' WHEN MOD(rn, 17) = 0 THEN 'medium' ELSE 'common' END, RPAD('x', 32, 'x') FROM (SELECT ROW_NUMBER() OVER (ORDER BY d1.n, d2.n, d3.n, d4.n) AS rn FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4) seq WHERE rn <= 423",
+    "INSERT IGNORE INTO slowlog_repro.scan_1456 (id, tag, pad) SELECT rn, CASE WHEN rn = 1 THEN 'rare_1' WHEN rn <= 8 THEN 'group_7' WHEN MOD(rn, 17) = 0 THEN 'medium' ELSE 'common' END, RPAD('x', 32, 'x') FROM (SELECT ROW_NUMBER() OVER (ORDER BY d1.n, d2.n, d3.n, d4.n) AS rn FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4) seq WHERE rn <= 1456"
+  ]
+}

@@ -1,0 +1,1 @@
+Supplemental assumption for post4 reproduction: the original 15s latency is likely caused by token '255392' being extremely sparse along the ORDER BY issues.id DESC scan path. This run keeps the Redmine-like query shape but places the only ten matching token rows at old low IDs, requiring a reverse PRIMARY scan over almost all issues rows.

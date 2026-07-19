@@ -1,0 +1,25 @@
+{
+  "decision": "matched",
+  "reasoning": "The EXPLAIN shows an issues-first reverse scan on PRIMARY with filtering (including LOWER(subject) LIKE), a single-row PRIMARY lookup into projects, a per-row covering index lookup into enabled_modules, and the NOT IN members predicate implemented via a materialized, deduplicated subquery keyed by project_id and probed per row. ORDER BY issues.id DESC LIMIT 10 is satisfied by the reverse PK scan without a separate sort. This aligns with the objective and expected evidence.",
+  "query_assessments": [
+    {
+      "query_id": "calibration_query_1",
+      "sql": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE (((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) ) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10",
+      "matched": true,
+      "observed_plan_summary": "Limit 10 over nested-loop join. First operator is an index range scan on issues using PRIMARY in reverse order over (id < 251880) OR (251880 < id), with a filter including lower(issues.subject) like '%255392%' and other predicates. Per-row covering index lookup on enabled_modules via uq_enabled_modules (project_id, name='issue_tracking'). Single-row join to projects via PRIMARY (id = issues.project_id). The NOT IN (members) predicate is implemented as a materialized, deduplicated subquery (distinct project_id for user_id in (44,638)) keyed by an auto_distinct_key and probed per outer row. ORDER BY issues.id DESC LIMIT 10 is satisfied by the reverse PK scan without a sort.",
+      "supporting_evidence": [
+        "Index range scan on issues using PRIMARY over (id < 251880) OR (251880 < id) (reverse)",
+        "Filter: lower(issues.`subject`) like <cache>(lower('%255392%')) on the issues scan",
+        "Single-row index lookup on projects using PRIMARY (id = issues.project_id)",
+        "Single-row covering index lookup on em using uq_enabled_modules (project_id = issues.project_id, name = 'issue_tracking')",
+        "Materialize with deduplication for members (user_id in (44,638)) and index lookup on <materialized_subquery> using <auto_distinct_key> (project_id = issues.project_id)",
+        "Limit: 10 row(s) with reverse PK scan indicates ORDER BY issues.id DESC satisfied without a full sort"
+      ],
+      "discrepancies": []
+    }
+  ],
+  "revised_blueprint": null,
+  "missing_information": [],
+  "round": 2,
+  "matched": true
+}

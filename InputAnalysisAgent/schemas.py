@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -181,8 +182,27 @@ class DataSpec:
         if not all(isinstance(item, dict) for item in tables + calibrations):
             raise ValueError("data_spec tables and calibration_queries must contain objects")
         for index, query in enumerate(calibrations):
-            if not str(query.get("sql") or "").strip():
+            sql = str(query.get("sql") or "").strip()
+            if not sql:
                 raise ValueError(f"data_spec.calibration_queries[{index}].sql is required")
+            if not re.match(r"^(SELECT|WITH)\b", sql, re.I):
+                raise ValueError(f"data_spec.calibration_queries[{index}].sql must be read-only SELECT/WITH")
+            legacy_fields = sorted({"expected_plan_features", "conditions", "max_probe_sec"}.intersection(query))
+            if legacy_fields:
+                raise ValueError(
+                    f"data_spec.calibration_queries[{index}] uses unsupported rule-based fields "
+                    f"{legacy_fields}; use objective and expected_evidence"
+                )
+            if not str(query.get("objective") or "").strip():
+                raise ValueError(f"data_spec.calibration_queries[{index}].objective is required")
+            expected_evidence = _strings(
+                query.get("expected_evidence", []),
+                f"data_spec.calibration_queries[{index}].expected_evidence",
+            )
+            if not expected_evidence or not all(item.strip() for item in expected_evidence):
+                raise ValueError(
+                    f"data_spec.calibration_queries[{index}].expected_evidence must contain non-empty strings"
+                )
         return cls(
             database=database,
             schema_sql=_strings(data.get("schema_sql", []), "data_spec.schema_sql"),
@@ -234,6 +254,13 @@ class ReproductionBlueprint:
                 raise ValueError("TaskSpecs that use SET GLOBAL require cleanup_actions")
             if "SET GLOBAL" in action_text and not task.get("cleanup_actions"):
                 raise ValueError("TaskSpecs that use SET GLOBAL require non-empty cleanup_actions")
+            for action_index, action in enumerate(task.get("actions") or []):
+                _validate_action(action, f"TaskSpec {task.get('task_id')} actions[{action_index}]")
+            cleanup_actions = task.get("cleanup_actions") or []
+            if not isinstance(cleanup_actions, list):
+                raise ValueError(f"TaskSpec {task.get('task_id')} cleanup_actions must be an array")
+            for action_index, action in enumerate(cleanup_actions):
+                _validate_action(action, f"TaskSpec {task.get('task_id')} cleanup_actions[{action_index}]")
         dependencies = _list(data.get("dependencies", []), "dependencies")
         if not all(isinstance(edge, list) and len(edge) == 2 and all(isinstance(v, str) for v in edge) for edge in dependencies):
             raise ValueError("dependencies must contain [source, target] string pairs")
@@ -300,3 +327,45 @@ class ReproductionEvaluation:
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
+
+
+def _validate_action(action: Any, path: str) -> None:
+    action = _dict(action, path)
+    kind = str(action.get("kind") or "")
+    allowed = {
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command",
+    }
+    if kind not in allowed:
+        raise ValueError(f"{path}.kind must be one of {sorted(allowed)}")
+    duration = action.get("duration_sec")
+    if not isinstance(duration, (int, float)) or isinstance(duration, bool) or duration <= 0:
+        raise ValueError(f"{path}.duration_sec must be a positive number")
+    if kind == "raw_sql_workload":
+        if not isinstance(action.get("sql"), str) or not action["sql"].strip():
+            raise ValueError(f"{path}.sql must be one non-empty SQL string, not an array/object")
+        concurrency = action.get("concurrency")
+        if not isinstance(concurrency, int) or isinstance(concurrency, bool) or concurrency <= 0:
+            raise ValueError(f"{path}.concurrency must be a positive integer")
+    elif kind == "raw_transaction_script":
+        scripts = action.get("scripts")
+        if not isinstance(scripts, list) or not scripts:
+            raise ValueError(f"{path}.scripts must be a non-empty array")
+        for script_index, script in enumerate(scripts):
+            script = _dict(script, f"{path}.scripts[{script_index}]")
+            steps = script.get("steps")
+            if not isinstance(steps, list) or not steps:
+                raise ValueError(f"{path}.scripts[{script_index}].steps must be a non-empty array")
+            for step_index, step in enumerate(steps):
+                if isinstance(step, str):
+                    continue
+                step = _dict(step, f"{path}.scripts[{script_index}].steps[{step_index}]")
+                if "sql" in step and not isinstance(step["sql"], str):
+                    raise ValueError(f"{path}.scripts[{script_index}].steps[{step_index}].sql must be a string")
+    else:
+        command = action.get("command")
+        if not isinstance(command, list) or not command or not all(isinstance(part, str) for part in command):
+            raise ValueError(f"{path}.command must be a non-empty argv string array")

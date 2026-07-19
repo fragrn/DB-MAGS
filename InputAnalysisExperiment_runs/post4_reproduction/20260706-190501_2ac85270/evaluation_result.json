@@ -1,0 +1,38 @@
+{
+  "symptom_hit": true,
+  "mechanism_hit": true,
+  "plan_similarity": 0.7,
+  "success": true,
+  "reason": "The calibrated query ran with enforced issues-first PRIMARY access, a leading-wildcard LOWER(subject) LIKE filter, and ORDER BY issues.id DESC LIMIT 10. Median latency was ~229 ms (>=200 ms threshold), indicating the slow behavior. The mechanism is present by design: the non-sargable LIKE prevents any subject index use, forcing a PK-ordered scan with per-row EXISTS/anti-subquery checks. While EXPLAIN for the reproduction was not captured, the STRAIGHT_JOIN and FORCE INDEX hints strongly indicate the intended plan shape, so plan similarity is estimated as sufficient.",
+  "unmatched_conditions": [
+    "No EXPLAIN captured for the reproduction; cannot directly verify rows estimate on issues or 'Using where'",
+    "Could not confirm enabled_modules lookup vs members NOT IN execution strategy (materialized vs index subquery)",
+    "Did not observe whether ORDER BY was satisfied without a filesort (no EXPLAIN Extra)",
+    "Did not measure latency scaling versus data size"
+  ],
+  "evidence": {
+    "latency_stats": {
+      "executions": 40,
+      "min_ms": 221.856,
+      "p50_ms": 228.639,
+      "p95_ms": 342.333,
+      "max_ms": 356.02
+    },
+    "com_select_delta": 40,
+    "query_features": {
+      "force_index_primary": true,
+      "straight_join": true,
+      "order_by_id_desc_limit_10": true,
+      "leading_wildcard_like_on_subject": true,
+      "exists_enabled_modules": true,
+      "not_in_members_subquery": true
+    },
+    "query_text_excerpt": "SELECT ... FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ... WHERE ... LOWER(issues.subject) LIKE LOWER('%255392%') ... ORDER BY issues.id DESC LIMIT 10",
+    "optimizer_switch_used": "semijoin=off,materialization=off,in_to_exists=on",
+    "dataset_scale": {
+      "issues_estimated_rows": 340000,
+      "projects_estimated_rows": 600
+    },
+    "explain_observed": false
+  }
+}

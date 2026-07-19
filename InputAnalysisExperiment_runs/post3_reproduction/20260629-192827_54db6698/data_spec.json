@@ -1,0 +1,95 @@
+{
+  "database": "mysql_slowlog_repro",
+  "schema_sql": [
+    "CREATE DATABASE IF NOT EXISTS mysql_slowlog_repro",
+    "CREATE TABLE IF NOT EXISTS events (id BIGINT PRIMARY KEY, status VARCHAR(16) NOT NULL, created_at TIMESTAMP NULL, payload VARCHAR(64) NULL, KEY idx_status (status))"
+  ],
+  "generation_sql": [
+    "INSERT INTO events (id, status, created_at, payload) SELECT n, CASE WHEN n <= {row_count} * 0.95 THEN 'hot' ELSE 'cold' END, NOW(), CONCAT('p', n) FROM (SELECT 1 AS n) AS seed"
+  ],
+  "tables": [
+    {
+      "name": "events",
+      "columns": [
+        {
+          "name": "id",
+          "type": "BIGINT",
+          "role": "primary_key"
+        },
+        {
+          "name": "status",
+          "type": "VARCHAR(16)",
+          "role": "skewed_filter_column"
+        },
+        {
+          "name": "created_at",
+          "type": "TIMESTAMP",
+          "role": "timestamp"
+        },
+        {
+          "name": "payload",
+          "type": "VARCHAR(64)",
+          "role": "filler"
+        }
+      ],
+      "indexes": [
+        "PRIMARY KEY (id)",
+        "KEY idx_status (status)"
+      ]
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "events": {
+        "initial_rows": 1000,
+        "target_rows": 100000,
+        "notes": "Need enough rows so the scan path examines many rows while still completing quickly."
+      }
+    },
+    "value_skew": {
+      "status": {
+        "hot": 0.95,
+        "cold": 0.05,
+        "notes": "Skew creates a high-frequency value that can still return quickly while scanning many rows if the index is not used."
+      }
+    },
+    "predicate_selectivity": {
+      "by_index": {
+        "id_eq": 1e-05,
+        "status_eq_hot": 0.95,
+        "status_eq_cold": 0.05
+      },
+      "notes": "Use both indexed and non-indexed/low-selectivity predicates to contrast slow-log behavior."
+    },
+    "join_selectivity": {},
+    "notes": "The key requirement is one query shape that can be logged due to not using an index and one indexed control query that should not trigger the same slow-log path."
+  },
+  "analyze_tables": [
+    "events"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT COUNT(*) FROM events WHERE status = 'hot'",
+      "expected_plan_features": [
+        "range or full scan depending on optimizer choice",
+        "rows_examined greater than indexed lookup",
+        "candidate for not_using_index slow-log path"
+      ],
+      "max_probe_sec": 10
+    },
+    {
+      "sql": "SELECT id FROM events WHERE id = 42",
+      "expected_plan_features": [
+        "const or eq_ref lookup using PRIMARY",
+        "low rows examined"
+      ],
+      "max_probe_sec": 10
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

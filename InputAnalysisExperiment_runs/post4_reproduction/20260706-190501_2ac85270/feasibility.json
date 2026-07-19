@@ -1,0 +1,9 @@
+{
+  "level": "mechanism",
+  "rationale": "We can synthetically reproduce the key mechanism: a large issues table scanned in PK order due to a leading-wildcard LIKE, with correlated/EXISTS checks and OR predicates inflating per-row cost. Exact 15-second runtime depends on hardware and version. MySQL may materialize the NOT IN members subquery; this still demonstrates per-row probing overhead and aligns with the symptomatic plan shape.",
+  "missing_capabilities": [],
+  "unmatched_conditions": [
+    "Exact production dataset and token rarity at high ids"
+  ],
+  "confidence": 0.7
+}

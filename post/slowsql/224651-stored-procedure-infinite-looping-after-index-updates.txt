@@ -1,0 +1,787 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/224651/stored-procedure-infinite-looping-after-index-updates
+Canonical URL: https://dba.stackexchange.com/questions/224651/stored-procedure-infinite-looping-after-index-updates
+Title: Stored Procedure infinite looping after index updates
+Question ID: 224651
+License: CC BY-SA 4.0; author: Mary Scherer
+
+# Question
+
+I have inherited a very old and poorly written stored procedure with nested fetch statements. This code processes a large amount of data by copying from one database into another. This process was working fine until updates were made to indexes. This past weekend the process was deadlocks on tables and failed to insert data. Added to this bad stored procedure the database we are inserting into is loaded with multiple triggers on just about every table.
+
+I have reverted the indexes back to where they were but the inner fetch stays in an infinite loop. We have also tried rebooting the server to clear out any data stuck in memory. We are running SQL Server 2008R2
+
+I can provide code if needed. Any help is greatly appreciated. We are impacting production at this point.
+
+Adding the stored procedure script```
+ALTER PROCEDURE [dbo].[EDI_PSI_INSERT_PREPARE_JD]
+AS
+BEGIN
+    -- SET NOCOUNT ON added to prevent extra result sets from
+    -- interfering with SELECT statements.
+    --SET NOCOUNT ON;
+    SET ANSI_WARNINGS OFF;
+
+    --Declare constants
+    DECLARE @C_ETRACKS_SUCCESS_STATUS_CD TINYINT = 5;
+    DECLARE @C_ETRACKS_FAILED_STATUS_CD TINYINT = 22;
+
+    --Declare variables
+    DECLARE @STEP FLOAT;
+    DECLARE @ODBC_ID VARCHAR(10);
+    DECLARE @TRANSACTION_SET VARCHAR(5);
+    DECLARE @COUNT INT;
+    DECLARE @CUST_ORDER_ID VARCHAR(15);
+    DECLARE @LINE_NO SMALLINT;
+    DECLARE @NEXT_LINE_NO SMALLINT;
+    DECLARE @PART_ID VARCHAR(30);
+    DECLARE @CUSTOMER_PART_ID VARCHAR(30);
+    DECLARE @LINE_STATUS CHAR(1);
+    DECLARE @ORDER_QTY DECIMAL(14,4);
+    DECLARE @USER_ORDER_QTY DECIMAL(14,4);
+    DECLARE @SELLING_UM VARCHAR(15);
+    DECLARE @UNIT_PRICE DECIMAL(15,6);
+    DECLARE @TRADE_DISC_PERCENT DECIMAL(6,3);
+    DECLARE @EST_FREIGHT DECIMAL(15,2);
+    DECLARE @COMMISSION_PCT DECIMAL(6,3);
+    DECLARE @MISC_REFERENCE VARCHAR(40);
+    DECLARE @PRODUCT_CODE VARCHAR(15);
+    DECLARE @DRAWING_ID VARCHAR(30);
+    DECLARE @DRAWING_REV_NO VARCHAR(8);
+    DECLARE @GL_REVENUE_ACCT_ID VARCHAR(30);
+    DECLARE @TOTAL_ACT_FREIGHT DECIMAL(15,2);
+    DECLARE @TOTAL_SHIPPED_QTY DECIMAL(14,4);
+    DECLARE @TOTAL_USR_SHIP_QTY DECIMAL(14,4);
+    DECLARE @TOTAL_AMT_SHIPPED DECIMAL(15,2);
+    DECLARE @TOTAL_AMT_ORDERED DECIMAL(15,2);
+    DECLARE @SERVICE_CHARGE_ID VARCHAR(15);
+    DECLARE @SHIPTO_ID VARCHAR(20);
+    DECLARE @SITE_ID VARCHAR(15);
+    DECLARE @WAREHOUSE_ID VARCHAR(15);
+    DECLARE @WIP_VAS_UNIT_PRICE DECIMAL(15,6);
+    DECLARE @ALLOCATED_QTY DECIMAL(14,4);                 
+    DECLARE @FULFILLED_QTY DECIMAL(14,4);
+    DECLARE @ACCEPT_EARLY CHAR(1);
+    DECLARE @DAYS_EARLY SMALLINT;
+    DECLARE @USER_1 VARCHAR(80);
+    DECLARE @USER_2 VARCHAR(80);
+    DECLARE @USER_3 VARCHAR(80);
+    DECLARE @USER_4 VARCHAR(80);
+    DECLARE @USER_5 VARCHAR(80);
+    DECLARE @USER_6 VARCHAR(80);
+    DECLARE @USER_7 VARCHAR(80);
+    DECLARE @ORIG_STAGE_REVISION_ID VARCHAR(24);
+    DECLARE @STATUS_EFF_DATE DATETIME;
+    DECLARE @PROMISE_DELIV_DATE DATETIME;
+    --Hani 07/21/2011 Calculate discount percentage
+    DECLARE @DISCOUNT_CODE VARCHAR(50);
+    DECLARE @DISCOUNT REAL;
+    --Hani 03/27/2011
+    DECLARE @EDI_UNIT_PRICE money;
+    DECLARE @SEND_ACK CHAR(1);
+    DECLARE @UDF_LAYOUT_ID VARCHAR(15);
+    DECLARE @FREIGHT_NOTE VARCHAR(255);
+
+    DECLARE @KS_CUSTID VARCHAR(80); 
+    DECLARE @KS_ST_ID VARCHAR(80);
+    DECLARE @TOTAL_LINES int;
+
+    DECLARE @PO_NUM varchar(22);
+
+    DECLARE @DESIRED_SHIP_DATE_CUTOFF as DATETIME = CAST(GETDATE()+14 as DATE);
+
+    --Declare Cursors
+    DECLARE psi_hdr_cur CURSOR
+    FOR SELECT ODBC_ID, TRANSACTION_SET, CUST_ID, ST_ID, PO_NUM
+        FROM GentranDev.dbo.EDI_PSI_HDR
+        WHERE V_STATUS = 'READY'
+        AND TRANSACTION_SET IN ('830')
+        AND CUST_ID = 'C01558'
+        ORDER BY ODBC_ID ASC;
+
+    --Initialize variables
+    SET @STEP = 0;  
+
+    PRINT @@FETCH_STATUS
+
+    --Loop thru every order records and create records in the KAPCO tables
+    OPEN psi_hdr_cur;   
+    FETCH NEXT FROM psi_hdr_cur INTO @ODBC_ID, @TRANSACTION_SET, @KS_CUSTID,@KS_ST_ID, @PO_NUM
+    WHILE (@@FETCH_STATUS = 0)
+    BEGIN
+        BEGIN TRY
+            PRINT 'PROCESSING ODBC_ID# ' + @ODBC_ID;
+            DECLARE @COMPID VARCHAR(15) 
+            SET @COMPID = LEFT(RIGHT(@KS_CUSTID,4) + '-' + @KS_ST_ID, 15); 
+            PRINT 'COMPID:' + @COMPID ;
+            PRINT 'PO:' + @PO_NUM;
+            -- Start transaction
+
+            BEGIN TRAN  
+            --Hani 05/20/2018" Moved this logic here so that a customer address is inserted before any processing happens
+            --Check if there are more than one record
+            --If yes then raise an error (most likely there are more than one address record)
+            SELECT @COUNT=COUNT(*)
+            FROM EDI_PSI_HDR H
+            INNER JOIN vmfgtest.dbo.CUSTOMER C ON C.ID=H.CUST_ID
+            INNER JOIN vmfgtest.dbo.CUST_ADDRESS A ON A.CUSTOMER_ID=C.ID AND A.SHIPTO_ID=H.ST_ID
+            WHERE H.ODBC_ID=@ODBC_ID;
+
+            --IF (@COUNT = 0)
+            --  RAISERROR('Matching CUST_ADDRESS recs not found', 16, 1, @ODBC_ID);
+
+                IF (@COUNT > 1)
+                    RAISERROR('Multiple CUST_ADDRESS recs', 16, 1, @ODBC_ID);
+
+                -- If no customer with ship to it then add it
+                IF (@COUNT = 0)
+                    BEGIN
+                        set @STEP = -1;
+                        PRINT 'No customer address found - inserting new customer address record'
+                        insert into vmfgtest.dbo.CUST_ADDRESS(CUSTOMER_ID, ADDR_NO, NAME, ADDR_1, ADDR_2, ADDR_3, CITY, STATE, ZIPCODE, COUNTRY,
+                            DEF_SLS_TAX_GRP_ID, TAX_EXEMPT, SALESREP_ID, TERRITORY, SHIPTO_ID, ORDER_FILL_RATE, USER_3, GENERATE_ASN,
+                            HOLD_TRANSFER_ASN, CUSTOMS_DOC_PRINT, ACCEPT_830, ACCEPT_862, CONSOL_SHIP_LINE, PALLET_DETAILS_REQ,
+                            GENERATE_WSA, HOLD_TRANSFER_WSA)
+                        select CUST_ID,
+                                (select ISNULL(MAX(ADDR_NO),0)+1 from vmfgtest.dbo.CUST_ADDRESS where CUSTOMER_ID=@KS_CUSTID),                  
+                                ST_NAME, ST_ADDRESS, ST_ADDRESS2, ST_ADDTL_NAME, ST_CITY, ST_STATE, ST_ZIP, ST_COUNTRY,
+                                NULL, 'N', C.SALESREP_ID, C.TERRITORY, ST_ID, 0.00, ST_ADDTL_NAME, 'D', 'D', 'D', 'D', 'D', 'N', 'N', 'D', 'D'  
+                        from EDI_PSI_HDR h
+                        INNER JOIN vmfgtest.dbo.CUSTOMER C ON C.ID=H.CUST_ID
+                        where ODBC_ID=@ODBC_ID;         
+                        PRINT 'Finished inserting new customer address record';
+                    END
+
+            --Hani 02/27/2018
+            --If this PSI has an customer order with the same order then:
+            -- delete the lines from the existing customer order that have a desired ship date <= today+14 days and qty shiped =0
+            -- delete the dtl lines from the psi that exist in the customer order and hard firmed (attr1=C)
+            SELECT @CUST_ORDER_ID=ID FROM vmfgtest.dbo.CUSTOMER_ORDER WHERE CUSTOMER_PO_REF=@PO_NUM AND ID!=@COMPID ;
+            PRINT 'CUST ORDER ID =' + @CUST_ORDER_ID
+
+            IF (@CUST_ORDER_ID IS NOT NULL)         
+            BEGIN
+               PRINT 'UPDATE EXISTING ORDER SHIP TO ID'
+               UPDATE vmfgtest.dbo.CUSTOMER_ORDER
+               SET SHIPTO_ID=@KS_ST_ID
+               WHERE ID=@CUST_ORDER_ID;
+
+               PRINT 'DELETIN ORDER LINES FROM CUST ORDER LINE'
+               DELETE FROM vmfgtest.dbo.CUST_ORDER_LINE
+               FROM vmfgtest.dbo.CUST_ORDER_LINE col
+               INNER JOIN EDI_PSI_DTL dtl ON dtl.ITEM_NO=col.PART_ID
+               WHERE dtl.ODBC_ID=@ODBC_ID AND col.CUST_ORDER_ID=@CUST_ORDER_ID
+               AND col.PROMISE_DEL_DATE > @DESIRED_SHIP_DATE_CUTOFF AND col.TOTAL_SHIPPED_QTY = 0;
+
+               --PRINT 'DELETIN FIRMED LINES FROM PSI'--commented out 5/15/2018 per testing scenarios
+               --DELETE FROM EDI_PSI_DTL
+               --FROM EDI_PSI_DTL dtl
+               --INNER JOIN vmfgtest.dbo.CUST_ORDER_LINE col ON col.PART_ID=dtl.ITEM_NO AND col.CUST_ORDER_ID=@CUST_ORDER_ID
+               --WHERE dtl.ODBC_ID=@ODBC_ID AND col.CUST_ORDER_ID=@CUST_ORDER_ID AND dtl.ATTRIBUTE_1='C';
+
+               SET @COMPID=@CUST_ORDER_ID;             
+               PRINT 'COMPID=' + @COMPID;
+               GOTO STEP_2_INSERT_LINES;
+            END
+            --End   
+
+            --Otherwise go ahead and create the customer order in visual from whatever data we have in PSI tables
+
+            -- Create customer order records only if the order doens't exit
+            SET @STEP = 1;
+
+            SET @COMPID='AL' + RIGHT(CAST( YEAR(GETDATE()) AS VARCHAR(4)) ,2) + dbo.RemoveNonNumericCharacters(@PO_NUM);
+
+
+            IF (NOT EXISTS(SELECT * FROM vmfgtest.dbo.CUSTOMER_ORDER O WHERE ID=@COMPID))
+                BEGIN
+                    PRINT 'CREATING NEW CUSTOMER ORDER ' + ISNULL(@COMPID,'');
+                    INSERT INTO [vmfgtest].[dbo].[CUSTOMER_ORDER]   
+                    (
+                        [ID]
+                        ,[CUSTOMER_ID]
+                        ,[CUSTOMER_PO_REF]
+                        ,[CONTACT_FIRST_NAME]
+                        ,[CONTACT_LAST_NAME]
+                        ,[CONTACT_PHONE]
+                        ,[CONTACT_FAX]
+                        ,[CONTACT_MOBILE]
+                        ,[CONTACT_EMAIL]
+                        ,[SHIP_TO_ADDR_NO]
+                        ,[SALESREP_ID]
+                        ,[SITE_ID]
+                        ,[TERMS_NET_TYPE]
+                        ,[TERMS_NET_DAYS]
+                        ,[TERMS_DISC_TYPE]
+                        ,[TERMS_DISC_DAYS]
+                        ,[TERMS_DISC_PERCENT]
+                        ,[TERMS_DESCRIPTION]
+                        ,[FREIGHT_TERMS]
+                        ,[ORDER_DATE]
+                        ,[DESIRED_SHIP_DATE]
+                        ,[BACK_ORDER]
+                        ,[STATUS]
+                        ,[SELL_RATE]
+                        ,[BUY_RATE]
+                        ,[POSTING_CANDIDATE]
+                        ,[TOTAL_AMT_ORDERED]
+                        ,[TOTAL_AMT_SHIPPED]
+                        ,[MARKED_FOR_PURGE]
+                        ,[EDI_FLAG]
+                        ,[EXCH_RATE_FIXED]
+                        ,[PROMISE_DATE]
+                        ,[EDI_BLANKET_FLAG]
+                        ,[SHIPTO_ID]
+                        ,[CURRENCY_ID]
+                        ,[WAREHOUSE_ID]
+                        ,[ACCEPT_EARLY]
+                        ,[DAYS_EARLY]
+                        ,[CREATE_DATE]
+                        ,[USER_1]
+                        ,[USER_2]
+                        ,[USER_3]
+                        ,[USER_4]
+                        ,[USER_5]
+                        ,[USER_6]
+                        ,[USER_7]
+                        ,[USER_8]
+                        ,[USER_9]
+                        ,[USER_10]
+                        ,[DD250_REQUIRED]
+                        ,[REVISION_ID]
+                        ,[VSCP_ORDER]
+                        ,[CONSIGNMENT]
+                        ,[STATUS_EFF_DATE]
+                        ,[PROMISE_DEL_DATE]
+                        ,[FREE_ON_BOARD]
+                        ,[SHIP_VIA]
+                        ,[CONTACT_SALUTATION]
+                        ,[TERRITORY]                   
+                    )
+                    SELECT
+                        @COMPID,
+                        H.CUST_ID,
+                        H.PO_NUM,
+                        C.CONTACT_FIRST_NAME,
+                        C.CONTACT_LAST_NAME,
+                        C.CONTACT_PHONE,
+                        C.CONTACT_FAX,
+                        C.CONTACT_MOBILE,
+                        C.CONTACT_EMAIL,
+                        A.ADDR_NO,
+                        C.SALESREP_ID,
+                        'KAPCO',
+                        C.TERMS_NET_TYPE,
+                        C.TERMS_NET_DAYS,
+                        C.TERMS_DISC_TYPE,
+                        C.TERMS_DISC_DAYS,
+                        C.TERMS_DISC_PERCENT,
+                        C.TERMS_DESCRIPTION,
+                        C.FREIGHT_TERMS,
+                        H.ORDER_DATE,
+                        NULL,
+                        'N',    --BACK_ORDER, Larry updated this from C.BACKORDER_FLAG TO to a 'N'on 1/31/2012..
+                        'R',    --STATUS
+                        '1',    --SELL_RATE
+                        '1',    --BUY_RATE
+                        'N',    --POSTING_CANDIDATE,
+                            0,      --TOTAL_AMT_ORDERED
+                            0,      --TOTAL_AMT_SHIPPED
+                        'N',    --MARKED_FOR_PURGE
+                        'Y',    --EDI_FLAG
+                        'N',    --EXCH_RATE_FIXED
+                        H.ORDER_DATE, -- PROMISE DATE
+                        'N', --EDI_BLANKET_FLAG
+                        A.SHIPTO_ID,    --SHIPTO_ID
+                        C.CURRENCY_ID,  --CURRENCY_ID
+                        (SELECT TOP 1 P2.PRIMARY_WHS_ID
+                            FROM EDI_PSI_DTL L2
+                            LEFT JOIN vmfgtest.dbo.PART_SITE P2 ON P2.PART_ID=L2.ITEM_NO
+                            WHERE L2.ODBC_ID=@ODBC_ID), -- WAREHOUSE_ID
+                        C.ACCEPT_EARLY, --ACCEPT_EARLY
+                        C.DAYS_EARLY,   --DAYS_EARLY
+                        H.ORDER_DATE,   --CREATE_DATE,
+                        NULL, --[USER_1]
+                        NULL, --[USER_2]
+                        NULL, --[USER_3]
+                        NULL, --[USER_4]
+                        NULL, --[USER_5]
+                        NULL, --[USER_6]
+                        NULL, --[USER_7]
+                        NULL, --[USER_8]
+                        NULL, --[USER_9]
+                        NULL, --[USER_10]
+                        'N',    --DD250_REQUIRED
+                        '00',   --REVISION_ID
+                        NULL,   --VSCP_ORDER
+                        'N',    --CONSIGNMENT
+                        H.ORDER_DATE,
+                        (SELECT TOP 1 L2.SCH_REQ_SHIP_DATE
+                            FROM EDI_PSI_DTL L2
+                            WHERE L2.ODBC_ID=@ODBC_ID),  --PROMISE_DEL_DATE
+                        C.FREE_ON_BOARD, --FREE ON BOARD
+                        C.SHIP_VIA,  --SHIP VIA
+                        C.CONTACT_SALUTATION, --CONTACT SALUTATION
+                        C.TERRITORY  --TERRITORY
+                    FROM EDI_PSI_HDR H
+                    INNER JOIN vmfgtest.dbo.CUSTOMER C ON C.ID=H.CUST_ID 
+                    INNER JOIN vmfgtest.dbo.CUST_ADDRESS A ON A.CUSTOMER_ID=C.ID AND A.SHIPTO_ID=H.ST_ID
+                    WHERE H.ODBC_ID=@ODBC_ID;
+
+
+                    IF (@@ROWCOUNT = 0)
+                        RAISERROR('No record inserted in CUSTOMER_ORDER table', 16, 1);         
+                END;
+
+STEP_2_INSERT_LINES:
+
+            SET @STEP = 2;
+            --Set the max line no to the that the new lines will start from if ther eno max then it starts or zero
+            SELECT @NEXT_LINE_NO = MAX(LINE_NO) FROM vmfgtest.dbo.CUST_ORDER_LINE WHERE CUST_ORDER_ID=@COMPID;
+            IF (@NEXT_LINE_NO IS NULL)
+                SET @NEXT_LINE_NO=0;
+
+            PRINT 'NEXT LINE NO =' + CONVERT(nvarchar(10), @NEXT_LINE_NO)
+
+            --Loop thru every order records and create records in the vmfgtest tables
+            --Declare the header line cursor
+            DECLARE po_lin_cur CURSOR
+            FOR
+            SELECT 
+               @COMPID,
+               L.LINE_NO,
+               'KAPCO' AS SITE_ID,
+               ISNULL(NULLIF(L.ITEM_NO,''), NULLIF(L.BUYER_PART_NO,'')),
+               ISNULL(NULLIF(L.BUYER_PART_NO,''), NULLIF(L.ITEM_NO,'')),
+               'A' AS LINE_STATUS,
+                L.QUANTITY_ORDERED,
+                L.QUANTITY_ORDERED AS USER_ORDER_QTY,
+                L.UNIT_OF_MEASUREMENT,
+                dbo.GetQtyUnitPrice(L.QUANTITY_ORDERED, CP.QTY_BREAK_1, CP.QTY_BREAK_2, CP.QTY_BREAK_3, CP.QTY_BREAK_4, CP.QTY_BREAK_5, CP.QTY_BREAK_6,
+                    CP.QTY_BREAK_7, CP.QTY_BREAK_8, CP.QTY_BREAK_9, CP.QTY_BREAK_10, CP.UNIT_PRICE_1, CP.UNIT_PRICE_2, CP.UNIT_PRICE_3, CP.UNIT_PRICE_4,
+                    CP.UNIT_PRICE_5, CP.UNIT_PRICE_6, CP.UNIT_PRICE_7, CP.UNIT_PRICE_8, CP.UNIT_PRICE_9, CP.UNIT_PRICE_10),
+                0, --DISCOUNT
+                0.00 AS EST_FREIGHT,
+                SR.DEF_COMMISSION_PCT,
+                P.DESCRIPTION,
+                P.PRODUCT_CODE,  --PRODUCT CODE
+                ISNULL(L.ITEM_NO,P.DRAWING_ID),  --DRAWING ID
+                P.DRAWING_REV_NO, --DRAWING REV NO -- WHAT TO DO FOR JOHN DEER
+                PR.REV_GL_ACCT_ID,
+                0 AS TOTAL_ACT_FREIGHT,
+                0 AS TOTAL_SHIPPED_QTY,
+                0 AS TOTAL_USR_SHIP_QTY,
+                0 AS TOTAL_AMT_SHIPPED,
+                0 AS TOTAL_AMT_ORDERED,
+                NULL,
+                A.SHIPTO_ID,
+                PS.PRIMARY_WHS_ID, --WAREHOUSE_ID
+                0 AS WIP_VAS_UNIT_PRICE,
+                0 AS ALLOCATED_QTY,                 
+                0 AS FULFILLED_QTY,
+                C.ACCEPT_EARLY,
+                C.DAYS_EARLY,
+                L.PO_NUM + '-'+ cast(L.LINE_NO as varchar(10)) + ':'+ L.REF_ID, --USER 1
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                NULL,
+                ISNULL(P.STAGE_ID,'')+ISNULL(P.REVISION_ID,'') AS ORIG_STAGE_REVISION_ID,
+                H.ORDER_DATE,--EFFECTIVE DATE,
+                L.SCH_REQ_SHIP_DATE,
+                '',
+                '',
+                0,
+                L.UNIT_PRICE, --FREIGHT NOTE
+                'Y',  --SEND ACK
+                'EDI_CO_Line' --UDF LAYOUT ID
+            --Mary Scherer 20180525 Remove Buyer_Part_No on join, fill Item_no with update 
+            FROM GentranDev.dbo.EDI_PSI_DTL L
+                INNER JOIN EDI_PSI_HDR H ON H.ODBC_ID=L.ODBC_ID
+                INNER JOIN vmfgtest.dbo.CUSTOMER_ORDER co ON co.CUSTOMER_PO_REF=H.PO_NUM AND ID=@COMPID
+                INNER JOIN vmfgtest.dbo.CUSTOMER C ON C.ID=co.CUSTOMER_ID
+                INNER JOIN vmfgtest.dbo.CUST_ADDRESS A ON A.CUSTOMER_ID=co.CUSTOMER_ID AND A.SHIPTO_ID=co.SHIPTO_ID
+                LEFT OUTER JOIN vmfgtest.dbo.SALES_REP SR ON SR.ID=C.SALESREP_ID
+                LEFT OUTER JOIN vmfgtest.dbo.PART P ON P.ID=L.ITEM_NO
+                LEFT OUTER JOIN vmfgtest.dbo.PART_SITE PS ON PS.PART_ID=L.ITEM_NO 
+                LEFT OUTER JOIN vmfgtest.dbo.PRODUCT PR ON PR.CODE=P.PRODUCT_CODE
+                LEFT OUTER JOIN vmfgtest.dbo.CUST_PRICE_EFFECT CP ON CP.CUSTOMER_ID=C.ID AND (CP.PART_ID=L.ITEM_NO)
+                    AND CP.EFFECTIVE_DATE < GETDATE() and (CP.DISCONTINUE_DATE is null or CP.DISCONTINUE_DATE > GETDATE())
+            WHERE L.ODBC_ID=@ODBC_ID AND L.ATTRIBUTE_1='C'              
+            AND CAST(L.SCH_REQ_SHIP_DATE AS DATE) > CAST((GETDATE()+14) AS DATE);
+
+            Print 'Fetch' 
+
+            OPEN po_lin_cur;
+
+            SET @STEP = 2.1;    
+            FETCH NEXT FROM po_lin_cur INTO
+                @CUST_ORDER_ID
+                ,@LINE_NO
+                ,@SITE_ID
+                ,@PART_ID
+                ,@CUSTOMER_PART_ID
+                ,@LINE_STATUS
+                ,@ORDER_QTY
+                ,@USER_ORDER_QTY
+                ,@SELLING_UM
+                ,@UNIT_PRICE
+                ,@TRADE_DISC_PERCENT
+                ,@EST_FREIGHT
+                ,@COMMISSION_PCT
+                ,@MISC_REFERENCE
+                ,@PRODUCT_CODE
+                ,@DRAWING_ID
+                ,@DRAWING_REV_NO
+                ,@GL_REVENUE_ACCT_ID
+                ,@TOTAL_ACT_FREIGHT
+                ,@TOTAL_SHIPPED_QTY
+                ,@TOTAL_USR_SHIP_QTY
+                ,@TOTAL_AMT_SHIPPED
+                ,@TOTAL_AMT_ORDERED
+                ,@SERVICE_CHARGE_ID
+                ,@SHIPTO_ID
+                ,@WAREHOUSE_ID
+                ,@WIP_VAS_UNIT_PRICE
+                ,@ALLOCATED_QTY                 
+                ,@FULFILLED_QTY
+                ,@ACCEPT_EARLY
+                ,@DAYS_EARLY
+                ,@USER_1
+                ,@USER_2
+                ,@USER_3
+                ,@USER_4
+                ,@USER_5
+                ,@USER_6
+                ,@USER_7
+                ,@ORIG_STAGE_REVISION_ID
+                ,@STATUS_EFF_DATE
+                ,@PROMISE_DELIV_DATE
+                ,@DISCOUNT_CODE
+                ,@DISCOUNT
+                ,@EDI_UNIT_PRICE
+                ,@FREIGHT_NOTE
+                ,@SEND_ACK
+                ,@UDF_LAYOUT_ID;
+            --Loop thru ever header line and process it
+                PRINT 'Looping in Line 1'
+
+            WHILE (@@FETCH_STATUS = 0)
+            BEGIN --1
+                --PRINT 'ADDING LINE ' + @NEXT_LINE_NO + ' , PART ' + @PART_ID;
+                set transaction isolation level read uncommitted
+                SET @STEP = 2.1;
+                IF (NOT EXISTS(SELECT 1 FROM vmfgtest.dbo.PART WHERE ID=@PART_ID))
+                BEGIN --2
+                    SET @STEP = 2.12;
+                    PRINT 'PART ' + @PART_ID + ' NOT FOUND, INSERTING NEW RECORD INTO PART TABLE';
+                    INSERT INTO vmfgtest.dbo.PART (
+                        ID, DESCRIPTION, STOCK_UM, PLANNING_LEADTIME,ORDER_POLICY,
+                        SAFETY_STOCK_QTY,PRODUCT_CODE,FABRICATED,PURCHASED,STOCKED,
+                        DETAIL_ONLY,DEMAND_HISTORY,TOOL_OR_FIXTURE,INSPECTION_REQD, MRP_REQUIRED,
+                        AUTO_BACKFLUSH,ANNUAL_USAGE_QTY,INVENTORY_LOCKED,QTY_ON_HAND,QTY_AVAILABLE_ISS,
+                        QTY_AVAILABLE_MRP,QTY_ON_ORDER,QTY_IN_DEMAND,PIECE_TRACKED,LENGTH_REQD,
+                        WIDTH_REQD,HEIGHT_REQD,CONSUMABLE,QTY_COMMITTED,intrastat_exempt,
+                        ECN_REV_CONTROL,IS_KIT,UNIV_PLAN_MATERIAL,STATUS_EFF_DATE,CONTROLLED_BY_ICS, planner_user_id
+                    ) 
+                    VALUES (
+                        @PART_ID,'New EDI Part','EA',0,'N',
+                         0,'EDI','Y','N','N',
+                        'N','N','N','N','N',
+                        'N',0,'N',0,0,
+                        0,0,0,'N','N',
+                        'N','N','N',0,'N',
+                        'N','N','Y',GETDATE(),'N', 'EDI'
+                    );
+                    PRINT 'INSERT PART COMPLETE' + CAST(@@ROWCOUNT AS VARCHAR(10));
+                END;  --2
+
+                PRINT @PART_ID
+                set transaction isolation level read uncommitted
+                SET @STEP = 2.21;
+                IF (NOT EXISTS(SELECT 1 FROM vmfgtest.dbo.PART_SITE WHERE PART_ID=@PART_ID AND SITE_ID=@SITE_ID))
+                BEGIN --3
+                    SET @STEP=2.22;
+                    PRINT 'PART ' + @PART_ID + ' NOT FOUND, INSERTING NEW RECORD INTO PART SITE TABLE';
+                    INSERT INTO vmfgtest.dbo.PART_SITE(SITE_ID,PART_ID,PLANNING_LEADTIME,ORDER_POLICY,SAFETY_STOCK_QTY,PRODUCT_CODE,
+                    FABRICATED,PURCHASED,STOCKED,DETAIL_ONLY,DEMAND_HISTORY,TOOL_OR_FIXTURE,INSPECTION_REQD,MRP_REQUIRED,
+                    AUTO_BACKFLUSH,ANNUAL_USAGE_QTY,INVENTORY_LOCKED,UNIT_LABOR_COST,UNIT_BURDEN_COST,
+                    UNIT_SERVICE_COST,BURDEN_PERCENT,BURDEN_PER_UNIT,PURC_BUR_PERCENT,PURC_BUR_PER_UNIT,FIXED_COST,
+                    NEW_MATERIAL_COST,NEW_LABOR_COST,NEW_BURDEN_COST,NEW_SERVICE_COST,NEW_BURDEN_PERCENT,NEW_BURDEN_PERUNIT,
+                    NEW_FIXED_COST,QTY_ON_HAND,QTY_AVAILABLE_ISS,QTY_AVAILABLE_MRP,QTY_ON_ORDER,QTY_IN_DEMAND,
+                    CONSUMABLE,QTY_COMMITTED,intrastat_exempt,STATUS_EFF_DATE, planner_user_id) 
+                    VALUES (@SITE_ID, @PART_ID,0,'N',0,
+                    'EDI','Y','N','N','N','N','N','N','N','N',0,'N',0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,'N',0,'N',GETDATE(), 'EDI');
+                    PRINT 'INSERT PART SITE COMPLETE' + CAST(@@ROWCOUNT AS VARCHAR(10));
+                END; --3
+
+                SET @STEP = 2.3;
+                SET @NEXT_LINE_NO = @NEXT_LINE_NO + 1;
+
+                PRINT '[' + CONVERT(varchar, GETDATE(), 121) + '] INSERTING INTO CUST_ORDER_LINE(' + @CUST_ORDER_ID + ',' + CAST(@LINE_NO as varchar(10)) + ',' + @SITE_ID + ',' + CAST(@NEXT_LINE_NO as varchar(10)) + ')';
+
+                --Insert record into customer order line table
+                --set transaction isolation level read uncommitted
+                INSERT INTO [vmfgtest].[dbo].[CUST_ORDER_LINE] (
+                    [CUST_ORDER_ID]
+                    ,[LINE_NO]
+                    ,[SITE_ID]
+                    ,[PART_ID]
+                    ,[CUSTOMER_PART_ID]
+                    ,[LINE_STATUS]
+                    ,[ORDER_QTY]
+                    ,[USER_ORDER_QTY]
+                    ,[SELLING_UM]
+                    ,[UNIT_PRICE]
+                    ,[TRADE_DISC_PERCENT]
+                    ,[EST_FREIGHT]
+                    ,[COMMISSION_PCT]
+                    ,[MISC_REFERENCE]
+                    ,[PRODUCT_CODE]
+                    ,[DRAWING_ID]
+                    ,[DRAWING_REV_NO]
+                    ,[GL_REVENUE_ACCT_ID]
+                    ,[TOTAL_ACT_FREIGHT]
+                    ,[TOTAL_SHIPPED_QTY]
+                    ,[TOTAL_USR_SHIP_QTY]
+                    ,[TOTAL_AMT_SHIPPED]
+                    ,[TOTAL_AMT_ORDERED]
+                    ,[SERVICE_CHARGE_ID]
+                    ,[SHIPTO_ID]
+                    ,[WAREHOUSE_ID]
+                    ,[WIP_VAS_UNIT_PRICE]
+                    ,[ALLOCATED_QTY]                 
+                    ,[FULFILLED_QTY]
+                    ,[ACCEPT_EARLY]
+                    ,[DAYS_EARLY]
+                    ,[USER_1]
+                    ,[USER_2]
+                    ,[USER_3]
+                    ,[USER_4]
+                    ,[USER_5]
+                    ,[USER_6]
+                    ,[USER_7]
+                    ,[ORIG_STAGE_REVISION_ID]
+                    ,[STATUS_EFF_DATE]
+                    ,[PROMISE_DEL_DATE]
+                    ,[FREIGHT_NOTE]
+                    ,[SEND_ACK]
+                    ,[UDF_LAYOUT_ID]
+                )
+                VALUES (
+                    @CUST_ORDER_ID
+                    ,@NEXT_LINE_NO
+                    ,@SITE_ID
+                    ,@PART_ID
+                    ,@CUSTOMER_PART_ID
+                    ,@LINE_STATUS
+                    ,@ORDER_QTY
+                    ,@USER_ORDER_QTY
+                    ,@SELLING_UM
+                    ,ISNULL(@UNIT_PRICE,0)
+                    ,@TRADE_DISC_PERCENT
+                    ,@EST_FREIGHT
+                    ,@COMMISSION_PCT
+                    ,@MISC_REFERENCE
+                    ,@PRODUCT_CODE
+                    ,@DRAWING_ID
+                    ,@DRAWING_REV_NO
+                    ,@GL_REVENUE_ACCT_ID
+                    ,@TOTAL_ACT_FREIGHT
+                    ,@TOTAL_SHIPPED_QTY
+                    ,@TOTAL_USR_SHIP_QTY
+                    ,@TOTAL_AMT_SHIPPED
+                    ,@TOTAL_AMT_ORDERED
+                    ,@SERVICE_CHARGE_ID
+                    ,@SHIPTO_ID
+                    ,@WAREHOUSE_ID
+                    ,@WIP_VAS_UNIT_PRICE
+                    ,@ALLOCATED_QTY                 
+                    ,@FULFILLED_QTY
+                    ,@ACCEPT_EARLY
+                    ,@DAYS_EARLY
+                    ,@USER_1
+                    ,@USER_2
+                    ,@DISCOUNT_CODE 
+                    ,@DISCOUNT  
+                    ,@USER_5
+                    ,@USER_6
+                    ,@USER_7
+                    ,@ORIG_STAGE_REVISION_ID
+                    ,@STATUS_EFF_DATE
+                    ,@PROMISE_DELIV_DATE
+                    ,@FREIGHT_NOTE
+                    ,@SEND_ACK
+                    ,@UDF_LAYOUT_ID
+                );
+
+                PRINT '[' + CONVERT(varchar, GETDATE(), 121) + '] INSERTING FINISHED';
+
+            --Fetch next record from cursor
+            --set transaction isolation level read uncommitted
+            SET @STEP = 2.4;
+            FETCH NEXT FROM po_lin_cur INTO
+                @CUST_ORDER_ID
+                ,@LINE_NO
+                ,@SITE_ID
+                ,@PART_ID
+                ,@CUSTOMER_PART_ID
+                ,@LINE_STATUS
+                ,@ORDER_QTY
+                ,@USER_ORDER_QTY
+                ,@SELLING_UM
+                ,@UNIT_PRICE
+                ,@TRADE_DISC_PERCENT
+                ,@EST_FREIGHT
+                ,@COMMISSION_PCT
+                ,@MISC_REFERENCE
+                ,@PRODUCT_CODE
+                ,@DRAWING_ID
+                ,@DRAWING_REV_NO
+                ,@GL_REVENUE_ACCT_ID
+                ,@TOTAL_ACT_FREIGHT
+                ,@TOTAL_SHIPPED_QTY
+                ,@TOTAL_USR_SHIP_QTY
+                ,@TOTAL_AMT_SHIPPED
+                ,@TOTAL_AMT_ORDERED
+                ,@SERVICE_CHARGE_ID
+                ,@SHIPTO_ID
+                ,@WAREHOUSE_ID
+                ,@WIP_VAS_UNIT_PRICE
+                ,@ALLOCATED_QTY                 
+                ,@FULFILLED_QTY
+                ,@ACCEPT_EARLY
+                ,@DAYS_EARLY
+                ,@USER_1
+                ,@USER_2
+                ,@USER_3
+                ,@USER_4
+                ,@USER_5
+                ,@USER_6
+                ,@USER_7
+                ,@ORIG_STAGE_REVISION_ID
+                ,@STATUS_EFF_DATE
+                ,@PROMISE_DELIV_DATE
+                ,@DISCOUNT_CODE
+                ,@DISCOUNT
+                ,@EDI_UNIT_PRICE
+                ,@FREIGHT_NOTE
+                ,@SEND_ACK
+                ,@UDF_LAYOUT_ID;
+            END; --1
+
+            PRINT 'STEP 2.4'
+
+            --Close cursor
+            CLOSE po_lin_cur;
+            --Deallocate cursor
+            DEALLOCATE po_lin_cur;
+
+            --Update the status on the PSI header records to N with error
+            UPDATE EDI_PSI_HDR
+            SET V_STATUS='READY-PREPARED',
+                V_STATUS_DT=GETDATE()
+            WHERE ODBC_ID=@ODBC_ID;     
+
+            --Commit transaciton
+            SET @STEP = 6;
+            COMMIT TRAN;
+        END TRY
+        BEGIN CATCH
+            --Rolback transaction
+            -- Test whether the transaction is uncommittable.
+            IF (XACT_STATE() != 0)
+                ROLLBACK TRAN;
+
+            --CLEAN UP
+            --Close cursor
+            IF (CURSOR_STATUS('global','po_lin_cur') >= 0)
+                CLOSE po_lin_cur;
+            IF (CURSOR_STATUS('global','po_lin_cur') >= -1)
+                DEALLOCATE po_lin_cur;
+
+            --Update the status on the PSI header records to N with error
+            UPDATE EDI_PSI_HDR
+            SET V_STATUS='N - PREPARE ' + CAST(ERROR_MESSAGE() AS VARCHAR(1000)) + ', PART_ID=' + ISNULL(cast(@PART_ID as varchar(50)),''),
+                V_STATUS_DT=GETDATE()
+            WHERE ODBC_ID=@ODBC_ID;
+
+            ----Update the etracks status
+            --EXEC UPDATE_ETRACKS_DOCUMENT_STATUS @ODBC_ID, @C_ETRACKS_FAILED_STATUS_CD;
+
+            --Print error information
+            PRINT 'ERROR!';
+            PRINT 'STEP:            ' + CAST(@STEP AS VARCHAR);
+            PRINT 'NUMBER:          ' + CAST(ERROR_NUMBER() AS VARCHAR);
+            PRINT 'SEVERITY:        ' + CAST(ERROR_SEVERITY() AS VARCHAR);
+            PRINT 'ERROR STATE:     ' + CAST(ERROR_STATE() AS VARCHAR);
+            PRINT 'ERROR LINE:      ' + CAST(ERROR_LINE() AS VARCHAR);
+            PRINT 'ERROR MESSAGE:   ' + CAST(ERROR_MESSAGE() AS VARCHAR(MAX));
+        END CATCH;
+
+NEXT_HDR_RECORD:
+        --Fetch next record from cursor
+        FETCH NEXT FROM psi_hdr_cur INTO @ODBC_ID, @TRANSACTION_SET, @KS_CUSTID,@KS_ST_ID, @PO_NUM;
+    END;
+
+    --CLEAN UP
+    --Close cursor
+    IF (CURSOR_STATUS('global','po_lin_cur') >= 0)
+        CLOSE po_lin_cur;
+    IF (CURSOR_STATUS('global','psi_hdr_cur') >= 0)
+        CLOSE psi_hdr_cur;  
+    --Deallocate cursor
+    IF (CURSOR_STATUS('global','po_lin_cur') >= -1)
+        DEALLOCATE po_lin_cur;
+    IF (CURSOR_STATUS('global','psi_hdr_cur') >= -1)
+        DEALLOCATE psi_hdr_cur;
+
+    --Turn on ansi warnings
+    SET ANSI_WARNINGS ON;
+END;
+
+```Adding an image of the results returned from sys.dm_exec_requests as requested. I highlighted the row in question. I stopped the looping process but it shows still running. How do I analyze this data?
+[image: enter image description here https://i.sstatic.net/OLrn9.png]
+(https://i.sstatic.net/OLrn9.png)
+
+I have more information to add. I now know the looping occurs when an update statement is executed inside an insert trigger. How do I release the lock on this table?
+
+# Answers
+
+## Answer 1
+Author: Mary Scherer
+Accepted: no
+Score: 0
+License: CC BY-SA 4.0
+
+I was able to resolve my own problem by deleting a single index. I suspect there was page locking on the index which was causing the undetected locks. Thank you for offering suggestions and leading me in the right direction.
+
+# Image OCR Notes
+
+OCR of image `https://i.sstatic.net/OLrn9.png`:
+
+The screenshot is an SSMS result grid showing active SQL Server sessions/requests. Most rows are system/background sessions, while the last visible row is a user query.
+
+```text
+Visible columns:
+session_id | request_id | start_time | status | command | sql_handle | statement_start_offset |
+statement_end_offset | plan_handle | database_id | user_id | connection_id | blocking_session_id | wait_type
+
+Important visible rows:
+- session_id 1: background, command RESOURCE MONITOR, wait_type NULL
+- session_id 2: background, command XE TIMER, wait_type XE_TIMER...
+- session_id 3: background, command XE DISPATCHER, wait_type XE_DISPA...
+- session_id 4: background, command LAZY WRITER, wait_type LAZYWRITER...
+- session_id 5: background, command LOG WRITER, wait_type LOGMGR...
+- session_id 6: background, command LOCK MONITOR, wait_type REQUEST...
+- session_id 7: background, command SIGNAL HANDLER, wait_type KSOURCE...
+- multiple TASK MANAGER / BRKR TASK / CHECKPOINT background or sleeping sessions
+- session_id 360: request_id 0, start_time 2018-12-12 10:13:07.373,
+  status running, command SELECT, statement_start_offset 46,
+  statement_end_offset 130, database_id 15, user_id 1,
+  blocking_session_id 0, wait_type NULL
+```
+
+Interpretation: the image shows one running SELECT request and no visible blocking session for it; other sessions are mostly SQL Server internal background tasks.

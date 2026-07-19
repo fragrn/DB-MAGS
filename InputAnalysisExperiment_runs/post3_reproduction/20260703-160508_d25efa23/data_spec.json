@@ -1,0 +1,178 @@
+{
+  "database": "slowlog_repro",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS slowlog_repro.scan_330 (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS slowlog_repro.scan_423 (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS slowlog_repro.scan_1456 (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB"
+  ],
+  "generation_sql": [
+    "INSERT IGNORE INTO slowlog_repro.scan_330 (id, tag, pad) SELECT rn, CASE WHEN rn = 1 THEN 'rare_1' WHEN rn <= 8 THEN 'group_7' WHEN MOD(rn, 17) = 0 THEN 'medium' ELSE 'common' END, RPAD('x', 32, 'x') FROM (SELECT ROW_NUMBER() OVER (ORDER BY d1.n, d2.n, d3.n, d4.n) AS rn FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4) seq WHERE rn <= 330",
+    "INSERT IGNORE INTO slowlog_repro.scan_423 (id, tag, pad) SELECT rn, CASE WHEN rn = 1 THEN 'rare_1' WHEN rn <= 8 THEN 'group_7' WHEN MOD(rn, 17) = 0 THEN 'medium' ELSE 'common' END, RPAD('x', 32, 'x') FROM (SELECT ROW_NUMBER() OVER (ORDER BY d1.n, d2.n, d3.n, d4.n) AS rn FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4) seq WHERE rn <= 423",
+    "INSERT IGNORE INTO slowlog_repro.scan_1456 (id, tag, pad) SELECT rn, CASE WHEN rn = 1 THEN 'rare_1' WHEN rn <= 8 THEN 'group_7' WHEN MOD(rn, 17) = 0 THEN 'medium' ELSE 'common' END, RPAD('x', 32, 'x') FROM (SELECT ROW_NUMBER() OVER (ORDER BY d1.n, d2.n, d3.n, d4.n) AS rn FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4) seq WHERE rn <= 1456"
+  ],
+  "tables": [
+    {
+      "table_name": "scan_330",
+      "columns": [
+        {
+          "name": "id",
+          "type": "int",
+          "nullable": false,
+          "key": "PRI"
+        },
+        {
+          "name": "tag",
+          "type": "varchar(16)",
+          "nullable": false,
+          "key": ""
+        },
+        {
+          "name": "pad",
+          "type": "char(32)",
+          "nullable": false,
+          "key": ""
+        }
+      ],
+      "indexes": [
+        {
+          "index_name": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "table_name": "scan_423",
+      "columns": [
+        {
+          "name": "id",
+          "type": "int",
+          "nullable": false,
+          "key": "PRI"
+        },
+        {
+          "name": "tag",
+          "type": "varchar(16)",
+          "nullable": false,
+          "key": ""
+        },
+        {
+          "name": "pad",
+          "type": "char(32)",
+          "nullable": false,
+          "key": ""
+        }
+      ],
+      "indexes": [
+        {
+          "index_name": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    },
+    {
+      "table_name": "scan_1456",
+      "columns": [
+        {
+          "name": "id",
+          "type": "int",
+          "nullable": false,
+          "key": "PRI"
+        },
+        {
+          "name": "tag",
+          "type": "varchar(16)",
+          "nullable": false,
+          "key": ""
+        },
+        {
+          "name": "pad",
+          "type": "char(32)",
+          "nullable": false,
+          "key": ""
+        }
+      ],
+      "indexes": [
+        {
+          "index_name": "PRIMARY",
+          "columns": [
+            "id"
+          ]
+        }
+      ]
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "scan_330": 330,
+      "scan_423": 423,
+      "scan_1456": 1456
+    },
+    "value_skew": {
+      "scan_330.tag": {
+        "rare_1": 1,
+        "group_7": 7,
+        "medium": 19,
+        "common": 303
+      },
+      "scan_423.tag": {
+        "rare_1": 1,
+        "group_7": 7,
+        "medium": 24,
+        "common": 391
+      },
+      "scan_1456.tag": {
+        "rare_1": 1,
+        "group_7": 7,
+        "medium": 85,
+        "common": 1363
+      }
+    },
+    "predicate_selectivity": {
+      "scan_330.tag = 'rare_1'": "~0.3%",
+      "scan_423.tag = 'rare_1'": "~0.2%",
+      "scan_1456.tag = 'group_7'": "~0.5%"
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "scan_330",
+    "scan_423",
+    "scan_1456"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT id FROM scan_330 WHERE tag = 'rare_1'",
+      "objective": "Confirm that the predicate is evaluated without a supporting index on `tag` and that the optimizer expects a read of most of the table.",
+      "expected_evidence": [
+        "The plan should describe reading the table directly rather than through a secondary index on `tag`.",
+        "The row estimate should be in the same order of magnitude as the table size."
+      ]
+    },
+    {
+      "sql": "SELECT id FROM scan_423 WHERE tag = 'rare_1'",
+      "objective": "Confirm the same scan-based access pattern on a slightly larger table with the same data shape.",
+      "expected_evidence": [
+        "The plan should show a full read of the table or equivalent scan-based access.",
+        "The row estimate should track the 423-row cardinality."
+      ]
+    },
+    {
+      "sql": "SELECT id FROM scan_1456 WHERE tag = 'group_7'",
+      "objective": "Confirm that a selective predicate still reads the table when there is no usable index on the filtered column.",
+      "expected_evidence": [
+        "The plan should not depend on a secondary index for `tag`.",
+        "The row estimate should reflect the table’s overall size rather than the tiny matching subset."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 330,
+    "max_rows": 1456,
+    "growth_factor": 1.5,
+    "max_rounds": 3
+  }
+}

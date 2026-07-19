@@ -1,0 +1,19 @@
+{
+  "validation_criteria": [
+    "The calibration EXPLAIN shows issues scanned first via PRIMARY with filter and large rows estimate",
+    "enabled_modules exists check is a per-row index lookup; members NOT IN may be implemented via a materialized/deduplicated subquery probed per row",
+    "ORDER BY issues.id DESC LIMIT 10 is satisfied by index order on PRIMARY (no full sort)",
+    "Observed runtime increases with more rows if workload is executed"
+  ],
+  "symptom_evidence": [
+    "High rows estimate on issues (hundreds of thousands)",
+    "No index used for subject LIKE",
+    "Latency per execution increases with data size"
+  ],
+  "mechanism_evidence": [
+    "Leading-wildcard LIKE prevents index on subject",
+    "Correlated checks add per-row work; anti-subquery may be materialized and probed per row",
+    "OR predicates reduce ability to use composite indexes"
+  ],
+  "minimum_plan_similarity": 0.6
+}

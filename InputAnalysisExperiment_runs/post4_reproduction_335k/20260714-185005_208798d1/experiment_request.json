@@ -1,0 +1,19 @@
+{
+  "target_anomaly": "slow MySQL SELECT caused by sparse token hits on a descending primary-key scan plus permission filters",
+  "target_database": "incident_repro_post4_335k",
+  "dba_description": "Reproduce the slow Redmine-like query from the forum post with data distributions that make token 255392 sparse on the issues.id DESC path, especially in high-id rows, so ORDER BY issues.id DESC LIMIT 10 must scan many candidates before stopping.",
+  "target_path": [
+    "issues",
+    "projects",
+    "enabled_modules",
+    "members"
+  ],
+  "injected_nodes": [],
+  "max_duration_sec": 120,
+  "max_retry_rounds": 2,
+  "risk_level": "low",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": false
+  }
+}

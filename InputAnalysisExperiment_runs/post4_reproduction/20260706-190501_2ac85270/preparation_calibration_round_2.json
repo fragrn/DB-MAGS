@@ -1,0 +1,22 @@
+{
+  "database": "dba_repro_slow_issues",
+  "statement_count": 16,
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS projects (id INT NOT NULL AUTO_INCREMENT, name VARCHAR(255) NOT NULL DEFAULT '', is_public TINYINT(1) NOT NULL DEFAULT 1, status TINYINT(1) NOT NULL DEFAULT 1, PRIMARY KEY (id)) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS issues (id INT NOT NULL AUTO_INCREMENT, project_id INT NOT NULL, subject VARCHAR(255) NOT NULL DEFAULT '', is_private TINYINT(1) NOT NULL DEFAULT 0, author_id INT NOT NULL DEFAULT 0, assigned_to_id INT DEFAULT NULL, PRIMARY KEY (id), KEY issues_project_id (project_id), KEY issues_author_id (author_id), KEY issues_assigned_to_id (assigned_to_id)) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS enabled_modules (id INT NOT NULL AUTO_INCREMENT, project_id INT DEFAULT NULL, name VARCHAR(255) NOT NULL, PRIMARY KEY (id), UNIQUE KEY uq_enabled_modules (project_id, name), KEY enabled_modules_project_id (project_id)) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS members (id INT NOT NULL AUTO_INCREMENT, user_id INT NOT NULL DEFAULT 0, project_id INT NOT NULL DEFAULT 0, PRIMARY KEY (id), UNIQUE KEY uq_member (user_id, project_id), KEY idx_members_user_id (user_id), KEY idx_members_project_id (project_id)) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS digits (n TINYINT NOT NULL, PRIMARY KEY (n)) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS seq_1k (n INT NOT NULL, PRIMARY KEY (n)) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS seq_400k (n INT NOT NULL, PRIMARY KEY (n)) ENGINE=InnoDB",
+    "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT INTO seq_1k (n) SELECT d0.n + d1.n*10 + d2.n*100 FROM digits d0 CROSS JOIN digits d1 CROSS JOIN digits d2 WHERE NOT EXISTS (SELECT 1 FROM seq_1k LIMIT 1)",
+    "INSERT INTO seq_400k (n) SELECT s1.n*1000 + s2.n FROM seq_1k s1 JOIN seq_1k s2 ON 1=1 WHERE s1.n*1000 + s2.n < 400000 AND NOT EXISTS (SELECT 1 FROM seq_400k LIMIT 1)",
+    "INSERT IGNORE INTO projects (id, name, is_public, status) SELECT n, CONCAT('Project ', n), IF(n%7=0,0,1), IF(n%10=0,9,1) FROM seq_1k WHERE n BETWEEN 1 AND 600 AND NOT EXISTS (SELECT 1 FROM projects LIMIT 1)",
+    "INSERT IGNORE INTO enabled_modules (project_id, name) SELECT id, 'issue_tracking' FROM projects WHERE id % 5 != 0 AND NOT EXISTS (SELECT 1 FROM enabled_modules LIMIT 1)",
+    "INSERT IGNORE INTO members (user_id, project_id) SELECT 44, id FROM projects WHERE id % 3 = 0 AND NOT EXISTS (SELECT 1 FROM members LIMIT 1)",
+    "INSERT IGNORE INTO members (user_id, project_id) SELECT 638, id FROM projects WHERE id % 4 = 0 AND NOT EXISTS (SELECT 1 FROM members WHERE user_id=638 LIMIT 1)",
+    "INSERT INTO issues (project_id, subject, is_private, author_id, assigned_to_id) SELECT p.id, CONCAT('alpha 255392 z ', s.n), 0, 44, 44 FROM (SELECT id FROM projects WHERE id IN (1,6,9,13,115,129,131,136,186,227,228,230,275,287,315,335,340,369,394,404,408,450,453,454,456,458,460,462,492,511,512,516,519,527,531,533,537)) p JOIN seq_1k s ON 1=1 WHERE NOT EXISTS (SELECT 1 FROM issues LIMIT 1) LIMIT 5000",
+    "INSERT INTO issues (project_id, subject, is_private, author_id, assigned_to_id) SELECT ((s.n % 600) + 1), CONCAT('noise-', LPAD(HEX(s.n),8,'0')), IF(s.n%5=0,1,0), (s.n%1000)+1000, NULL FROM seq_400k s WHERE s.n < 335000 AND (SELECT COUNT(*) FROM issues)=5000"
+  ]
+}

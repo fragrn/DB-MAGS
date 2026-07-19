@@ -1,0 +1,206 @@
+{
+  "planning_status": "failed",
+  "failure_type": "planner_fallback_blocked",
+  "reason": "Planner fallback blocked after tool loop failure: Remote end closed connection without response",
+  "target_path": [
+    "hot_update",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "hot_update"
+  ],
+  "fallback_used": false,
+  "fallback_blocked": true,
+  "react_trace": [
+    {
+      "step": 1,
+      "tool": "read_memory",
+      "arguments": {
+        "anomaly": "hot_update",
+        "limit": 20
+      },
+      "result": []
+    },
+    {
+      "step": 1,
+      "tool": "probe_schema",
+      "arguments": {
+        "database": "tpcc_10W"
+      },
+      "result": {
+        "truncated": true,
+        "preview": "{\"customer\": {\"columns\": [{\"name\": \"c_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_discount\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(4,4)\", \"default\": null}, {\"name\": \"c_credit\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_last\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(16)\", \"default\": null}, {\"name\": \"c_first\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(16)\", \"default\": null}, {\"name\": \"c_credit_lim\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"c_balance\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"c_ytd_payment\", \"type\": \"float\", \"nullable\": false, \"key\": \"\", \"column_type\": \"float\", \"default\": null}, {\"name\": \"c_payment_cnt\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_delivery_cnt\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"c_street_1\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_street_2\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_city\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"c_state\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_zip\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(9)\", \"default\": null}, {\"name\": \"c_phone\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(16)\", \"default\": null}, {\"name\": \"c_since\", \"type\": \"timestamp\", \"nullable\": false, \"key\": \"\", \"column_type\": \"timestamp\", \"default\": \"CURRENT_TIMESTAMP\"}, {\"name\": \"c_middle\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"c_data\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(500)\", \"default\": null}], \"indexes\": [{\"index_name\": \"idx_customer_name\", \"column\": \"c_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_d_id\", \"non_unique\": true, \"seq\": 2}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_last\", \"non_unique\": true, \"seq\": 3}, {\"index_name\": \"idx_customer_name\", \"column\": \"c_first\", \"non_unique\": true, \"seq\": 4}, {\"index_name\": \"PRIMARY\", \"column\": \"c_w_id\", \"non_unique\": false, \"seq\": 1}, {\"index_name\": \"PRIMARY\", \"column\": \"c_d_id\", \"non_unique\": false, \"seq\": 2}, {\"index_name\": \"PRIMARY\", \"column\": \"c_id\", \"non_unique\": false, \"seq\": 3}]}, \"district\": {\"columns\": [{\"name\": \"d_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_ytd\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(12,2)\", \"default\": null}, {\"name\": \"d_tax\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(4,4)\", \"default\": null}, {\"name\": \"d_next_o_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"d_name\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(10)\", \"default\": null}, {\"name\": \"d_street_1\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_street_2\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_city\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(20)\", \"default\": null}, {\"name\": \"d_state\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(2)\", \"default\": null}, {\"name\": \"d_zip\", \"type\": \"char\", \"nullable\": false, \"key\": \"\", \"column_type\": \"char(9)\", \"default\": null}], \"indexes\": [{\"index_name\": \"PRIMARY\", \"column\": \"d_w_id\", \"non_unique\": false, \"seq\": 1}, {\"index_name\": \"PRIMARY\", \"column\": \"d_id\", \"non_unique\": false, \"seq\": 2}]}, \"history\": {\"columns\": [{\"name\": \"h_c_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_c_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_c_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"MUL\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_d_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_w_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"MUL\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"h_date\", \"type\": \"timestamp\", \"nullable\": false, \"key\": \"\", \"column_type\": \"timestamp\", \"default\": \"CURRENT_TIMESTAMP\"}, {\"name\": \"h_amount\", \"type\": \"decimal\", \"nullable\": false, \"key\": \"\", \"column_type\": \"decimal(6,2)\", \"default\": null}, {\"name\": \"h_data\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_type\": \"varchar(24)\", \"default\": null}], \"indexes\": [{\"index_name\": \"h_c_w_id\", \"column\": \"h_c_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"h_c_w_id\", \"column\": \"h_c_d_id\", \"non_unique\": true, \"seq\": 2}, {\"index_name\": \"h_c_w_id\", \"column\": \"h_c_id\", \"non_unique\": true, \"seq\": 3}, {\"index_name\": \"h_w_id\", \"column\": \"h_w_id\", \"non_unique\": true, \"seq\": 1}, {\"index_name\": \"h_w_id\", \"column\": \"h_d_id\", \"non_unique\": true, \"seq\": 2}]}, \"item\": {\"columns\": [{\"name\": \"i_id\", \"type\": \"int\", \"nullable\": false, \"key\": \"PRI\", \"column_type\": \"int\", \"default\": null}, {\"name\": \"i_name\", \"type\": \"varchar\", \"nullable\": false, \"key\": \"\", \"column_t"
+      }
+    },
+    {
+      "step": 2,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "EXPLAIN UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id = 1 AND d_id = 1"
+      },
+      "result": {
+        "sql": "EXPLAIN UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id = 1 AND d_id = 1",
+        "plan": [
+          {
+            "error": "(1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'EXPLAIN UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id = 1 AND d_id = 1' at line 1\")"
+          }
+        ]
+      }
+    },
+    {
+      "step": 3,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "EXPLAIN SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE"
+      },
+      "result": {
+        "sql": "EXPLAIN SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE",
+        "plan": [
+          {
+            "error": "(1064, \"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'EXPLAIN SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE' at line 1\")"
+          }
+        ]
+      }
+    },
+    {
+      "step": 4,
+      "tool": "explain_sql",
+      "arguments": {
+        "database": "tpcc_10W",
+        "sql": "SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE"
+      },
+      "result": {
+        "sql": "SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE",
+        "plan": [
+          {
+            "EXPLAIN": "-> Rows fetched before execution  (cost=0..0 rows=1)\n"
+          }
+        ]
+      }
+    },
+    {
+      "step": 5,
+      "tool": "probe_os_metrics",
+      "arguments": {},
+      "result": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 4.29,
+          "5m": 3.77,
+          "15m": 3.23
+        },
+        "cpu_usage": {},
+        "memory": {
+          "total_kb": 1986976,
+          "active_kb": 1209316,
+          "wired_kb": 760044,
+          "free_kb": 17616,
+          "usage_ratio": 0.9911
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 353081397248,
+          "free_bytes": 141303398400,
+          "usage_ratio": 0.7142
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      }
+    },
+    {
+      "step": 5,
+      "tool": "probe_db_metrics",
+      "arguments": {
+        "database": "tpcc_10W"
+      },
+      "result": {
+        "Aborted_connects": "0",
+        "Com_delete": "894150",
+        "Com_insert": "6677487",
+        "Com_select": "52070810",
+        "Com_update": "25830448",
+        "Created_tmp_disk_tables": "2",
+        "Innodb_row_lock_time": "108331714",
+        "Innodb_row_lock_time_avg": "33",
+        "Innodb_row_lock_waits": "3223584",
+        "Max_used_connections": "105",
+        "Slow_queries": "226",
+        "Sort_merge_passes": "636",
+        "Threads_connected": "5",
+        "Threads_running": "5",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 2702757,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 10247,
+            "User": "root",
+            "Host": "localhost:49261",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "statistics",
+            "Info": "SELECT I_PRICE, I_NAME , I_DATA\n      FROM item\n     WHERE I_ID = 60127"
+          },
+          {
+            "Id": 10248,
+            "User": "root",
+            "Host": "localhost:49262",
+            "db": "tpcc_10w",
+            "Command": "Sleep",
+            "Time": 0,
+            "State": "",
+            "Info": null
+          },
+          {
+            "Id": 10249,
+            "User": "root",
+            "Host": "localhost:49263",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 1812.3800048828125\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 10250,
+            "User": "root",
+            "Host": "localhost:49264",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "updating",
+            "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 62.119998931884766\n     WHERE W_ID = 1"
+          },
+          {
+            "Id": 10269,
+            "User": "root",
+            "Host": "localhost:49759",
+            "db": "tpcc_10w",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ]
+      }
+    }
+  ]
+}

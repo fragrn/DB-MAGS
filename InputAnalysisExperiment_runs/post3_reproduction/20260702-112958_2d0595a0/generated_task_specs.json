@@ -1,0 +1,177 @@
+{
+  "task_specs": [
+    {
+      "task_id": "prepare_synthetic_data",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS `digits` (n TINYINT NOT NULL PRIMARY KEY) ENGINE=InnoDB;"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO `digits` (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9);"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS `scan_330` (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB;"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS `scan_423` (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB;"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS `scan_1456` (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB;"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO `scan_330` (id, tag, pad) SELECT seq, CASE WHEN seq <= 7 THEN 'hit' ELSE 'cold' END, RPAD(CONCAT('scan_330-', seq), 32, 'x') FROM (SELECT 1 + a.n + b.n * 10 + c.n * 100 + d.n * 1000 AS seq FROM `digits` a CROSS JOIN `digits` b CROSS JOIN `digits` c CROSS JOIN `digits` d) AS s WHERE seq <= 330;"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO `scan_423` (id, tag, pad) SELECT seq, CASE WHEN seq <= 1 THEN 'hit' ELSE 'cold' END, RPAD(CONCAT('scan_423-', seq), 32, 'x') FROM (SELECT 1 + a.n + b.n * 10 + c.n * 100 + d.n * 1000 AS seq FROM `digits` a CROSS JOIN `digits` b CROSS JOIN `digits` c CROSS JOIN `digits` d) AS s WHERE seq <= 423;"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO `scan_1456` (id, tag, pad) SELECT seq, CASE WHEN seq <= 1 THEN 'hit' ELSE 'cold' END, RPAD(CONCAT('scan_1456-', seq), 32, 'x') FROM (SELECT 1 + a.n + b.n * 10 + c.n * 100 + d.n * 1000 AS seq FROM `digits` a CROSS JOIN `digits` b CROSS JOIN `digits` c CROSS JOIN `digits` d) AS s WHERE seq <= 1456;"
+                },
+                {
+                  "sql": "ANALYZE TABLE `digits`, `scan_330`, `scan_423`, `scan_1456`;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "table_rows": {
+          "digits": 10,
+          "scan_330": 330,
+          "scan_423": 423,
+          "scan_1456": 1456
+        }
+      },
+      "success_criteria": {
+        "tables_present": true,
+        "statistics_refreshed": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic tables reproduce the observed cardinality and unindexed predicate shape needed for fast full scans."
+      }
+    },
+    {
+      "task_id": "repro_logging_mechanism",
+      "task_type": "probe",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "mysql",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = ON;"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 2;"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = ON;"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0;"
+                },
+                {
+                  "sql": "SET GLOBAL log_output = 'FILE';"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT id FROM `slowlog_repro`.`scan_330` WHERE tag = 'hit';",
+          "concurrency": 1,
+          "duration_sec": 5
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT id FROM `slowlog_repro`.`scan_423` WHERE tag = 'hit';",
+          "concurrency": 1,
+          "duration_sec": 5
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT id FROM `slowlog_repro`.`scan_1456` WHERE tag = 'hit';",
+          "concurrency": 1,
+          "duration_sec": 5
+        }
+      ],
+      "expected_metrics": {
+        "slow_log_entries": ">= 3",
+        "query_time_sec": "< 2",
+        "rows_examined": [
+          330,
+          423,
+          1456
+        ]
+      },
+      "success_criteria": {
+        "slow_log_contains_subsecond_scan_queries": true,
+        "rows_examined_matches_table_cardinality": true
+      },
+      "risk_assessment": "low",
+      "cleanup_actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "mysql",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = OFF;"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 10;"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = OFF;"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0;"
+                },
+                {
+                  "sql": "SET GLOBAL log_output = 'FILE';"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "metadata": {
+        "root_cause": "Fast full scans are logged because `log_queries_not_using_indexes` expands the slow-query log beyond `long_query_time`."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "prepare_synthetic_data",
+      "repro_logging_mechanism"
+    ]
+  ]
+}

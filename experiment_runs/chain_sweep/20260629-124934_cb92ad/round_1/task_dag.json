@@ -1,0 +1,45 @@
+{
+  "tasks": {
+    "hot_update_stock_1": {
+      "task_id": "hot_update_stock_1",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "tpcc_10W",
+          "scripts": [
+            [
+              "START TRANSACTION",
+              "UPDATE stock SET S_QUANTITY = S_QUANTITY - 1, S_YTD = S_YTD + 1, S_ORDER_CNT = S_ORDER_CNT + 1 WHERE S_W_ID = 1 AND S_I_ID = 35031",
+              "DO SLEEP(2)",
+              "COMMIT"
+            ]
+          ],
+          "duration_sec": 14,
+          "concurrency": 4
+        }
+      ],
+      "expected_metrics": {
+        "Innodb_row_lock_waits_delta": "increase",
+        "Innodb_row_lock_time_delta": "increase",
+        "Threads_running": "elevated above baseline",
+        "Slow_queries_delta": "may increase"
+      },
+      "success_criteria": [
+        "Concurrent txns block on the same stock row and produce measurable row-lock waits.",
+        "The injection window stays within the 15 second observation window."
+      ],
+      "start_after_sec": 0.0,
+      "dependencies": [],
+      "cleanup_actions": [],
+      "risk_assessment": "Medium-high: intentionally serializes updates on a hot TPC-C stock row and can elevate latency, but the task is bounded to the observation window.",
+      "metadata": {
+        "root_cause": "hot_update"
+      }
+    }
+  },
+  "edges": [],
+  "schedule": {
+    "hot_update_stock_1": 0.0
+  }
+}

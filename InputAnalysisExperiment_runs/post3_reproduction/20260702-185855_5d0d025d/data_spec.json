@@ -1,0 +1,142 @@
+{
+  "database": "slowlog_repro",
+  "schema_sql": [
+    "CREATE DATABASE IF NOT EXISTS slowlog_repro",
+    "CREATE TABLE IF NOT EXISTS slowlog_repro.repro_events (id BIGINT UNSIGNED NOT NULL, category VARCHAR(16) NOT NULL, payload VARCHAR(128) NOT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB"
+  ],
+  "generation_sql": [
+    "INSERT IGNORE INTO slowlog_repro.repro_events (id, category, payload, created_at) SELECT nums.n + 1, CASE WHEN MOD(nums.n, 100) < 10 THEN CONCAT('rare_', MOD(nums.n, 10)) ELSE 'common' END, RPAD(CONCAT('payload-', nums.n), 64, 'x'), TIMESTAMP('2024-01-01 00:00:00') + INTERVAL MOD(nums.n, 86400) SECOND FROM (SELECT a.d + b.d * 10 + c.d * 100 + d.d * 1000 + e.d * 10000 + f.d * 100000 AS n FROM (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) c CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) e CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) f) nums WHERE nums.n < 100000",
+    "ANALYZE TABLE slowlog_repro.repro_events"
+  ],
+  "tables": [
+    {
+      "name": "repro_events",
+      "primary_key": [
+        "id"
+      ],
+      "secondary_indexes": [],
+      "row_count": 100000
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "repro_events": 100000
+    },
+    "value_skew": {
+      "category": {
+        "common": 0.9,
+        "rare_0": 0.01,
+        "rare_1": 0.01,
+        "rare_2": 0.01,
+        "rare_3": 0.01,
+        "rare_4": 0.01,
+        "rare_5": 0.01,
+        "rare_6": 0.01,
+        "rare_7": 0.01,
+        "rare_8": 0.01,
+        "rare_9": 0.01
+      }
+    },
+    "predicate_selectivity": {
+      "category='rare_0'": 0.01,
+      "category='common'": 0.9,
+      "id=1": 1e-05
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "slowlog_repro.repro_events"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'rare_0'",
+      "conditions": [
+        {
+          "source": "explain",
+          "metric": "access_method",
+          "operator": "eq",
+          "expected": "ALL",
+          "tolerance": 0.2,
+          "required": true,
+          "rationale": "The repro query must read the table by scan so it can be logged as an unindexed query."
+        },
+        {
+          "source": "explain",
+          "metric": "table",
+          "operator": "eq",
+          "expected": "repro_events",
+          "tolerance": 0.2,
+          "required": true,
+          "rationale": "Confirms the plan is against the synthetic table."
+        },
+        {
+          "source": "explain",
+          "metric": "estimated_rows",
+          "operator": "approx",
+          "expected": 100000,
+          "tolerance": 0.2,
+          "required": true,
+          "rationale": "A near-full-table scan is the mechanism that makes the query appear in the slow log when unindexed logging is enabled."
+        },
+        {
+          "source": "explain",
+          "metric": "key_used",
+          "operator": "eq",
+          "expected": "NULL",
+          "tolerance": 0.2,
+          "required": true,
+          "rationale": "There is no index on `category`, so the optimizer should not use a key."
+        }
+      ],
+      "max_probe_sec": 10
+    },
+    {
+      "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE id = 1",
+      "conditions": [
+        {
+          "source": "explain",
+          "metric": "access_method",
+          "operator": "eq",
+          "expected": "const",
+          "tolerance": 0.2,
+          "required": true,
+          "rationale": "This indexed control query should be access-efficient and serve as a contrast to the scan case."
+        },
+        {
+          "source": "explain",
+          "metric": "table",
+          "operator": "eq",
+          "expected": "repro_events",
+          "tolerance": 0.2,
+          "required": true,
+          "rationale": "Confirms the control query is on the same table."
+        },
+        {
+          "source": "explain",
+          "metric": "estimated_rows",
+          "operator": "approx",
+          "expected": 1,
+          "tolerance": 0.5,
+          "required": true,
+          "rationale": "The primary-key lookup should be highly selective."
+        },
+        {
+          "source": "explain",
+          "metric": "key_used",
+          "operator": "eq",
+          "expected": "PRIMARY",
+          "tolerance": 0.2,
+          "required": true,
+          "rationale": "Confirms the optimizer uses the primary key for the indexed control query."
+        }
+      ],
+      "max_probe_sec": 10
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

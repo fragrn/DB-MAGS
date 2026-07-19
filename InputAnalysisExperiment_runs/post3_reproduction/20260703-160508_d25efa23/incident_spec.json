@@ -1,0 +1,83 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "MySQL can write fast queries to the slow log when slow-query logging is enabled for statements that do not use an index. In the post, sub-second SELECTs appear in the slow log because `log_queries_not_using_indexes` is enabled, not because they exceeded `long_query_time`.",
+  "symptoms": [
+    "The slow log contains `Query_time` values far below the configured `long_query_time` of 2 seconds.",
+    "Logged entries show `Rows_examined` values that line up with full-table reads on tables of about 330, 423, and 1456 rows.",
+    "The same fast SELECT pattern is repeatedly written to the slow log even though execution time is only a few milliseconds."
+  ],
+  "mechanism": "With `slow_query_log=ON` and `log_queries_not_using_indexes=ON`, MySQL treats non-indexed statements as slow-log eligible even when their actual runtime is below `long_query_time`. A predicate on an unindexed column therefore produces slow-log entries with low `Query_time` but high `Rows_examined`.",
+  "facts": [
+    {
+      "key": "posted configuration",
+      "value": {
+        "slow_query_log": "ON",
+        "long_query_time_seconds": 2,
+        "log_queries_not_using_indexes": "ON",
+        "log_slow_verbosity": "full",
+        "log_slow_admin_statements": 1,
+        "log_slow_slave_statements": 1
+      },
+      "source": "explicit_post",
+      "evidence": "The configuration block in the post shows `slow-query-log = ON`, `long_query_time = 2`, and `log-queries-not-using-indexes = ON`.",
+      "confidence": 0.99
+    },
+    {
+      "key": "slow-log excerpt",
+      "value": {
+        "query_time_range_seconds": [
+          0.000296,
+          0.002353
+        ],
+        "rows_examined_examples": [
+          330,
+          423,
+          1456
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The excerpt contains many lines such as `# Query_time: 0.000715 ... Rows_examined: 1456` and similar entries well below 2 seconds.",
+      "confidence": 0.99
+    },
+    {
+      "key": "user interpretation",
+      "value": {
+        "question": "why are sub-second queries appearing in the slow log?"
+      },
+      "source": "explicit_post",
+      "evidence": "The user asks why the slow log seems to log every query instead of only slow ones.",
+      "confidence": 0.98
+    },
+    {
+      "key": "query_time meaning",
+      "value": {
+        "interpretation": "actual execution time reported in the slow log"
+      },
+      "source": "agent_inference",
+      "evidence": "The reported `Query_time` is a runtime measurement; it is not itself the log-eligibility threshold.",
+      "confidence": 0.93
+    },
+    {
+      "key": "index-usage mechanism",
+      "value": {
+        "interpretation": "non-indexed statements can be logged independently of `long_query_time` when the relevant flag is enabled"
+      },
+      "source": "agent_inference",
+      "evidence": "The presence of `log_queries_not_using_indexes=ON` matches MySQL behavior that broadens slow-log eligibility to statements not using an index.",
+      "confidence": 0.92
+    }
+  ],
+  "assumptions": [
+    "The excerpted slow-log lines came from the configuration shown in the post.",
+    "The affected predicates did not have a usable secondary index on the filtered column.",
+    "The repeated `Rows_examined` values reflect the underlying table sizes rather than joins or application-side batching."
+  ],
+  "unknowns": [
+    "Exact MySQL minor version",
+    "Exact application SQL that generated the excerpt",
+    "Whether `min_examined_row_limit` was changed from its default before the excerpt",
+    "Whether any triggers, views, or query rewrites influenced index selection"
+  ],
+  "confidence": 0.91
+}

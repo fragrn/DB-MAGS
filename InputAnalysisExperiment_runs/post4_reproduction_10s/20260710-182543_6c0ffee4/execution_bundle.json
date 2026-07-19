@@ -1,0 +1,433 @@
+{
+  "baseline": {
+    "db_metrics": {
+      "Aborted_connects": "3",
+      "Com_delete": "2055804",
+      "Com_insert": "15332140",
+      "Com_select": "119944126",
+      "Com_update": "59490942",
+      "Created_tmp_disk_tables": "38",
+      "Innodb_row_lock_time": "293616171",
+      "Innodb_row_lock_time_avg": "39",
+      "Innodb_row_lock_waits": "7414953",
+      "Max_used_connections": "105",
+      "Slow_queries": "1791",
+      "Sort_merge_passes": "60111",
+      "Threads_connected": "5",
+      "Threads_running": "6",
+      "innodb_lock_wait_timeout": "50",
+      "max_connections": 151,
+      "wait_timeout": "28800",
+      "processlist": [
+        {
+          "Id": 5,
+          "User": "event_scheduler",
+          "Host": "localhost",
+          "db": null,
+          "Command": "Daemon",
+          "Time": 3644445,
+          "State": "Waiting on empty queue",
+          "Info": null
+        },
+        {
+          "Id": 17731,
+          "User": "root",
+          "Host": "localhost:57190",
+          "db": "tpcc_10w",
+          "Command": "Query",
+          "Time": 1,
+          "State": "statistics",
+          "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+        },
+        {
+          "Id": 17732,
+          "User": "root",
+          "Host": "localhost:57191",
+          "db": "tpcc_10w",
+          "Command": "Query",
+          "Time": 1,
+          "State": "statistics",
+          "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+        },
+        {
+          "Id": 17733,
+          "User": "root",
+          "Host": "localhost:57192",
+          "db": "tpcc_10w",
+          "Command": "Query",
+          "Time": 1,
+          "State": "waiting for handler commit",
+          "Info": "commit"
+        },
+        {
+          "Id": 17734,
+          "User": "root",
+          "Host": "localhost:57193",
+          "db": "tpcc_10w",
+          "Command": "Query",
+          "Time": 1,
+          "State": "statistics",
+          "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+        },
+        {
+          "Id": 17761,
+          "User": "root",
+          "Host": "localhost:57379",
+          "db": "incident_repro_post4_10s",
+          "Command": "Query",
+          "Time": 0,
+          "State": "init",
+          "Info": "SHOW FULL PROCESSLIST"
+        }
+      ]
+    },
+    "workload": {
+      "qps": 2243.67,
+      "tps": 1429.0,
+      "interval_sec": 3.0
+    },
+    "os_metrics": {
+      "platform": "Darwin",
+      "load_average": {
+        "1m": 6.0,
+        "5m": 6.39,
+        "15m": 6.67
+      },
+      "cpu_usage": {
+        "user_pct": 32.69,
+        "sys_pct": 23.99,
+        "idle_pct": 43.31,
+        "usage_ratio": 0.567
+      },
+      "memory": {
+        "total_kb": 2796996,
+        "active_kb": 1856568,
+        "wired_kb": 822392,
+        "free_kb": 118036,
+        "usage_ratio": 0.9578
+      },
+      "disk": {
+        "total_bytes": 494384795648,
+        "used_bytes": 401844027392,
+        "free_bytes": 92540768256,
+        "usage_ratio": 0.8128
+      },
+      "disk_io": {},
+      "network": {},
+      "file_descriptors": {
+        "open_fds": -1
+      }
+    },
+    "timestamp": 1783679551.7818859
+  },
+  "execution_trace": {
+    "tasks": {
+      "run_target_query_workload": {
+        "task_id": "run_target_query_workload",
+        "status": "completed",
+        "start_time": "2026-07-10T10:32:31+00:00",
+        "end_time": "2026-07-10T10:33:46+00:00",
+        "stdout": "{'concurrency': 1, 'duration_sec': 70, 'executions': 4, 'latency_ms': {'min': 12477.75, 'p50': 15460.504, 'p95': 20831.61, 'max': 20831.61}, 'error_count': 0}\n",
+        "stderr": "",
+        "errors": [],
+        "metrics": {}
+      },
+      "validate_query_plan_shape": {
+        "task_id": "validate_query_plan_shape",
+        "status": "completed",
+        "start_time": "2026-07-10T10:32:31+00:00",
+        "end_time": "2026-07-10T10:32:31+00:00",
+        "stdout": "{'kind': 'raw_command', 'command': ['mysql', '-h', '127.0.0.1', '-P', '3306', '-D', 'incident_repro_post4_10s', '-e', \"EXPLAIN SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10;\"], 'cwd': None, 'pid': 35488, 'exit_code': 0, 'timed_out': False, 'duration_sec': 5.0, 'stdout_path': 'InputAnalysisExperiment_runs/post4_reproduction_10s/20260710-182543_6c0ffee4/validate_query_plan_shape_raw_command_stdout.log', 'stderr_path': 'InputAnalysisExperiment_runs/post4_reproduction_10s/20260710-182543_6c0ffee4/validate_query_plan_shape_raw_command_stderr.log', 'stdout_tail': \"(s)  (cost=3.92e+6 rows=10)\\\\n    -> Nested loop inner join  (cost=3.92e+6 rows=2.52e+6)\\\\n        -> Nested loop inner join  (cost=1.54e+6 rows=2.8e+6)\\\\n            -> Filter: (((<in_optimizer>(issues.project_id,issues.project_id in (select #3) is false) and ((issues.is_private = 0) or (issues.author_id = 44) or (issues.assigned_to_id in (44,186,898)))) or ((issues.project_id in (1,6,9,13,115,129,131,136,186,227,228,230,275,287,315,335,340,369,394,404,408,450,453,454,456,458,460,462,492,511,512,516,519,527,531,533,537)) and ((issues.is_private = 0) or (issues.author_id = 44) or (issues.assigned_to_id in (44,186,898)))) or (issues.project_id in (40,68,130,149,326,330,331,332,333,350,356,402,455,514,515,528)) or ((issues.project_id in (91,111,128,130,149,235,257,322,326,328,330,331,332,333,350,356,489,508,514,515,525,528)) and ((issues.is_private = 0) or (issues.author_id = 44) or (issues.assigned_to_id in (44,186,898)))) or ((issues.project_id = 457) and ((issues.is_private = 0) or (issues.author_id = 44) or (issues.assigned_to_id in (44,186,898))))) and (issues.id <> 251880) and (lower(issues.`subject`) like <cache>(lower('%255392%'))))  (cost=564898 rows=2.8e+6)\\\\n                -> Index range scan on issues using PRIMARY over (id < 251880) OR (251880 < id) (reverse)  (cost=564898 rows=2.8e+6)\\\\n                -> Select #3 (subquery in condition; run only once)\\\\n                    -> Filter: ((issues.project_id = `<materialized_subquery>`.project_id))  (cost=13.5..13.5 rows=1)\\\\n                        -> Limit: 1 row(s)  (cost=13.5..13.5 rows=1)\\\\n                            -> Index lookup on <materialized_subquery> using <auto_distinct_key> (project_id = issues.project_id)\\\\n                                -> Materialize with deduplication  (cost=13.5..13.5 rows=40)\\\\n                                    -> Filter: (members.user_id in (44,638))  (cost=4.25 rows=40)\\\\n                                        -> Table scan on members  (cost=4.25 rows=40)\\\\n            -> Remove duplicates from input sorted on enabled_modules_name_project_id  (cost=0.25 rows=1)\\\\n                -> Covering index lookup on em using enabled_modules_name_project_id (name = 'issue_tracking', project_id = issues.project_id)  (cost=0.25 rows=1)\\\\n        -> Filter: ((projects.`status` <> 9) and (((projects.is_public = 1) and <in_optimizer>(issues.project_id,issues.project_id in (select #3) is false) and ((issues.is_private = 0) or (issues.author_id = 44) or (issues.assigned_to_id in (44,186,898)))) or ((issues.project_id in (1,6,9,13,115,129,131,136,186,227,228,230,275,287,315,335,340,369,394,404,408,450,453,454,456,458,460,462,492,511,512,516,519,527,531,533,537)) and ((issues.is_private = 0) or (issues.author_id = 44) or (issues.assigned_to_id in (44,186,898)))) or (issues.project_id in (40,68,130,149,326,330,331,332,333,350,356,402,455,514,515,528)) or ((issues.project_id in (91,111,128,130,149,235,257,322,326,328,330,331,332,333,350,356,489,508,514,515,525,528)) and ((issues.is_private = 0) or (issues.author_id = 44) or (issues.assigned_to_id in (44,186,898)))) or ((issues.project_id = 457) and ((issues.is_private = 0) or (issues.author_id = 44) or (issues.assigned_to_id in (44,186,898))))))  (cost=0.75 rows=0.9)\\\\n            -> Single-row index lookup on projects using PRIMARY (id = issues.project_id)  (cost=0.75 rows=1)\\\\n            -> Select #3 (subquery in condition; run only once)\\\\n                -> Filter: ((issues.project_id = `<materialized_subquery>`.project_id))  (cost=13.5..13.5 rows=1)\\\\n                    -> Limit: 1 row(s)  (cost=13.5..13.5 rows=1)\\\\n                        -> Index lookup on <materialized_subquery> using <auto_distinct_key> (project_id = issues.project_id)\\\\n                            -> Materialize with deduplication  (cost=13.5..13.5 rows=40)\\\\n                                -> Filter: (members.user_id in (44,638))  (cost=4.25 rows=40)\\\\n                                    -> Table scan on members  (cost=4.25 rows=40)\\\\n\\n\", 'stderr_tail': '', 'cleanup': None}\n",
+        "stderr": "",
+        "errors": [],
+        "metrics": {}
+      }
+    },
+    "cleanup_status": "completed",
+    "cleanup_errors": [],
+    "safety_events": []
+  },
+  "after": {
+    "db_metrics": {
+      "Aborted_connects": "3",
+      "Com_delete": "2059704",
+      "Com_insert": "15363060",
+      "Com_select": "120186855",
+      "Com_update": "59610975",
+      "Created_tmp_disk_tables": "38",
+      "Innodb_row_lock_time": "293801323",
+      "Innodb_row_lock_time_avg": "39",
+      "Innodb_row_lock_waits": "7429865",
+      "Max_used_connections": "105",
+      "Slow_queries": "1795",
+      "Sort_merge_passes": "60111",
+      "Threads_connected": "6",
+      "Threads_running": "7",
+      "innodb_lock_wait_timeout": "50",
+      "max_connections": 151,
+      "wait_timeout": "28800",
+      "processlist": [
+        {
+          "Id": 5,
+          "User": "event_scheduler",
+          "Host": "localhost",
+          "db": null,
+          "Command": "Daemon",
+          "Time": 3644527,
+          "State": "Waiting on empty queue",
+          "Info": null
+        },
+        {
+          "Id": 17731,
+          "User": "root",
+          "Host": "localhost:57190",
+          "db": "tpcc_10w",
+          "Command": "Query",
+          "Time": 0,
+          "State": "update",
+          "Info": "INSERT INTO oorder\n     (O_ID, O_D_ID, O_W_ID, O_C_ID, O_ENTRY_D, O_OL_CNT, O_ALL_LOCAL)\n     VALUES (487071, 2, 1, 737, '2026-07-10 18:33:46.871', 10, 0)"
+        },
+        {
+          "Id": 17732,
+          "User": "root",
+          "Host": "localhost:57191",
+          "db": "tpcc_10w",
+          "Command": "Sleep",
+          "Time": 0,
+          "State": "",
+          "Info": null
+        },
+        {
+          "Id": 17733,
+          "User": "root",
+          "Host": "localhost:57192",
+          "db": "tpcc_10w",
+          "Command": "Query",
+          "Time": 0,
+          "State": "statistics",
+          "Info": "SELECT W_TAX\n      FROM warehouse\n     WHERE W_ID = 1"
+        },
+        {
+          "Id": 17734,
+          "User": "root",
+          "Host": "localhost:57193",
+          "db": "tpcc_10w",
+          "Command": "Query",
+          "Time": 0,
+          "State": "updating",
+          "Info": "UPDATE warehouse\n       SET W_YTD = W_YTD + 929.1199951171875\n     WHERE W_ID = 1"
+        },
+        {
+          "Id": 17764,
+          "User": "root",
+          "Host": "localhost:57406",
+          "db": "incident_repro_post4_10s",
+          "Command": "Query",
+          "Time": 13,
+          "State": "executing",
+          "Info": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10"
+        },
+        {
+          "Id": 17783,
+          "User": "root",
+          "Host": "localhost:57692",
+          "db": "incident_repro_post4_10s",
+          "Command": "Query",
+          "Time": 0,
+          "State": "init",
+          "Info": "SHOW FULL PROCESSLIST"
+        }
+      ]
+    },
+    "workload": {
+      "qps": 3264.0,
+      "tps": 2120.67,
+      "interval_sec": 3.0
+    },
+    "os_metrics": {
+      "platform": "Darwin",
+      "load_average": {
+        "1m": 4.77,
+        "5m": 5.97,
+        "15m": 6.48
+      },
+      "cpu_usage": {
+        "user_pct": 26.79,
+        "sys_pct": 32.86,
+        "idle_pct": 40.33,
+        "usage_ratio": 0.597
+      },
+      "memory": {
+        "total_kb": 2632424,
+        "active_kb": 1883836,
+        "wired_kb": 728660,
+        "free_kb": 19928,
+        "usage_ratio": 0.9924
+      },
+      "disk": {
+        "total_bytes": 494384795648,
+        "used_bytes": 401958420480,
+        "free_bytes": 92426375168,
+        "usage_ratio": 0.813
+      },
+      "disk_io": {},
+      "network": {},
+      "file_descriptors": {
+        "open_fds": -1
+      }
+    },
+    "timestamp": 1783679633.721857
+  },
+  "task_dag": {
+    "tasks": {
+      "run_target_query_workload": {
+        "task_id": "run_target_query_workload",
+        "task_type": "workload",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "database": "incident_repro_post4_10s",
+            "duration_sec": 70,
+            "concurrency": 1,
+            "sql": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10"
+          }
+        ],
+        "cleanup_actions": [],
+        "expected_metrics": {
+          "query": "target query execution"
+        },
+        "success_criteria": [
+          "The target query executes successfully under the synthetic Redmine-style schema",
+          "Observed p50 or representative latency exceeds 10 seconds, ideally approaching the original 15 second report",
+          "The SQL retains LOWER(subject) LIKE leading-wildcard filtering and Redmine permission predicates"
+        ],
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "post4_sparse_token_pk_scan"
+        }
+      },
+      "validate_query_plan_shape": {
+        "task_id": "validate_query_plan_shape",
+        "task_type": "validation",
+        "actions": [
+          {
+            "kind": "raw_command",
+            "command": [
+              "mysql",
+              "-h",
+              "127.0.0.1",
+              "-P",
+              "3306",
+              "-D",
+              "incident_repro_post4_10s",
+              "-e",
+              "EXPLAIN SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10;"
+            ],
+            "duration_sec": 5
+          }
+        ],
+        "cleanup_actions": [],
+        "expected_metrics": {
+          "plan_shape": "issues-driven nested-loop with dependent subqueries",
+          "row_estimate": "large"
+        },
+        "success_criteria": {
+          "plan_mentions": [
+            "issues",
+            "projects",
+            "enabled_modules",
+            "members"
+          ]
+        },
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "post4_plan_validation"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "run_target_query_workload": 0.0,
+      "validate_query_plan_shape": 0.0
+    }
+  },
+  "safety": {
+    "approved": true,
+    "reasons": [],
+    "warnings": [],
+    "normalized_task_dag": {
+      "tasks": {
+        "run_target_query_workload": {
+          "task_id": "run_target_query_workload",
+          "task_type": "workload",
+          "actions": [
+            {
+              "kind": "raw_sql_workload",
+              "database": "incident_repro_post4_10s",
+              "duration_sec": 70,
+              "concurrency": 1,
+              "sql": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10"
+            }
+          ],
+          "cleanup_actions": [],
+          "expected_metrics": {
+            "query": "target query execution"
+          },
+          "success_criteria": [
+            "The target query executes successfully under the synthetic Redmine-style schema",
+            "Observed p50 or representative latency exceeds 10 seconds, ideally approaching the original 15 second report",
+            "The SQL retains LOWER(subject) LIKE leading-wildcard filtering and Redmine permission predicates"
+          ],
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "post4_sparse_token_pk_scan"
+          }
+        },
+        "validate_query_plan_shape": {
+          "task_id": "validate_query_plan_shape",
+          "task_type": "validation",
+          "actions": [
+            {
+              "kind": "raw_command",
+              "command": [
+                "mysql",
+                "-h",
+                "127.0.0.1",
+                "-P",
+                "3306",
+                "-D",
+                "incident_repro_post4_10s",
+                "-e",
+                "EXPLAIN SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10;"
+              ],
+              "duration_sec": 5
+            }
+          ],
+          "cleanup_actions": [],
+          "expected_metrics": {
+            "plan_shape": "issues-driven nested-loop with dependent subqueries",
+            "row_estimate": "large"
+          },
+          "success_criteria": {
+            "plan_mentions": [
+              "issues",
+              "projects",
+              "enabled_modules",
+              "members"
+            ]
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "post4_plan_validation"
+          }
+        }
+      },
+      "edges": [],
+      "schedule": {
+        "run_target_query_workload": 0.0,
+        "validate_query_plan_shape": 0.0
+      }
+    }
+  },
+  "slow_log_evidence": null
+}

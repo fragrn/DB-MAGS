@@ -1,0 +1,18 @@
+请基于以下分析重新生成复现方案：原帖慢的关键可能不是单纯的表规模，而是目标 token '255392' 在按 issues.id DESC 扫描路径上非常稀疏，导致 MySQL 为了 ORDER BY issues.id DESC LIMIT 10 扫描大量 issues 主键范围后才找到 10 条匹配。当前合成数据中 token 分布过于友好，所以只有约 229ms。
+
+请在 DataSpec 中显式建模：
+1. token 匹配率；
+2. token 在 issues.id 上的位置分布；
+3. 权限过滤后的有效命中率。
+
+让 '255392' 主要出现在低 id/旧数据区间，或者让高 id 区间极少匹配，从而迫使 PRIMARY DESC 扫描更长距离。
+
+Calibration 阶段需要通过 EXPLAIN 或 EXPLAIN ANALYZE 证明：
+1. 查询仍是 issues-first PRIMARY/PK 扫描；
+2. LOWER(subject) LIKE '%255392%' 不能使用 subject 索引；
+3. 扫描行数明显大于返回行数。
+
+不要只靠提高机器负载来制造慢，而要优先通过数据分布复现原帖机制。
+
+并且请生成真正执行目标查询的 raw_sql_workload TaskSpec，而不只是 EXPLAIN/validation task。
+EOF

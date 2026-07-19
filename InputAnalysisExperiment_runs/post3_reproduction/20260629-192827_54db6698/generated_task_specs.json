@@ -1,0 +1,111 @@
+{
+  "task_specs": [
+    {
+      "task_id": "repro_slow_log_indexless_scan",
+      "task_type": "reproduction",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "mysql_slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "transaction_script",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = ON"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 2"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = ON"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "mysql_slowlog_repro",
+          "sql": "SELECT COUNT(*) FROM events WHERE status = 'hot'",
+          "concurrency": 4,
+          "duration_sec": 10
+        },
+        {
+          "kind": "raw_transaction_script",
+          "database": "mysql_slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "transaction_script",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = OFF"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "mysql_slowlog_repro",
+          "sql": "SELECT COUNT(*) FROM events WHERE status = 'hot'",
+          "concurrency": 4,
+          "duration_sec": 10
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "mysql_slowlog_repro",
+          "sql": "SELECT id FROM events WHERE id = 42",
+          "concurrency": 4,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {
+        "first_phase_nonindexed_query_should_appear_in_slow_log": true,
+        "indexed_control_query_should_not_depend_on_slow_log_threshold": true,
+        "second_phase_same_query_should_drop_from_slow_log_after_toggle_off": true
+      },
+      "success_criteria": {
+        "mechanism_confirmed": true,
+        "nonindexed_query_rows_examined_greater_than_zero": true,
+        "slow_logged_query_time_seconds_max": 2
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "MySQL slow query logging is broadened by log_queries_not_using_indexes, so non-indexed statements can be written to the slow log even when Query_time is far below long_query_time."
+      },
+      "cleanup_actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "mysql_slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "transaction_script",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 10.000000"
+                },
+                {
+                  "sql": "SET GLOBAL slow_query_log = OFF"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "dependencies": []
+}

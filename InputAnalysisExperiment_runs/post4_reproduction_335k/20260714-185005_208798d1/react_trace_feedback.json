@@ -1,0 +1,743 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "dbms_adapters": [
+        "mysql"
+      ],
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "No SQL Server/PostgreSQL execution adapter in v1",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 2,
+    "tool": "inspect_mysql_global_variables",
+    "arguments": {},
+    "result": {
+      "variables": {
+        "log_output": "FILE",
+        "log_queries_not_using_indexes": "OFF",
+        "long_query_time": "10.000000",
+        "min_examined_row_limit": "0",
+        "slow_query_log": "OFF",
+        "slow_query_log_file": "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+      },
+      "error": ""
+    }
+  },
+  {
+    "step": 3,
+    "tool": "inspect_db_environment",
+    "arguments": "{\"database\":\"incident_repro\"}",
+    "error": "(1049, \"Unknown database 'incident_repro'\")"
+  },
+  {
+    "step": 4,
+    "tool": "compile_task_specs",
+    "arguments": "{\"dependencies\":[[\"build_synthetic_redmine_like_dataset\",\"run_target_query_workload\"],[\"build_synthetic_redmine_like_dataset\",\"validate_query_plan_shape\"]],\"task_specs\":[{\"task_id\":\"build_synthetic_redmine_like_dataset\",\"task_type\":\"setup\",\"actions\":[{\"kind\":\"raw_transaction_script\",\"database\":\"incident_repro\",\"duration_sec\":1,\"scripts\":[{\"role\":\"configure\",\"autocommit\":true,\"concurrency\":1,\"steps\":[{\"sql\":\"CREATE DATABASE IF NOT EXISTS incident_repro\"},{\"sql\":\"USE incident_repro\"},{\"sql\":\"CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY)\"},{\"sql\":\"CREATE TABLE IF NOT EXISTS users (id INT NOT NULL PRIMARY KEY, login VARCHAR(255) NOT NULL)\"},{\"sql\":\"CREATE TABLE IF NOT EXISTS projects (id INT NOT NULL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', description TEXT, homepage VARCHAR(255) DEFAULT '', is_public TINYINT(1) NOT NULL DEFAULT 1, status INT NOT NULL DEFAULT 1, parent_id INT DEFAULT NULL, created_on DATETIME DEFAULT NULL)\"},{\"sql\":\"CREATE TABLE IF NOT EXISTS enabled_modules (id INT NOT NULL PRIMARY KEY, project_id INT DEFAULT NULL, name VARCHAR(255) NOT NULL, KEY enabled_modules_project_id (project_id), KEY enabled_modules_name_project_id (name, project_id))\"},{\"sql\":\"CREATE TABLE IF NOT EXISTS members (id INT NOT NULL PRIMARY KEY, user_id INT NOT NULL DEFAULT 0, project_id INT NOT NULL DEFAULT 0, created_on DATETIME DEFAULT NULL, mail_notification TINYINT(1) NOT NULL DEFAULT 0, KEY index_members_on_user_id (user_id), KEY members_project_id (project_id))\"},{\"sql\":\"CREATE TABLE IF NOT EXISTS issues (id INT NOT NULL PRIMARY KEY, tracker_id INT NOT NULL, project_id INT NOT NULL, subject VARCHAR(255) NOT NULL DEFAULT '', description LONGTEXT, due_date DATE DEFAULT NULL, category_id INT DEFAULT NULL, is_private TINYINT(1) NOT NULL DEFAULT 0, author_id INT NOT NULL, assigned_to_id INT DEFAULT NULL, KEY issues_project_id (project_id), KEY issues_author_id (author_id), KEY issues_assigned_to_id (assigned_to_id))\"},{\"sql\":\"INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)\"},{\"sql\":\"INSERT IGNORE INTO users (id, login) SELECT n, CONCAT('user_', n) FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 <= 1350) seq\"},{\"sql\":\"INSERT IGNORE INTO projects (id, name, description, homepage, is_public, status, parent_id, created_on) SELECT n, CONCAT('project_', n), '', '', 1, 1, NULL, '2020-01-01 00:00:00' FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 WHERE d1.d + 10*d2.d + 100*d3.d + 1 <= 494) seq\"},{\"sql\":\"INSERT IGNORE INTO enabled_modules (id, project_id, name) SELECT id, id, 'issue_tracking' FROM projects\"},{\"sql\":\"INSERT IGNORE INTO members (id, user_id, project_id, created_on, mail_notification) SELECT n, CASE WHEN n <= 20 THEN 44 ELSE 638 END, n, '2020-01-01 00:00:00', 0 FROM (SELECT d1.d + 10*d2.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 WHERE d1.d + 10*d2.d + 1 <= 40) seq\"},{\"sql\":\"INSERT IGNORE INTO issues (id, tracker_id, project_id, subject, description, due_date, category_id, is_private, author_id, assigned_to_id) SELECT n, 1 + MOD(n, 5), CASE WHEN MOD(n, 30000) = 0 THEN 41 + MOD(n, 454) ELSE 1 + MOD(n - 1, 494) END, CASE WHEN n <= 6000 AND MOD(n, 300) = 0 THEN CONCAT('old ticket ', n, ' 255392 hit') WHEN n <= 6000 AND MOD(n, 17) = 0 THEN CONCAT('old ticket ', n, ' token 255392 near-miss') ELSE CONCAT('ticket ', n, ' filler') END, '', NULL, NULL, CASE WHEN n <= 6000 AND MOD(n, 8) = 0 THEN 44 ELSE 1 + MOD(n, 1350) END, CASE WHEN n <= 6000 AND MOD(n, 12) = 0 THEN 44 WHEN n <= 6000 AND MOD(n, 18) = 0 THEN 186 WHEN n <= 6000 AND MOD(n, 25) = 0 THEN 898 ELSE NULL END FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 <= 334823) seq\"},{\"sql\":\"ANALYZE TABLE users, projects, enabled_modules, members, issues\"}]}]}],\"metadata\":{\"root_cause\":\"Large issues table plus sparse substring predicate and repeated permission lookups\"}} ,{\"task_id\":\"run_target_query_workload\",\"task_type\":\"workload\",\"actions\":[{\"kind\":\"raw_sql_workload\",\"database\":\"incident_repro\",\"sql\":\"SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10\",\"concurrency\":1,\"duration_sec\":30}],\"metadata\":{\"root_cause\":\"Descending primary-key scan with sparse token matches and post-filter permission checks\"}}]}",
+    "error": "Dependency target task 'validate_query_plan_shape' not in task set"
+  },
+  {
+    "step": 5,
+    "tool": "compile_task_specs",
+    "arguments": {
+      "dependencies": [
+        [
+          "build_synthetic_redmine_like_dataset",
+          "run_target_query_workload"
+        ],
+        [
+          "build_synthetic_redmine_like_dataset",
+          "validate_query_plan_shape"
+        ]
+      ],
+      "task_specs": [
+        {
+          "task_id": "build_synthetic_redmine_like_dataset",
+          "task_type": "setup",
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "database": "incident_repro",
+              "duration_sec": 1,
+              "scripts": [
+                {
+                  "role": "configure",
+                  "autocommit": true,
+                  "concurrency": 1,
+                  "steps": [
+                    {
+                      "sql": "CREATE DATABASE IF NOT EXISTS incident_repro"
+                    },
+                    {
+                      "sql": "USE incident_repro"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY)"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS users (id INT NOT NULL PRIMARY KEY, login VARCHAR(255) NOT NULL)"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS projects (id INT NOT NULL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', description TEXT, homepage VARCHAR(255) DEFAULT '', is_public TINYINT(1) NOT NULL DEFAULT 1, status INT NOT NULL DEFAULT 1, parent_id INT DEFAULT NULL, created_on DATETIME DEFAULT NULL)"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS enabled_modules (id INT NOT NULL PRIMARY KEY, project_id INT DEFAULT NULL, name VARCHAR(255) NOT NULL, KEY enabled_modules_project_id (project_id), KEY enabled_modules_name_project_id (name, project_id))"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS members (id INT NOT NULL PRIMARY KEY, user_id INT NOT NULL DEFAULT 0, project_id INT NOT NULL DEFAULT 0, created_on DATETIME DEFAULT NULL, mail_notification TINYINT(1) NOT NULL DEFAULT 0, KEY index_members_on_user_id (user_id), KEY members_project_id (project_id))"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS issues (id INT NOT NULL PRIMARY KEY, tracker_id INT NOT NULL, project_id INT NOT NULL, subject VARCHAR(255) NOT NULL DEFAULT '', description LONGTEXT, due_date DATE DEFAULT NULL, category_id INT DEFAULT NULL, is_private TINYINT(1) NOT NULL DEFAULT 0, author_id INT NOT NULL, assigned_to_id INT DEFAULT NULL, KEY issues_project_id (project_id), KEY issues_author_id (author_id), KEY issues_assigned_to_id (assigned_to_id))"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO users (id, login) SELECT n, CONCAT('user_', n) FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 <= 1350) seq"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO projects (id, name, description, homepage, is_public, status, parent_id, created_on) SELECT n, CONCAT('project_', n), '', '', 1, 1, NULL, '2020-01-01 00:00:00' FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 WHERE d1.d + 10*d2.d + 100*d3.d + 1 <= 494) seq"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO enabled_modules (id, project_id, name) SELECT id, id, 'issue_tracking' FROM projects"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO members (id, user_id, project_id, created_on, mail_notification) SELECT n, CASE WHEN n <= 20 THEN 44 ELSE 638 END, n, '2020-01-01 00:00:00', 0 FROM (SELECT d1.d + 10*d2.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 WHERE d1.d + 10*d2.d + 1 <= 40) seq"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO issues (id, tracker_id, project_id, subject, description, due_date, category_id, is_private, author_id, assigned_to_id) SELECT n, 1 + MOD(n, 5), CASE WHEN MOD(n, 30000) = 0 THEN 41 + MOD(n, 454) ELSE 1 + MOD(n - 1, 494) END, CASE WHEN n <= 6000 AND MOD(n, 300) = 0 THEN CONCAT('old ticket ', n, ' 255392 hit') WHEN n <= 6000 AND MOD(n, 17) = 0 THEN CONCAT('old ticket ', n, ' token 255392 near-miss') ELSE CONCAT('ticket ', n, ' filler') END, '', NULL, NULL, CASE WHEN n <= 6000 AND MOD(n, 8) = 0 THEN 44 ELSE 1 + MOD(n, 1350) END, CASE WHEN n <= 6000 AND MOD(n, 12) = 0 THEN 44 WHEN n <= 6000 AND MOD(n, 18) = 0 THEN 186 WHEN n <= 6000 AND MOD(n, 25) = 0 THEN 898 ELSE NULL END FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 <= 334823) seq"
+                    },
+                    {
+                      "sql": "ANALYZE TABLE users, projects, enabled_modules, members, issues"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "cleanup_actions": [],
+          "expected_metrics": {
+            "tables": {
+              "digits": 10,
+              "users": 1350,
+              "projects": 494,
+              "enabled_modules": 494,
+              "members": 40,
+              "issues": 334823
+            }
+          },
+          "success_criteria": {
+            "data_loaded": true,
+            "statistics_updated": true
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "Large issues table plus sparse substring predicate and repeated permission lookups"
+          }
+        },
+        {
+          "task_id": "run_target_query_workload",
+          "task_type": "workload",
+          "actions": [
+            {
+              "kind": "raw_sql_workload",
+              "database": "incident_repro",
+              "duration_sec": 30,
+              "concurrency": 1,
+              "sql": "SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10"
+            }
+          ],
+          "cleanup_actions": [],
+          "expected_metrics": {
+            "query": "target query execution"
+          },
+          "success_criteria": {
+            "query_executed": true
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "Descending primary-key scan with sparse token matches and post-filter permission checks"
+          }
+        },
+        {
+          "task_id": "validate_query_plan_shape",
+          "task_type": "validation",
+          "actions": [
+            {
+              "kind": "raw_command",
+              "command": [
+                "mysql",
+                "-h",
+                "127.0.0.1",
+                "-P",
+                "3306",
+                "-D",
+                "incident_repro",
+                "-e",
+                "EXPLAIN SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10;"
+              ],
+              "duration_sec": 1
+            }
+          ],
+          "cleanup_actions": [],
+          "expected_metrics": {
+            "plan_shape": "issues-driven nested-loop with dependent subqueries",
+            "row_estimate": "large"
+          },
+          "success_criteria": {
+            "plan_mentions": [
+              "issues",
+              "projects",
+              "enabled_modules",
+              "members"
+            ]
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "Non-sargable substring search plus correlated lookups under ORDER BY DESC LIMIT"
+          }
+        }
+      ]
+    },
+    "result": {
+      "tasks": {
+        "build_synthetic_redmine_like_dataset": {
+          "task_id": "build_synthetic_redmine_like_dataset",
+          "task_type": "setup",
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "database": "incident_repro",
+              "duration_sec": 1,
+              "scripts": [
+                {
+                  "role": "configure",
+                  "autocommit": true,
+                  "concurrency": 1,
+                  "steps": [
+                    {
+                      "sql": "CREATE DATABASE IF NOT EXISTS incident_repro"
+                    },
+                    {
+                      "sql": "USE incident_repro"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY)"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS users (id INT NOT NULL PRIMARY KEY, login VARCHAR(255) NOT NULL)"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS projects (id INT NOT NULL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', description TEXT, homepage VARCHAR(255) DEFAULT '', is_public TINYINT(1) NOT NULL DEFAULT 1, status INT NOT NULL DEFAULT 1, parent_id INT DEFAULT NULL, created_on DATETIME DEFAULT NULL)"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS enabled_modules (id INT NOT NULL PRIMARY KEY, project_id INT DEFAULT NULL, name VARCHAR(255) NOT NULL, KEY enabled_modules_project_id (project_id), KEY enabled_modules_name_project_id (name, project_id))"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS members (id INT NOT NULL PRIMARY KEY, user_id INT NOT NULL DEFAULT 0, project_id INT NOT NULL DEFAULT 0, created_on DATETIME DEFAULT NULL, mail_notification TINYINT(1) NOT NULL DEFAULT 0, KEY index_members_on_user_id (user_id), KEY members_project_id (project_id))"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS issues (id INT NOT NULL PRIMARY KEY, tracker_id INT NOT NULL, project_id INT NOT NULL, subject VARCHAR(255) NOT NULL DEFAULT '', description LONGTEXT, due_date DATE DEFAULT NULL, category_id INT DEFAULT NULL, is_private TINYINT(1) NOT NULL DEFAULT 0, author_id INT NOT NULL, assigned_to_id INT DEFAULT NULL, KEY issues_project_id (project_id), KEY issues_author_id (author_id), KEY issues_assigned_to_id (assigned_to_id))"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO users (id, login) SELECT n, CONCAT('user_', n) FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 <= 1350) seq"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO projects (id, name, description, homepage, is_public, status, parent_id, created_on) SELECT n, CONCAT('project_', n), '', '', 1, 1, NULL, '2020-01-01 00:00:00' FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 WHERE d1.d + 10*d2.d + 100*d3.d + 1 <= 494) seq"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO enabled_modules (id, project_id, name) SELECT id, id, 'issue_tracking' FROM projects"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO members (id, user_id, project_id, created_on, mail_notification) SELECT n, CASE WHEN n <= 20 THEN 44 ELSE 638 END, n, '2020-01-01 00:00:00', 0 FROM (SELECT d1.d + 10*d2.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 WHERE d1.d + 10*d2.d + 1 <= 40) seq"
+                    },
+                    {
+                      "sql": "INSERT IGNORE INTO issues (id, tracker_id, project_id, subject, description, due_date, category_id, is_private, author_id, assigned_to_id) SELECT n, 1 + MOD(n, 5), CASE WHEN MOD(n, 30000) = 0 THEN 41 + MOD(n, 454) ELSE 1 + MOD(n - 1, 494) END, CASE WHEN n <= 6000 AND MOD(n, 300) = 0 THEN CONCAT('old ticket ', n, ' 255392 hit') WHEN n <= 6000 AND MOD(n, 17) = 0 THEN CONCAT('old ticket ', n, ' token 255392 near-miss') ELSE CONCAT('ticket ', n, ' filler') END, '', NULL, NULL, CASE WHEN n <= 6000 AND MOD(n, 8) = 0 THEN 44 ELSE 1 + MOD(n, 1350) END, CASE WHEN n <= 6000 AND MOD(n, 12) = 0 THEN 44 WHEN n <= 6000 AND MOD(n, 18) = 0 THEN 186 WHEN n <= 6000 AND MOD(n, 25) = 0 THEN 898 ELSE NULL END FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 <= 334823) seq"
+                    },
+                    {
+                      "sql": "ANALYZE TABLE users, projects, enabled_modules, members, issues"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "cleanup_actions": [],
+          "expected_metrics": {
+            "tables": {
+              "digits": 10,
+              "users": 1350,
+              "projects": 494,
+              "enabled_modules": 494,
+              "members": 40,
+              "issues": 334823
+            }
+          },
+          "success_criteria": {
+            "data_loaded": true,
+            "statistics_updated": true
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "Large issues table plus sparse substring predicate and repeated permission lookups"
+          }
+        },
+        "run_target_query_workload": {
+          "task_id": "run_target_query_workload",
+          "task_type": "workload",
+          "actions": [
+            {
+              "kind": "raw_sql_workload",
+              "database": "incident_repro",
+              "duration_sec": 30,
+              "concurrency": 1,
+              "sql": "SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10"
+            }
+          ],
+          "cleanup_actions": [],
+          "expected_metrics": {
+            "query": "target query execution"
+          },
+          "success_criteria": {
+            "query_executed": true
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "Descending primary-key scan with sparse token matches and post-filter permission checks"
+          }
+        },
+        "validate_query_plan_shape": {
+          "task_id": "validate_query_plan_shape",
+          "task_type": "validation",
+          "actions": [
+            {
+              "kind": "raw_command",
+              "command": [
+                "mysql",
+                "-h",
+                "127.0.0.1",
+                "-P",
+                "3306",
+                "-D",
+                "incident_repro",
+                "-e",
+                "EXPLAIN SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10;"
+              ],
+              "duration_sec": 1
+            }
+          ],
+          "cleanup_actions": [],
+          "expected_metrics": {
+            "plan_shape": "issues-driven nested-loop with dependent subqueries",
+            "row_estimate": "large"
+          },
+          "success_criteria": {
+            "plan_mentions": [
+              "issues",
+              "projects",
+              "enabled_modules",
+              "members"
+            ]
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "Non-sargable substring search plus correlated lookups under ORDER BY DESC LIMIT"
+          }
+        }
+      },
+      "edges": [
+        {
+          "source": "build_synthetic_redmine_like_dataset",
+          "target": "run_target_query_workload",
+          "condition": ""
+        },
+        {
+          "source": "build_synthetic_redmine_like_dataset",
+          "target": "validate_query_plan_shape",
+          "condition": ""
+        }
+      ],
+      "schedule": {
+        "build_synthetic_redmine_like_dataset": 0.0,
+        "run_target_query_workload": 0.0,
+        "validate_query_plan_shape": 0.0
+      }
+    }
+  },
+  {
+    "step": 6,
+    "tool": "check_safety",
+    "arguments": {
+      "expected_workload": {
+        "enabled": true,
+        "method": "sql",
+        "concurrency": 1,
+        "duration_sec": 30
+      },
+      "task_dag": {
+        "tasks": {
+          "build_synthetic_redmine_like_dataset": {
+            "task_id": "build_synthetic_redmine_like_dataset",
+            "task_type": "setup",
+            "actions": [
+              {
+                "kind": "raw_transaction_script",
+                "database": "incident_repro",
+                "duration_sec": 1,
+                "scripts": [
+                  {
+                    "role": "configure",
+                    "autocommit": true,
+                    "concurrency": 1,
+                    "steps": [
+                      {
+                        "sql": "CREATE DATABASE IF NOT EXISTS incident_repro"
+                      },
+                      {
+                        "sql": "USE incident_repro"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY)"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS users (id INT NOT NULL PRIMARY KEY, login VARCHAR(255) NOT NULL)"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS projects (id INT NOT NULL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', description TEXT, homepage VARCHAR(255) DEFAULT '', is_public TINYINT(1) NOT NULL DEFAULT 1, status INT NOT NULL DEFAULT 1, parent_id INT DEFAULT NULL, created_on DATETIME DEFAULT NULL)"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS enabled_modules (id INT NOT NULL PRIMARY KEY, project_id INT DEFAULT NULL, name VARCHAR(255) NOT NULL, KEY enabled_modules_project_id (project_id), KEY enabled_modules_name_project_id (name, project_id))"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS members (id INT NOT NULL PRIMARY KEY, user_id INT NOT NULL DEFAULT 0, project_id INT NOT NULL DEFAULT 0, created_on DATETIME DEFAULT NULL, mail_notification TINYINT(1) NOT NULL DEFAULT 0, KEY index_members_on_user_id (user_id), KEY members_project_id (project_id))"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS issues (id INT NOT NULL PRIMARY KEY, tracker_id INT NOT NULL, project_id INT NOT NULL, subject VARCHAR(255) NOT NULL DEFAULT '', description LONGTEXT, due_date DATE DEFAULT NULL, category_id INT DEFAULT NULL, is_private TINYINT(1) NOT NULL DEFAULT 0, author_id INT NOT NULL, assigned_to_id INT DEFAULT NULL, KEY issues_project_id (project_id), KEY issues_author_id (author_id), KEY issues_assigned_to_id (assigned_to_id))"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO users (id, login) SELECT n, CONCAT('user_', n) FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 <= 1350) seq"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO projects (id, name, description, homepage, is_public, status, parent_id, created_on) SELECT n, CONCAT('project_', n), '', '', 1, 1, NULL, '2020-01-01 00:00:00' FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 WHERE d1.d + 10*d2.d + 100*d3.d + 1 <= 494) seq"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO enabled_modules (id, project_id, name) SELECT id, id, 'issue_tracking' FROM projects"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO members (id, user_id, project_id, created_on, mail_notification) SELECT n, CASE WHEN n <= 20 THEN 44 ELSE 638 END, n, '2020-01-01 00:00:00', 0 FROM (SELECT d1.d + 10*d2.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 WHERE d1.d + 10*d2.d + 1 <= 40) seq"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO issues (id, tracker_id, project_id, subject, description, due_date, category_id, is_private, author_id, assigned_to_id) SELECT n, 1 + MOD(n, 5), CASE WHEN MOD(n, 30000) = 0 THEN 41 + MOD(n, 454) ELSE 1 + MOD(n - 1, 494) END, CASE WHEN n <= 6000 AND MOD(n, 300) = 0 THEN CONCAT('old ticket ', n, ' 255392 hit') WHEN n <= 6000 AND MOD(n, 17) = 0 THEN CONCAT('old ticket ', n, ' token 255392 near-miss') ELSE CONCAT('ticket ', n, ' filler') END, '', NULL, NULL, CASE WHEN n <= 6000 AND MOD(n, 8) = 0 THEN 44 ELSE 1 + MOD(n, 1350) END, CASE WHEN n <= 6000 AND MOD(n, 12) = 0 THEN 44 WHEN n <= 6000 AND MOD(n, 18) = 0 THEN 186 WHEN n <= 6000 AND MOD(n, 25) = 0 THEN 898 ELSE NULL END FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 <= 334823) seq"
+                      },
+                      {
+                        "sql": "ANALYZE TABLE users, projects, enabled_modules, members, issues"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "cleanup_actions": [],
+            "expected_metrics": {
+              "tables": {
+                "digits": 10,
+                "users": 1350,
+                "projects": 494,
+                "enabled_modules": 494,
+                "members": 40,
+                "issues": 334823
+              }
+            },
+            "success_criteria": {
+              "data_loaded": true,
+              "statistics_updated": true
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "Large issues table plus sparse substring predicate and repeated permission lookups"
+            }
+          },
+          "run_target_query_workload": {
+            "task_id": "run_target_query_workload",
+            "task_type": "workload",
+            "actions": [
+              {
+                "kind": "raw_sql_workload",
+                "database": "incident_repro",
+                "duration_sec": 30,
+                "concurrency": 1,
+                "sql": "SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10"
+              }
+            ],
+            "cleanup_actions": [],
+            "expected_metrics": {
+              "query": "target query execution"
+            },
+            "success_criteria": {
+              "query_executed": true
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "Descending primary-key scan with sparse token matches and post-filter permission checks"
+            }
+          },
+          "validate_query_plan_shape": {
+            "task_id": "validate_query_plan_shape",
+            "task_type": "validation",
+            "actions": [
+              {
+                "kind": "raw_command",
+                "command": [
+                  "mysql",
+                  "-h",
+                  "127.0.0.1",
+                  "-P",
+                  "3306",
+                  "-D",
+                  "incident_repro",
+                  "-e",
+                  "EXPLAIN SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10;"
+                ],
+                "duration_sec": 1
+              }
+            ],
+            "cleanup_actions": [],
+            "expected_metrics": {
+              "plan_shape": "issues-driven nested-loop with dependent subqueries",
+              "row_estimate": "large"
+            },
+            "success_criteria": {
+              "plan_mentions": [
+                "issues",
+                "projects",
+                "enabled_modules",
+                "members"
+              ]
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "Non-sargable substring search plus correlated lookups under ORDER BY DESC LIMIT"
+            }
+          }
+        },
+        "edges": [
+          {
+            "source": "build_synthetic_redmine_like_dataset",
+            "target": "run_target_query_workload",
+            "condition": ""
+          },
+          {
+            "source": "build_synthetic_redmine_like_dataset",
+            "target": "validate_query_plan_shape",
+            "condition": ""
+          }
+        ],
+        "schedule": {
+          "build_synthetic_redmine_like_dataset": 0.0,
+          "run_target_query_workload": 0.0,
+          "validate_query_plan_shape": 0.0
+        }
+      }
+    },
+    "result": {
+      "approved": true,
+      "reasons": [],
+      "warnings": [],
+      "normalized_task_dag": {
+        "tasks": {
+          "build_synthetic_redmine_like_dataset": {
+            "task_id": "build_synthetic_redmine_like_dataset",
+            "task_type": "setup",
+            "actions": [
+              {
+                "kind": "raw_transaction_script",
+                "database": "incident_repro",
+                "duration_sec": 1,
+                "scripts": [
+                  {
+                    "role": "configure",
+                    "autocommit": true,
+                    "concurrency": 1,
+                    "steps": [
+                      {
+                        "sql": "CREATE DATABASE IF NOT EXISTS incident_repro"
+                      },
+                      {
+                        "sql": "USE incident_repro"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY)"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS users (id INT NOT NULL PRIMARY KEY, login VARCHAR(255) NOT NULL)"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS projects (id INT NOT NULL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', description TEXT, homepage VARCHAR(255) DEFAULT '', is_public TINYINT(1) NOT NULL DEFAULT 1, status INT NOT NULL DEFAULT 1, parent_id INT DEFAULT NULL, created_on DATETIME DEFAULT NULL)"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS enabled_modules (id INT NOT NULL PRIMARY KEY, project_id INT DEFAULT NULL, name VARCHAR(255) NOT NULL, KEY enabled_modules_project_id (project_id), KEY enabled_modules_name_project_id (name, project_id))"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS members (id INT NOT NULL PRIMARY KEY, user_id INT NOT NULL DEFAULT 0, project_id INT NOT NULL DEFAULT 0, created_on DATETIME DEFAULT NULL, mail_notification TINYINT(1) NOT NULL DEFAULT 0, KEY index_members_on_user_id (user_id), KEY members_project_id (project_id))"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS issues (id INT NOT NULL PRIMARY KEY, tracker_id INT NOT NULL, project_id INT NOT NULL, subject VARCHAR(255) NOT NULL DEFAULT '', description LONGTEXT, due_date DATE DEFAULT NULL, category_id INT DEFAULT NULL, is_private TINYINT(1) NOT NULL DEFAULT 0, author_id INT NOT NULL, assigned_to_id INT DEFAULT NULL, KEY issues_project_id (project_id), KEY issues_author_id (author_id), KEY issues_assigned_to_id (assigned_to_id))"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO users (id, login) SELECT n, CONCAT('user_', n) FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 <= 1350) seq"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO projects (id, name, description, homepage, is_public, status, parent_id, created_on) SELECT n, CONCAT('project_', n), '', '', 1, 1, NULL, '2020-01-01 00:00:00' FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 WHERE d1.d + 10*d2.d + 100*d3.d + 1 <= 494) seq"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO enabled_modules (id, project_id, name) SELECT id, id, 'issue_tracking' FROM projects"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO members (id, user_id, project_id, created_on, mail_notification) SELECT n, CASE WHEN n <= 20 THEN 44 ELSE 638 END, n, '2020-01-01 00:00:00', 0 FROM (SELECT d1.d + 10*d2.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 WHERE d1.d + 10*d2.d + 1 <= 40) seq"
+                      },
+                      {
+                        "sql": "INSERT IGNORE INTO issues (id, tracker_id, project_id, subject, description, due_date, category_id, is_private, author_id, assigned_to_id) SELECT n, 1 + MOD(n, 5), CASE WHEN MOD(n, 30000) = 0 THEN 41 + MOD(n, 454) ELSE 1 + MOD(n - 1, 494) END, CASE WHEN n <= 6000 AND MOD(n, 300) = 0 THEN CONCAT('old ticket ', n, ' 255392 hit') WHEN n <= 6000 AND MOD(n, 17) = 0 THEN CONCAT('old ticket ', n, ' token 255392 near-miss') ELSE CONCAT('ticket ', n, ' filler') END, '', NULL, NULL, CASE WHEN n <= 6000 AND MOD(n, 8) = 0 THEN 44 ELSE 1 + MOD(n, 1350) END, CASE WHEN n <= 6000 AND MOD(n, 12) = 0 THEN 44 WHEN n <= 6000 AND MOD(n, 18) = 0 THEN 186 WHEN n <= 6000 AND MOD(n, 25) = 0 THEN 898 ELSE NULL END FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 <= 334823) seq"
+                      },
+                      {
+                        "sql": "ANALYZE TABLE users, projects, enabled_modules, members, issues"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "cleanup_actions": [],
+            "expected_metrics": {
+              "tables": {
+                "digits": 10,
+                "users": 1350,
+                "projects": 494,
+                "enabled_modules": 494,
+                "members": 40,
+                "issues": 334823
+              }
+            },
+            "success_criteria": {
+              "data_loaded": true,
+              "statistics_updated": true
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "Large issues table plus sparse substring predicate and repeated permission lookups"
+            }
+          },
+          "run_target_query_workload": {
+            "task_id": "run_target_query_workload",
+            "task_type": "workload",
+            "actions": [
+              {
+                "kind": "raw_sql_workload",
+                "database": "incident_repro",
+                "duration_sec": 30,
+                "concurrency": 1,
+                "sql": "SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10"
+              }
+            ],
+            "cleanup_actions": [],
+            "expected_metrics": {
+              "query": "target query execution"
+            },
+            "success_criteria": {
+              "query_executed": true
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "Descending primary-key scan with sparse token matches and post-filter permission checks"
+            }
+          },
+          "validate_query_plan_shape": {
+            "task_id": "validate_query_plan_shape",
+            "task_type": "validation",
+            "actions": [
+              {
+                "kind": "raw_command",
+                "command": [
+                  "mysql",
+                  "-h",
+                  "127.0.0.1",
+                  "-P",
+                  "3306",
+                  "-D",
+                  "incident_repro",
+                  "-e",
+                  "EXPLAIN SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10;"
+                ],
+                "duration_sec": 1
+              }
+            ],
+            "cleanup_actions": [],
+            "expected_metrics": {
+              "plan_shape": "issues-driven nested-loop with dependent subqueries",
+              "row_estimate": "large"
+            },
+            "success_criteria": {
+              "plan_mentions": [
+                "issues",
+                "projects",
+                "enabled_modules",
+                "members"
+              ]
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "Non-sargable substring search plus correlated lookups under ORDER BY DESC LIMIT"
+            }
+          }
+        },
+        "edges": [
+          {
+            "source": "build_synthetic_redmine_like_dataset",
+            "target": "run_target_query_workload",
+            "condition": ""
+          },
+          {
+            "source": "build_synthetic_redmine_like_dataset",
+            "target": "validate_query_plan_shape",
+            "condition": ""
+          }
+        ],
+        "schedule": {
+          "build_synthetic_redmine_like_dataset": 0.0,
+          "run_target_query_workload": 0.0,
+          "validate_query_plan_shape": 0.0
+        }
+      }
+    }
+  },
+  {
+    "step": 7,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"mysql\",\n    \"dbms_version\": null,\n    \"summary\": \"A Redmine-like MySQL query is slow because MySQL must evaluate a large issues-driven access path, correlated permission checks, and a non-sargable substring predicate while honoring ORDER BY issues.id DESC LIMIT 10. The reproduction should model the mechanism with sparse token hits concentrated in older/lower-id rows so the descending primary-key scan must walk a long distance before finding 10 matches.\",\n    \"symptoms\": [\n      \"The reported query takes about 15 seconds in production.\",\n      \"EXPLAIN shows issues as the primary driving table with a large row estimate.\",\n      \"Dependent subqueries appear for enabled_modules and members.\",\n      \"The query filters on LOWER(issues.subject) LIKE LOWER('%255392%') and orders by issues.id DESC with LIMIT 10.\"\n    ],\n    \"mechanism\": \"MySQL scans issues by PRIMARY key in descending order to satisfy ORDER BY ... DESC LIMIT 10, but the token match is sparse and concentrated in low-id/old rows, so the scan must inspect many non-matching rows before enough qualifying rows are found. The join to projects and the permission subqueries remain post-filters, and LOWER(subject) LIKE '%255392%' is non-sargable, so the optimizer cannot use a subject index to jump directly to matching rows.\",\n    \"facts\": [\n      {\n        \"key\": \"issues_row_count\",\n        \"value\": {\n          \"count\": 334823\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post says issues has more than 334,823 records.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"custom_values_row_count\",\n        \"value\": {\n          \"count\": 1350243\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post says custom_values has over 1,350,243 records.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"projects_row_count\",\n        \"value\": {\n          \"count\": 494\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post says projects has 494 records.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"users_row_count\",\n        \"value\": {\n          \"count\": 1350\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post says the system currently has 1350 users.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"slowest_query_runtime\",\n        \"value\": {\n          \"seconds\": 15\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The author says the slowest query takes about 15 seconds.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"query_shape\",\n        \"value\": {\n          \"joins\": [\n            \"issues\",\n            \"projects\"\n          ],\n          \"subqueries\": [\n            \"enabled_modules EXISTS\",\n            \"members NOT IN\"\n          ],\n          \"final_filter\": \"LOWER(issues.subject) LIKE LOWER('%255392%')\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post includes the full SELECT with an inner join to projects, EXISTS on enabled_modules, NOT IN on members, and a LOWER(subject) substring predicate.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"posted_explain_shape\",\n        \"value\": {\n          \"main_table\": \"issues\",\n          \"main_type\": \"range\",\n          \"estimated_rows\": 311632,\n          \"project_access\": \"eq_ref\",\n          \"subqueries\": [\n            \"members dependent subquery\",\n            \"enabled_modules dependent subquery\"\n          ]\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The Tabular Explain in the post lists issues as PRIMARY with type range and rows 311632, projects as eq_ref, and dependent subqueries for members and enabled_modules.\",\n        \"confidence\": 0.97\n      },\n      {\n        \"key\": \"token_sparsity_mechanism\",\n        \"value\": {\n          \"token\": \"255392\",\n          \"placement\": \"mostly in low-id/older issues rows\",\n          \"effect\": \"descending PK scan must inspect many rows before LIMIT 10 is satisfi"
+  }
+]

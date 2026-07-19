@@ -1,0 +1,514 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "dbms_adapters": [
+        "mysql"
+      ],
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "No SQL Server/PostgreSQL execution adapter in v1",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_mysql_global_variables",
+    "arguments": {},
+    "result": {
+      "variables": {
+        "log_output": "FILE",
+        "log_queries_not_using_indexes": "OFF",
+        "long_query_time": "10.000000",
+        "min_examined_row_limit": "0",
+        "slow_query_log": "OFF",
+        "slow_query_log_file": "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+      },
+      "error": ""
+    }
+  },
+  {
+    "step": 2,
+    "tool": "compile_task_specs",
+    "arguments": {
+      "dependencies": [
+        [
+          "seed_data",
+          "reproduce_slow_log"
+        ]
+      ],
+      "task_specs": [
+        {
+          "task_id": "seed_data",
+          "task_type": "raw_transaction_script",
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "database": "slowlog_repro",
+              "duration_sec": 1,
+              "scripts": [
+                {
+                  "role": "configure",
+                  "autocommit": true,
+                  "concurrency": 1,
+                  "steps": [
+                    {
+                      "sql": "CREATE DATABASE IF NOT EXISTS slowlog_repro"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS slowlog_repro.repro_events (id BIGINT UNSIGNED NOT NULL PRIMARY KEY, category VARCHAR(16) NOT NULL, payload VARCHAR(64) NOT NULL, created_at DATETIME NOT NULL)"
+                    },
+                    {
+                      "sql": "DELETE FROM slowlog_repro.repro_events"
+                    },
+                    {
+                      "sql": "INSERT INTO slowlog_repro.repro_events (id, category, payload, created_at) SELECT seq.n, CASE WHEN seq.n % 20 = 0 THEN 'cold' ELSE 'hot' END, LPAD(seq.n, 8, '0'), TIMESTAMPADD(SECOND, seq.n, '2024-01-01 00:00:00') FROM (SELECT a.i + b.i * 10 + c.i * 100 + d.i * 1000 + 1 AS n FROM (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS a CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS b CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS c CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d) AS seq WHERE seq.n <= 4096"
+                    },
+                    {
+                      "sql": "ANALYZE TABLE slowlog_repro.repro_events"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "expected_metrics": {
+            "row_count": 4096
+          },
+          "success_criteria": {
+            "row_count": 4096
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "full table scan on an unindexed predicate column"
+          }
+        },
+        {
+          "task_id": "reproduce_slow_log",
+          "task_type": "mixed",
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "database": "slowlog_repro",
+              "duration_sec": 1,
+              "scripts": [
+                {
+                  "role": "configure",
+                  "autocommit": true,
+                  "concurrency": 1,
+                  "steps": [
+                    {
+                      "sql": "SET GLOBAL slow_query_log = ON"
+                    },
+                    {
+                      "sql": "SET GLOBAL log_queries_not_using_indexes = ON"
+                    },
+                    {
+                      "sql": "SET GLOBAL long_query_time = 2"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "raw_sql_workload",
+              "database": "slowlog_repro",
+              "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'cold'",
+              "concurrency": 1,
+              "duration_sec": 5
+            },
+            {
+              "kind": "raw_command",
+              "argv": [
+                "grep",
+                "-F",
+                "COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'cold'",
+                "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+              ]
+            }
+          ],
+          "expected_metrics": {
+            "slow_log_entries": "nonzero"
+          },
+          "success_criteria": {
+            "completed": true
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "log_queries_not_using_indexes causes fast full scans to be logged in the slow log"
+          }
+        }
+      ]
+    },
+    "result": {
+      "tasks": {
+        "seed_data": {
+          "task_id": "seed_data",
+          "task_type": "raw_transaction_script",
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "database": "slowlog_repro",
+              "duration_sec": 1,
+              "scripts": [
+                {
+                  "role": "configure",
+                  "autocommit": true,
+                  "concurrency": 1,
+                  "steps": [
+                    {
+                      "sql": "CREATE DATABASE IF NOT EXISTS slowlog_repro"
+                    },
+                    {
+                      "sql": "CREATE TABLE IF NOT EXISTS slowlog_repro.repro_events (id BIGINT UNSIGNED NOT NULL PRIMARY KEY, category VARCHAR(16) NOT NULL, payload VARCHAR(64) NOT NULL, created_at DATETIME NOT NULL)"
+                    },
+                    {
+                      "sql": "DELETE FROM slowlog_repro.repro_events"
+                    },
+                    {
+                      "sql": "INSERT INTO slowlog_repro.repro_events (id, category, payload, created_at) SELECT seq.n, CASE WHEN seq.n % 20 = 0 THEN 'cold' ELSE 'hot' END, LPAD(seq.n, 8, '0'), TIMESTAMPADD(SECOND, seq.n, '2024-01-01 00:00:00') FROM (SELECT a.i + b.i * 10 + c.i * 100 + d.i * 1000 + 1 AS n FROM (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS a CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS b CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS c CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d) AS seq WHERE seq.n <= 4096"
+                    },
+                    {
+                      "sql": "ANALYZE TABLE slowlog_repro.repro_events"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "expected_metrics": {
+            "row_count": 4096
+          },
+          "success_criteria": {
+            "row_count": 4096
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "full table scan on an unindexed predicate column"
+          }
+        },
+        "reproduce_slow_log": {
+          "task_id": "reproduce_slow_log",
+          "task_type": "mixed",
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "database": "slowlog_repro",
+              "duration_sec": 1,
+              "scripts": [
+                {
+                  "role": "configure",
+                  "autocommit": true,
+                  "concurrency": 1,
+                  "steps": [
+                    {
+                      "sql": "SET GLOBAL slow_query_log = ON"
+                    },
+                    {
+                      "sql": "SET GLOBAL log_queries_not_using_indexes = ON"
+                    },
+                    {
+                      "sql": "SET GLOBAL long_query_time = 2"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "kind": "raw_sql_workload",
+              "database": "slowlog_repro",
+              "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'cold'",
+              "concurrency": 1,
+              "duration_sec": 5
+            },
+            {
+              "kind": "raw_command",
+              "argv": [
+                "grep",
+                "-F",
+                "COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'cold'",
+                "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+              ]
+            }
+          ],
+          "expected_metrics": {
+            "slow_log_entries": "nonzero"
+          },
+          "success_criteria": {
+            "completed": true
+          },
+          "risk_assessment": "low",
+          "metadata": {
+            "root_cause": "log_queries_not_using_indexes causes fast full scans to be logged in the slow log"
+          }
+        }
+      },
+      "edges": [
+        {
+          "source": "seed_data",
+          "target": "reproduce_slow_log",
+          "condition": ""
+        }
+      ],
+      "schedule": {
+        "seed_data": 0.0,
+        "reproduce_slow_log": 0.0
+      }
+    }
+  },
+  {
+    "step": 3,
+    "tool": "check_safety",
+    "arguments": {
+      "task_dag": {
+        "tasks": {
+          "seed_data": {
+            "task_id": "seed_data",
+            "task_type": "raw_transaction_script",
+            "actions": [
+              {
+                "kind": "raw_transaction_script",
+                "database": "slowlog_repro",
+                "duration_sec": 1,
+                "scripts": [
+                  {
+                    "role": "configure",
+                    "autocommit": true,
+                    "concurrency": 1,
+                    "steps": [
+                      {
+                        "sql": "CREATE DATABASE IF NOT EXISTS slowlog_repro"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS slowlog_repro.repro_events (id BIGINT UNSIGNED NOT NULL PRIMARY KEY, category VARCHAR(16) NOT NULL, payload VARCHAR(64) NOT NULL, created_at DATETIME NOT NULL)"
+                      },
+                      {
+                        "sql": "DELETE FROM slowlog_repro.repro_events"
+                      },
+                      {
+                        "sql": "INSERT INTO slowlog_repro.repro_events (id, category, payload, created_at) SELECT seq.n, CASE WHEN seq.n % 20 = 0 THEN 'cold' ELSE 'hot' END, LPAD(seq.n, 8, '0'), TIMESTAMPADD(SECOND, seq.n, '2024-01-01 00:00:00') FROM (SELECT a.i + b.i * 10 + c.i * 100 + d.i * 1000 + 1 AS n FROM (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS a CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS b CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS c CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d) AS seq WHERE seq.n <= 4096"
+                      },
+                      {
+                        "sql": "ANALYZE TABLE slowlog_repro.repro_events"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "expected_metrics": {
+              "row_count": 4096
+            },
+            "success_criteria": {
+              "row_count": 4096
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "full table scan on an unindexed predicate column"
+            }
+          },
+          "reproduce_slow_log": {
+            "task_id": "reproduce_slow_log",
+            "task_type": "mixed",
+            "actions": [
+              {
+                "kind": "raw_transaction_script",
+                "database": "slowlog_repro",
+                "duration_sec": 1,
+                "scripts": [
+                  {
+                    "role": "configure",
+                    "autocommit": true,
+                    "concurrency": 1,
+                    "steps": [
+                      {
+                        "sql": "SET GLOBAL slow_query_log = ON"
+                      },
+                      {
+                        "sql": "SET GLOBAL log_queries_not_using_indexes = ON"
+                      },
+                      {
+                        "sql": "SET GLOBAL long_query_time = 2"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "raw_sql_workload",
+                "database": "slowlog_repro",
+                "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'cold'",
+                "concurrency": 1,
+                "duration_sec": 5
+              },
+              {
+                "kind": "raw_command",
+                "argv": [
+                  "grep",
+                  "-F",
+                  "COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'cold'",
+                  "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+                ]
+              }
+            ],
+            "expected_metrics": {
+              "slow_log_entries": "nonzero"
+            },
+            "success_criteria": {
+              "completed": true
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "log_queries_not_using_indexes causes fast full scans to be logged in the slow log"
+            }
+          }
+        },
+        "edges": [
+          [
+            "seed_data",
+            "reproduce_slow_log"
+          ]
+        ]
+      },
+      "max_duration_sec": 60
+    },
+    "result": {
+      "approved": false,
+      "reasons": [
+        "Task 'reproduce_slow_log' action 2 kind=raw_command has non-positive duration",
+        "Task 'seed_data' contains dangerous SQL pattern: \\bDELETE\\s+FROM\\s+\\w+\\b(?![\\s\\S]*\\bWHERE\\b)",
+        "Task 'reproduce_slow_log' command must be argv array"
+      ],
+      "warnings": [],
+      "normalized_task_dag": {
+        "tasks": {
+          "seed_data": {
+            "task_id": "seed_data",
+            "task_type": "raw_transaction_script",
+            "actions": [
+              {
+                "kind": "raw_transaction_script",
+                "database": "slowlog_repro",
+                "duration_sec": 1,
+                "scripts": [
+                  {
+                    "role": "configure",
+                    "autocommit": true,
+                    "concurrency": 1,
+                    "steps": [
+                      {
+                        "sql": "CREATE DATABASE IF NOT EXISTS slowlog_repro"
+                      },
+                      {
+                        "sql": "CREATE TABLE IF NOT EXISTS slowlog_repro.repro_events (id BIGINT UNSIGNED NOT NULL PRIMARY KEY, category VARCHAR(16) NOT NULL, payload VARCHAR(64) NOT NULL, created_at DATETIME NOT NULL)"
+                      },
+                      {
+                        "sql": "DELETE FROM slowlog_repro.repro_events"
+                      },
+                      {
+                        "sql": "INSERT INTO slowlog_repro.repro_events (id, category, payload, created_at) SELECT seq.n, CASE WHEN seq.n % 20 = 0 THEN 'cold' ELSE 'hot' END, LPAD(seq.n, 8, '0'), TIMESTAMPADD(SECOND, seq.n, '2024-01-01 00:00:00') FROM (SELECT a.i + b.i * 10 + c.i * 100 + d.i * 1000 + 1 AS n FROM (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS a CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS b CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS c CROSS JOIN (SELECT 0 AS i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d) AS seq WHERE seq.n <= 4096"
+                      },
+                      {
+                        "sql": "ANALYZE TABLE slowlog_repro.repro_events"
+                      }
+                    ]
+                  }
+                ]
+              }
+            ],
+            "expected_metrics": {
+              "row_count": 4096
+            },
+            "success_criteria": {
+              "row_count": 4096
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "full table scan on an unindexed predicate column"
+            }
+          },
+          "reproduce_slow_log": {
+            "task_id": "reproduce_slow_log",
+            "task_type": "mixed",
+            "actions": [
+              {
+                "kind": "raw_transaction_script",
+                "database": "slowlog_repro",
+                "duration_sec": 1,
+                "scripts": [
+                  {
+                    "role": "configure",
+                    "autocommit": true,
+                    "concurrency": 1,
+                    "steps": [
+                      {
+                        "sql": "SET GLOBAL slow_query_log = ON"
+                      },
+                      {
+                        "sql": "SET GLOBAL log_queries_not_using_indexes = ON"
+                      },
+                      {
+                        "sql": "SET GLOBAL long_query_time = 2"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "kind": "raw_sql_workload",
+                "database": "slowlog_repro",
+                "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'cold'",
+                "concurrency": 1,
+                "duration_sec": 5
+              },
+              {
+                "kind": "raw_command",
+                "argv": [
+                  "grep",
+                  "-F",
+                  "COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'cold'",
+                  "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+                ]
+              }
+            ],
+            "expected_metrics": {
+              "slow_log_entries": "nonzero"
+            },
+            "success_criteria": {
+              "completed": true
+            },
+            "risk_assessment": "low",
+            "metadata": {
+              "root_cause": "log_queries_not_using_indexes causes fast full scans to be logged in the slow log"
+            }
+          }
+        },
+        "edges": [
+          [
+            "seed_data",
+            "reproduce_slow_log"
+          ]
+        ]
+      }
+    }
+  },
+  {
+    "step": 4,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"mysql\",\n    \"dbms_version\": null,\n    \"summary\": \"MySQL slow log entries appear for queries that finish far below `long_query_time` because `log_queries_not_using_indexes` is enabled, so non-indexed statements are logged even when they are fast.\",\n    \"symptoms\": [\n      \"The slow log contains `Query_time` values around 0.0003-0.0024 seconds, well below the configured `long_query_time = 2`.\",\n      \"The post shows `slow-query-log = ON` and `log-queries-not-using-indexes = ON` at the same time.\",\n      \"The user expected only slow queries to be logged, but the file appears to record many fast statements.\"\n    ],\n    \"mechanism\": \"When `log_queries_not_using_indexes` is ON, MySQL writes qualifying non-indexed statements to the slow log even if they are faster than `long_query_time`; the time threshold is not the only gate.\",\n    \"facts\": [\n      {\n        \"key\": \"slow_query_log_enabled_in_post\",\n        \"value\": {\n          \"slow_query_log\": \"ON\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"`slow-query-log = ON`\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"long_query_time_in_post\",\n        \"value\": {\n          \"long_query_time_seconds\": 2\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"`long_query_time = 2`\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"log_queries_not_using_indexes_enabled_in_post\",\n        \"value\": {\n          \"log_queries_not_using_indexes\": \"ON\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"`log-queries-not-using-indexes = ON`\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"observed_slow_log_times_are_subthreshold\",\n        \"value\": {\n          \"query_time_range_seconds\": {\n            \"min\": 0.000296,\n            \"max\": 0.002353\n          }\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The pasted slow-log lines show `Query_time` values in the sub-millisecond to low-millisecond range.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"logging_behavior_is_index_related_not_time_only\",\n        \"value\": {\n          \"cause\": \"non_indexed_statement_logging\"\n        },\n        \"source\": \"agent_inference\",\n        \"evidence\": \"The configuration explicitly enables `log_queries_not_using_indexes`, which can populate the slow log independently of the `long_query_time` threshold.\",\n        \"confidence\": 0.91\n      }\n    ],\n    \"assumptions\": [\n      \"The pasted slow-log excerpt is representative of the problematic behavior, not a complete dump of all relevant statements.\",\n      \"The logged statements are non-indexed or otherwise eligible for slow-log capture under `log_queries_not_using_indexes`.\",\n      \"The target MySQL build supports the slow-log variables shown in the post.\"\n    ],\n    \"unknowns\": [\n      \"Exact MySQL version\",\n      \"Exact query texts that produced the shown slow-log lines\",\n      \"Whether any of the logged statements were administrative or replication-related rather than ordinary SELECTs\"\n    ],\n    \"confidence\": 0.92\n  },\n  \"feasibility\": {\n    \"level\": \"mechanism\",\n    \"rationale\": \"The reported behavior is reproducible with synthetic data by forcing a fast full-table scan on an unindexed predicate while `slow_query_log=ON`, `long_query_time=2`, and `log_queries_not_using_indexes=ON`. Exact production data and exact query mix are unavailable, so this is a mechanism-level reproduction rather than an exact replay.\",\n    \"missing_capabilities\": [],\n    \"unmatched_conditions\": [\n      \"No original production dataset or exact SQL workload is available\",\n      \"The exact slow-log excerpt cannot be reproduced byte-for-byte\"\n    ],\n    \"confidence\": 0.9\n  },\n  \"environment_spec\": {\n    \"dbms\": \"mysql\",\n    \"database\": \"slowlog_repro\",\n    \"requirements\": [\n      \"MySQL adapter with permission to change GLOBAL variables\",\n      \"Access to the configured slow-log file on the test host\",\n      \"Dedicated test database isolation\"\n    ],"
+  }
+]

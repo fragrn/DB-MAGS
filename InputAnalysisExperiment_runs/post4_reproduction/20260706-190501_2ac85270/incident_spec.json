@@ -1,0 +1,114 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Slow query against large issues table with complex authorization predicates, EXISTS subquery, NOT IN subquery, leading-wildcard LIKE on subject, and ORDER BY id DESC LIMIT 10.",
+  "symptoms": [
+    "Single SELECT takes ~15 seconds",
+    "EXPLAIN shows issues scanned with PRIMARY key range and Using where",
+    "Dependent subqueries evaluated per-row for enabled_modules and members"
+  ],
+  "mechanism": "Non-sargable text filter (LOWER(subject) LIKE '%...%') prevents index use and forces scanning many issues in descending PK order to find 10 matches; complex OR predicates and correlated checks add CPU and lookups. In MySQL, the NOT IN members predicate may be executed via a materialized deduplicated list probed per row; data skew and rarity of the searched token near high ids exacerbate the scan length.",
+  "facts": [
+    {
+      "key": "row_counts",
+      "value": {
+        "issues": 334823,
+        "custom_values": 1350243,
+        "users": 1350,
+        "projects": 494
+      },
+      "source": "explicit_post",
+      "evidence": "The question text lists table record counts.",
+      "confidence": 0.9
+    },
+    {
+      "key": "concurrency",
+      "value": {
+        "concurrent_users": 100
+      },
+      "source": "explicit_post",
+      "evidence": "The system currently has 1350 users. Currently only goes to 100 concurrent users.",
+      "confidence": 0.8
+    },
+    {
+      "key": "slow_query_text",
+      "value": {
+        "select": "SELECT issues.* FROM issues INNER JOIN projects ON projects.id = issues.project_id WHERE (...) AND (LOWER(issues.subject) LIKE LOWER('%255392%')) ORDER BY issues.id DESC LIMIT 10"
+      },
+      "source": "explicit_post",
+      "evidence": "Full query provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "explain_shape",
+      "value": {
+        "issues": {
+          "type": "range",
+          "key": "PRIMARY",
+          "rows": 311632,
+          "extra": "Using where"
+        },
+        "projects": {
+          "type": "eq_ref",
+          "key": "PRIMARY"
+        },
+        "enabled_modules": {
+          "select_type": "DEPENDENT SUBQUERY",
+          "key": "enabled_modules_project_id"
+        },
+        "members": {
+          "select_type": "DEPENDENT SUBQUERY",
+          "type": "index_subquery",
+          "key": "index_members_on_user_id"
+        }
+      },
+      "source": "explicit_post",
+      "evidence": "Tabular EXPLAIN included in the post.",
+      "confidence": 0.9
+    },
+    {
+      "key": "schema_basics",
+      "value": {
+        "issues": [
+          "id PK",
+          "project_id",
+          "subject",
+          "is_private",
+          "author_id",
+          "assigned_to_id"
+        ],
+        "projects": [
+          "id PK",
+          "is_public",
+          "status"
+        ],
+        "enabled_modules": [
+          "id PK",
+          "project_id",
+          "name",
+          "KEY(project_id)"
+        ],
+        "members": [
+          "id PK",
+          "user_id",
+          "project_id"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Partial CREATE TABLE statements provided.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "MySQL version is 5.6/5.7/8.0 with InnoDB and default case-insensitive collation for subject; no fulltext indexes on issues.subject.",
+    "The searched token ('255392') is rare among the newest issues (high ids), forcing long PK-desc scans to find 10 matches.",
+    "Indexes exist on issues(project_id), enabled_modules(project_id,name), and members(user_id, project_id) as suggested by EXPLAIN, but there is no usable index for the LIKE predicate.",
+    "OR-heavy authorization predicates and subqueries inhibit use of composite indexes and encourage a PK-ordered scan with filter."
+  ],
+  "unknowns": [
+    "Exact MySQL version and optimizer settings (e.g., semijoin/materialization strategies)",
+    "Exact data distribution across projects and subjects, and user membership patterns",
+    "Presence of any covering/compound indexes in production beyond those shown in EXPLAIN possible_keys"
+  ],
+  "confidence": 0.68
+}

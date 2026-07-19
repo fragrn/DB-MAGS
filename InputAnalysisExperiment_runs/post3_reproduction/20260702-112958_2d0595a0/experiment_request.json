@@ -1,0 +1,21 @@
+{
+  "target_anomaly": "MySQL slow query log includes fast statements because non-indexed scans are being logged, not because they exceed `long_query_time`.",
+  "target_database": "slowlog_repro",
+  "dba_description": "The slow log shows many `Query_time` entries far below `long_query_time=2`, likely because `log_queries_not_using_indexes=ON` causes fast full scans to be written to the slow log.",
+  "target_path": [
+    "slow_query_log",
+    "log_queries_not_using_indexes",
+    "long_query_time",
+    "min_examined_row_limit"
+  ],
+  "injected_nodes": [
+    "fast full-table scan on an unindexed `tag` predicate"
+  ],
+  "max_duration_sec": 60,
+  "max_retry_rounds": 2,
+  "risk_level": "low",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": false
+  }
+}

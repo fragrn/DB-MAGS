@@ -1,0 +1,16 @@
+{
+  "validation_criteria": [
+    "Statements with `Query_time` well below 2 seconds still appear in the slow log.",
+    "Logged entries show `Rows_examined` close to the table cardinality for the probe tables.",
+    "Turning `log_queries_not_using_indexes` off should stop these fast scan statements from appearing in the slow log unless they exceed `long_query_time`."
+  ],
+  "symptom_evidence": [
+    "Sub-second `Query_time` values appear in the slow log.",
+    "The slow log contains repeated entries for the same query shapes."
+  ],
+  "mechanism_evidence": [
+    "The probe queries are full scans because `tag` has no index.",
+    "The instance logs them because `log_queries_not_using_indexes=ON`."
+  ],
+  "minimum_plan_similarity": 0.6
+}

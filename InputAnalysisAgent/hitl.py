@@ -14,6 +14,7 @@ EDITABLE_ROOTS = {
     "incident_spec.assumptions",
     "incident_spec.unknowns",
     "data_spec.constraints",
+    "data_spec.calibration_queries",
     "data_spec.scale_strategy",
     "data_spec.tables",
     "workload_spec",
@@ -34,6 +35,8 @@ class RunState:
     completed_phases: list[str] = field(default_factory=list)
     artifacts: dict[str, str] = field(default_factory=dict)
     failed_rounds: int = 0
+    calibration_failed_rounds: int = 0
+    evaluation_failed_rounds: int = 0
     pending_gate: dict[str, Any] | None = None
     last_error: str = ""
     updated_at: float = field(default_factory=time.time)
@@ -48,6 +51,8 @@ class RunState:
             completed_phases=list(data.get("completed_phases", [])),
             artifacts=dict(data.get("artifacts", {})),
             failed_rounds=int(data.get("failed_rounds", 0)),
+            calibration_failed_rounds=int(data.get("calibration_failed_rounds", 0)),
+            evaluation_failed_rounds=int(data.get("evaluation_failed_rounds", data.get("failed_rounds", 0))),
             pending_gate=data.get("pending_gate"),
             last_error=str(data.get("last_error", "")),
             updated_at=float(data.get("updated_at", time.time())),
@@ -85,7 +90,12 @@ class HumanGateRequired(RuntimeError):
         self.request = request
 
 
-def gate_reasons(blueprint: dict[str, Any], failed_rounds: int = 0) -> list[str]:
+def gate_reasons(
+    blueprint: dict[str, Any],
+    failed_rounds: int = 0,
+    *,
+    calibration_failed_rounds: int = 0,
+) -> list[str]:
     """Return policy reasons that require a human decision."""
     incident = blueprint.get("incident_spec") or {}
     feasibility = blueprint.get("feasibility") or {}
@@ -106,10 +116,20 @@ def gate_reasons(blueprint: dict[str, Any], failed_rounds: int = 0) -> list[str]
         reasons.append("privileged_or_global_operation")
     if failed_rounds >= 2:
         reasons.append("two_failed_reproduction_rounds")
+    if calibration_failed_rounds >= 2:
+        reasons.append("two_failed_calibration_rounds")
     return list(dict.fromkeys(reasons))
 
 
-def write_gate(run_dir: Path, state: RunState, *, phase: str, reasons: list[str], summary: str) -> dict[str, Any]:
+def write_gate(
+    run_dir: Path,
+    state: RunState,
+    *,
+    phase: str,
+    reasons: list[str],
+    summary: str,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     request = {
         "status": "waiting_human",
         "phase": phase,
@@ -119,6 +139,8 @@ def write_gate(run_dir: Path, state: RunState, *, phase: str, reasons: list[str]
         "editable_roots": sorted(EDITABLE_ROOTS),
         "timestamp": time.time(),
     }
+    if details:
+        request["details"] = details
     state.status = "waiting_human"
     state.phase = phase
     state.pending_gate = request

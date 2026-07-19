@@ -1,0 +1,9 @@
+{
+  "database": "mysql_slowlog_repro",
+  "statement_count": 3,
+  "statements": [
+    "CREATE DATABASE IF NOT EXISTS mysql_slowlog_repro",
+    "CREATE TABLE IF NOT EXISTS events (id BIGINT PRIMARY KEY, status VARCHAR(16) NOT NULL, created_at TIMESTAMP NULL, payload VARCHAR(64) NULL, KEY idx_status (status))",
+    "INSERT INTO events (id, status, created_at, payload) SELECT n, CASE WHEN n <= 1000 * 0.95 THEN 'hot' ELSE 'cold' END, NOW(), CONCAT('p', n) FROM (SELECT 1 AS n) AS seed"
+  ]
+}

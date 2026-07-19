@@ -1,0 +1,111 @@
+{
+  "database": "incident_repro_post4_335k",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY)",
+    "CREATE TABLE IF NOT EXISTS users (id INT NOT NULL PRIMARY KEY, login VARCHAR(255) NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS projects (id INT NOT NULL PRIMARY KEY, name VARCHAR(255) NOT NULL DEFAULT '', description TEXT, homepage VARCHAR(255) DEFAULT '', is_public TINYINT(1) NOT NULL DEFAULT 1, status INT NOT NULL DEFAULT 1, parent_id INT DEFAULT NULL, created_on DATETIME DEFAULT NULL)",
+    "CREATE TABLE IF NOT EXISTS enabled_modules (id INT NOT NULL PRIMARY KEY, project_id INT DEFAULT NULL, name VARCHAR(255) NOT NULL, KEY enabled_modules_project_id (project_id), KEY enabled_modules_name_project_id (name, project_id))",
+    "CREATE TABLE IF NOT EXISTS members (id INT NOT NULL PRIMARY KEY, user_id INT NOT NULL DEFAULT 0, project_id INT NOT NULL DEFAULT 0, created_on DATETIME DEFAULT NULL, mail_notification TINYINT(1) NOT NULL DEFAULT 0, KEY index_members_on_user_id (user_id), KEY members_project_id (project_id))",
+    "CREATE TABLE IF NOT EXISTS issues (id INT NOT NULL PRIMARY KEY, tracker_id INT NOT NULL, project_id INT NOT NULL, subject VARCHAR(255) NOT NULL DEFAULT '', description LONGTEXT, due_date DATE DEFAULT NULL, category_id INT DEFAULT NULL, is_private TINYINT(1) NOT NULL DEFAULT 0, author_id INT NOT NULL, assigned_to_id INT DEFAULT NULL, KEY issues_project_id (project_id), KEY issues_author_id (author_id), KEY issues_assigned_to_id (assigned_to_id))"
+  ],
+  "generation_sql": [
+    "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT IGNORE INTO users (id, login) SELECT n, CONCAT('user_', n) FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 WHERE d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 1 <= 1350) seq",
+    "INSERT IGNORE INTO projects (id, name, description, homepage, is_public, status, parent_id, created_on) SELECT n, CONCAT('project_', n), '', '', 1, 1, NULL, '2020-01-01 00:00:00' FROM (SELECT d1.d + 10*d2.d + 100*d3.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 WHERE d1.d + 10*d2.d + 100*d3.d + 1 <= 494) seq",
+    "INSERT IGNORE INTO enabled_modules (id, project_id, name) SELECT id, id, 'issue_tracking' FROM projects",
+    "INSERT IGNORE INTO members (id, user_id, project_id, created_on, mail_notification) SELECT n, CASE WHEN n <= 20 THEN 44 ELSE 638 END, n, '2020-01-01 00:00:00', 0 FROM (SELECT d1.d + 10*d2.d + 1 AS n FROM digits d1 CROSS JOIN digits d2 WHERE d1.d + 10*d2.d + 1 <= 40) seq",
+    "INSERT IGNORE INTO issues (id, project_id, subject, is_private, author_id, assigned_to_id)\nSELECT\n  n,\n  CASE WHEN n IN (50,100,150,200,250,300,350,400,450,500)\n       THEN 41 + MOD(n, 454)\n       ELSE 1 + MOD(n - 1, 494)\n  END AS project_id,\n  CASE WHEN n IN (50,100,150,200,250,300,350,400,450,500)\n       THEN CONCAT('old production incident ', n, ' token 255392 target match')\n       ELSE CONCAT('ordinary issue ', n, ' ', RPAD('x', 180, 'x'))\n  END AS subject,\n  0 AS is_private,\n  1 + MOD(n, 900) AS author_id,\n  1 + MOD(n * 7, 900) AS assigned_to_id\nFROM (\n  SELECT d1.d + 10*d2.d + 100*d3.d + 1000*d4.d + 10000*d5.d + 100000*d6.d + 1 AS n\n  FROM digits d1\n  CROSS JOIN digits d2\n  CROSS JOIN digits d3\n  CROSS JOIN digits d4\n  CROSS JOIN digits d5\n  CROSS JOIN digits d6\n) seq\nWHERE n <= 335000;",
+    "ANALYZE TABLE users, projects, enabled_modules, members, issues"
+  ],
+  "tables": [
+    {
+      "name": "digits",
+      "purpose": "helper table to generate bounded row counts without external tooling",
+      "target_rows": 10,
+      "distribution_notes": "Single digit values 0 through 9."
+    },
+    {
+      "name": "users",
+      "purpose": "small dimension table matching the reported user count",
+      "target_rows": 1350,
+      "distribution_notes": "Uniform synthetic identities."
+    },
+    {
+      "name": "projects",
+      "purpose": "project dimension table used by the join and permission predicates",
+      "target_rows": 600,
+      "distribution_notes": "Mostly public projects with status 1; enough rows to cover the literal project-id lists in the query."
+    },
+    {
+      "name": "enabled_modules",
+      "purpose": "one-row-per-project module table to satisfy the EXISTS predicate",
+      "target_rows": 494,
+      "distribution_notes": "Every project gets an issue_tracking row so the EXISTS check stays visible but not selective."
+    },
+    {
+      "name": "members",
+      "purpose": "membership table used by the NOT IN subquery",
+      "target_rows": 40,
+      "distribution_notes": "Only projects 1-40 are associated with users 44 and 638, producing a small but non-empty exclusion set."
+    },
+    {
+      "name": "issues",
+      "purpose": "large fact table whose cardinality and subject distribution drive the query cost",
+      "target_rows": 335000,
+      "distribution_notes": "335k synthetic Redmine issues, close to the forum-reported issues scale. Token '255392' appears only in exactly ten old/low-id rows (ids 50..500). High-id rows intentionally avoid the token, so ORDER BY issues.id DESC LIMIT 10 still scans most of the PRIMARY key range before finding enough matches."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "digits": 10,
+      "users": 1350,
+      "projects": 600,
+      "enabled_modules": 600,
+      "members": 40,
+      "issues": 335000
+    },
+    "value_skew": {
+      "issues.subject": "token '255392' appears only in ids 50,100,...,500; high-id rows contain no token and long filler text",
+      "issues.id": "matching token rows are concentrated in old/low ids while the query scans PRIMARY descending",
+      "projects.is_public": "all rows public to preserve broad permission branch visibility",
+      "projects.status": "all rows non-9 so status filter does not eliminate projects",
+      "members.user_id": "small exclusion set for users 44 and 638"
+    },
+    "predicate_selectivity": {
+      "LOWER(issues.subject) LIKE LOWER('%255392%')": 2.9850746268656717e-05,
+      "issues.id != 251880": 0.9999996,
+      "projects.is_public = 1": 1.0,
+      "projects.status <> 9": 1.0
+    },
+    "join_selectivity": {
+      "issues.project_id = projects.id": "many-to-one",
+      "enabled_modules.project_id = projects.id": "one-to-one for synthetic projects",
+      "members.project_id = projects.id": "small anti-subquery exclusion set"
+    }
+  },
+  "analyze_tables": [
+    "digits",
+    "users",
+    "projects",
+    "enabled_modules",
+    "members",
+    "issues"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10",
+      "objective": "Confirm the target Redmine-style query scans issues in reverse PRIMARY key order and applies LOWER(subject) LIKE '%255392%' as a post-filter, so sparse low-id token placement can force a long scan.",
+      "expected_evidence": [
+        "EXPLAIN shows issues accessed through PRIMARY/PK in descending or reverse order, preferably issues-first",
+        "LOWER(subject) LIKE '%255392%' is evaluated as a filter and does not use a subject index",
+        "The estimated scan range/rows is far larger than LIMIT 10, consistent with sparse low-id matches"
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 335000,
+    "max_rows": 335000,
+    "growth_factor": 2.0,
+    "max_rounds": 1
+  }
+}

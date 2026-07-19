@@ -1,0 +1,36 @@
+{
+  "symptom_hit": true,
+  "mechanism_hit": true,
+  "plan_similarity": 0.97,
+  "success": true,
+  "reason": "The reproduction hit the reported symptom and the mechanism. The workload run shows representative latency of 15.46s p50 with a 12.48s minimum, matching the slow-query symptom. The EXPLAIN shape shows `issues` as the driving table with a reverse `PRIMARY` index scan and a large row estimate (~2.8e6), plus dependent subqueries for `members` and `enabled_modules`. The query still contains the non-sargable `LOWER(issues.subject) LIKE LOWER('%255392%')` predicate, and the process list shows the query executing for 13s during the run.",
+  "unmatched_conditions": [],
+  "evidence": {
+    "workload_latency_ms": {
+      "min": 12477.75,
+      "p50": 15460.504,
+      "p95": 20831.61,
+      "max": 20831.61,
+      "executions": 4,
+      "error_count": 0
+    },
+    "explain_shape": {
+      "main_access": "Index range scan on issues using PRIMARY ... (reverse)",
+      "main_table": "issues",
+      "estimated_rows": 2800000,
+      "joins": [
+        "projects"
+      ],
+      "subqueries": [
+        "members dependent/materialized subquery",
+        "enabled_modules dependent subquery"
+      ]
+    },
+    "filter_evidence": "lower(issues.subject) like <cache>(lower('%255392%'))",
+    "live_execution_evidence": {
+      "process_state": "executing",
+      "time_seconds": 13,
+      "db": "incident_repro_post4_10s"
+    }
+  }
+}

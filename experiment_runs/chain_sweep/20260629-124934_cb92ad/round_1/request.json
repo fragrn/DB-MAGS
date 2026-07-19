@@ -1,0 +1,41 @@
+{
+  "target_anomaly": "hot_update_lock_contention_chain",
+  "target_database": "tpcc_10W",
+  "dba_description": "Generate a hot update task to induce lock contention on TPCC background workload.",
+  "target_path": [
+    "hot_update",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "hot_update"
+  ],
+  "target_chain": [
+    "hot_update",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "max_duration_sec": 30,
+  "max_retry_rounds": 2,
+  "risk_level": "medium",
+  "allowed_anomalies": [],
+  "safety_overrides": {},
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/.tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "jar_path": "/Users/neo/Documents/ecnu_courses/laboratory/TianYiYun/DB-MAGS/.tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
+    "java_bin": "/opt/homebrew/Cellar/openjdk/26.0.1/libexec/openjdk.jdk/Contents/Home/bin/java",
+    "warmup_sec": 5.0,
+    "baseline_sec": 10.0,
+    "injection_observe_sec": 15.0,
+    "recovery_sec": 5.0,
+    "sample_interval_sec": 5.0,
+    "duration_sec": 1800.0,
+    "terminals": 4
+  }
+}

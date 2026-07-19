@@ -1,0 +1,431 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MySQL can write fast queries to the slow log when slow-query logging is enabled for statements that do not use an index. In the post, sub-second SELECTs appear in the slow log because `log_queries_not_using_indexes` is enabled, not because they exceeded `long_query_time`.",
+    "symptoms": [
+      "The slow log contains `Query_time` values far below the configured `long_query_time` of 2 seconds.",
+      "Logged entries show `Rows_examined` values that line up with full-table reads on tables of about 330, 423, and 1456 rows.",
+      "The same fast SELECT pattern is repeatedly written to the slow log even though execution time is only a few milliseconds."
+    ],
+    "mechanism": "With `slow_query_log=ON` and `log_queries_not_using_indexes=ON`, MySQL treats non-indexed statements as slow-log eligible even when their actual runtime is below `long_query_time`. A predicate on an unindexed column therefore produces slow-log entries with low `Query_time` but high `Rows_examined`.",
+    "facts": [
+      {
+        "key": "posted configuration",
+        "value": {
+          "slow_query_log": "ON",
+          "long_query_time_seconds": 2,
+          "log_queries_not_using_indexes": "ON",
+          "log_slow_verbosity": "full",
+          "log_slow_admin_statements": 1,
+          "log_slow_slave_statements": 1
+        },
+        "source": "explicit_post",
+        "evidence": "The configuration block in the post shows `slow-query-log = ON`, `long_query_time = 2`, and `log-queries-not-using-indexes = ON`.",
+        "confidence": 0.99
+      },
+      {
+        "key": "slow-log excerpt",
+        "value": {
+          "query_time_range_seconds": [
+            0.000296,
+            0.002353
+          ],
+          "rows_examined_examples": [
+            330,
+            423,
+            1456
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "The excerpt contains many lines such as `# Query_time: 0.000715 ... Rows_examined: 1456` and similar entries well below 2 seconds.",
+        "confidence": 0.99
+      },
+      {
+        "key": "user interpretation",
+        "value": {
+          "question": "why are sub-second queries appearing in the slow log?"
+        },
+        "source": "explicit_post",
+        "evidence": "The user asks why the slow log seems to log every query instead of only slow ones.",
+        "confidence": 0.98
+      },
+      {
+        "key": "query_time meaning",
+        "value": {
+          "interpretation": "actual execution time reported in the slow log"
+        },
+        "source": "agent_inference",
+        "evidence": "The reported `Query_time` is a runtime measurement; it is not itself the log-eligibility threshold.",
+        "confidence": 0.93
+      },
+      {
+        "key": "index-usage mechanism",
+        "value": {
+          "interpretation": "non-indexed statements can be logged independently of `long_query_time` when the relevant flag is enabled"
+        },
+        "source": "agent_inference",
+        "evidence": "The presence of `log_queries_not_using_indexes=ON` matches MySQL behavior that broadens slow-log eligibility to statements not using an index.",
+        "confidence": 0.92
+      }
+    ],
+    "assumptions": [
+      "The excerpted slow-log lines came from the configuration shown in the post.",
+      "The affected predicates did not have a usable secondary index on the filtered column.",
+      "The repeated `Rows_examined` values reflect the underlying table sizes rather than joins or application-side batching."
+    ],
+    "unknowns": [
+      "Exact MySQL minor version",
+      "Exact application SQL that generated the excerpt",
+      "Whether `min_examined_row_limit` was changed from its default before the excerpt",
+      "Whether any triggers, views, or query rewrites influenced index selection"
+    ],
+    "confidence": 0.91
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "A MySQL adapter is available, and the core mechanism is reproducible with synthetic tables that have a primary key but no secondary index on the filtered column. That lets us reproduce the key symptom: fast queries with low `Query_time` still appear in the slow log when `log_queries_not_using_indexes` is enabled. The original production data and exact query text are unavailable, so this is mechanism-level rather than exact reproduction.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Original production data is unavailable",
+      "Exact workload text is only partially known",
+      "Exact server minor version is not provided"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "slowlog_repro",
+    "requirements": [
+      "Dedicated MySQL test database",
+      "Permission to change MySQL global variables for the experiment",
+      "A helper number source such as the existing `digits` table"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "slowlog_repro",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS slowlog_repro.scan_330 (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS slowlog_repro.scan_423 (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS slowlog_repro.scan_1456 (id INT NOT NULL PRIMARY KEY, tag VARCHAR(16) NOT NULL, pad CHAR(32) NOT NULL) ENGINE=InnoDB"
+    ],
+    "generation_sql": [
+      "INSERT IGNORE INTO slowlog_repro.scan_330 (id, tag, pad) SELECT rn, CASE WHEN rn = 1 THEN 'rare_1' WHEN rn <= 8 THEN 'group_7' WHEN MOD(rn, 17) = 0 THEN 'medium' ELSE 'common' END, RPAD('x', 32, 'x') FROM (SELECT ROW_NUMBER() OVER (ORDER BY d1.n, d2.n, d3.n, d4.n) AS rn FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4) seq WHERE rn <= 330",
+      "INSERT IGNORE INTO slowlog_repro.scan_423 (id, tag, pad) SELECT rn, CASE WHEN rn = 1 THEN 'rare_1' WHEN rn <= 8 THEN 'group_7' WHEN MOD(rn, 17) = 0 THEN 'medium' ELSE 'common' END, RPAD('x', 32, 'x') FROM (SELECT ROW_NUMBER() OVER (ORDER BY d1.n, d2.n, d3.n, d4.n) AS rn FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4) seq WHERE rn <= 423",
+      "INSERT IGNORE INTO slowlog_repro.scan_1456 (id, tag, pad) SELECT rn, CASE WHEN rn = 1 THEN 'rare_1' WHEN rn <= 8 THEN 'group_7' WHEN MOD(rn, 17) = 0 THEN 'medium' ELSE 'common' END, RPAD('x', 32, 'x') FROM (SELECT ROW_NUMBER() OVER (ORDER BY d1.n, d2.n, d3.n, d4.n) AS rn FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4) seq WHERE rn <= 1456"
+    ],
+    "tables": [
+      {
+        "table_name": "scan_330",
+        "columns": [
+          {
+            "name": "id",
+            "type": "int",
+            "nullable": false,
+            "key": "PRI"
+          },
+          {
+            "name": "tag",
+            "type": "varchar(16)",
+            "nullable": false,
+            "key": ""
+          },
+          {
+            "name": "pad",
+            "type": "char(32)",
+            "nullable": false,
+            "key": ""
+          }
+        ],
+        "indexes": [
+          {
+            "index_name": "PRIMARY",
+            "columns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "table_name": "scan_423",
+        "columns": [
+          {
+            "name": "id",
+            "type": "int",
+            "nullable": false,
+            "key": "PRI"
+          },
+          {
+            "name": "tag",
+            "type": "varchar(16)",
+            "nullable": false,
+            "key": ""
+          },
+          {
+            "name": "pad",
+            "type": "char(32)",
+            "nullable": false,
+            "key": ""
+          }
+        ],
+        "indexes": [
+          {
+            "index_name": "PRIMARY",
+            "columns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "table_name": "scan_1456",
+        "columns": [
+          {
+            "name": "id",
+            "type": "int",
+            "nullable": false,
+            "key": "PRI"
+          },
+          {
+            "name": "tag",
+            "type": "varchar(16)",
+            "nullable": false,
+            "key": ""
+          },
+          {
+            "name": "pad",
+            "type": "char(32)",
+            "nullable": false,
+            "key": ""
+          }
+        ],
+        "indexes": [
+          {
+            "index_name": "PRIMARY",
+            "columns": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "scan_330": 330,
+        "scan_423": 423,
+        "scan_1456": 1456
+      },
+      "value_skew": {
+        "scan_330.tag": {
+          "rare_1": 1,
+          "group_7": 7,
+          "medium": 19,
+          "common": 303
+        },
+        "scan_423.tag": {
+          "rare_1": 1,
+          "group_7": 7,
+          "medium": 24,
+          "common": 391
+        },
+        "scan_1456.tag": {
+          "rare_1": 1,
+          "group_7": 7,
+          "medium": 85,
+          "common": 1363
+        }
+      },
+      "predicate_selectivity": {
+        "scan_330.tag = 'rare_1'": "~0.3%",
+        "scan_423.tag = 'rare_1'": "~0.2%",
+        "scan_1456.tag = 'group_7'": "~0.5%"
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "scan_330",
+      "scan_423",
+      "scan_1456"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT id FROM scan_330 WHERE tag = 'rare_1'",
+        "objective": "Confirm that the predicate is evaluated without a supporting index on `tag` and that the optimizer expects a read of most of the table.",
+        "expected_evidence": [
+          "The plan should describe reading the table directly rather than through a secondary index on `tag`.",
+          "The row estimate should be in the same order of magnitude as the table size."
+        ]
+      },
+      {
+        "sql": "SELECT id FROM scan_423 WHERE tag = 'rare_1'",
+        "objective": "Confirm the same scan-based access pattern on a slightly larger table with the same data shape.",
+        "expected_evidence": [
+          "The plan should show a full read of the table or equivalent scan-based access.",
+          "The row estimate should track the 423-row cardinality."
+        ]
+      },
+      {
+        "sql": "SELECT id FROM scan_1456 WHERE tag = 'group_7'",
+        "objective": "Confirm that a selective predicate still reads the table when there is no usable index on the filtered column.",
+        "expected_evidence": [
+          "The plan should not depend on a secondary index for `tag`.",
+          "The row estimate should reflect the table’s overall size rather than the tiny matching subset."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 330,
+      "max_rows": 1456,
+      "growth_factor": 1.5,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "EXPLAIN for the calibration queries shows scan-based access on the filtered tables with no usable secondary index on `tag`.",
+      "With `slow_query_log=ON` and `log_queries_not_using_indexes=ON`, the fast SELECT workload appears in the slow log even though runtime stays well below `long_query_time`.",
+      "With the flag disabled, the same fast workload should not materially populate the slow log."
+    ],
+    "symptom_evidence": [
+      "Slow-log lines contain `Query_time` values in the sub-second range.",
+      "Logged entries show `Rows_examined` near the underlying table cardinality.",
+      "The workload is visible in the slow log despite being much faster than 2 seconds."
+    ],
+    "mechanism_evidence": [
+      "EXPLAIN shows table reads on the filtered column without a supporting index.",
+      "Toggling `log_queries_not_using_indexes` changes whether the fast queries are logged.",
+      "The same query text can remain fast while the slow log eligibility changes."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "MySQL slow log logs fast non-indexed queries even when they do not exceed `long_query_time`.",
+    "target_database": "slowlog_repro",
+    "dba_description": "Slow log entries show sub-second `Query_time` values, yet the server is configured with `long_query_time = 2`. The most likely explanation is that non-indexed queries are being logged by policy rather than by duration alone.",
+    "target_path": [
+      "slow_query_log",
+      "log_queries_not_using_indexes",
+      "scan-based SELECT predicates"
+    ],
+    "injected_nodes": [
+      "SET GLOBAL slow_query_log = ON",
+      "SET GLOBAL log_queries_not_using_indexes = ON",
+      "SELECT ... WHERE tag = 'rare_1'"
+    ],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "reproduce_fast_unindexed_slow_log",
+      "task_type": "observability",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure_slow_log",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = ON"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 2"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = ON"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT id FROM slowlog_repro.scan_330 WHERE tag = 'rare_1'",
+          "concurrency": 1,
+          "duration_sec": 5
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT id FROM slowlog_repro.scan_423 WHERE tag = 'rare_1'",
+          "concurrency": 1,
+          "duration_sec": 5
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT id FROM slowlog_repro.scan_1456 WHERE tag = 'group_7'",
+          "concurrency": 1,
+          "duration_sec": 5
+        }
+      ],
+      "cleanup_actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "restore_slow_log",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 10.000000"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "slow_log_entries": "present",
+        "query_time_below_threshold": true,
+        "rows_examined_near_table_cardinality": true
+      },
+      "success_criteria": {
+        "fast_unindexed_queries_recorded_in_slow_log": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "log_queries_not_using_indexes logs fast scan-based SELECT statements below long_query_time"
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [],
+  "rationale": "The post is consistent with MySQL slow logging of non-indexed statements rather than a timing-threshold failure. The synthetic design uses tables sized to the observed `Rows_examined` values, no secondary index on the filtered column, and controlled toggling of `log_queries_not_using_indexes` to isolate the mechanism that makes fast queries appear in the slow log."
+}

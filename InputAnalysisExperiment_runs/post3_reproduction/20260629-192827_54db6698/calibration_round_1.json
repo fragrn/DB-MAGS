@@ -1,0 +1,53 @@
+{
+  "round": 1,
+  "matched": false,
+  "observations": [
+    {
+      "sql": "SELECT COUNT(*) FROM events WHERE status = 'hot'",
+      "explain": {
+        "sql": "SELECT COUNT(*) FROM events WHERE status = 'hot'",
+        "plan": [
+          {
+            "EXPLAIN": "-> Aggregate: count(0)  (cost=0.58 rows=1)\n    -> Covering index lookup on events using idx_status (status = 'hot')  (cost=0.35 rows=1)\n"
+          }
+        ]
+      },
+      "expected_plan_features": [
+        "range or full scan depending on optimizer choice",
+        "rows_examined greater than indexed lookup",
+        "candidate for not_using_index slow-log path"
+      ],
+      "matched_features": [],
+      "matched": false,
+      "probe": {
+        "completed": true,
+        "row_count": 1,
+        "error": ""
+      },
+      "elapsed_sec": 0.015747917
+    },
+    {
+      "sql": "SELECT id FROM events WHERE id = 42",
+      "explain": {
+        "sql": "SELECT id FROM events WHERE id = 42",
+        "plan": [
+          {
+            "EXPLAIN": "-> Zero rows (no matching row in const table)  (cost=0..0 rows=0)\n"
+          }
+        ]
+      },
+      "expected_plan_features": [
+        "const or eq_ref lookup using primary",
+        "low rows examined"
+      ],
+      "matched_features": [],
+      "matched": false,
+      "probe": {
+        "completed": true,
+        "row_count": 0,
+        "error": ""
+      },
+      "elapsed_sec": 0.016224917000000005
+    }
+  ]
+}

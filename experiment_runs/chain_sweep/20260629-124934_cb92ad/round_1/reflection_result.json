@@ -1,0 +1,43 @@
+{
+  "failure_reason": "The injection created measurable row-lock pressure, but it was not strong or broad enough to propagate into user-visible latency and throughput loss. `Innodb_row_lock_waits` increased, yet `Innodb_row_lock_time_avg` did not, which suggests brief waits on too few transactions rather than sustained blocking. As a result, the chain stopped before `slow_query_count` could rise and before `qps_ratio` could fall below the threshold. If the benchmark workload that touches the same rows is not already part of the injected set, the current setup cannot reliably reach `slow_query`/`qps_drop`.",
+  "suggested_changes": [
+    "Increase contention intensity: raise writer concurrency to 32 and extend the run to 600s so the hot rows stay contested long enough to affect downstream queries.",
+    "Narrow the hotspot to a single row or very small key set in the TPC-C table that the workload already hits, so all writers collide on the same lock.",
+    "Hold locks longer inside each transaction by adding an explicit `SELECT SLEEP(0.1)` before commit; this should convert short waits into sustained blocking.",
+    "Make `lock_contention` target the exact same table and predicate as `hot_update` so both injectors pile onto the same hot row instead of spreading contention across different keys.",
+    "If `slow_query` and `qps_drop` are not already produced by the existing benchmark workload, add the workload that reads/writes the same row set; otherwise the terminal nodes cannot be reached from contention alone."
+  ],
+  "task_parameter_updates": {
+    "hot_update": {
+      "table": "district",
+      "predicate": "d_w_id = 1 AND d_id = 1",
+      "concurrency": 32,
+      "duration_sec": 600,
+      "sql_text": "BEGIN; UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id = 1 AND d_id = 1; SELECT SLEEP(0.1); COMMIT;"
+    },
+    "lock_contention": {
+      "table": "district",
+      "predicate": "d_w_id = 1 AND d_id = 1",
+      "concurrency": 32,
+      "duration_sec": 600,
+      "sql_text": "BEGIN; SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE; SELECT SLEEP(0.1); COMMIT;"
+    }
+  },
+  "risk_warning": "These changes can sharply increase lock waits and may cause a broad TPS collapse, long transaction queues, and timeouts on unrelated sessions. Run only in an isolated test environment and avoid using production data or shared instances.",
+  "memory_update": [
+    {
+      "anomaly": "hot_update_lock_contention_chain",
+      "path": [
+        "hot_update",
+        "lock_contention",
+        "slow_query",
+        "qps_drop"
+      ],
+      "outcome": "Propagation chain NOT fully reproduced. 2/4 nodes hit. Failure at: terminal_not_hit:qps_drop",
+      "success": false,
+      "round": 0,
+      "node_hit_ratio": 0.5
+    }
+  ],
+  "raw_text": "{\n  \"failure_reason\": \"The injection created measurable row-lock pressure, but it was not strong or broad enough to propagate into user-visible latency and throughput loss. `Innodb_row_lock_waits` increased, yet `Innodb_row_lock_time_avg` did not, which suggests brief waits on too few transactions rather than sustained blocking. As a result, the chain stopped before `slow_query_count` could rise and before `qps_ratio` could fall below the threshold. If the benchmark workload that touches the same rows is not already part of the injected set, the current setup cannot reliably reach `slow_query`/`qps_drop`.\",\n  \"suggested_changes\": [\n    \"Increase contention intensity: raise writer concurrency to 32 and extend the run to 600s so the hot rows stay contested long enough to affect downstream queries.\",\n    \"Narrow the hotspot to a single row or very small key set in the TPC-C table that the workload already hits, so all writers collide on the same lock.\",\n    \"Hold locks longer inside each transaction by adding an explicit `SELECT SLEEP(0.1)` before commit; this should convert short waits into sustained blocking.\",\n    \"Make `lock_contention` target the exact same table and predicate as `hot_update` so both injectors pile onto the same hot row instead of spreading contention across different keys.\",\n    \"If `slow_query` and `qps_drop` are not already produced by the existing benchmark workload, add the workload that reads/writes the same row set; otherwise the terminal nodes cannot be reached from contention alone.\"\n  ],\n  \"task_parameter_updates\": {\n    \"hot_update\": {\n      \"table\": \"district\",\n      \"predicate\": \"d_w_id = 1 AND d_id = 1\",\n      \"concurrency\": 32,\n      \"duration_sec\": 600,\n      \"sql_text\": \"BEGIN; UPDATE district SET d_ytd = d_ytd + 1 WHERE d_w_id = 1 AND d_id = 1; SELECT SLEEP(0.1); COMMIT;\"\n    },\n    \"lock_contention\": {\n      \"table\": \"district\",\n      \"predicate\": \"d_w_id = 1 AND d_id = 1\",\n      \"concurrency\": 32,\n      \"duration_sec\": 600,\n      \"sql_text\": \"BEGIN; SELECT d_ytd FROM district WHERE d_w_id = 1 AND d_id = 1 FOR UPDATE; SELECT SLEEP(0.1); COMMIT;\"\n    }\n  },\n  \"risk_warning\": \"These changes can sharply increase lock waits and may cause a broad TPS collapse, long transaction queues, and timeouts on unrelated sessions. Run only in an isolated test environment and avoid using production data or shared instances.\"\n}"
+}

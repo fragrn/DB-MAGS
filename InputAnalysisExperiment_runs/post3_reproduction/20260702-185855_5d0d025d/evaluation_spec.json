@@ -1,0 +1,16 @@
+{
+  "validation_criteria": [
+    "The unindexed predicate query is logged in the slow log while `Query_time` remains far below `long_query_time`.",
+    "EXPLAIN for the unindexed predicate query shows a scan-like plan with no key used.",
+    "The indexed control query uses the primary key and does not represent the mechanism that causes the extra slow-log entries."
+  ],
+  "symptom_evidence": [
+    "Slow-log lines contain sub-second `Query_time` values.",
+    "Slow-log lines contain `Rows_examined` values much larger than `Rows_sent`."
+  ],
+  "mechanism_evidence": [
+    "The repro query has no usable secondary index on the filter column.",
+    "The slow log records the query only when `log_queries_not_using_indexes` is enabled."
+  ],
+  "minimum_plan_similarity": 0.6
+}

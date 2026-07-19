@@ -51,7 +51,7 @@ python3 -m InputAnalysisAgent.cli resume \
 ```
 
 The ReAct request timeout and attempt count are configurable through
-`INPUT_ANALYSIS_LLM_TIMEOUT_SEC` (default `180`) and
+`INPUT_ANALYSIS_LLM_TIMEOUT_SEC` (default `300`) and
 `INPUT_ANALYSIS_LLM_MAX_ATTEMPTS` (default `2`).
 
 Version 1 executes MySQL-compatible reproductions. DBMS-specific incidents for
@@ -63,3 +63,9 @@ writes `slow_log_marker.json` plus `slow_log_evidence.json`. Success requires an
 incremental fast target query entry, positive `Rows_examined`, matching EXPLAIN
 calibration, and an executed plan that enables `log_queries_not_using_indexes`.
 Global variables must be restored through TaskSpec `cleanup_actions`.
+
+After data preparation, Calibration runs a dedicated ReAct loop that must call
+`explain_sql` for every declared calibration query. The LLM judges the raw plan
+against each query's natural-language `objective` and `expected_evidence`; the
+runtime validates tool coverage and output structure but does not apply a
+rule-based execution-plan matcher.

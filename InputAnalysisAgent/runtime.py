@@ -6,6 +6,7 @@ import json
 import re
 import threading
 import time
+import traceback
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
@@ -26,7 +27,13 @@ from InputAnalysisAgent.hitl import (
     write_gate,
     write_json,
 )
-from InputAnalysisAgent.react import ReproductionPlanningError, evaluate_reproduction, plan_reproduction
+from InputAnalysisAgent.react import (
+    ReproductionPlanningError,
+    calibrate_reproduction,
+    canonicalize_blueprint_payload,
+    evaluate_reproduction,
+    plan_reproduction,
+)
 from InputAnalysisAgent.schemas import ReproductionBlueprint
 from InputAnalysisAgent.schemas import ReproductionEvaluation
 from InputAnalysisAgent.slowlog import SlowLogProbe, evaluate_slow_log_evidence, is_slow_log_reproduction
@@ -67,6 +74,7 @@ class ReproductionRuntime:
     def resume(self, run_dir: str | Path, decision: HumanDecision) -> dict[str, Any]:
         run_dir = Path(run_dir)
         state = load_state(run_dir)
+        gate_phase = state.phase
         decision.validate()
         if decision.decision == "retry":
             if state.status != "failed":
@@ -76,6 +84,32 @@ class ReproductionRuntime:
             state.pending_gate = None
             save_state(run_dir, state)
             record_decision(run_dir, decision)
+            candidate_path = run_dir / "candidate_blueprint.json"
+            if state.phase == "planning" and candidate_path.exists():
+                try:
+                    candidate, changes = canonicalize_blueprint_payload(self._read_json(candidate_path))
+                    blueprint = ReproductionBlueprint.from_dict(candidate)
+                    self._validate_blueprint_safety(blueprint)
+                    self._write_blueprint_artifacts(run_dir, blueprint)
+                    trace_path = run_dir / "react_trace.json"
+                    trace = json.loads(trace_path.read_text()) if trace_path.exists() else []
+                    if not isinstance(trace, list):
+                        trace = []
+                    trace.append({
+                        "step": "resume_retry",
+                        "event": "reused_candidate_blueprint",
+                        "changes": changes,
+                    })
+                    write_json(trace_path, trace)
+                    state.artifacts["blueprint"] = "blueprint.json"
+                    self._complete_phase(run_dir, state, "planning")
+                    return self._continue(run_dir, state)
+                except Exception as exc:
+                    write_json(run_dir / "candidate_reuse_failure.json", {
+                        "error": str(exc),
+                        "exception_type": type(exc).__name__,
+                        "timestamp": time.time(),
+                    })
             return self._continue(run_dir, state)
         if state.status != "waiting_human":
             raise ValueError(f"run is not waiting for human input: status={state.status}")
@@ -92,11 +126,16 @@ class ReproductionRuntime:
             blueprint = ReproductionBlueprint.from_dict(blueprint_data)
             self._validate_blueprint_safety(blueprint)
             self._write_blueprint_artifacts(run_dir, blueprint)
+            self._reset_after_human_revision(state, gate_phase)
             state.phase = "approval"
             state.status = "running"
             state.pending_gate = None
             save_state(run_dir, state)
-            reasons = gate_reasons(blueprint.to_dict(), state.failed_rounds)
+            reasons = gate_reasons(
+                blueprint.to_dict(),
+                state.evaluation_failed_rounds,
+                calibration_failed_rounds=state.calibration_failed_rounds,
+            )
             if reasons:
                 return self._request_human(run_dir, state, reasons, "Review the revised reproduction blueprint")
         elif decision.decision == "feedback":
@@ -118,14 +157,22 @@ class ReproductionRuntime:
             self._validate_blueprint_safety(blueprint)
             self._write_blueprint_artifacts(run_dir, blueprint)
             write_json(run_dir / "react_trace_feedback.json", trace)
+            self._reset_after_human_revision(state, gate_phase)
             state.phase = "approval"
             state.status = "running"
             state.pending_gate = None
             save_state(run_dir, state)
-            reasons = gate_reasons(blueprint.to_dict(), state.failed_rounds)
+            reasons = gate_reasons(
+                blueprint.to_dict(),
+                state.evaluation_failed_rounds,
+                calibration_failed_rounds=state.calibration_failed_rounds,
+            )
             if reasons:
                 return self._request_human(run_dir, state, reasons, "Review the blueprint regenerated from human feedback")
         else:
+            if gate_phase == "calibration":
+                self._approve_calibration_override(run_dir, state)
+                return self._continue(run_dir, state, human_approved=True)
             state.phase = "approval"
             state.status = "running"
             state.pending_gate = None
@@ -146,6 +193,8 @@ class ReproductionRuntime:
                 except ReproductionPlanningError as exc:
                     self._write_planner_failure(run_dir, state, exc, stage="initial_planning")
                     raise
+                write_json(run_dir / "candidate_blueprint.json", blueprint.to_dict())
+                write_json(run_dir / "react_trace.json", trace)
                 self._validate_blueprint_safety(blueprint)
                 self._write_blueprint_artifacts(run_dir, blueprint)
                 write_json(run_dir / "react_trace.json", trace)
@@ -166,7 +215,11 @@ class ReproductionRuntime:
                 blueprint = ReproductionBlueprint.from_dict(self._read_json(run_dir / "blueprint.json"))
 
             if not human_approved and "approval" not in state.completed_phases:
-                reasons = gate_reasons(blueprint.to_dict(), state.failed_rounds)
+                reasons = gate_reasons(
+                    blueprint.to_dict(),
+                    state.evaluation_failed_rounds,
+                    calibration_failed_rounds=state.calibration_failed_rounds,
+                )
                 if reasons:
                     state.phase = "approval"
                     save_state(run_dir, state)
@@ -197,10 +250,35 @@ class ReproductionRuntime:
                 self._write_blueprint_artifacts(run_dir, blueprint)
                 state.artifacts["calibration"] = "calibration_result.json"
                 if not calibration.get("matched"):
-                    state.failed_rounds += 1
+                    state.calibration_failed_rounds = max(state.calibration_failed_rounds, 1)
                     save_state(run_dir, state)
-                    reasons = gate_reasons(blueprint.to_dict(), max(2, state.failed_rounds))
-                    return self._request_human(run_dir, state, reasons, "Calibration failed twice; DBA judgment is required")
+                    reasons = gate_reasons(
+                        blueprint.to_dict(),
+                        state.evaluation_failed_rounds,
+                        calibration_failed_rounds=state.calibration_failed_rounds,
+                    )
+                    if calibration.get("status") == "weak_match":
+                        reasons = list(dict.fromkeys([*reasons, "calibration_weak_match"]))
+                        summary = "Calibration found a weak match; DBA judgment is required"
+                    elif calibration.get("status") == "rejected_by_llm":
+                        reasons = list(dict.fromkeys([*reasons, "calibration_rejected_by_llm"]))
+                        summary = "Calibration was rejected by the LLM; DBA judgment is required"
+                    else:
+                        summary = "Calibration requires DBA judgment"
+                    return self._request_human(
+                        run_dir,
+                        state,
+                        reasons,
+                        summary,
+                        details={
+                            "calibration": {
+                                "status": calibration.get("status"),
+                                "decision": calibration.get("decision"),
+                                "concerns": calibration.get("concerns") or [],
+                                "recommended_changes": calibration.get("recommended_changes") or [],
+                            }
+                        },
+                    )
                 self._complete_phase(run_dir, state, "calibration")
 
             if "execution" not in state.completed_phases:
@@ -220,13 +298,14 @@ class ReproductionRuntime:
                 write_json(run_dir / "evaluation_result.json", evaluation.to_dict())
                 state.artifacts["evaluation"] = "evaluation_result.json"
                 if not evaluation.success:
-                    state.failed_rounds += 1
+                    state.evaluation_failed_rounds += 1
+                    state.failed_rounds = state.evaluation_failed_rounds
                     save_state(run_dir, state)
-                    if state.failed_rounds >= 2:
+                    if state.evaluation_failed_rounds >= 2:
                         return self._request_human(
                             run_dir,
                             state,
-                            gate_reasons(blueprint.to_dict(), state.failed_rounds),
+                            gate_reasons(blueprint.to_dict(), state.evaluation_failed_rounds),
                             "Reproduction failed twice; review evidence and adjust the design",
                         )
                     try:
@@ -241,10 +320,10 @@ class ReproductionRuntime:
                         self._write_planner_failure(run_dir, state, exc, stage="execution_reflection")
                         raise
                     self._validate_blueprint_safety(revised)
-                    write_json(run_dir / f"blueprint_reflection_round_{state.failed_rounds + 1}.json", revised.to_dict())
-                    write_json(run_dir / f"react_trace_reflection_round_{state.failed_rounds + 1}.json", trace)
+                    write_json(run_dir / f"blueprint_reflection_round_{state.evaluation_failed_rounds + 1}.json", revised.to_dict())
+                    write_json(run_dir / f"react_trace_reflection_round_{state.evaluation_failed_rounds + 1}.json", trace)
                     self._write_blueprint_artifacts(run_dir, revised)
-                    revised_gate_reasons = gate_reasons(revised.to_dict(), state.failed_rounds)
+                    revised_gate_reasons = gate_reasons(revised.to_dict(), state.evaluation_failed_rounds)
                     if revised_gate_reasons:
                         return self._request_human(
                             run_dir,
@@ -287,11 +366,63 @@ class ReproductionRuntime:
             state.status = "failed"
             state.last_error = str(exc)
             save_state(run_dir, state)
-            write_json(run_dir / "failure.json", {"phase": state.phase, "error": str(exc), "timestamp": time.time()})
+            write_json(run_dir / "failure.json", {
+                "phase": state.phase,
+                "error": str(exc),
+                "exception_type": type(exc).__name__,
+                "traceback": traceback.format_exc(),
+                "timestamp": time.time(),
+            })
             raise
 
-    def _request_human(self, run_dir: Path, state: RunState, reasons: list[str], summary: str) -> dict[str, Any]:
-        request = write_gate(run_dir, state, phase=state.phase, reasons=reasons, summary=summary)
+    def _approve_calibration_override(self, run_dir: Path, state: RunState) -> None:
+        calibration_path = run_dir / "calibration_result.json"
+        if not calibration_path.exists():
+            raise ValueError("calibration approval requires calibration_result.json")
+        calibration = self._read_json(calibration_path)
+        observed_matched = bool(calibration.get("matched"))
+        override = {
+            "status": "approved_by_human",
+            "phase": "calibration",
+            "observed_matched": observed_matched,
+            "effective_matched": True,
+            "calibration_failed_rounds": state.calibration_failed_rounds,
+            "timestamp": time.time(),
+        }
+        write_json(run_dir / "calibration_override.json", override)
+        calibration.update({
+            "status": "overridden",
+            "observed_matched": observed_matched,
+            "matched": True,
+            "overridden": True,
+        })
+        write_json(calibration_path, calibration)
+        state.artifacts["calibration_override"] = "calibration_override.json"
+        state.pending_gate = None
+        self._complete_phase(run_dir, state, "calibration")
+
+    @staticmethod
+    def _reset_after_human_revision(state: RunState, gate_phase: str) -> None:
+        if gate_phase not in {"calibration", "execution", "evaluation"}:
+            return
+        for phase in ("preparation", "calibration", "execution", "evaluation", "completed"):
+            if phase in state.completed_phases:
+                state.completed_phases.remove(phase)
+        state.calibration_failed_rounds = 0
+        if gate_phase in {"execution", "evaluation"}:
+            state.evaluation_failed_rounds = 0
+            state.failed_rounds = 0
+
+    def _request_human(
+        self,
+        run_dir: Path,
+        state: RunState,
+        reasons: list[str],
+        summary: str,
+        *,
+        details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        request = write_gate(run_dir, state, phase=state.phase, reasons=reasons, summary=summary, details=details)
         if state.interaction == "checkpoint":
             raise HumanGateRequired(run_dir, request)
         decision = self._interactive_decision(request)
@@ -350,92 +481,51 @@ class ReproductionRuntime:
         input_data: dict[str, Any],
         blueprint: ReproductionBlueprint,
     ) -> tuple[ReproductionBlueprint, dict[str, Any]]:
+        if not blueprint.data_spec.calibration_queries:
+            state.calibration_failed_rounds = 0
+            save_state(run_dir, state)
+            return blueprint, {"status": "not_applicable", "matched": True, "rounds": []}
         rounds: list[dict[str, Any]] = []
-        max_rounds = min(blueprint.data_spec.scale_strategy.max_rounds, 2)
-        for round_no in range(1, max_rounds + 1):
-            observations = self._calibration_observations(blueprint)
-            matched = all(item.get("matched", False) for item in observations) if observations else True
-            round_result = {"round": round_no, "matched": matched, "observations": observations}
-            rounds.append(round_result)
-            write_json(run_dir / f"calibration_round_{round_no}.json", round_result)
-            if matched:
-                return blueprint, {"matched": True, "rounds": rounds}
-            if round_no < max_rounds:
-                try:
-                    revised, trace = plan_reproduction(
-                        str(input_data["dba_description"]),
-                        metadata=input_data.get("metadata") or {},
-                        config=self.config,
-                        previous_blueprint=blueprint.to_dict(),
-                        observations=round_result,
-                    )
-                except ReproductionPlanningError as exc:
-                    self._write_planner_failure(run_dir, state, exc, stage=f"calibration_round_{round_no}")
-                    raise
-                self._validate_blueprint_safety(revised)
-                blueprint = revised
-                write_json(run_dir / f"blueprint_calibration_round_{round_no + 1}.json", blueprint.to_dict())
-                write_json(run_dir / f"react_trace_calibration_round_{round_no + 1}.json", trace)
-                self._prepare_mysql(blueprint)
-        state.failed_rounds = max(state.failed_rounds, 2)
-        return blueprint, {"matched": False, "rounds": rounds}
-
-    def _calibration_observations(self, blueprint: ReproductionBlueprint) -> list[dict[str, Any]]:
-        results: list[dict[str, Any]] = []
-        for item in blueprint.data_spec.calibration_queries:
-            sql = str(item["sql"])
-            if not re.match(r"^\s*(SELECT|WITH)\b", sql, re.I):
-                raise ValueError("calibration queries must be read-only SELECT/WITH statements")
-            explained = agent_tools.explain_sql(self.config, blueprint.data_spec.database, sql)
-            text = json.dumps(explained, ensure_ascii=False).lower()
-            expected = [str(value).lower() for value in item.get("expected_plan_features", [])]
-            started = time.monotonic()
-            probe = self._probe_read_query(blueprint.data_spec.database, sql, float(item.get("max_probe_sec", 10)))
-            elapsed = time.monotonic() - started
-            results.append({
-                "sql": sql,
-                "explain": explained,
-                "expected_plan_features": expected,
-                "matched_features": [feature for feature in expected if feature in text],
-                "matched": not expected or all(feature in text for feature in expected),
-                "probe": probe,
-                "elapsed_sec": elapsed,
-            })
-        return results
-
-    def _probe_read_query(self, database: str, sql: str, timeout_sec: float) -> dict[str, Any]:
-        import pymysql
-
-        result: dict[str, Any] = {"completed": False, "row_count": 0, "error": ""}
-
-        def run() -> None:
-            connection = None
-            try:
-                connection = pymysql.connect(
-                    host=self.config.mysql_host,
-                    port=self.config.mysql_port,
-                    user=self.config.mysql_user,
-                    password=self.config.mysql_password,
-                    database=database,
-                    read_timeout=max(1, int(timeout_sec)),
-                    connect_timeout=5,
-                )
-                with connection.cursor() as cursor:
-                    cursor.execute(sql)
-                    rows = cursor.fetchmany(1000)
-                    result.update({"completed": True, "row_count": len(rows)})
-            except Exception as exc:
-                result["error"] = str(exc)
-            finally:
-                if connection:
-                    connection.close()
-
-        thread = threading.Thread(target=run, daemon=True)
-        thread.start()
-        thread.join(timeout=max(0.1, timeout_sec))
-        if thread.is_alive():
-            result["timed_out"] = True
-        return result
+        preparation_path = run_dir / "preparation_result.json"
+        preparation = self._read_json(preparation_path) if preparation_path.exists() else {}
+        round_no = 1
+        try:
+            decision, _revised, trace = calibrate_reproduction(
+                str(input_data["dba_description"]),
+                blueprint,
+                preparation,
+                round_no=round_no,
+                previous_calibration=None,
+                config=self.config,
+            )
+        except ReproductionPlanningError as exc:
+            write_json(run_dir / f"react_trace_calibration_round_{round_no}.json", exc.trace)
+            self._write_planner_failure(run_dir, state, exc, stage=f"calibration_round_{round_no}")
+            raise
+        status_by_decision = {
+            "accept": "accepted",
+            "weak_match": "weak_match",
+            "reject": "rejected_by_llm",
+        }
+        matched = decision["decision"] == "accept"
+        round_result = {**decision, "round": round_no, "matched": matched}
+        rounds.append(round_result)
+        write_json(run_dir / f"calibration_round_{round_no}.json", round_result)
+        write_json(run_dir / f"react_trace_calibration_round_{round_no}.json", trace)
+        if matched:
+            state.calibration_failed_rounds = 0
+        else:
+            state.calibration_failed_rounds = 1
+        save_state(run_dir, state)
+        return blueprint, {
+            "status": status_by_decision[decision["decision"]],
+            "matched": matched,
+            "decision": decision["decision"],
+            "weak_match": decision["decision"] == "weak_match",
+            "concerns": decision.get("concerns") or [],
+            "recommended_changes": decision.get("recommended_changes") or [],
+            "rounds": rounds,
+        }
 
     def _execute(self, blueprint: ReproductionBlueprint, run_dir: Path) -> dict[str, Any]:
         dag = agent_tools.build_task_dag(blueprint.task_specs, blueprint.dependencies)
@@ -615,6 +705,9 @@ class ReproductionRuntime:
             ),
             "timestamp": time.time(),
         })
+        if error.candidate is not None:
+            write_json(run_dir / "candidate_blueprint.json", error.candidate)
+            state.artifacts["candidate_blueprint"] = "candidate_blueprint.json"
         state.artifacts["react_trace"] = "react_trace.json"
         state.artifacts["planner_failure"] = "planner_failure.json"
         save_state(run_dir, state)

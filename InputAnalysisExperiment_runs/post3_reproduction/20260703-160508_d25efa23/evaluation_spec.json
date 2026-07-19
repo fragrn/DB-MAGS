@@ -1,0 +1,18 @@
+{
+  "validation_criteria": [
+    "EXPLAIN for the calibration queries shows scan-based access on the filtered tables with no usable secondary index on `tag`.",
+    "With `slow_query_log=ON` and `log_queries_not_using_indexes=ON`, the fast SELECT workload appears in the slow log even though runtime stays well below `long_query_time`.",
+    "With the flag disabled, the same fast workload should not materially populate the slow log."
+  ],
+  "symptom_evidence": [
+    "Slow-log lines contain `Query_time` values in the sub-second range.",
+    "Logged entries show `Rows_examined` near the underlying table cardinality.",
+    "The workload is visible in the slow log despite being much faster than 2 seconds."
+  ],
+  "mechanism_evidence": [
+    "EXPLAIN shows table reads on the filtered column without a supporting index.",
+    "Toggling `log_queries_not_using_indexes` changes whether the fast queries are logged.",
+    "The same query text can remain fast while the slow log eligibility changes."
+  ],
+  "minimum_plan_similarity": 0.6
+}

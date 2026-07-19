@@ -1,0 +1,187 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_schema",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS slowlog_repro"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS slowlog_repro.repro_events (id BIGINT UNSIGNED NOT NULL, category VARCHAR(16) NOT NULL, payload VARCHAR(128) NOT NULL, created_at DATETIME NOT NULL, PRIMARY KEY (id)) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO slowlog_repro.repro_events (id, category, payload, created_at) SELECT nums.n + 1, CASE WHEN MOD(nums.n, 100) < 10 THEN CONCAT('rare_', MOD(nums.n, 10)) ELSE 'common' END, RPAD(CONCAT('payload-', nums.n), 64, 'x'), TIMESTAMP('2024-01-01 00:00:00') + INTERVAL MOD(nums.n, 86400) SECOND FROM (SELECT a.d + b.d * 10 + c.d * 100 + d.d * 1000 + e.d * 10000 + f.d * 100000 AS n FROM (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) c CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) d CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) e CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) f) nums WHERE nums.n < 100000"
+                },
+                {
+                  "sql": "ANALYZE TABLE slowlog_repro.repro_events"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "rows": 100000,
+        "tables": 1
+      },
+      "success_criteria": {
+        "table_exists": "slowlog_repro.repro_events",
+        "row_count_gte": 100000
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "unindexed_predicate_scan"
+      }
+    },
+    {
+      "task_id": "enable_slow_log",
+      "task_type": "configuration",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = ON"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 2"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = ON"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "cleanup_actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "slowlog_repro",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL slow_query_log = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 10.000000"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "slow_query_log": "ON",
+        "long_query_time": 2,
+        "log_queries_not_using_indexes": "ON"
+      },
+      "success_criteria": {
+        "variables_set": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "slow_log_logs_unindexed_queries_below_threshold"
+      }
+    },
+    {
+      "task_id": "run_repro_workload",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "slowlog_repro",
+          "sql": "SELECT COUNT(*) FROM slowlog_repro.repro_events WHERE category = 'rare_0'",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "queries": "many",
+        "slow_log_entries": "many"
+      },
+      "success_criteria": {
+        "completed": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "full_table_scan_logged_as_slow"
+      }
+    },
+    {
+      "task_id": "verify_slow_log",
+      "task_type": "verification",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "grep",
+            "-n",
+            "repro_events",
+            "/opt/homebrew/var/mysql/neodeMacBook-Air-slow.log"
+          ],
+          "duration_sec": 1,
+          "cleanup_command": [
+            "true"
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "matches": ">0"
+      },
+      "success_criteria": {
+        "matches_found": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "slow_log_contains_fast_scan_queries"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_schema",
+      "enable_slow_log"
+    ],
+    [
+      "enable_slow_log",
+      "run_repro_workload"
+    ],
+    [
+      "run_repro_workload",
+      "verify_slow_log"
+    ]
+  ]
+}

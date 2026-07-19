@@ -1,0 +1,39 @@
+{
+  "status": "accepted",
+  "matched": true,
+  "decision": "accept",
+  "weak_match": false,
+  "concerns": [],
+  "recommended_changes": [],
+  "rounds": [
+    {
+      "decision": "accept",
+      "reasoning": "The EXPLAIN plan supports the intended mechanism: MySQL drives from `issues` via a reverse PRIMARY index range scan to satisfy `ORDER BY issues.id DESC LIMIT 10`, applies the non-sargable `LOWER(subject) LIKE '%255392%'` as a filter rather than an index probe, and retains the project/module/permission checks in the plan. The plan is not an exact copy of the forum EXPLAIN because the `members` check is materialized once instead of appearing as a dependent subquery, but the core slow-path structure is present and credible for execution.",
+      "query_assessments": [
+        {
+          "query_id": "calibration_query_1",
+          "sql": "SELECT /*+ SET_VAR(optimizer_switch='semijoin=off,materialization=off,in_to_exists=on') */ issues.* FROM issues FORCE INDEX (PRIMARY) STRAIGHT_JOIN projects ON projects.id = issues.project_id WHERE ((projects.status <> 9 AND EXISTS (SELECT 1 AS one FROM enabled_modules em WHERE em.project_id = projects.id AND em.name = 'issue_tracking')) AND (((projects.is_public = 1 AND projects.id NOT IN (SELECT project_id FROM members WHERE user_id IN (44, 638)) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (1, 6, 9, 13, 115, 129, 131, 136, 186, 227, 228, 230, 275, 287, 315, 335, 340, 369, 394, 404, 408, 450, 453, 454, 456, 458, 460, 462, 492, 511, 512, 516, 519, 527, 531, 533, 537) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (40, 68, 130, 149, 326, 330, 331, 332, 333, 350, 356, 402, 455, 514, 515, 528) AND (1 = 1)) OR (projects.id IN (91, 111, 128, 130, 149, 235, 257, 322, 326, 328, 330, 331, 332, 333, 350, 356, 489, 508, 514, 515, 525, 528) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))) OR (projects.id IN (457) AND ((issues.is_private = 0 OR issues.author_id = 44 OR issues.assigned_to_id IN (44, 186, 898)))))) AND (issues.id != 251880) AND (LOWER(issues.subject) LIKE LOWER('%255392%'))) ORDER BY issues.id DESC LIMIT 10",
+          "matched": true,
+          "observed_plan_summary": "Reverse PRIMARY index range scan on `issues` feeds a nested-loop join to `projects`; `enabled_modules` is probed by index lookup; the `members` anti-join is materialized once; the subject predicate is evaluated as a filter; LIMIT 10 is applied after the descending scan.",
+          "supporting_evidence": [
+            "`issues` is the driving table with `Index range scan on issues using PRIMARY ... (reverse)`.",
+            "`ORDER BY issues.id DESC LIMIT 10` is aligned with the reverse primary-key walk.",
+            "`lower(issues.subject) like <cache>(lower('%255392%'))` appears inside the filter, not as an index access condition.",
+            "`projects` is accessed by single-row PRIMARY lookup on `issues.project_id`.",
+            "`enabled_modules` is accessed by index lookup on `enabled_modules_project_id` with the `name = 'issue_tracking'` filter.",
+            "`members` is materialized with deduplication and then probed, preserving the permission-check mechanism."
+          ],
+          "discrepancies": [
+            "The `members` check is materialized once rather than shown as a dependent subquery in the textual EXPLAIN.",
+            "The estimated row counts differ from the forum plan, but the access pattern remains the same."
+          ]
+        }
+      ],
+      "concerns": [],
+      "recommended_changes": [],
+      "missing_information": [],
+      "round": 1,
+      "matched": true
+    }
+  ]
+}
