@@ -1,0 +1,87 @@
+{
+  "database": "post_retry_resource_limitation_130884_mysql_data_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS digits (n TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS accounts (id INT NOT NULL PRIMARY KEY, segment VARCHAR(16) NOT NULL, region VARCHAR(16) NOT NULL, created_day SMALLINT UNSIGNED NOT NULL) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS orders (id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, status VARCHAR(16) NOT NULL, created_day SMALLINT UNSIGNED NOT NULL, amount_cents INT NOT NULL) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS order_items (id INT NOT NULL PRIMARY KEY, order_id INT NOT NULL, sku_id INT NOT NULL, qty TINYINT UNSIGNED NOT NULL, unit_price_cents INT NOT NULL) ENGINE=InnoDB"
+  ],
+  "generation_sql": [
+    "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT IGNORE INTO accounts (id, segment, region, created_day) SELECT seq.n, CASE WHEN seq.n <= 500 THEN 'premium' ELSE 'standard' END, ELT(1 + MOD(seq.n, 4), 'na', 'eu', 'apac', 'latam'), 1 + MOD(seq.n, 365) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5) AS seq WHERE seq.n <= {row_count}",
+    "INSERT IGNORE INTO orders (id, account_id, status, created_day, amount_cents) SELECT seq.n, CASE WHEN MOD(seq.n, 2) = 0 THEN 1 + MOD(seq.n, 500) ELSE 501 + MOD(seq.n, 49500) END, CASE WHEN MOD(seq.n, 20) < 17 THEN 'paid' WHEN MOD(seq.n, 20) < 19 THEN 'shipped' ELSE 'cancelled' END, 1 + MOD(seq.n, 365), 500 + MOD(seq.n, 50000) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n + 100000*d6.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= {row_count} * 3",
+    "INSERT IGNORE INTO order_items (id, order_id, sku_id, qty, unit_price_cents) SELECT seq.n, 1 + FLOOR((seq.n - 1) / 3), 1 + MOD(seq.n, 10000), 1 + MOD(seq.n, 5), 100 + MOD(seq.n, 900) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n + 100000*d6.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= {row_count} * 9",
+    "ANALYZE TABLE digits, accounts, orders, order_items"
+  ],
+  "tables": [
+    {
+      "name": "digits",
+      "purpose": "helper number source for bounded synthetic row generation",
+      "target_rows": 10,
+      "distribution_notes": "Fixed 0-9 seed table used only to generate larger row sets deterministically."
+    },
+    {
+      "name": "accounts",
+      "purpose": "parent entity with a rare premium segment filter and evenly spread regions",
+      "target_rows": 50000,
+      "distribution_notes": "Premium rows are sparse; region is roughly uniform across four values; primary key only, no secondary index on segment or region."
+    },
+    {
+      "name": "orders",
+      "purpose": "high-volume child table joined from accounts",
+      "target_rows": 150000,
+      "distribution_notes": "Half of the rows repeatedly point to the first 500 premium accounts; status is heavily skewed toward paid/shipped; no index on account_id or status."
+    },
+    {
+      "name": "order_items",
+      "purpose": "fanout table joined from orders",
+      "target_rows": 450000,
+      "distribution_notes": "Exactly three items per order on average; no index on order_id, so join fanout remains expensive under concurrency."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "digits": 10,
+      "accounts": 50000,
+      "orders": 150000,
+      "order_items": 450000
+    },
+    "value_skew": {
+      "accounts.segment": "premium is about 1% of accounts",
+      "orders.account_id": "about half the orders target the first 500 premium accounts to create repeated lookups",
+      "orders.status": "about 85% paid, 10% shipped, 5% cancelled",
+      "accounts.region": "approximately uniform across na, eu, apac, latam"
+    },
+    "predicate_selectivity": {
+      "accounts.segment = 'premium'": 0.01,
+      "orders.status IN ('paid','shipped')": 0.95
+    },
+    "join_selectivity": {
+      "orders.account_id = accounts.id": "many-to-one with high repetition on a small hot subset",
+      "order_items.order_id = orders.id": "one-to-many with average fanout of 3"
+    }
+  },
+  "analyze_tables": [
+    "digits",
+    "accounts",
+    "orders",
+    "order_items"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT SQL_NO_CACHE a.region, COUNT(*) AS item_count, SUM(oi.qty * oi.unit_price_cents) AS gross_cents FROM accounts a JOIN orders o ON o.account_id = a.id JOIN order_items oi ON oi.order_id = o.id WHERE a.segment = 'premium' AND o.status IN ('paid','shipped') GROUP BY a.region ORDER BY gross_cents DESC",
+      "objective": "Verify that the synthetic schema preserves the intended join fanout and forces the optimizer to consider a broad join path over the large child tables.",
+      "expected_evidence": [
+        "The plan shows the join order and broad row estimates for the orders and order_items tables.",
+        "The join predicates are visible without a supporting secondary index on account_id or order_id.",
+        "The plan reflects fanout-heavy scanning rather than a narrow point lookup."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

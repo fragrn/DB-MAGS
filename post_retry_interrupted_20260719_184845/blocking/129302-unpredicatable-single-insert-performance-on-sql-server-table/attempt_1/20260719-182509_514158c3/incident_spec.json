@@ -1,0 +1,93 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "A single-row insert on a large OLTP table sometimes stalls for minutes and blocks other work. The post strongly suggests the outlier is caused by blocking from another session rather than by table size or the count of indexes alone.",
+  "symptoms": [
+    "Single insert took over 7 minutes instead of the usual fast path",
+    "The insert blocked the system and other sessions piled up behind it",
+    "DMV output showed a blocking session id that did not appear as an active request",
+    "The blocked request reported `LCK_M_S` waits",
+    "The table had a clustered index plus 34 other indexes and no visible triggers"
+  ],
+  "mechanism": "A session left an uncommitted transaction open on a hot referenced row, so inserts that needed to validate or touch that row blocked behind row/key locks; the many secondary indexes increase insert work but do not explain the minute-scale outlier by themselves.",
+  "facts": [
+    {
+      "key": "table_scale",
+      "value": {
+        "rows": "~8 million"
+      },
+      "source": "explicit_post",
+      "evidence": "\"The table is something like 8 million rows\"",
+      "confidence": 0.97
+    },
+    {
+      "key": "index_count",
+      "value": {
+        "secondary_indexes": 34,
+        "clustered_index": true
+      },
+      "source": "explicit_post",
+      "evidence": "\"although this particular table does have a Clustered Index, it has 34 other indexes\"",
+      "confidence": 0.98
+    },
+    {
+      "key": "triggers",
+      "value": {
+        "visible_triggers": false
+      },
+      "source": "explicit_post",
+      "evidence": "\"There are no triggers that I can see\"",
+      "confidence": 0.9
+    },
+    {
+      "key": "blocking_symptom",
+      "value": {
+        "blocked_for_minutes": true,
+        "system_blocked": true
+      },
+      "source": "explicit_post",
+      "evidence": "\"took over 7 minutes and blocked the entire system up\"",
+      "confidence": 0.99
+    },
+    {
+      "key": "wait_type",
+      "value": {
+        "wait": "LCK_M_S"
+      },
+      "source": "explicit_post",
+      "evidence": "\"the blocked requests ... was waiting for a `LCK_M_S`\"",
+      "confidence": 0.95
+    },
+    {
+      "key": "ghost_blocker",
+      "value": {
+        "blocking_session_present_in_sessions_but_not_requests": true
+      },
+      "source": "explicit_post",
+      "evidence": "\"there is a session in dm_exec_sessions, it says it's sleeping and there are no equivalent rows in the requests DMV\"",
+      "confidence": 0.96
+    },
+    {
+      "key": "working_hypothesis",
+      "value": {
+        "blocked_not_slow": true,
+        "open_transaction_likely": true
+      },
+      "source": "post_hypothesis",
+      "evidence": "Accepted answer says the insert was probably blocked by another session holding locks, possibly an uncommitted transaction",
+      "confidence": 0.88
+    }
+  ],
+  "assumptions": [
+    "A foreign-key-like parent/child lock dependency can stand in for the SQL Server blocking mechanism in MySQL.",
+    "The minute-scale delay is primarily caused by lock wait time, not by pure insert CPU or disk cost.",
+    "The hot key / hot row can be synthesized so that the blocked insert targets the same value repeatedly."
+  ],
+  "unknowns": [
+    "Exact DDL of the production table and all 34 indexes",
+    "The exact blocker SQL and transaction scope",
+    "Whether the production system uses foreign keys, triggers, or cascading side effects that were not visible in the post",
+    "Exact isolation level and lock escalation behavior in the production incident"
+  ],
+  "confidence": 0.89
+}

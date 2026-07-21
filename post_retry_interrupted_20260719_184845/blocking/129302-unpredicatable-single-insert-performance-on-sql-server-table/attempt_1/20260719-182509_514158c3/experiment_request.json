@@ -1,0 +1,20 @@
+{
+  "target_anomaly": "unpredictable single insert blocking due to an apparently absent blocker",
+  "target_database": "post_retry_blocking_129302_unpredicatable_single_a1",
+  "dba_description": "A large SQL Server OLTP table with many indexes sometimes shows a single-row insert taking minutes and blocking the system. The blocker appears in session DMVs as sleeping or absent from request DMVs, and the wait type reported for the blocked request is LCK_M_S.",
+  "target_path": [
+    "open transaction on hot parent row",
+    "blocked insert against dependent child row",
+    "post-rollback successful insert"
+  ],
+  "injected_nodes": [
+    "uncommitted_parent_row_lock"
+  ],
+  "max_duration_sec": 60,
+  "max_retry_rounds": 2,
+  "risk_level": "medium",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": false
+  }
+}

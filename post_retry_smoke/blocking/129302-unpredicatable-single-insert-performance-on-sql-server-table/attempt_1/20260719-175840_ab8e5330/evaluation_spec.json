@@ -1,0 +1,19 @@
+{
+  "validation_criteria": [
+    "A cold-key insert completes without waiting on a lock while the blocker is absent.",
+    "A hot-key insert blocks while the sleeping transaction remains open.",
+    "Committing the blocker releases the hot-key insert promptly.",
+    "The calibration EXPLAIN output continues to show the intended secondary-index access path, proving the data shape is appropriate for the lock-wait mechanism."
+  ],
+  "symptom_evidence": [
+    "Blocked insert latency is a clear outlier versus the baseline insert.",
+    "The blocker can be idle or sleeping while still holding locks.",
+    "The wait is attributable to a transaction boundary, not to a trigger or DDL event."
+  ],
+  "mechanism_evidence": [
+    "The insert on comm_channelid = 11 waits until the lock-holding transaction commits.",
+    "The same statement on a cold key does not reproduce the delay.",
+    "The hotspot is driven by lock ownership on a secondary index key range."
+  ],
+  "minimum_plan_similarity": 0.6
+}

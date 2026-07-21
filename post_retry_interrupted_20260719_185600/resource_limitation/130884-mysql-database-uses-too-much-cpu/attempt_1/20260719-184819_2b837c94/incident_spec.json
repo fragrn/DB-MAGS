@@ -1,0 +1,108 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "MySQL CPU saturation during a read-heavy benchmark is most plausibly explained by concurrent join-heavy SELECTs that lack supporting indexes on the join columns. The post also shows connection pressure and weak query cache efficiency, but the synthetic reproduction focuses on the join fanout mechanism because that is the most directly reproducible signal.",
+  "symptoms": [
+    "Database VM/domain consumes about 471% CPU across vCPUs.",
+    "Workload is read-dominant with effectively no writes.",
+    "MySQLTuner reports 6,782 joins performed without indexes.",
+    "Connection usage reaches 152/151 and query cache pruning is extremely high.",
+    "Table cache hit rate is very low, suggesting avoidable overhead under load."
+  ],
+  "mechanism": "Concurrent read-only queries repeatedly join large tables on non-indexed foreign-key columns, producing broad scans and high row-examination fanout. The query cache is likely not helping and may amplify contention in the original environment, but the core CPU mechanism is the join plan itself.",
+  "facts": [
+    {
+      "key": "mysql_version",
+      "value": {
+        "version": "5.5.47-0ubuntu0.12.04.1"
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner reports \"Currently running supported MySQL version 5.5.47-0ubuntu0.12.04.1\".",
+      "confidence": 0.99
+    },
+    {
+      "key": "host_resources",
+      "value": {
+        "vcpus": 5,
+        "memory_gb": 4
+      },
+      "source": "explicit_post",
+      "evidence": "The question states the VM has 5 vCPU and 4GB of memory.",
+      "confidence": 0.99
+    },
+    {
+      "key": "read_heavy_workload",
+      "value": {
+        "reads_pct": 100,
+        "writes_pct": 0
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner shows \"Reads / Writes: 100% / 0%\" and the user says they are benchmarking web servers querying the database.",
+      "confidence": 0.97
+    },
+    {
+      "key": "cpu_saturation",
+      "value": {
+        "database_domain_cpu_pct": 471.2
+      },
+      "source": "explicit_post",
+      "evidence": "The OCR of the xentop screenshot shows the database domain at 471.2% CPU.",
+      "confidence": 0.98
+    },
+    {
+      "key": "connection_pressure",
+      "value": {
+        "highest_connection_usage_pct": 100,
+        "connections": 152,
+        "max_connections": 151
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner reports \"Highest connection usage: 100% (152/151)\".",
+      "confidence": 0.98
+    },
+    {
+      "key": "unindexed_joins",
+      "value": {
+        "joins_without_indexes": 6782
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner reports \"Joins performed without indexes: 6782\".",
+      "confidence": 0.98
+    },
+    {
+      "key": "query_cache_issues",
+      "value": {
+        "efficiency_pct": 7.8,
+        "prunes_per_day": 39159937,
+        "query_cache_size_mb": 16
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner reports \"Query cache efficiency: 7.8%\" and \"Query cache prunes per day: 39159937\" with query_cache_size = 16M.",
+      "confidence": 0.96
+    },
+    {
+      "key": "target_database",
+      "value": {
+        "database": "post_retry_resource_limitation_130884_mysql_data_a1"
+      },
+      "source": "human_input",
+      "evidence": "Metadata instructs using this exact dedicated test database name for all MySQL setup and task actions.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The dominant CPU cost comes from query execution and join fanout rather than storage I/O saturation.",
+    "The benchmark workload is representative enough that reproducing one high-fanout read path is useful even if the exact production schema is unknown.",
+    "Missing secondary indexes on foreign-key/join columns are the main reproducible cause, while query cache effects are secondary or optional.",
+    "A synthetic schema with accounts, orders, and order_items can preserve the cardinality and skew needed for the mechanism.",
+    "Using SQL_NO_CACHE in the benchmark query is acceptable to keep query cache from masking the CPU cost of the join path."
+  ],
+  "unknowns": [
+    "The exact production schema and index layout.",
+    "The exact query text or query mix that drove the benchmark.",
+    "Whether mutex contention or query cache mutexes contributed materially to CPU burn.",
+    "Whether the observed CPU was entirely from this benchmark or from mixed background traffic.",
+    "Which tables, if any, were fragmented or had stale statistics in the original environment."
+  ],
+  "confidence": 0.84
+}

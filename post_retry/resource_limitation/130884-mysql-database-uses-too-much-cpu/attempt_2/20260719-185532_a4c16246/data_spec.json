@@ -1,0 +1,86 @@
+{
+  "database": "post_retry_resource_limitation_130884_mysql_data_a2",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS digits (n TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+    "CREATE TABLE IF NOT EXISTS accounts (id INT UNSIGNED NOT NULL PRIMARY KEY, tenant_id INT UNSIGNED NOT NULL, email VARCHAR(128) NOT NULL, status VARCHAR(16) NOT NULL, created_at DATE NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+    "CREATE TABLE IF NOT EXISTS orders (id INT UNSIGNED NOT NULL PRIMARY KEY, account_id INT UNSIGNED NOT NULL, order_state VARCHAR(16) NOT NULL, amount DECIMAL(10,2) NOT NULL, created_at DATE NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8",
+    "CREATE TABLE IF NOT EXISTS events (id INT UNSIGNED NOT NULL PRIMARY KEY, account_id INT UNSIGNED NOT NULL, event_type VARCHAR(24) NOT NULL, created_at DATE NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8"
+  ],
+  "generation_sql": [
+    "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT IGNORE INTO accounts (id, tenant_id, email, status, created_at) SELECT seq.n, 1 + MOD(seq.n, 1000), CONCAT('acct_', LPAD(seq.n, 6, '0'), '@example.test'), CASE WHEN MOD(seq.n, 10) = 0 THEN 'inactive' ELSE 'active' END, DATE_ADD('2024-01-01', INTERVAL MOD(seq.n, 365) DAY) FROM (SELECT d1.n * 10000 + d2.n * 1000 + d3.n * 100 + d4.n * 10 + d5.n + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5) AS seq WHERE seq.n <= 100000",
+    "INSERT IGNORE INTO orders (id, account_id, order_state, amount, created_at) SELECT seq.n, 1 + MOD(seq.n - 1, 100000), CASE WHEN MOD(seq.n, 5) = 0 THEN 'open' ELSE 'closed' END, 1.00 + MOD(seq.n, 10000) / 100.0, DATE_ADD('2024-01-01', INTERVAL MOD(seq.n, 365) DAY) FROM (SELECT d1.n * 100000 + d2.n * 10000 + d3.n * 1000 + d4.n * 100 + d5.n * 10 + d6.n + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= 500000",
+    "INSERT IGNORE INTO events (id, account_id, event_type, created_at) SELECT seq.n, 1 + MOD(seq.n - 1, 100000), CASE WHEN MOD(seq.n, 10) = 0 THEN 'checkout' ELSE 'browse' END, DATE_ADD('2024-01-01', INTERVAL MOD(seq.n, 365) DAY) FROM (SELECT d1.n * 100000 + d2.n * 10000 + d3.n * 1000 + d4.n * 100 + d5.n * 10 + d6.n + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= 500000"
+  ],
+  "tables": [
+    {
+      "name": "digits",
+      "purpose": "small helper table used to generate deterministic sequences for synthetic data loading",
+      "target_rows": 10,
+      "distribution_notes": "Dense 0-9 helper values only; no reproduction role beyond bounded sequence generation."
+    },
+    {
+      "name": "accounts",
+      "purpose": "dimension table for the benchmarked join path",
+      "target_rows": 100000,
+      "distribution_notes": "One row per account; `status` is skewed so 90% are active, and `tenant_id` is moderately dispersed to create grouping work. No secondary indexes on `status` or `email`."
+    },
+    {
+      "name": "orders",
+      "purpose": "large fact table joined to accounts without a supporting secondary index on the join key",
+      "target_rows": 500000,
+      "distribution_notes": "About five rows per account on average; 20% of rows are `open`. Join key `account_id` is intentionally unindexed to force scan-heavy join execution."
+    },
+    {
+      "name": "events",
+      "purpose": "large fact table joined to accounts without a supporting secondary index on the join key",
+      "target_rows": 500000,
+      "distribution_notes": "About five rows per account on average; 10% of rows are `checkout`. Join key `account_id` is intentionally unindexed to force scan-heavy join execution."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "digits": 10,
+      "accounts": 100000,
+      "orders": 500000,
+      "events": 500000
+    },
+    "value_skew": {
+      "accounts.status": "90% active / 10% inactive",
+      "orders.order_state": "20% open / 80% closed",
+      "events.event_type": "10% checkout / 90% browse"
+    },
+    "predicate_selectivity": {
+      "accounts.status = 'active'": 0.9,
+      "orders.order_state = 'open'": 0.2,
+      "events.event_type = 'checkout'": 0.1
+    },
+    "join_selectivity": {
+      "accounts.id = orders.account_id": "many-to-one",
+      "accounts.id = events.account_id": "many-to-one",
+      "accounts.id joins both fact tables": "join fanout of roughly 25 joined fact combinations per account before filters"
+    }
+  },
+  "analyze_tables": [
+    "accounts",
+    "orders",
+    "events"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT a.tenant_id, COUNT(*) AS matched_rows FROM accounts a JOIN orders o ON o.account_id = a.id JOIN events e ON e.account_id = a.id WHERE a.status = 'active' AND o.order_state = 'open' AND e.event_type = 'checkout' GROUP BY a.tenant_id",
+      "objective": "Verify that the synthetic schema and distributions create the intended scan-heavy join path on unindexed join keys.",
+      "expected_evidence": [
+        "EXPLAIN should show that the join relies on scans or block nested-loop style processing rather than selective lookups on the join keys.",
+        "The filter predicates should appear selective enough to matter but not selective enough to eliminate the need to read large portions of the fact tables.",
+        "The plan should reflect the intended join fanout and not collapse into a trivial point lookup."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 100000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

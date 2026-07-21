@@ -1,0 +1,55 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "dbms_adapters": [
+        "mysql"
+      ],
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "No SQL Server/PostgreSQL execution adapter in v1",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_mysql_global_variables",
+    "arguments": {},
+    "result": {
+      "variables": {
+        "log_output": "FILE",
+        "log_queries_not_using_indexes": "OFF",
+        "long_query_time": "10.000000",
+        "min_examined_row_limit": "0",
+        "slow_query_log": "OFF",
+        "slow_query_log_file": "/opt/homebrew/var/mysql/neodeMacBook-Air-2-slow.log"
+      },
+      "error": ""
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": "{\"database\":\"post_retry_resource_limitation_17677_why_is_mysq_a1\"}",
+    "error": "(1049, \"Unknown database 'post_retry_resource_limitation_17677_why_is_mysq_a1'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"mysql\",\n    \"dbms_version\": null,\n    \"summary\": \"The post describes MySQL creating a large number of internal temporary tables, with a significant fraction spilling to disk. The most plausible mechanism is a query shape that forces grouped or sorted intermediate results to include wide columns or TEXT/BLOB data, which causes internal temp tables to fall back to on-disk storage.\",\n    \"symptoms\": [\n      \"mysqltuner reports many temp tables, with 30-38% created on disk.\",\n      \"The same database on another machine shows far fewer disk temp tables.\",\n      \"Increasing tmp_table_size and max_heap_table_size reduced but did not eliminate disk temp tables.\",\n      \"The user suspects MyISAM versus MEMORY for group-by tables, but the discussion indicates that internal temp tables are the relevant mechanism.\"\n    ],\n    \"mechanism\": \"MySQL creates internal temporary tables for GROUP BY, ORDER BY, UNION, derived-table materialization, and similar operations. If the intermediate result includes TEXT/BLOB columns or wide columns used in grouping/sorting, or if the temp table exceeds tmp_table_size/max_heap_table_size, MySQL spills from MEMORY to on-disk internal temp tables (typically MyISAM in the referenced version).\",\n    \"facts\": [\n      {\n        \"key\": \"dbms\",\n        \"value\": {\n          \"name\": \"MySQL\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The user explicitly says they are using MySQL and asks about MySQL temporary tables.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"disk_temp_table_fraction_reported_by_mysqltuner\",\n        \"value\": {\n          \"reported_disk_fraction\": \"30-38%\",\n          \"reported_temp_table_counts\": [17158, 23725, 580]\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post quotes mysqltuner output showing a substantial fraction of temp tables created on disk.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"configuration_changes_tried\",\n        \"value\": {\n          \"tmp_table_size\": \"200M\",\n          \"max_heap_table_size\": \"200M\",\n          \"previous_values\": \"16M\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The user says they changed tmp_table_size and max_heap_table_size from 16M to 200M.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"other_config_parameters\",\n        \"value\": {\n          \"engine\": \"myisam\",\n          \"group_concat_max_len\": 32768,\n          \"key_buffer_size\": \"3.7 GB\",\n          \"table_cache\": 125,\n          \"query_cache_limit\": \"1M\",\n          \"query_cache_size\": \"16M\",\n          \"join_buffer_size\": \"2.00 M\",\n          \"max_connections\": 800\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post lists these server settings as the current configuration.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"internal_temp_table_rules\",\n        \"value\": {\n          \"disk_spill_triggers\": [\n            \"TEXT or BLOB columns\",\n            \"temp table size exceeding tmp_table_size/max_heap_table_size\",\n            \"columns over 512 bytes used in GROUP BY/ORDER BY/UNION\"\n          ]\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The accepted answer explains the common reasons internal temp tables are created on disk.\",\n        \"confidence\": 0.93\n      },\n      {\n        \"key\": \"likely_root_cause_is_workload_shape\",\n        \"value\": {\n          \"hypothesis\": \"The query pattern, not a simple server knob, is driving disk temp tables.\"\n        },\n        \"source\": \"agent_inference\",\n        \"evidence\": \"The same database behaves differently across machines, and the answer says temp tables are expected for some query shapes.\",\n        \"confidence\": 0.84\n      }\n    ],\n    \"assumptions\": [\n      \"The problematic workload includes at least one GROUP BY, ORDER BY, UNION, or derived-table materialization step.\",\n      \"At least one grouped or sorted column is wide enough to trigger disk temp table behavior, o"
+  }
+]

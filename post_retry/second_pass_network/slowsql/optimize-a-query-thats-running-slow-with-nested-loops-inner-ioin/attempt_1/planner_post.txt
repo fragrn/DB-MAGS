@@ -1,0 +1,233 @@
+https://dba.stackexchange.com/questions/40280/optimize-a-query-thats-running-slow-with-nested-loops-inner-ioin
+
+
+Optimize a query that's running slow with nested loops inner ioin
+Asked 13 years, 3 months ago
+Modified 3 years, 2 months ago
+Viewed 107k times
+43
+
+Consider the following simple query (only 3 tables involved)
+
+    SELECT
+
+        l.sku_id AS ProductId,
+        l.is_primary AS IsPrimary,
+        v1.category_name AS Category1,
+        v2.category_name AS Category2,
+        v3.category_name AS Category3,
+        v4.category_name AS Category4,
+        v5.category_name AS Category5
+
+    FROM category c4
+    JOIN category_voc v4 ON v4.category_id = c4.category_id and v4.language_code = 'en'
+
+    JOIN category c3 ON c3.category_id = c4.parent_category_id
+    JOIN category_voc v3 ON v3.category_id = c3.category_id and v3.language_code = 'en'
+
+    JOIN category c2 ON c2.category_id = c3.category_id
+    JOIN category_voc v2 ON v2.category_id = c2.category_id and v2.language_code = 'en'
+
+    JOIN category c1 ON c1.category_id = c2.parent_category_id
+    JOIN category_voc v1 ON v1.category_id = c1.category_id and v1.language_code = 'en'
+
+    LEFT OUTER JOIN category c5 ON c5.parent_category_id = c4.category_id
+    LEFT OUTER JOIN category_voc v5 ON v5.category_id = c5.category_id and v5.language_code = @lang
+
+    JOIN category_link l on l.sku_id IN (SELECT value FROM #Ids) AND
+    (
+        l.category_id = c4.category_id OR
+        l.category_id = c5.category_id
+    )
+
+    WHERE c4.[level] = 4 AND c4.version_id = 5
+This is a pretty simple query, the only confusing part is the last category join, it's this way because category level 5 might or might not exist. At the end of the query I am looking for category info per product ID (SKU ID), and the that's where the very large table category_link comes in. Finally, the table #Ids is just a temp table containing 10'000 Ids.
+
+When executed, I get the following actual execution plan:
+
+
+Results 1   Messages   Execution plan
+Query 1: Query cost (relative to the batch): 100%
+SELECT 1.sku_id AS ProductId, 1.is_primary AS IsPrimary, v1.category_name AS Category1, v2.category_nam
+
+[流程图部分]
+
+┌─────────┐     ┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐     ┌──────────────────────┐
+│  SELECT │ ──→ │ Parallelism          │ ──→ │ Merge Join           │ ──→ │ Parallelism          │ ──→ │ Clustered Index Scan │
+│         │     │ (Gather Streams)     │     │ (Right Outer Join)   │     │ (Repartition Streams)│     │ [idx_alt_category]   │
+│         │     │ Cost: 0 %            │     │ Cost: 1 %            │     │ Cost: 0 %            │     │ Cost: 0 %            │
+└─────────┘     └──────────────────────┘     └──────────────────────┘     └──────────────────────┘     └──────────────────────┘
+                                                                                                      ↑
+                                                                                                      │
+                                                                                              ┌──────────────────────┐
+                                                                                              │ Nested Loops         │
+                                                                                              │ (Inner Join)         │
+                                                                                              │ Cost: 89 %           │
+                                                                                              └──────────────────────┘
+                                                                                                      ↑
+                                                                                                      │
+                                                                                              ┌──────────────────────┐
+                                                                                              │ Parallelism          │
+                                                                                              │ (Repartition Streams)│
+                                                                                              │ Cost: 1 %            │
+                                                                                              └──────────────────────┘
+
+注：最后一行 “v2.category_nam” 应为 “v2.category_name”（图片截断），此处按原图保留。
+
+
+As you can see, almost 90% of the time is spent in the Nested Loops (Inner Join). Here's extra information on those Nested Loops:
+Nested Loops
+For each row in the top (outer) input, scan the bottom (inner) input, and output matching rows.
+
+Physical Operation        Nested Loops
+Logical Operation         Inner Join
+Actual Number of Rows     28863
+Estimated I/O Cost        0
+Estimated CPU Cost        553.487
+Estimated Number of Executions  1
+Number of Executions      1
+Estimated Operator Lost   738.86548 (99 %)
+Estimated Subtree Cost    821.727
+Estimated Number of Rows  114621
+Estimated Row Size        1046 B
+Actual Rebinds            0
+Actual Rewinds            0
+Node ID                   5
+
+Predicate
+[ADS2].[dbo].[ads_alt_category_link].[category_id] as []. 
+[category_id] as [c1] = [ADS2].[dbo].[sku].[sku_id] and 
+([ADS2].[dbo].[sku].[is_primary] = 1) and 
+([ADS2].[dbo].[sku].[sku_id] = [ADS2].[dbo].[ads_alt_category_voc].[sku_id]) and 
+([ADS2].[dbo].[ads_alt_category_voc].[category_id] = [ADS2].[dbo].[ads_alt_category].[category_id]) and 
+([ADS2].[dbo].[ads_alt_category].[category_id] = [c5])
+
+Output List
+[ADS2].[dbo].[ads_alt_category_voc].[category_name], 
+[ADS2].[dbo].[ads_alt_category_voc].[category_name], 
+[ADS2].[dbo].[ads_alt_category_voc].[category_id], 
+[ADS2].[dbo].[ads_alt_category_voc].[sku_id], 
+[ADS2].[dbo].[ads_alt_category_link].[sku_id], 
+[ADS2].[dbo].[ads_alt_category_link].is_primary
+
+
+
+
+Note that the table names don't match exactly because I edited the query table names for readability, but it's pretty easy to match (ads_alt_category = category). Is there any way to optimize this query? Also note that in production, the temp table #Ids doesn't exist, it's a Table Valued Parameter of the same 10'000 Ids passed on to the Stored Procedure.
+
+Additional info:
+
+category indices on category_id and parent_category_id
+category_voc index on category_id, language_code
+category_link index on sku_id, category_id
+sql-serverquery-performance
+Share
+Improve this question
+Follow
+edited Apr 19, 2023 at 9:28
+Paul White's user avatar
+Paul White♦
+96.3k3030 gold badges448448 silver badges703703 bronze badges
+asked Apr 17, 2013 at 18:05
+Luis Ferrao's user avatar
+Luis Ferrao
+54511 gold badge44 silver badges77 bronze badges
+Add a comment
+3 Answers
+Sorted by:
+
+Highest score (default)
+19
+
+The problem appears to be in this part of the code:
+
+JOIN category_link l on l.sku_id IN (SELECT value FROM #Ids) AND
+(
+    l.category_id = c4.category_id OR
+    l.category_id = c5.category_id
+)
+or in join conditions is always suspicious. One suggestion is to split this into two joins:
+
+JOIN category_link l1 on l1.sku_id in (SELECT value FROM #Ids) and l1.category_id = cr.category_id
+left outer join
+category_link l1 on l2.sku_id in (SELECT value FROM #Ids) and l2.category_id = cr.category_id
+You then have to modify the rest of the query to handle this . . . coalesce(l1.sku_id, l2.sku_id) for instance in the select clause.
+
+Share
+Improve this answer
+Follow
+answered Apr 17, 2013 at 18:43
+Gordon Linoff's user avatar
+Gordon Linoff
+2,27211 gold badge1717 silver badges1818 bronze badges
+Add a comment
+9
+
+As another user mentioned, this join is likely the cause:
+
+JOIN category_link l on l.sku_id IN (SELECT value FROM #Ids) AND
+(
+    l.category_id = c4.category_id OR
+    l.category_id = c5.category_id
+)
+Besides splitting these out into multiple joins, you can also try a CROSS APPLY
+
+CROSS APPLY (
+    SELECT [some column(s)]
+    FROM category_link x
+    WHERE EXISTS(SELECT value FROM #Ids WHERE value = x.sku_id)
+    AND (x.category_id = c4.category_id OR x.category_id = c5.category_id)        
+) l
+From the MSDN link above:
+
+The table-valued function acts as the right input and the outer table expression acts as the left input. The right input is evaluated for each row from the left input and the rows produced are combined for the final output.
+
+Basically, APPLY is like a subquery that filters out records on the right first, and then applies them to the rest of your query.
+
+This article does a very good job of explaining what it is and when to use it: http://explainextended.com/2009/07/16/inner-join-vs-cross-apply/
+
+It's important to note, however, that the CROSS APPLY does not always perform faster than an INNER JOIN. In many situations, it will probably be about the same. In rare cases, though, I've actually seen it slower (again, this all depends on your table structure and the query itself).
+
+As a general rule of thumb, if I find myself joining to a table with way too many conditional statements, then I tend to lean toward APPLY
+
+Also a fun note: OUTER APPLY will act like a LEFT JOIN
+
+Also, please take note of my choice to use EXISTS rather than IN. When doing IN on a subquery, remember that it will return the entire result set, even after it has found your value. With EXISTS, though, it will stop the subquery the instant it finds a match.
+
+Share
+Improve this answer
+Follow
+edited Apr 18, 2013 at 12:15
+answered Apr 17, 2013 at 21:02
+valverij's user avatar
+valverij
+19133 bronze badges
+Add a comment
+2
+
+Since this question keeps getting views, I'll summarize it here so newcomers don't have to suffer the history:
+
+JOIN table t ON t.member = @value1 OR t.member = @value2 -- this is slow as hell
+JOIN table t ON t.member = COALESCE(@value1, @value2)    -- this is blazing fast
+-- Note that here if @value1 has a value, @value2 is NULL, and vice versa
+I realize this might not be everyone's problem, but by highlighting the sensitivity of the ON clauses, it might help you look in the right direction.
+
+As pointed out in the accepted answer, the problem was the OR clause in the category_link join. However, the code suggested in that answer is very slow, slower even than the original code.
+
+A much faster and also much cleaner solution is simply to replace the current join condition with the following:
+
+JOIN category_link l
+    ON l.sku_id IN  (SELECT value FROM @p1) 
+    AND l.category_id = COALESCE(c5.category_id, c4.category_id)
+This minute tweak is the fastest solution, tested against the double join from the accepted answer and also tested against the CROSS APPLY as suggested by valverij.
+
+Wiki answer from question author content originally posted in the question and various comments
+
+Share
+Improve this answer
+Follow
+edited Apr 19, 2023 at 9:30
+community wiki
+2 revs
+comment-answers
+Add a comment

@@ -9,13 +9,14 @@ from pathlib import Path
 from typing import Any
 
 from InputAnalysisAgent.analyzer import InputAnalysisError, analyze_post
+from InputAnalysisAgent.batch import run_batch
 from InputAnalysisAgent.hitl import HumanDecision, HumanGateRequired, WAITING_EXIT_CODE
 from InputAnalysisAgent.runtime import ReproductionRuntime
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(argv if argv is not None else sys.argv[1:])
-    if argv and argv[0] in {"run", "resume"}:
+    if argv and argv[0] in {"run", "resume", "batch-run"}:
         return _reproduction_main(argv)
 
     parser = argparse.ArgumentParser(
@@ -63,10 +64,28 @@ def _reproduction_main(argv: list[str]) -> int:
     resume_parser.add_argument("--decision", choices=["approve", "reject", "revise", "feedback", "retry"], required=True)
     resume_parser.add_argument("--patch", help="JSON Merge Patch file, required for revise")
     resume_parser.add_argument("--feedback", default="")
+
+    batch_parser = subparsers.add_parser("batch-run", help="Run reproductions for every post below an input root")
+    batch_parser.add_argument("--input-root", required=True, help="Directory containing post *.txt files")
+    batch_parser.add_argument("--output-root", required=True, help="Directory for batch run artifacts")
+    batch_parser.add_argument("--max-attempts", type=int, default=4)
+    batch_parser.add_argument("--attempt-timeout-sec", type=int, default=300)
+    batch_parser.add_argument("--limit", type=int, help="Only process the first N posts; useful for smoke tests")
     args = parser.parse_args(argv)
 
     runtime = ReproductionRuntime()
     try:
+        if args.command == "batch-run":
+            result = run_batch(
+                input_root=args.input_root,
+                output_root=args.output_root,
+                max_attempts=args.max_attempts,
+                attempt_timeout_sec=args.attempt_timeout_sec,
+                limit=args.limit,
+                runtime=runtime,
+            )
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         if args.command == "run":
             description, metadata = _load_input(Path(args.input))
             result = runtime.run(

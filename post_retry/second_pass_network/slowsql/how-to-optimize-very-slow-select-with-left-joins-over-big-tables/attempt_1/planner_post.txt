@@ -1,0 +1,270 @@
+How to optimize very slow SELECT with LEFT JOINs over big tables
+Asked 10 years, 9 months ago
+Modified 7 years, 5 months ago
+Viewed 181k times
+32
+
+I was googling, self-educating & looking for solution for hours but with no luck. I found a few similar questions here but not this case.
+
+My tables:
+
+persons (~10M rows)
+attributes (location, age,...)
+links (M:M) between persons and attributes (~40M rows)
+Full dump ~280MB
+
+Situation: I try to select all person ids (person_id) from some locations (location.attribute_value BETWEEN 3000 AND 7000), being some gender (gender.attribute_value = 1), born in some years (bornyear.attribute_value BETWEEN 1980 AND 2000) and having some eyes' color (eyecolor.attribute_value IN (2,3)).
+
+This is my query witch tooks 3~4 min. and I'd like to optimize:
+
+SELECT person_id
+FROM person
+    LEFT JOIN attribute location ON location.attribute_type_id = 1 AND location.person_id = person.person_id
+    LEFT JOIN attribute gender ON gender.attribute_type_id = 2 AND gender.person_id = person.person_id
+    LEFT JOIN attribute bornyear ON bornyear.attribute_type_id = 3 AND bornyear.person_id = person.person_id
+    LEFT JOIN attribute eyecolor ON eyecolor.attribute_type_id = 4 AND eyecolor.person_id = person.person_id
+WHERE 1
+    AND location.attribute_value BETWEEN 3000 AND 7000
+    AND gender.attribute_value = 1
+    AND bornyear.attribute_value BETWEEN 1980 AND 2000
+    AND eyecolor.attribute_value IN (2,3)
+LIMIT 100000;
+Result:
+
++-----------+
+| person_id |
++-----------+
+|       233 |
+|       605 |
+|       ... |
+|   8702599 |
+|   8703617 |
++-----------+
+100000 rows in set (3 min 42.77 sec)
+Explain extended:
+
++----+-------------+----------+--------+---------------------------------------------+-----------------+---------+--------------------------+---------+----------+--------------------------+
+| id | select_type | table    | type   | possible_keys                               | key             | key_len | ref                      | rows    | filtered | Extra                    |
++----+-------------+----------+--------+---------------------------------------------+-----------------+---------+--------------------------+---------+----------+--------------------------+
+|  1 | SIMPLE      | bornyear | range  | attribute_type_id,attribute_value,person_id | attribute_value | 5       | NULL                     | 1265229 |   100.00 | Using where              |
+|  1 | SIMPLE      | location | ref    | attribute_type_id,attribute_value,person_id | person_id       | 5       | test1.bornyear.person_id |       4 |   100.00 | Using where              |
+|  1 | SIMPLE      | eyecolor | ref    | attribute_type_id,attribute_value,person_id | person_id       | 5       | test1.bornyear.person_id |       4 |   100.00 | Using where              |
+|  1 | SIMPLE      | gender   | ref    | attribute_type_id,attribute_value,person_id | person_id       | 5       | test1.eyecolor.person_id |       4 |   100.00 | Using where              |
+|  1 | SIMPLE      | person   | eq_ref | PRIMARY                                     | PRIMARY         | 4       | test1.location.person_id |       1 |   100.00 | Using where; Using index |
++----+-------------+----------+--------+---------------------------------------------+-----------------+---------+--------------------------+---------+----------+--------------------------+
+5 rows in set, 1 warning (0.02 sec)
+Profiling:
+
++------------------------------+-----------+
+| Status                       | Duration  |
++------------------------------+-----------+
+| Sending data                 |  3.069452 |
+| Waiting for query cache lock |  0.000017 |
+| Sending data                 |  2.968915 |
+| Waiting for query cache lock |  0.000019 |
+| Sending data                 |  3.042468 |
+| Waiting for query cache lock |  0.000043 |
+| Sending data                 |  3.264984 |
+| Waiting for query cache lock |  0.000017 |
+| Sending data                 |  2.823919 |
+| Waiting for query cache lock |  0.000038 |
+| Sending data                 |  2.863903 |
+| Waiting for query cache lock |  0.000014 |
+| Sending data                 |  2.971079 |
+| Waiting for query cache lock |  0.000020 |
+| Sending data                 |  3.053197 |
+| Waiting for query cache lock |  0.000087 |
+| Sending data                 |  3.099053 |
+| Waiting for query cache lock |  0.000035 |
+| Sending data                 |  3.064186 |
+| Waiting for query cache lock |  0.000017 |
+| Sending data                 |  2.939404 |
+| Waiting for query cache lock |  0.000018 |
+| Sending data                 |  3.440288 |
+| Waiting for query cache lock |  0.000086 |
+| Sending data                 |  3.115798 |
+| Waiting for query cache lock |  0.000068 |
+| Sending data                 |  3.075427 |
+| Waiting for query cache lock |  0.000072 |
+| Sending data                 |  3.658319 |
+| Waiting for query cache lock |  0.000061 |
+| Sending data                 |  3.335427 |
+| Waiting for query cache lock |  0.000049 |
+| Sending data                 |  3.319430 |
+| Waiting for query cache lock |  0.000061 |
+| Sending data                 |  3.496563 |
+| Waiting for query cache lock |  0.000029 |
+| Sending data                 |  3.017041 |
+| Waiting for query cache lock |  0.000032 |
+| Sending data                 |  3.132841 |
+| Waiting for query cache lock |  0.000050 |
+| Sending data                 |  2.901310 |
+| Waiting for query cache lock |  0.000016 |
+| Sending data                 |  3.107269 |
+| Waiting for query cache lock |  0.000062 |
+| Sending data                 |  2.937373 |
+| Waiting for query cache lock |  0.000016 |
+| Sending data                 |  3.097082 |
+| Waiting for query cache lock |  0.000261 |
+| Sending data                 |  3.026108 |
+| Waiting for query cache lock |  0.000026 |
+| Sending data                 |  3.089760 |
+| Waiting for query cache lock |  0.000041 |
+| Sending data                 |  3.012763 |
+| Waiting for query cache lock |  0.000021 |
+| Sending data                 |  3.069694 |
+| Waiting for query cache lock |  0.000046 |
+| Sending data                 |  3.591908 |
+| Waiting for query cache lock |  0.000060 |
+| Sending data                 |  3.526693 |
+| Waiting for query cache lock |  0.000076 |
+| Sending data                 |  3.772659 |
+| Waiting for query cache lock |  0.000069 |
+| Sending data                 |  3.346089 |
+| Waiting for query cache lock |  0.000245 |
+| Sending data                 |  3.300460 |
+| Waiting for query cache lock |  0.000019 |
+| Sending data                 |  3.135361 |
+| Waiting for query cache lock |  0.000021 |
+| Sending data                 |  2.909447 |
+| Waiting for query cache lock |  0.000039 |
+| Sending data                 |  3.337561 |
+| Waiting for query cache lock |  0.000140 |
+| Sending data                 |  3.138180 |
+| Waiting for query cache lock |  0.000090 |
+| Sending data                 |  3.060687 |
+| Waiting for query cache lock |  0.000085 |
+| Sending data                 |  2.938677 |
+| Waiting for query cache lock |  0.000041 |
+| Sending data                 |  2.977974 |
+| Waiting for query cache lock |  0.000872 |
+| Sending data                 |  2.918640 |
+| Waiting for query cache lock |  0.000036 |
+| Sending data                 |  2.975842 |
+| Waiting for query cache lock |  0.000051 |
+| Sending data                 |  2.918988 |
+| Waiting for query cache lock |  0.000021 |
+| Sending data                 |  2.943810 |
+| Waiting for query cache lock |  0.000061 |
+| Sending data                 |  3.330211 |
+| Waiting for query cache lock |  0.000025 |
+| Sending data                 |  3.411236 |
+| Waiting for query cache lock |  0.000023 |
+| Sending data                 | 23.339035 |
+| end                          |  0.000807 |
+| query end                    |  0.000023 |
+| closing tables               |  0.000325 |
+| freeing items                |  0.001217 |
+| logging slow query           |  0.000007 |
+| logging slow query           |  0.000011 |
+| cleaning up                  |  0.000104 |
++------------------------------+-----------+
+100 rows in set (0.00 sec)
+Tables structures:
+
+CREATE TABLE `attribute` (
+  `attribute_id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `attribute_type_id` int(11) unsigned DEFAULT NULL,
+  `attribute_value` int(6) DEFAULT NULL,
+  `person_id` int(11) unsigned DEFAULT NULL,
+  PRIMARY KEY (`attribute_id`),
+  KEY `attribute_type_id` (`attribute_type_id`),
+  KEY `attribute_value` (`attribute_value`),
+  KEY `person_id` (`person_id`)
+) ENGINE=MyISAM AUTO_INCREMENT=40000001 DEFAULT CHARSET=utf8;
+
+CREATE TABLE `person` (
+  `person_id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `person_name` text CHARACTER SET latin1,
+  PRIMARY KEY (`person_id`)
+) ENGINE=MyISAM AUTO_INCREMENT=20000001 DEFAULT CHARSET=utf8;
+Query had been performed on DigitalOcean virtual server with SSD and 1GB RAM.
+
+I assume there may be problem with database design. Do you have any suggestions to design this situation better please? Or just to adjust the select above?
+
+mysqlperformanceoptimizationeavquery-performance
+Share
+Improve this
+
+[... middle of long forum export omitted by batch planner compaction ...]
+
+WHERE attribute_type_id = 4
+            AND location.attribute_value IN (2, 3)
+    ) AS eyecolor ON eyecolor.person_id = person.person_id
+LIMIT 100000;
+Also, it may be worth partitioning the attribute table by attribute_type_id.
+
+Share
+Improve this answer
+Follow
+answered Oct 22, 2015 at 0:51
+Vladimir Baranov's user avatar
+Vladimir Baranov
+4,71044 gold badges2828 silver badges4444 bronze badges
+Performance caution: JOIN ( SELECT ... ) does not optimize well. JOINing directly to the table works better (but is still problematical). – 
+Rick James
+ CommentedOct 30, 2015 at 15:39
+Pretty sure he uses LEFT JOIN and not INNER JOIN, because the row in the opposite table may not exist. – 
+Martin Zvarík
+ CommentedAug 15, 2023 at 21:53
+Add a comment
+3
+
+Add indeces to attribute for:
+
+(person_id, attribute_type_id, attribute_value) and
+(attribute_type_id, attribute_value, person_id)
+Explanation
+
+With your current design EXPLAIN expects your query to examine 1,265,229 * 4 * 4 * 4 = 80,974,656 rows in attribute. You can reduce this number by adding a composite index on attribute for (person_id, attribute_type_id). Using this index your query will only examine 1 instead of 4 rows for each of location, eyecolor and gender.
+
+You could extend that index to include attribute_type_value as well: (person_id, attribute_type_id, attribute_value). This would turn this index into a covering index for this query, which should improve performance as well.
+
+Furthermore adding an index on (attribute_type_id, attribute_value, person_id) (again a covering index by including person_id) should improve performance over just using an index on attribute_value where more rows would have to be examined. In this case it will fasten the first step in your explain: selecting a range from bornyear.
+
+Using those two indeces lowered the execution time of your query on my system from ~2.0 s to ~0.2 s with the explain output looking like this:
+
++----+-------------+----------+--------+-------------------------------------+-------------------+---------+--------------------------------+---------+----------+--------------------------+
+| id | select_type | table    | type   | possible_keys                       | key               | key_len | ref                            |    rows | filtered | Extra                    |
++----+-------------+----------+--------+-------------------------------------+-------------------+---------+--------------------------------+---------+----------+--------------------------+
+|  1 | SIMPLE      | bornyear | range  | person_type_value,type_value_person | type_value_person |       9 |                                | 1861881 |   100.00 | Using where; Using index |
+|  1 | SIMPLE      | location | ref    | person_type_value,type_value_person | person_type_value |       8 | bornyear.person_id,const       |       1 |   100.00 | Using where; Using index |
+|  1 | SIMPLE      | eyecolor | ref    | person_type_value,type_value_person | person_type_value |       8 | bornyear.person_id,const       |       1 |   100.00 | Using where; Using index |
+|  1 | SIMPLE      | gender   | ref    | person_type_value,type_value_person | person_type_value |      13 | bornyear.person_id,const,const |       1 |   100.00 | Using index              |
+|  1 | SIMPLE      | person   | eq_ref | PRIMARY                             | PRIMARY           |       4 | bornyear.person_id             |       1 |   100.00 | Using index              |
++----+-------------+----------+--------+-------------------------------------+-------------------+---------+--------------------------------+---------+----------+--------------------------+
+Share
+Improve this answer
+Follow
+answered Oct 18, 2015 at 12:39
+wolfgangwalther's user avatar
+wolfgangwalther
+23711 silver badge55 bronze badges
+1
+Thanks for extensive answer & explanation. I did all you mentioned but the query still take ~2 min. Please, what table type (innodb,myisam) are you using and what exact query performed? – 
+Martin
+ CommentedOct 19, 2015 at 11:57
+1
+Other than adding the indeces I used the exact same data and definitions you did, so I did use MyISAM. I changed the first line of your query to SELECT person.person_id because otherwise it wouldn't run, obviously. Did you do ANALYZE TABLE attribute after adding the indeces? You might want to add your new EXPLAIN output (after adding indeces) to your question as well. – 
+wolfgangwalther
+ CommentedOct 24, 2015 at 14:20
+Add a comment
+0
+
+Try using query index hints thats look appropriate
+
+Mysql Index Hints
+
+Share
+Improve this answer
+Follow
+answered Oct 19, 2015 at 1:50
+Muhammad Muazzam's user avatar
+Muhammad Muazzam
+14599 bronze badges
+1
+Hints may help one version of the query, but then hurt another. Note that the Optimizer picked bornyear as the best first table, probably because if filtered out the most undesirable rows. – 
+Rick James
+ CommentedOct 21, 2015 at 16:15
+
+[Batch planner note: the original full post is saved as source_post.txt. This planning input was compacted to remove linked-page snapshots or excessive length.]

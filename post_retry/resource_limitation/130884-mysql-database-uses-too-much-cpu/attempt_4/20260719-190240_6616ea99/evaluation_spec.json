@@ -1,0 +1,19 @@
+{
+  "validation_criteria": [
+    "The benchmark should sustain elevated MySQL CPU while remaining read-only.",
+    "EXPLAIN for the calibration query should show a multi-table join with row estimates consistent with the configured selectivity and fanout.",
+    "The mechanism should be sensitive to missing supporting indexes on the fact-table join path.",
+    "If secondary query-cache effects are absent, the join/fanout mechanism should still reproduce the core CPU symptom."
+  ],
+  "symptom_evidence": [
+    "High user-space CPU on the database host during the workload.",
+    "Low throughput or rising latency as concurrency increases.",
+    "No comparable CPU saturation on the application/web tier."
+  ],
+  "mechanism_evidence": [
+    "Join fanout is visible in the plan and data shape.",
+    "Selective predicates are present but not enough to eliminate the large fact-table join work.",
+    "Rows examined remain high relative to the returned result set."
+  ],
+  "minimum_plan_similarity": 0.6
+}

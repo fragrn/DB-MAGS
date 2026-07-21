@@ -1,0 +1,116 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "The post describes MySQL becoming the bottleneck during a read-only benchmark: CPU is high, the server is not I/O-bound, and MySQLTuner reports many joins without indexes. The most reproducible mechanism is scan-heavy concurrent join execution over tables lacking secondary indexes on join/filter columns.",
+  "symptoms": [
+    "Database VM CPU is very high while the web server is not the busy component.",
+    "vmstat shows high user CPU with near-zero iowait.",
+    "Reads dominate writes (100% reads / 0% writes).",
+    "MySQLTuner reports thousands of joins performed without indexes.",
+    "Connection usage reached the configured ceiling (152/151).",
+    "Query cache efficiency is low and pruning is frequent.",
+    "No slow queries were captured, but the benchmark is read-heavy and concurrent."
+  ],
+  "mechanism": "Concurrent read-only joins over large tables with missing secondary indexes force MySQL into scan-heavy nested-loop join execution and high CPU consumption. Query-cache tuning may change the symptom profile, but the core reproduced mechanism is inefficient join planning/execution under concurrency, not disk latency.",
+  "facts": [
+    {
+      "key": "benchmark_workload",
+      "value": {
+        "description": "benchmarking web servers issuing queries to MySQL",
+        "read_only": true
+      },
+      "source": "explicit_post",
+      "evidence": "The question says the author is \"performing benchmarking to the web servers which queries the database\" and the workload is read-only.",
+      "confidence": 1.0
+    },
+    {
+      "key": "cpu_bottleneck",
+      "value": {
+        "observation": "database is the bottleneck and uses too much CPU"
+      },
+      "source": "explicit_post",
+      "evidence": "The question states \"the database is being the bottleneck, it uses too much CPU\".",
+      "confidence": 1.0
+    },
+    {
+      "key": "vcpus_and_memory",
+      "value": {
+        "vcpus": 5,
+        "memory_gb": 4
+      },
+      "source": "explicit_post",
+      "evidence": "The post states \"The VM has 5 vCPU and 4GB of memory.\"",
+      "confidence": 1.0
+    },
+    {
+      "key": "joins_without_indexes",
+      "value": {
+        "count": 6782
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner output includes \"[!!] Joins performed without indexes: 6782\".",
+      "confidence": 1.0
+    },
+    {
+      "key": "connection_pressure",
+      "value": {
+        "highest_connection_usage": "100%",
+        "current_or_peak": "152/151"
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner reports \"Highest connection usage: 100% (152/151)\".",
+      "confidence": 1.0
+    },
+    {
+      "key": "query_cache_is_ineffective",
+      "value": {
+        "efficiency_percent": 7.8,
+        "prunes_per_day": 39159937
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner reports \"Query cache efficiency: 7.8%\" and \"Query cache prunes per day: 39159937\".",
+      "confidence": 1.0
+    },
+    {
+      "key": "iowait_is_low",
+      "value": {
+        "vmstat_snapshot": "CPU is mostly user/sys time with 0-1% wa"
+      },
+      "source": "explicit_post",
+      "evidence": "The vmstat output shows user CPU around 86-89%, system CPU around 5-8%, and iowait at 0% in most samples.",
+      "confidence": 1.0
+    },
+    {
+      "key": "data_fits_in_innodb_buffer_pool",
+      "value": {
+        "buffer_pool_mb": 953,
+        "data_in_innodb_mb": 695.3
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner reports \"InnoDB buffer pool / data size: 953.0M/695.3M\" and 100% read buffer efficiency.",
+      "confidence": 1.0
+    },
+    {
+      "key": "target_database",
+      "value": {
+        "name": "post_retry_resource_limitation_130884_mysql_data_a2"
+      },
+      "source": "human_input",
+      "evidence": "metadata.target_database instruction",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The benchmark workload is dominated by repeated variants of the same join-heavy read query.",
+    "The most important CPU mechanism is join execution over unindexed columns, not storage latency.",
+    "The exact production schema is unknown, so the reproduction uses synthetic tables with the same cardinality and skew characteristics.",
+    "Query-cache behavior is treated as secondary because the current executor may not expose the legacy 5.5 query cache path."
+  ],
+  "unknowns": [
+    "Exact production SQL text is unavailable.",
+    "Exact table sizes and join fanout are unavailable.",
+    "Whether the original instance relied on query cache for some requests is unknown.",
+    "Whether the MySQL version matched the legacy 5.5 query-cache behavior exactly is unknown."
+  ],
+  "confidence": 0.73
+}

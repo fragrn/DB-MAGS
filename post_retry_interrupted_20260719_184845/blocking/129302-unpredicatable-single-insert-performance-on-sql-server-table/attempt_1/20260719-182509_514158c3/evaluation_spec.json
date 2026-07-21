@@ -1,0 +1,19 @@
+{
+  "validation_criteria": [
+    "While the parent-row lock is held, the insert into `communication` blocks and remains waiting until the lock holder rolls back.",
+    "After the rollback, the same insert succeeds quickly, showing that the stall is lock-driven rather than a persistent engine failure.",
+    "The synthetic data and EXPLAIN evidence show a selective insert target with a hot referenced key and many secondary indexes.",
+    "The reproduction demonstrates that a sleeping session with an open transaction can be the effective blocker even if no active request is visible at the moment of inspection."
+  ],
+  "symptom_evidence": [
+    "Blocked insert latency increases dramatically only when the lock holder is active",
+    "The blocker disappears from active-request views after it stops issuing statements but before the transaction commits",
+    "The same insert completes normally after the lock is released"
+  ],
+  "mechanism_evidence": [
+    "A transaction keeps a lock on `channel.id = 11`",
+    "The child insert targeting `comm_channelid = 11` waits on that lock",
+    "Rollback immediately releases the wait and allows the insert to complete"
+  ],
+  "minimum_plan_similarity": 0.6
+}

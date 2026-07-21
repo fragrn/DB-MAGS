@@ -1,0 +1,167 @@
+https://dba.stackexchange.com/questions/27893/increasing-work-mem-and-shared-buffers-on-postgres-9-2-significantly-slows-down
+
+Increasing work_mem and shared_buffers on Postgres 9.2 significantly slows down queries
+Asked 13 years, 8 months ago
+Modified 2 years, 11 months ago
+Viewed 94k times
+48
+
+I have a PostgreSQL 9.2 instance running on RHEL 6.3, 8-core machine with 16GB of RAM. The server is dedicated to this database. Given that the default postgresql.conf is quite conservative regarding memory settings, I thought it might be a good idea to allow Postgres to use more memory. To my surprise, following advice on wiki.postgresql.org/wiki/Tuning_Your_PostgreSQL_Server significantly slowed down practically every query I run but it's obviously more noticeable on the more complex queries.
+
+I also tried running pgtune which gave the following recommendation with more parameters tuned, but that didn't change anything. It suggests shared_buffers of 1/4 of RAM size which seems to in line with advice elsewhere (and on PG wiki in particular).
+
+default_statistics_target = 50
+maintenance_work_mem = 960MB
+constraint_exclusion = on
+checkpoint_completion_target = 0.9
+effective_cache_size = 11GB
+work_mem = 96MB
+wal_buffers = 8MB
+checkpoint_segments = 16
+shared_buffers = 3840MB
+max_connections = 80
+I tried reindexing the whole database after changing the settings (using reindex database), but that didn't help either. I played around with shared_buffers and work_mem. Gradually changing them from the very conservative default values (128k / 1MB) gradually decreased performance.
+
+I ran EXPLAIN (ANALYZE,BUFFERS) on a few queries and the culprit seems to be that Hash Join is significantly slower. It's not clear to me why.
+
+To give some specific example, I have the following query. It runs in ~2100ms on the default configuration and ~3300ms on the configuration with increased buffer sizes:
+
+select count(*) from contest c
+left outer join contestparticipant cp on c.id=cp.contestId
+left outer join teammember tm on tm.contestparticipantid=cp.id
+left outer join staffmember sm on cp.id=sm.contestparticipantid
+left outer join person p on p.id=cp.personid
+left outer join personinfo pi on pi.id=cp.personinfoid
+where pi.lastname like '%b%' or pi.firstname like '%a%';
+EXPLAIN (ANALYZE,BUFFERS) for the query above:
+
+Default buffers: http://explain.depesz.com/s/xaHJ
+Bigger buffers: http://explain.depesz.com/s/Plk
+The question is why am I observing decreased performance when I increase buffer sizes? The machine is definitely not running out of memory. Allocation if shared memory in OS is (shmmax and shmall) is set to very large values, that should not be a problem. I'm not getting any errors in the Postgres log either. I'm running autovacuum in the default configuration but I don't expect that has anything to do with it. All queries were run on the same machine few seconds apart, just with changed configuration (and restarted PG).
+
+Edit: I just found one particularly interesting fact: when I perform the same test on my mid-2010 iMac (OSX 10.7.5) also with Postgres 9.2.1 and 16GB RAM, I don't experience the slow down. Specifically:
+
+set work_mem='1MB';
+select ...; // running time is ~1800 ms
+set work_mem='96MB';
+select ...' // running time is ~1500 ms
+When I do exactly the same query (the one above) with exactly the same data on the server I get 2100 ms with work_mem=1MB and 3200 ms with 96 MB.
+
+The Mac has SSD so it's understandably faster, but it exhibits a behavior I would expect.
+
+See also the follow-up discussion on pgsql-performance.
+
+postgresqlperformancequery-performance
+Share
+Improve this question
+Follow
+edited Jan 7, 2020 at 22:23
+Community's user avatar
+CommunityBot
+1
+asked Oct 30, 2012 at 15:57
+Petr Praus's user avatar
+Petr Praus
+58311 gold badge55 silver badges66 bronze badges
+1
+It looks like that in the slower case every step is consistenly slower. Did other settings remain the same? – 
+András Váczi
+ CommentedOct 30, 2012 at 16:12
+1
+It's probably worth your while to ask this on a more specialised forum rather than the generic one that this is. In this case I suggest the pgsql-general mailing list archives.postgresql.org/pgsql-general – 
+Colin 't Hart
+ CommentedOct 30, 2012 at 18:20
+1
+Oh, and report back and please answer your own question if you find the answer! (This is allowed, encouraged even). – 
+Colin 't Hart
+ CommentedOct 30, 2012 at 18:29
+2
+The question is now posted on pgsql-performance: archives.postgresql.org/pgsql-performance/2012-11/msg00004.php – 
+Petr Praus
+ CommentedNov 1, 2012 at 19:42
+2
+this one: default_statistics_target = 50 seems strange to me. I would probably increase that dramatically - especially as the default is 100. Higher values might give the planner better information. – 
+user1822
+ CommentedNov 3, 2012 at 8:50
+Show 10 more comments
+2 Answers
+Sorted by:
+
+Highest score (default)
+40
+
+First of all, keep in mind that work_mem is per operation and so it can get excessive pretty quickly. In general if you are not having trouble with sorts being slow I would leave work_mem alone until you need it.
+
+Looking at your query plans, one thing that strikes me is that the buffer hits are very different looking at the two plans, and that even the sequential scans are slower. I suspect that the issue has to do with read-ahead caching and having less space for that. What this means is you are biasing memory for re-use of indexes and against reading tables on disk.
+
+My understanding is that PostgreSQL will look to the cache for a page before reading it from disk because it doesn't know really whether the OS cache will contain that page. Because the pages are then staying in the cache and because that cache is slower than the OS cache, this changes the sorts of queries which are fast vs the sorts that are slow. In fact reading the plans, aside from work_mem issues, it looks like all of your query info comes from the cache but it is a question of which cache.
+
+work_mem: how much memory we can allocate for a sort or related join operation. This is per operation, not per statement or per back-end, so a single complex query can use many times this amount of memory. It isn't clear you are hitting this limit but it is worth noting and being aware of. if you increase this too far, you lose memory that might be available for the read cache and the shared buffers.
+
+shared_buffers: how much memory to allocate to the actual PostgreSQL page queue. Now, ideally the interesting set of your database will stay in memory cached here and in the read buffers. However, what this does is ensure that the most frequently used information across all backends gets cached and not flushed to disk. On Linux this cache is significantly slower than the OS disk cache, but it offers guarantees that the OS disk cache dos not and is transparent to PostgreSQL. This is pretty clearly where your problem is.
+
+So what happens is that when we have a request, we check the shared buffers first since PostgreSQL has deep knowledge of this cache, and look for the pages. If they are not there we ask the OS to open them from the file, and if the OS has cached the result it returns the cached copy (this is faster than the shared buffers, but Pg can't tell whether it is cached or on disk, and disk is much slower so PostgreSQL typically will not take that chance). Keep in mind this affects random vs sequential page access as well. So you may get better performance with lower shared_buffers settings.
+
+My gut sense is that you probably get better, or at least more consistent, performance in high concurrency environments with larger shared_buffer settings. Also keep in mind that PostgreSQL grabs this memory and holds it so if you have other things running on the system, the read buffers will hold files read by other processes. It's a very large and complex topic. Larger shared buffer settings provide better guarantees of performance but may deliver less performance in some cases.
+
+Share
+Improve this answer
+Follow
+edited Dec 10, 2015 at 15:43
+Paul White's user avatar
+Paul White♦
+96.3k3030 gold badges448448 silver badges703703 bronze badges
+answered Jan 27, 2013 at 15:23
+Chris Travers's user avatar
+Chris Travers
+13.2k5252 silver badges9696 bronze badges
+Add a comment
+14
+
+Apart from the seemingly paradoxical effect that increasing work_mem decreases performance (@Chris might have an explanation), you can improve your function in at least two ways.
+
+1.
+Rewrite two fake LEFT JOIN's with JOIN. That might confuse the query planner and lead to inferior plans.
+
+SELECT count(*) AS ct
+FROM   contest            c
+JOIN   contestparticipant cp ON cp.contestId = c.id
+JOIN   personinfo         pi ON pi.id = cp.personinfoid
+LEFT   JOIN teammember    tm ON tm.contestparticipantid = cp.id
+LEFT   JOIN staffmember   sm ON sm.contestparticipantid = cp.id
+LEFT   JOIN person        p  ON p.id = cp.personid
+WHERE (pi.firstname LIKE '%a%'
+OR     pi.lastname  LIKE '%b%')
+2.
+Assuming that your actual search patterns are more selective, use trigram indexes on pi.firstname and pi.lastname to support non-anchored LIKE searches. (Shorter patterns like '%a%' are supported as well but an index is not likely to help for non-selective predicates.):
+
+CREATE INDEX personinfo_firstname_gin_idx ON personinfo USING gin (firstname gin_trgm_ops);
+CREATE INDEX personinfo_lastname_gin_idx  ON personinfo USING gin (lastname gin_trgm_ops);
+Or one multicolumn index:
+
+CREATE INDEX personinfo_name_gin_idx ON personinfo USING gin (firstname gin_trgm_ops, lastname gin_trgm_ops);
+Should make your query quite a bit faster. You need to install the additional module pg_trgm for this. Details under these related questions:
+
+How is LIKE implemented?
+Pattern matching with LIKE, SIMILAR TO or regular expressions
+Also, have you tried setting work_mem locally - for the current transaction only?
+
+SET LOCAL work_mem = '96MB';
+This keeps concurrent transactions from also eating more RAM, possibly starving each other.
+
+Share
+Improve this answer
+Follow
+edited Aug 1, 2023 at 17:55
+answered Jan 27, 2013 at 22:42
+Erwin Brandstetter's user avatar
+Erwin Brandstetter
+187k2929 gold badges469469 silver badges651651 bronze badges
+3
+I want to second Erwin's local work_mem suggestion. Because work_mem changes the sorts of queries that are faster, you may need to change it for some queries. I.e. low work_mem levels are best for queries which sort/join small numbers of records in complex ways (i.e. lots of joins) while high work_mem levels are best for queries which have a few sorts but which sort or join a large number of rows at once. – 
+Chris Travers
+ CommentedJan 28, 2013 at 2:10
+I improved the query in the meantime (the question is from October last year) but thanks :) This question is more about the unexpected effect than the particular query. The query serves mainly to demonstrate the effect. Thanks for the tip on the index, I'll try that! – 
+Petr Praus
+ CommentedJan 28, 2013 at 20:11
+Add a comment

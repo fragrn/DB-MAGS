@@ -1,0 +1,174 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_synthetic_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_single_a1",
+          "duration_sec": 20,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS channel (id INT NOT NULL PRIMARY KEY, status TINYINT NOT NULL, name VARCHAR(50) NOT NULL) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS communication (id BIGINT NOT NULL PRIMARY KEY, comm_action VARCHAR(20) NOT NULL, comm_channelid INT NOT NULL, created_at DATETIME NOT NULL, payload VARCHAR(200) NOT NULL, amount INT NOT NULL, filler VARCHAR(100) NOT NULL, KEY idx_comm_channelid (comm_channelid), KEY idx_comm_action_channel (comm_action, comm_channelid), KEY idx_comm_channel_action (comm_channelid, comm_action), KEY idx_comm_channel_created (comm_channelid, created_at), KEY idx_comm_action_created (comm_action, created_at), KEY idx_comm_created (created_at), KEY idx_comm_amount (amount), KEY idx_comm_payload (payload(32)), KEY idx_comm_channel_amount (comm_channelid, amount), CONSTRAINT fk_comm_channel FOREIGN KEY (comm_channelid) REFERENCES channel(id)) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO channel (id, status, name) SELECT 1 + (d0.d + d1.d * 10), CASE WHEN 1 + (d0.d + d1.d * 10) = 11 THEN 1 ELSE 0 END, CONCAT('channel_', 1 + (d0.d + d1.d * 10)) FROM digits AS d0 CROSS JOIN digits AS d1 WHERE 1 + (d0.d + d1.d * 10) <= 100"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO communication (id, comm_action, comm_channelid, created_at, payload, amount, filler) SELECT seq.n, CASE WHEN MOD(seq.n, 33) = 0 THEN 'Deskwork' ELSE 'Other' END, CASE WHEN MOD(seq.n, 100) = 0 THEN 11 ELSE 1 + MOD(seq.n, 99) END, TIMESTAMPADD(SECOND, MOD(seq.n, 86400), '2024-01-01 00:00:00'), CONCAT('payload_', seq.n), MOD(seq.n, 1000), RPAD(CONCAT('f_', seq.n), 100, 'x') FROM (SELECT 1 + (d0.d + d1.d * 10 + d2.d * 100 + d3.d * 1000 + d4.d * 10000 + d5.d * 100000) AS n FROM digits AS d0 CROSS JOIN digits AS d1 CROSS JOIN digits AS d2 CROSS JOIN digits AS d3 CROSS JOIN digits AS d4 CROSS JOIN digits AS d5) AS seq WHERE seq.n <= 1000000"
+                },
+                {
+                  "sql": "ANALYZE TABLE channel, communication"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "table_rows": {
+          "channel": 100,
+          "communication": 1000000
+        }
+      },
+      "success_criteria": {
+        "schema_exists": true,
+        "data_loaded": true,
+        "indexes_present": [
+          "idx_comm_channelid",
+          "idx_comm_action_channel",
+          "idx_comm_channel_action",
+          "idx_comm_channel_created",
+          "idx_comm_action_created",
+          "idx_comm_created",
+          "idx_comm_amount",
+          "idx_comm_payload",
+          "idx_comm_channel_amount"
+        ]
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic OLTP child table with many secondary indexes and a hot referenced parent row"
+      }
+    },
+    {
+      "task_id": "hold_parent_lock",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_single_a1",
+          "duration_sec": 25,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": false,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "START TRANSACTION"
+                },
+                {
+                  "sql": "UPDATE channel SET status = status WHERE id = 11"
+                },
+                {
+                  "sql": "SELECT SLEEP(20)"
+                },
+                {
+                  "sql": "ROLLBACK"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "blocking_session_present": true
+      },
+      "success_criteria": {
+        "transaction_open": true,
+        "lock_held_on_channel_11": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Hold an uncommitted transaction on the hot parent row so dependent inserts block on lock acquisition"
+      }
+    },
+    {
+      "task_id": "attempt_insert_blocked",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_blocking_129302_unpredicatable_single_a1",
+          "concurrency": 1,
+          "duration_sec": 20,
+          "sql": "INSERT INTO communication (id, comm_action, comm_channelid, created_at, payload, amount, filler) VALUES (2000001, 'Deskwork', 11, '2024-01-02 00:00:00', 'repro', 1, RPAD('x', 100, 'x'))"
+        }
+      ],
+      "expected_metrics": {
+        "blocked_insert_attempts": 1
+      },
+      "success_criteria": {
+        "wait_observed": true,
+        "insert_uses_channel_11": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "The insert waits on the uncommitted parent-row lock rather than failing immediately"
+      }
+    },
+    {
+      "task_id": "verify_insert_after_release",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_blocking_129302_unpredicatable_single_a1",
+          "concurrency": 1,
+          "duration_sec": 5,
+          "sql": "INSERT INTO communication (id, comm_action, comm_channelid, created_at, payload, amount, filler) VALUES (2000002, 'Deskwork', 11, '2024-01-02 00:00:01', 'repro2', 1, RPAD('y', 100, 'y'))"
+        }
+      ],
+      "expected_metrics": {
+        "successful_insert_attempts": 1
+      },
+      "success_criteria": {
+        "insert_succeeds": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Same path succeeds once the lock holder rolls back, confirming the stall was lock-driven"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_synthetic_schema",
+      "hold_parent_lock"
+    ],
+    [
+      "setup_synthetic_schema",
+      "attempt_insert_blocked"
+    ],
+    [
+      "hold_parent_lock",
+      "verify_insert_after_release"
+    ]
+  ]
+}

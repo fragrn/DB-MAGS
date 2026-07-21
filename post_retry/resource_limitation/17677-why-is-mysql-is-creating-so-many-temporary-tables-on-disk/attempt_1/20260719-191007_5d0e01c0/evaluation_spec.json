@@ -1,0 +1,19 @@
+{
+  "validation_criteria": [
+    "EXPLAIN on the wide query shows a grouping/sorting plan consistent with internal temp-table use.",
+    "Executing the wide query against the synthetic data produces non-zero disk temp table activity.",
+    "The control query remains similar in join shape but is less dependent on the wide TEXT/VARCHAR mechanism.",
+    "The reproduction demonstrates a workload-driven cause rather than a server-config-only cause."
+  ],
+  "symptom_evidence": [
+    "Created_tmp_disk_tables increases during the wide workload",
+    "The wide query produces more disk temp table activity than the control query",
+    "The symptom persists even without changing MySQL global temp-table thresholds"
+  ],
+  "mechanism_evidence": [
+    "Wide UTF8MB4 grouped columns are present in the plan",
+    "TEXT participates in the grouped or aggregated result",
+    "The grouped result is joined to a small dimension table and then ordered"
+  ],
+  "minimum_plan_similarity": 0.6
+}

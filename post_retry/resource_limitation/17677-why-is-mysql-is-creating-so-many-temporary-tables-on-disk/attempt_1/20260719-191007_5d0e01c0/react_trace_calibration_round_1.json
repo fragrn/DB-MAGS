@@ -1,0 +1,41 @@
+[
+  {
+    "step": 1,
+    "tool": "explain_sql",
+    "arguments": {
+      "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+      "query_id": "calibration_query_1",
+      "sql": "SELECT d.bucket_label, e.grp_key, MIN(e.payload) AS sample_payload, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.grp_key ORDER BY d.bucket_label, e.grp_key"
+    },
+    "result": {
+      "sql": "SELECT d.bucket_label, e.grp_key, MIN(e.payload) AS sample_payload, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.grp_key ORDER BY d.bucket_label, e.grp_key",
+      "plan": [
+        {
+          "EXPLAIN": "-> Sort: d.bucket_label, e.grp_key\n    -> Table scan on <temporary>\n        -> Aggregate using temporary table\n            -> Nested loop inner join  (cost=66.8 rows=100)\n                -> Index lookup on e using idx_status (status = 1)  (cost=31.8 rows=100)\n                -> Single-row index lookup on d using PRIMARY (bucket_id = e.bucket_id)  (cost=0.251 rows=1)\n"
+        }
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "explain_sql",
+    "arguments": {
+      "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+      "query_id": "calibration_query_2",
+      "sql": "SELECT d.bucket_label, e.bucket_id, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.bucket_id ORDER BY d.bucket_label, e.bucket_id"
+    },
+    "result": {
+      "sql": "SELECT d.bucket_label, e.bucket_id, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.bucket_id ORDER BY d.bucket_label, e.bucket_id",
+      "plan": [
+        {
+          "EXPLAIN": "-> Sort: d.bucket_label, e.bucket_id\n    -> Table scan on <temporary>\n        -> Aggregate using temporary table\n            -> Nested loop inner join  (cost=45.3 rows=100)\n                -> Covering index lookup on e using idx_status_bucket (status = 1)  (cost=10.3 rows=100)\n                -> Single-row index lookup on d using PRIMARY (bucket_id = e.bucket_id)  (cost=0.251 rows=1)\n"
+        }
+      ]
+    }
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"decision\": \"accept\",\n  \"reasoning\": \"Both calibration queries show the internal temporary-table mechanism needed for this reproduction: MySQL performs an aggregate using a temporary table, then sorts the aggregated result. The main query includes the wide UTF8MB4 grouping key and a TEXT aggregate, which matches the intended spill-prone pattern. The control query preserves the join and grouping shape while narrowing the grouped columns, which supports the comparison design.\",\n  \"query_assessments\": [\n    {\n      \"query_id\": \"calibration_query_1\",\n      \"sql\": \"SELECT d.bucket_label, e.grp_key, MIN(e.payload) AS sample_payload, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.grp_key ORDER BY d.bucket_label, e.grp_key\",\n      \"matched\": true,\n      \"observed_plan_summary\": \"Nested loop join from `wide_events` filtered by `idx_status`, joined to `bucket_dim` by primary key, followed by `Aggregate using temporary table`, then `Sort: d.bucket_label, e.grp_key` over a temporary result.\",\n      \"supporting_evidence\": [\n        \"EXPLAIN shows `Aggregate using temporary table`.\",\n        \"EXPLAIN shows `Sort: d.bucket_label, e.grp_key` after the temporary-table aggregation.\",\n        \"The grouped result includes the wide `grp_key` column and `MIN(e.payload)` from a TEXT column.\",\n        \"The join to `bucket_dim` is present but remains a single-row index lookup, so the grouping/sorting path is the notable mechanism.\"\n      ],\n      \"discrepancies\": []\n    },\n    {\n      \"query_id\": \"calibration_query_2\",\n      \"sql\": \"SELECT d.bucket_label, e.bucket_id, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.bucket_id ORDER BY d.bucket_label, e.bucket_id\",\n      \"matched\": true,\n      \"observed_plan_summary\": \"Nested loop join from `wide_events` using a covering index on `(status, bucket_id)`, joined to `bucket_dim` by primary key, followed by `Aggregate using temporary table`, then `Sort: d.bucket_label, e.bucket_id` over a temporary result.\",\n      \"supporting_evidence\": [\n        \"EXPLAIN shows the same temp-table aggregation and sort pattern as the main query.\",\n        \"The access path is narrower and covering for the fact table, making it a reasonable control.\",\n        \"The grouped columns are smaller than the wide query, which helps separate general GROUP BY behavior from the wide-column mechanism.\"\n      ],\n      \"discrepancies\": []\n    }\n  ],\n  \"concerns\": [\n    \"EXPLAIN confirms temporary-table usage but does not directly prove on-disk spill for this dataset.\",\n    \"The reproduction is mechanism-level rather than an exact copy of the original production workload.\"\n  ],\n  \"recommended_changes\": [],\n  \"missing_information\": [\n    \"The exact production query responsible for the temp-table statistics.\",\n    \"The MySQL version and internal temporary-table implementation details from the source system.\",\n    \"Whether the original workload relied on TEXT/BLOB columns, wide VARCHAR/CHAR columns, or both.\"\n  ]\n}"
+  }
+]

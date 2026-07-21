@@ -1,0 +1,12 @@
+{
+  "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+  "statement_count": 6,
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS bucket_dim (bucket_id INT NOT NULL PRIMARY KEY, bucket_label VARCHAR(32) NOT NULL) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS wide_events (id BIGINT UNSIGNED NOT NULL PRIMARY KEY, bucket_id INT NOT NULL, status TINYINT NOT NULL, grp_key VARCHAR(600) CHARACTER SET utf8mb4 NOT NULL, payload TEXT NOT NULL, created_at DATE NOT NULL, KEY idx_bucket_id (bucket_id), KEY idx_status (status), KEY idx_status_bucket (status, bucket_id)) ENGINE=InnoDB",
+    "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT IGNORE INTO bucket_dim (bucket_id, bucket_label) SELECT n, CONCAT('bucket_', LPAD(n, 2, '0')) FROM (SELECT d1.d + d2.d * 10 + 1 AS n FROM digits d1 CROSS JOIN digits d2) AS x WHERE n <= 32",
+    "INSERT IGNORE INTO wide_events (id, bucket_id, status, grp_key, payload, created_at) SELECT n, 1 + MOD(n, 32), CASE WHEN MOD(n, 10) = 0 THEN 1 ELSE 0 END, CASE WHEN MOD(n, 100) = 0 THEN CONCAT('hot_', LPAD(MOD(n, 20), 2, '0'), REPEAT('x', 560)) ELSE CONCAT('grp_', LPAD(MOD(n, 1000), 4, '0'), REPEAT('y', 560)) END, CONCAT('payload_', n, REPEAT('z', 100)), DATE_ADD('2024-01-01', INTERVAL MOD(n, 365) DAY) FROM (SELECT d1.d + d2.d * 10 + d3.d * 100 + d4.d * 1000 + d5.d * 10000 + d6.d * 100000 + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS nums WHERE n <= 1000"
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "validation_criteria": [
+    "The wide grouped-query workload causes a measurable increase in Created_tmp_disk_tables relative to baseline",
+    "The narrow control query shares the same join-and-aggregate structure but should show materially lower disk-temp pressure than the wide query",
+    "EXPLAIN for the calibration queries preserves the join and grouped-aggregation shape needed for the mechanism",
+    "The reproduction demonstrates that row width and TEXT-like payloads matter even when tmp_table_size and max_heap_table_size are large"
+  ],
+  "symptom_evidence": [
+    "Created_tmp_disk_tables increases during the wide query",
+    "Created_tmp_tables also rises, showing internal temp-table creation rather than a point lookup",
+    "The wide query produces more disk-temp activity than the narrow control"
+  ],
+  "mechanism_evidence": [
+    "The wide query groups by a 700-byte key and scans a TEXT-heavy row shape",
+    "The narrow control keeps the same row counts and join pattern but removes the width-triggering conditions",
+    "The plan retains a grouped aggregation and ordering step that can require internal temporary storage"
+  ],
+  "minimum_plan_similarity": 0.6
+}

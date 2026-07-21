@@ -1,0 +1,99 @@
+{
+  "task_specs": [
+    {
+      "task_id": "prepare_synthetic_join_data",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a1",
+          "duration_sec": 30,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS digits (n TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS accounts (id INT NOT NULL PRIMARY KEY, segment VARCHAR(16) NOT NULL, region VARCHAR(16) NOT NULL, created_day SMALLINT UNSIGNED NOT NULL) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS orders (id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, status VARCHAR(16) NOT NULL, created_day SMALLINT UNSIGNED NOT NULL, amount_cents INT NOT NULL) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS order_items (id INT NOT NULL PRIMARY KEY, order_id INT NOT NULL, sku_id INT NOT NULL, qty TINYINT UNSIGNED NOT NULL, unit_price_cents INT NOT NULL) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO accounts (id, segment, region, created_day) SELECT seq.n, CASE WHEN seq.n <= 500 THEN 'premium' ELSE 'standard' END, ELT(1 + MOD(seq.n, 4), 'na', 'eu', 'apac', 'latam'), 1 + MOD(seq.n, 365) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5) AS seq WHERE seq.n <= 50000"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO orders (id, account_id, status, created_day, amount_cents) SELECT seq.n, CASE WHEN MOD(seq.n, 2) = 0 THEN 1 + MOD(seq.n, 500) ELSE 501 + MOD(seq.n, 49500) END, CASE WHEN MOD(seq.n, 20) < 17 THEN 'paid' WHEN MOD(seq.n, 20) < 19 THEN 'shipped' ELSE 'cancelled' END, 1 + MOD(seq.n, 365), 500 + MOD(seq.n, 50000) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n + 100000*d6.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= 150000"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO order_items (id, order_id, sku_id, qty, unit_price_cents) SELECT seq.n, 1 + FLOOR((seq.n - 1) / 3), 1 + MOD(seq.n, 10000), 1 + MOD(seq.n, 5), 100 + MOD(seq.n, 900) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n + 100000*d6.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= 450000"
+                },
+                {
+                  "sql": "ANALYZE TABLE digits, accounts, orders, order_items"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "row_counts": {
+          "accounts": 50000,
+          "orders": 150000,
+          "order_items": 450000
+        }
+      },
+      "success_criteria": {
+        "tables_created": true,
+        "statistics_collected": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "missing_index_join_fanout"
+      }
+    },
+    {
+      "task_id": "baseline_cpu_repro",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a1",
+          "sql": "SELECT SQL_NO_CACHE a.region, COUNT(*) AS item_count, SUM(oi.qty * oi.unit_price_cents) AS gross_cents FROM accounts a JOIN orders o ON o.account_id = a.id JOIN order_items oi ON oi.order_id = o.id WHERE a.segment = 'premium' AND o.status IN ('paid','shipped') GROUP BY a.region ORDER BY gross_cents DESC",
+          "concurrency": 32,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "cpu_saturation": "high",
+        "io_wait": "low",
+        "rows_examined": "large",
+        "plan_shape": "scan_heavy_join_path"
+      },
+      "success_criteria": {
+        "sustained_cpu_pressure": true,
+        "row_examination_is_broad": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "missing_index_join_fanout"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "prepare_synthetic_join_data",
+      "baseline_cpu_repro"
+    ]
+  ]
+}

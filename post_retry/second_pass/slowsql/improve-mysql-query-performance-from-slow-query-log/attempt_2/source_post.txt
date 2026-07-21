@@ -1,0 +1,200 @@
+Source: Stack Overflow
+URL: https://stackoverflow.com/questions/36319871/improve-mysql-query-performance-from-slow-query-log
+Title: improve MySQL query performance from slow query log
+Question ID: 36319871
+Asked timestamp: 1459372415
+Last activity timestamp: 1459375195
+License: CC BY-SA 3.0; author: RNK
+
+# Question
+
+I turned on slow query monitor in `MySQL` config.
+
+Below is the query and time:
+
+Time: 160330 20:54:11
+User@Host: user[user] @ [xx.xx.xxx.xxx]
+Query_time: 8.794170 Lock_time: 0.000141 Rows_sent: 3942 Rows_examined: 4742825
+SET timestamp=1459371251;```
+SELECT (SELECT (CASE WHEN ce_type = 'IN' then SUM(payment_amount)
+                                END) as debit
+                        FROM customer_payment_options cpo
+                        WHERE wallet_id=cw.id
+                        AND (cpo.real_account_type='HQ')
+                        AND cpo.source_country_id='40'
+                        GROUP BY cpo.wallet_id)
+                    as debit,
+                    (SELECT SUM(payment_amount)
+                                 as credit
+                        FROM customer_payment_options cpo
+                        WHERE wallet_id=cw.id
+                        AND (cpo.real_account_type='HQ')
+                        AND cpo.tran_id IS NOT NULL
+                        AND cpo.source_country_id='40'
+                        GROUP BY cpo.wallet_id)
+                    as credit
+
+                    FROM customer_wallet cw
+                    WHERE cw.company_id='1'
+                    AND cw.currency='40'
+                    AND cw.is_approved = '1'
+                    AND DATE(cw.date_added) < '2016-03-30';
+
+```Indexes on `customer_payment_options`:```
+company_id
+tran_id
+ce_id
+wallet_id
+
+```What should I do to improve it's performance?
+
+EXPLAIN:
+
+https://i.sstatic.net/iH8rt.png (https://i.sstatic.net/iH8rt.png)
+
+OCR of EXPLAIN image:
+
+```text
++----+--------------------+-------+------+-----------------------------+-----------------+---------+--------------+------+-------------+
+| id | select_type        | table | type | possible_keys               | key             | key_len | ref          | rows | Extra       |
++----+--------------------+-------+------+-----------------------------+-----------------+---------+--------------+------+-------------+
+|  1 | PRIMARY            | cw    | ref  | branch_admin_id             | branch_admin_id | 5       | const        |    1 | Using where |
+|  3 | DEPENDENT SUBQUERY | cpo   | ref  | real_account_type,wallet_id | wallet_id       | 5       | mtesdb.cw.id |   11 | Using where |
+|  2 | DEPENDENT SUBQUERY | cpo   | ref  | real_account_type,wallet_id | wallet_id       | 5       | mtesdb.cw.id |   11 | Using where |
++----+--------------------+-------+------+-----------------------------+-----------------+---------+--------------+------+-------------+
+```
+
+SCHEMA```
+CREATE TABLE `customer_payment_options` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`company_id` int(11) NOT NULL,
+`local_branch_id` int(11) NOT NULL,
+`tran_id` bigint(11) DEFAULT NULL,
+`ce_id` int(11) DEFAULT NULL,
+`wallet_id` int(11) DEFAULT NULL,
+`reward_credit_id` int(11) DEFAULT NULL,
+`ce_invoice_id` varchar(32) DEFAULT NULL,
+`ce_type` enum('IN','OUT') DEFAULT NULL,
+`payment_type` enum('CASH','DEBIT','CREDIT','CHEQUE','DRAFT','BANK_DEPOSIT','EWIRE','WALLET','LOAN','REWARD_CREDIT') NOT NULL,
+`payment_amount` varchar(20) NOT NULL,
+`payment_type_number` varchar(100) DEFAULT NULL,
+`source_country_id` int(11) NOT NULL,
+`real_account_id` int(11) DEFAULT NULL,
+`real_account_type` enum('LOCAL','HQ') DEFAULT NULL,
+`date_added` datetime NOT NULL,
+`event_type` enum('MONEY_TRANSFER','CURRENCY_EXCHANGE','WALLET') DEFAULT NULL,
+PRIMARY KEY (`id`),
+KEY `company_id` (`company_id`),
+KEY `real_account_type` (`real_account_type`),
+KEY `tran_id` (`tran_id`),
+KEY `ce_id` (`ce_id`),
+KEY `wallet_id` (`wallet_id`),
+CONSTRAINT `customer_payment_options_ibfk_4` FOREIGN KEY (`wallet_id`) REFERENCES `customer_wallet` (`id`),
+CONSTRAINT `customer_payment_options_ibfk_1` FOREIGN KEY (`company_id`) REFERENCES `company` (`id`),
+CONSTRAINT `customer_payment_options_ibfk_2` FOREIGN KEY (`tran_id`) REFERENCES `transaction` (`id`),
+CONSTRAINT `customer_payment_options_ibfk_3` FOREIGN KEY (`ce_id`) REFERENCES `currency_exchange` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=412 DEFAULT CHARSET=utf8
+
+CREATE TABLE `customer_wallet` (
+`id` int(11) NOT NULL AUTO_INCREMENT,
+`wallet_unique_id` varchar(100) DEFAULT NULL,
+`company_id` int(11) NOT NULL,
+`branch_admin_id` int(11) DEFAULT NULL,
+`emp_id` int(11) DEFAULT NULL,
+`emp_type` enum('SUPER_ADMIN','ADMIN','AGENT_ADMIN','AGENT','OVER_AGENT_ADMIN','OVER_AGENT') DEFAULT NULL,
+`cus_id` bigint(11) NOT NULL,
+`tran_id` bigint(11) DEFAULT NULL,
+`beehive_id` int(11) DEFAULT NULL,
+`type` enum('DEPOSIT','WITHDRAW','TRANSACTION') NOT NULL,
+`sub_type` enum('MONEY_TRANSFER','BEEHIVE_DEPOSIT') DEFAULT NULL,
+`credit_in` varchar(20) DEFAULT NULL,
+`credit_out` varchar(20) DEFAULT NULL,
+`currency` varchar(20) NOT NULL,
+`date_added` datetime NOT NULL,
+`note` varchar(255) DEFAULT NULL,
+`location` enum('DIRECT') DEFAULT NULL,
+`is_approved` enum('0','1') NOT NULL DEFAULT '1',
+`idebit_issconf` varchar(50) DEFAULT NULL,
+`idebit_issname` varchar(50) DEFAULT NULL,
+`idebit_isstrack2` varchar(100) DEFAULT NULL,
+PRIMARY KEY (`id`),
+KEY `cus_id` (`cus_id`),
+KEY `company_id` (`company_id`),
+KEY `branch_admin_id` (`branch_admin_id`),
+KEY `emp_id` (`emp_id`),
+KEY `tran_id` (`tran_id`),
+KEY `beehive_id` (`beehive_id`),
+CONSTRAINT `customer_wallet_ibfk_1` FOREIGN KEY (`cus_id`) REFERENCES `customers` (`id`),
+CONSTRAINT `customer_wallet_ibfk_2` FOREIGN KEY (`company_id`) REFERENCES `company` (`id`),
+CONSTRAINT `customer_wallet_ibfk_3` FOREIGN KEY (`tran_id`) REFERENCES `transaction` (`id`),
+CONSTRAINT `customer_wallet_ibfk_4` FOREIGN KEY (`emp_id`) REFERENCES `employees` (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=152 DEFAULT CHARSET=utf8
+
+```
+
+# Answers
+
+## Answer 1
+Author: Andrew
+Accepted: no
+Score: 0
+License: CC BY-SA 3.0
+
+You need to add indexes and multi-column indexes to make it fast.
+Please keep in mind, that if you have large table, extra indexes will slow-down the insertions , since index file update will take more time.
+
+If a multiple-column index exists on col1 and col2, the appropriate
+rows can be fetched directly. If separate single-column indexes exist
+on col1 and col2, the optimizer attempts to use the Index Merge
+optimization (see Section 8.2.1.4, “Index Merge Optimization”), or
+attempts to find the most restrictive index by deciding which index
+excludes more rows and using that index to fetch the rows.
+
+If the table has a multiple-column index, any leftmost prefix of the
+index can be used by the optimizer to look up rows. For example, if
+you have a three-column index on (col1, col2, col3), you have indexed
+search capabilities on (col1), (col1, col2), and (col1, col2, col3).
+
+Read more (https://dev.mysql.com/doc/refman/5.5/en/multiple-column-indexes.html)
+
+## Answer 2
+Author: DRapp
+Accepted: yes
+Score: 3
+License: CC BY-SA 3.0
+
+What you are doing as a correlated query on every wallet ID to get the corresponding debits and credits. It appears you are getting one record per wallet id. This is very busy. Having a join to the customer payments table on your criteria that is common (including the join per wallet id). Then, simplify the CASE as a SUM( case/when ) as respective debit / credit.
+
+I don't know your underlying criteria of table columns, but I would even hedge to (and did) include NOT the CE_TYPE = 'IN' as that appears basis of a debit and you would not want to falsely count as part of a credit too. Again, dont know correlation of fields, trans_id, types.
+
+Now, as stated, having individual indexes on individual fields will not help optimize this query. I would suggest the following indexes.
+
+table index
+customer_wallet ( company_id, is_approved, currency, id, date_added )
+customer_payment_options ( wallet_id, account_type, country_id )```
+SELECT
+      cw.wallet_id,
+      SUM( case when cpo.ce_type = 'IN'
+                then cpo.payment_amount
+                ELSE 0 end ) as Debit,
+      SUM( case when NOT cpo.ce_type = 'IN' 
+                     AND cpo.tran_id IS NOT NULL
+                then cpo.payment_amount
+                ELSE 0 end ) as Credit
+   FROM 
+      customer_wallet cw
+         JOIN customer_payment_options cpo
+            ON cw.id = cpo.wallet_id
+           AND cpo.real_account_type = 'HQ'
+           AND cpo.source_country_id = '40'
+   WHERE 
+          cw.company_id = '1'
+      AND cw.currency = '40'
+      AND cw.is_approved = '1'
+      AND cw.date_added < '2016-03-30'
+   GROUP BY
+      cw.id
+
+```One additional comment. if your ID columns, Currency flag, country ID, approved are actually numeric values in the table structure, remove the quotes and let compare directly on the numeric value. Also, for your date_added. You had that based on DATE( date_added ). Doing a function on a column can not fully utilize the index. Since date() strips off any time portion of a date/time stamp column, and you are asking for all added less than Mar 30, then date added of March 29 @ 11:59:59pm is still less than Mar 30 at 12:00:00am, so no date conversion is required.
+
+As commented by Ivan (below), if you want ALL Wallet IDs regardless of having any payments (debit or credit), then change from a join to a LEFT JOIN.

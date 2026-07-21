@@ -1,0 +1,39 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "dbms_adapters": [
+        "mysql"
+      ],
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "No SQL Server/PostgreSQL execution adapter in v1",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": "{\"database\":\"post_retry_long_transaction_252749_lock_wait_tim_a1\"}",
+    "error": "(1049, \"Unknown database 'post_retry_long_transaction_252749_lock_wait_tim_a1'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\"incident_spec\":{\"dbms\":\"mysql\",\"dbms_version\":null,\"summary\":\"Intermittent `DELETE` lock wait timeouts on a MySQL/Aurora InnoDB table with no PRIMARY KEY, where a long-lived uncommitted transaction holds a row lock on a qualifying `EVENT_DETAILS` row while the daily purge scans a date-leading secondary index and eventually collides with the locked clustered-record entry.\",\"symptoms\":[\"`DELETE ... WHERE UPDATE_DATE < ... AND COMPONENT_NAME = 'health'` sometimes fails with `Lock wait timeout exceeded; try restarting transaction`.\",\"`SHOW ENGINE INNODB STATUS` shows the wait on `GEN_CLUST_INDEX` for `EVENT_DETAILS`, which is the hidden clustered index used when no PRIMARY KEY exists.\",\"Processlist and InnoDB trx views show transactions active for minutes to hours, including sessions that remain open after queries finish.\",\"Long-lived transactions accumulate undo log entries and some row locks, indicating uncommitted DML retained by an open transaction rather than a deadlock.\"],\"mechanism\":\"A pooled application connection leaves a transaction open after row-modifying work, holding an exclusive lock on at least one `EVENT_DETAILS` row. The daily purge runs a broad delete against rows older than a cutoff date and filtered by `COMPONENT_NAME='health'`. Because the table has no PRIMARY KEY, InnoDB uses the hidden clustered index (`GEN_CLUST_INDEX`) for row locking, and the delete eventually reaches the locked row and waits until `lock_wait_timeout` expires. The undo log entry count grows with each row-modifying statement executed inside the still-open transaction, which is why long-lived sessions can show thousands of undo records.\",\"facts\":[{\"key\":\"dbms_and_hosting\",\"value\":{\"dbms\":\"MySQL\",\"environment\":\"Aurora RDS\",\"version\":\"5.6\"},\"source\":\"explicit_post\",\"evidence\":\"The post says \\\"I'm using RDS Aurora with MySQL 5.6.\\\"\",\"confidence\":1},{\"key\":\"autocommit_and_isolation\",\"value\":{\"autocommit\":\"enabled\",\"transaction_isolation\":\"REPEATABLE READ\"},\"source\":\"explicit_post\",\"evidence\":\"The post says autocommit is enabled and the default isolation level is REPEATABLE READ.\",\"confidence\":1},{\"key\":\"table_has_no_primary_key\",\"value\":{\"primary_key_present\":false,\"secondary_index_non_unique\":true},\"source\":\"explicit_post\",\"evidence\":\"The post says \\\"Table has no primary Keys and Index is not Unique.\\\"\",\"confidence\":1},{\"key\":\"delete_predicate\",\"value\":{\"sql\":\"DELETE ... WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'\"},\"source\":\"explicit_post\",\"evidence\":\"The waiting query shown in InnoDB status is the delete with `UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'`.\",\"confidence\":1},{\"key\":\"wait_on_hidden_clustered_index\",\"value\":{\"index\":\"GEN_CLUST_INDEX\",\"lock_mode\":\"X\"},\"source\":\"explicit_post\",\"evidence\":\"The waiting lock shown in InnoDB status is on `GEN_CLUST_INDEX` of `EVENT_DETAILS`.\",\"confidence\":1},{\"key\":\"long_lived_transactions_exist\",\"value\":{\"examples\":[{\"active_sec\":390,\"undo_log_entries\":34,\"row_locks\":6},{\"active_sec\":69125,\"undo_log_entries\":1969},{\"active_sec\":69297,\"undo_log_entries\":1965}]},\"source\":\"explicit_post\",\"evidence\":\"The post includes several `information_schema.innodb_trx` rows showing long-running active transactions and undo log entry counts.\",\"confidence\":1},{\"key\":\"pooled_connection_suspected\",\"value\":{\"same_thread_id_multiple_queries\":true,\"likely_pool_reuse\":true},\"source\":\"post_hypothesis\",\"evidence\":\"The author notes multiple queries with the same thread id and suspects Tomcat connection reuse.\",\"confidence\":0.74}],\"assumptions\":[\"The blocking transaction is a row-modifying statement or `SELECT ... FOR UPDATE` on a qualifying `EVENT_DETAILS` row, not a metadata lock.\",\"The delete is large enough to scan a substantial portion of the date range before reaching the locked row.\",\"One or more application sessions are holding transactions open longer than intended, likely through connection-pool reuse or missed commits.\",\"The production data skew makes `UPDATE_DATE < 20191015` and `COMPONENT_"
+  }
+]

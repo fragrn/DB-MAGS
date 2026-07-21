@@ -1,0 +1,61 @@
+{
+  "task_specs": [
+    {
+      "task_id": "wide_groupby_temp_table_repro",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+          "sql": "SELECT d.bucket_label, e.grp_key, MIN(e.payload) AS sample_payload, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.grp_key ORDER BY d.bucket_label, e.grp_key",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "Created_tmp_disk_tables": "nonzero",
+        "Created_tmp_tables": "increases",
+        "plan_shape": "grouped and ordered wide result"
+      },
+      "success_criteria": {
+        "disk_temp_tables_observed": true,
+        "query_executes_successfully": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Wide grouped columns plus TEXT in the result force internal temp tables toward on-disk storage."
+      }
+    },
+    {
+      "task_id": "narrow_groupby_control",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+          "sql": "SELECT d.bucket_label, e.bucket_id, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.bucket_id ORDER BY d.bucket_label, e.bucket_id",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "Created_tmp_disk_tables": "lower than the wide workload",
+        "Created_tmp_tables": "increases"
+      },
+      "success_criteria": {
+        "query_executes_successfully": true,
+        "serves_as_control": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Control path keeps the same general join pattern while removing the wide TEXT/VARCHAR spill driver."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "wide_groupby_temp_table_repro",
+      "narrow_groupby_control"
+    ]
+  ]
+}

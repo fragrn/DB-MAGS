@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
+import os
 import re
 import socket
 import time
@@ -15,6 +16,7 @@ from typing import Any, Callable
 from agent import tools as agent_tools
 from agent.config import RuntimeConfig
 
+from InputAnalysisAgent.db_adapters import PostgresAdapter, SqlServerAdapter, normalize_dbms
 from InputAnalysisAgent.prompt_examples import DATASPEC_FORMAT_REFERENCE
 from InputAnalysisAgent.schemas import ReproductionBlueprint, ReproductionEvaluation
 
@@ -46,8 +48,12 @@ needed by the suspected mechanism. Do not claim exact accident reproduction.
 Use tools to inspect available capabilities and the target database when useful. Use EXPLAIN for
 SQL that can be checked against an existing schema. Tools are capabilities, not reproduction
 templates. You decide the schema, distributions, workload, SQL, task parameters, and evaluation
-criteria from evidence in the post. Do not invent a MySQL substitute for a DBMS-specific mechanism;
-mark feasibility blocked or symptom_only when the required environment is unavailable.
+criteria from evidence in the post. The current execution adapters are MySQL/MariaDB/Percona,
+PostgreSQL, and a SQL Server-compatible T-SQL adapter backed by the local Azure SQL Edge/sqlcmd
+environment. Do not invent a MySQL substitute for a DBMS-specific mechanism; mark feasibility
+blocked or symptom_only when the required environment is unavailable.
+If metadata.target_database is provided, use that exact database name for data_spec.database,
+environment_spec.database, experiment_request.target_database, and every TaskSpec action database.
 Before changing any MySQL global variable, call inspect_mysql_global_variables and use the returned
 pre-experiment values in cleanup_actions.
 
@@ -181,7 +187,7 @@ CALIBRATION_SYSTEM_PROMPT = """You are the Calibration phase of InputAnalysisAge
 The synthetic database has already been prepared from the supplied reproduction blueprint. For every
 calibration query, you must call explain_sql against the prepared database. Pass its query_id unchanged
 and pass only the original SELECT/WITH statement in sql. Never prepend EXPLAIN because the tool adds it.
-Preserve the supplied SQL, including optimizer hints. Read the raw MySQL EXPLAIN
+Preserve the supplied SQL, including optimizer hints. Read the raw DBMS EXPLAIN
 result and decide yourself whether it supports the query's objective and expected_evidence. There is no
 rule-based plan matcher and no fixed access-method vocabulary. Do not execute workload tasks, mutate the
 database, or claim evidence that was not returned by explain_sql.
@@ -245,6 +251,7 @@ def calibrate_reproduction(
         max_steps=max_steps,
         tool_names={"explain_sql"},
         calibration_queries={item["query_id"]: item["sql"] for item in identified_queries},
+        dbms=blueprint.incident_spec.dbms,
     )
     if result.get("error"):
         raise ReproductionPlanningError(str(result["error"]), result.get("trace"))
@@ -452,6 +459,7 @@ def _tool_loop(
     max_steps: int,
     tool_names: set[str] | None = None,
     calibration_queries: dict[str, str] | None = None,
+    dbms: str | None = None,
 ) -> dict[str, Any]:
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": system_prompt},
@@ -500,7 +508,7 @@ def _tool_loop(
                                 str(arguments.get("sql") or ""),
                                 flags=re.I,
                             )
-                    result = _call_tool(name, arguments, config, allowed_tools=tool_names)
+                    result = _call_tool(name, arguments, config, allowed_tools=tool_names, dbms=dbms)
                     observation = {"result": result}
                     trace.append({"step": step, "tool": name, "arguments": arguments, "result": _truncate(result)})
                 except Exception as exc:
@@ -574,12 +582,23 @@ def _call_tool(
     config: RuntimeConfig,
     *,
     allowed_tools: set[str] | None = None,
+    dbms: str | None = None,
 ) -> Any:
+    effective_dbms = normalize_dbms(str(arguments.get("dbms") or dbms or "mysql"))
     tools: dict[str, Callable[..., Any]] = {
         "inspect_capabilities": lambda: _inspect_capabilities(config),
         "inspect_mysql_global_variables": lambda: _inspect_mysql_global_variables(config),
-        "inspect_db_environment": lambda database: _inspect_db_environment(config, database),
-        "explain_sql": lambda database, sql, query_id=None: agent_tools.explain_sql(config, database, sql),
+        "inspect_db_environment": lambda database, dbms=None: _inspect_db_environment(
+            config,
+            database,
+            dbms=normalize_dbms(dbms or effective_dbms),
+        ),
+        "explain_sql": lambda database, sql, query_id=None, dbms=None: _explain_sql(
+            config,
+            database,
+            sql,
+            dbms=normalize_dbms(dbms or effective_dbms),
+        ),
         "compile_task_specs": lambda task_specs, dependencies=None: agent_tools.build_task_dag(task_specs, dependencies or []),
         "check_safety": lambda task_dag, max_duration_sec=300, expected_workload=None: agent_tools.check_safety(
             task_dag,
@@ -595,7 +614,6 @@ def _call_tool(
 
 def _inspect_capabilities(config: RuntimeConfig) -> dict[str, Any]:
     return {
-        "dbms_adapters": ["mysql"],
         "task_action_kinds": [
             "raw_sql_workload",
             "raw_transaction_script",
@@ -603,19 +621,63 @@ def _inspect_capabilities(config: RuntimeConfig) -> dict[str, Any]:
             "logical_backup_command",
             "benchbase_burst_command",
         ],
+        "dbms_adapters": ["mysql", "postgresql", "sqlserver"],
         "mysql": {"host": config.mysql_host, "port": config.mysql_port},
+        "postgresql": {
+            "host": os.environ.get("DBMAGS_PG_HOST") or os.environ.get("PGHOST") or "local socket",
+            "port": int(os.environ.get("DBMAGS_PG_PORT") or os.environ.get("PGPORT") or 5432),
+            "user": os.environ.get("DBMAGS_PG_USER") or os.environ.get("PGUSER") or "current OS user",
+        },
+        "sqlserver": {
+            "host": os.environ.get("DBMAGS_SQLSERVER_HOST") or "127.0.0.1",
+            "port": int(os.environ.get("DBMAGS_SQLSERVER_PORT") or 1433),
+            "user": os.environ.get("DBMAGS_SQLSERVER_USER") or "sa",
+            "client": os.environ.get("DBMAGS_SQLSERVER_CLIENT") or "docker",
+            "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server.",
+        },
         "chaosblade_available": Path(config.chaosblade_path).exists(),
-        "limitations": ["No SQL Server/PostgreSQL execution adapter in v1", "No production data dump is assumed"],
+        "limitations": [
+            "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+            "No production data dump is assumed",
+        ],
     }
 
 
-def _inspect_db_environment(config: RuntimeConfig, database: str) -> dict[str, Any]:
+def _inspect_db_environment(config: RuntimeConfig, database: str, *, dbms: str = "mysql") -> dict[str, Any]:
+    if normalize_dbms(dbms) == "postgresql":
+        adapter = PostgresAdapter()
+        return {
+            "database": database,
+            "dbms": "postgresql",
+            "schema": adapter.schema(database),
+            "table_stats": adapter.table_stats(database),
+            "db_metrics": adapter.db_metrics(database),
+            "os_metrics": agent_tools.probe_os_metrics(),
+        }
+    if normalize_dbms(dbms) == "sqlserver":
+        adapter = SqlServerAdapter()
+        return {
+            "database": database,
+            "dbms": "sqlserver",
+            "schema": adapter.schema(database),
+            "table_stats": adapter.table_stats(database),
+            "db_metrics": adapter.db_metrics(database),
+            "os_metrics": agent_tools.probe_os_metrics(),
+        }
     return {
         "schema": agent_tools.probe_schema(config, database),
         "table_stats": agent_tools.probe_table_stats(config, database),
         "db_metrics": agent_tools.probe_db_metrics(config, database),
         "os_metrics": agent_tools.probe_os_metrics(),
     }
+
+
+def _explain_sql(config: RuntimeConfig, database: str, sql: str, *, dbms: str = "mysql") -> dict[str, Any]:
+    if normalize_dbms(dbms) == "postgresql":
+        return PostgresAdapter().explain(database, sql)
+    if normalize_dbms(dbms) == "sqlserver":
+        return SqlServerAdapter().explain(database, sql)
+    return agent_tools.explain_sql(config, database, sql)
 
 
 def _inspect_mysql_global_variables(config: RuntimeConfig) -> dict[str, Any]:

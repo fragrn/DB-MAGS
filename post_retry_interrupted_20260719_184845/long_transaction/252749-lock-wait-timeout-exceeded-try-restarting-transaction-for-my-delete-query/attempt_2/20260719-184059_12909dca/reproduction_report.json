@@ -1,0 +1,39 @@
+{
+  "run_id": "20260719-184059_12909dca",
+  "reproduction_level": "mechanism",
+  "original_data_available": false,
+  "evaluation": {
+    "symptom_hit": true,
+    "mechanism_hit": true,
+    "plan_similarity": 0.92,
+    "success": true,
+    "reason": "Yes: the conflicting `DELETE` returned `(1205, 'Lock wait timeout exceeded; try restarting transaction')` while a concurrent REPEATABLE READ transaction updated 2000 rows in the same `UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'` range and stayed open during a 58-second sleep. The supplied observations do not directly show `innodb_lock_waits`, `GEN_CLUST_INDEX`, or undo-log counters, but the reproduced locking pattern matches the reported mechanism closely enough.",
+    "unmatched_conditions": [
+      "No direct supplied snapshot of `information_schema.innodb_lock_waits` or `GEN_CLUST_INDEX` wait details",
+      "No direct supplied observation of undo-log entry growth during the blocker sleep",
+      "No production-specific application/session-leak behavior or exact data skew"
+    ],
+    "evidence": {
+      "delete_timeout": {
+        "error": "(1205, 'Lock wait timeout exceeded; try restarting transaction')",
+        "executions": 20,
+        "max_latency_ms": 7416.227
+      },
+      "blocker_transaction": {
+        "autocommit": false,
+        "isolation": "REPEATABLE READ",
+        "update_sql": "UPDATE event_details SET STATUS = STATUS + 1 WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health' ORDER BY UPDATE_DATE, UPDATE_TIME LIMIT 2000",
+        "sleep_seconds": 58,
+        "rollback": "performed"
+      },
+      "shared_predicate_range": "Both statements target the same `UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'` range",
+      "schema_shape": "`event_details` is defined without a PRIMARY KEY"
+    }
+  },
+  "unmatched_conditions": [
+    "Exact production data skew and cardinality",
+    "Exact blocking application session behavior",
+    "Aurora-specific operational context and history"
+  ],
+  "decision_history": "decision_history.jsonl"
+}

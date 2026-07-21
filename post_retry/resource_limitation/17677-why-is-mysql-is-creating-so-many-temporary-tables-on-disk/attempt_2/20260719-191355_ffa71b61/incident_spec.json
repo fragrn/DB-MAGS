@@ -1,0 +1,89 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "MySQL is creating many on-disk internal temporary tables for a grouped workload; the evidence points to query/schema shape, especially wide grouped columns and TEXT-like rows, rather than a simple server-memory setting.",
+  "symptoms": [
+    "mysqltuner reports a large fraction of temp tables created on disk",
+    "Raising tmp_table_size and max_heap_table_size from 16M to 200M reduced but did not eliminate the disk-temp-table share",
+    "The same database on another machine shows a much lower on-disk temp-table percentage",
+    "The user is considering changing table engines to address GROUP BY behavior"
+  ],
+  "mechanism": "MySQL internal temporary tables can spill to disk when GROUP BY / ORDER BY / UNION work has wide rows, TEXT/BLOB columns, or other row-shape limits that prevent MEMORY-based temp tables from being used efficiently. A workload with a wide grouped key, text payloads, and join fanout can keep creating disk-backed temporary tables even after tmp_table_size and max_heap_table_size are increased. Switching base tables from MyISAM to MEMORY does not change how MySQL builds internal temp tables for the query.",
+  "facts": [
+    {
+      "key": "disk_temp_table_share_reported",
+      "value": {
+        "temp_tables_observed": 17158,
+        "disk_temp_table_share": "30%",
+        "previous_disk_temp_table_share": "38%"
+      },
+      "source": "explicit_post",
+      "evidence": "The post says 'Of 17158 temp tables, 30% were created on disk' and earlier 'Of 23725 temp tables 38% were created on disk'.",
+      "confidence": 0.99
+    },
+    {
+      "key": "tmp_memory_settings_increased",
+      "value": {
+        "tmp_table_size": "200M",
+        "max_heap_table_size": "200M",
+        "previous_value": "16M"
+      },
+      "source": "explicit_post",
+      "evidence": "The author says they changed max_heap_table_size and tmp_table_size from 16m to 200m and the disk-temp-table percentage dropped.",
+      "confidence": 0.98
+    },
+    {
+      "key": "reported_configuration",
+      "value": {
+        "engine": "myisam",
+        "group_concat_max_len": 32768,
+        "key_buffer_size": "3.7 GB",
+        "thread_stack": "256k",
+        "table_cache": 125,
+        "query_cache_limit": "1M",
+        "query_cache_size": "16M",
+        "join_buffer_size": "2.00 M",
+        "max_connections": 800
+      },
+      "source": "explicit_post",
+      "evidence": "The post lists the server configuration values.",
+      "confidence": 0.97
+    },
+    {
+      "key": "comparison_host",
+      "value": {
+        "same_database_other_machine_disk_tmp_share": "1%",
+        "default_configuration_reference": true
+      },
+      "source": "explicit_post",
+      "evidence": "The post says another system with default configuration shows 'of 23725 temp tables, 1% were created on disk' with the same database.",
+      "confidence": 0.96
+    },
+    {
+      "key": "internal_temp_table_rule",
+      "value": {
+        "disk_trigger_candidates": [
+          "TEXT/BLOB columns",
+          "row size exceeds tmp_table_size/max_heap_table_size",
+          "columns over 512 bytes used with GROUP BY / UNION / ORDER BY"
+        ]
+      },
+      "source": "agent_inference",
+      "evidence": "This is the known MySQL internal temporary-table behavior referenced by the accepted answer and consistent with the user's GROUP BY concern.",
+      "confidence": 0.88
+    }
+  ],
+  "assumptions": [
+    "The problematic workload includes aggregation or ordering over a wide grouped key or text-heavy rows",
+    "The high on-disk temporary-table fraction reflects query mix and row shape, not just RAM shortage",
+    "The reported mysqltuner counters are for MySQL internal temporary tables, not user-created TEMPORARY TABLE statements"
+  ],
+  "unknowns": [
+    "Exact SQL statements that produce the temp tables",
+    "Exact table definitions and indexes in the production database",
+    "Exact MySQL version and internal temp-table implementation details",
+    "Whether the user is observing latency, I/O pressure, or only mysqltuner counters",
+    "Whether any queries involve TEXT/BLOB, GROUP_CONCAT, or very wide VARCHAR columns"
+  ],
+  "confidence": 0.77
+}

@@ -1,0 +1,81 @@
+{
+  "database": "post_retry_blocking_129302_unpredicatable_single_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS channel (id INT NOT NULL PRIMARY KEY, status TINYINT NOT NULL, name VARCHAR(50) NOT NULL) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS communication (id BIGINT NOT NULL PRIMARY KEY, comm_action VARCHAR(20) NOT NULL, comm_channelid INT NOT NULL, created_at DATETIME NOT NULL, payload VARCHAR(200) NOT NULL, amount INT NOT NULL, filler VARCHAR(100) NOT NULL, KEY idx_comm_channelid (comm_channelid), KEY idx_comm_action_channel (comm_action, comm_channelid), KEY idx_comm_channel_action (comm_channelid, comm_action), KEY idx_comm_channel_created (comm_channelid, created_at), KEY idx_comm_action_created (comm_action, created_at), KEY idx_comm_created (created_at), KEY idx_comm_amount (amount), KEY idx_comm_payload (payload(32)), KEY idx_comm_channel_amount (comm_channelid, amount), CONSTRAINT fk_comm_channel FOREIGN KEY (comm_channelid) REFERENCES channel(id)) ENGINE=InnoDB"
+  ],
+  "generation_sql": [
+    "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT IGNORE INTO channel (id, status, name) SELECT 1 + (d0.d + d1.d * 10), CASE WHEN 1 + (d0.d + d1.d * 10) = 11 THEN 1 ELSE 0 END, CONCAT('channel_', 1 + (d0.d + d1.d * 10)) FROM digits AS d0 CROSS JOIN digits AS d1 WHERE 1 + (d0.d + d1.d * 10) <= 100",
+    "INSERT IGNORE INTO communication (id, comm_action, comm_channelid, created_at, payload, amount, filler) SELECT seq.n, CASE WHEN MOD(seq.n, 33) = 0 THEN 'Deskwork' ELSE 'Other' END, CASE WHEN MOD(seq.n, 100) = 0 THEN 11 ELSE 1 + MOD(seq.n, 99) END, TIMESTAMPADD(SECOND, MOD(seq.n, 86400), '2024-01-01 00:00:00'), CONCAT('payload_', seq.n), MOD(seq.n, 1000), RPAD(CONCAT('f_', seq.n), 100, 'x') FROM (SELECT 1 + (d0.d + d1.d * 10 + d2.d * 100 + d3.d * 1000 + d4.d * 10000 + d5.d * 100000) AS n FROM digits AS d0 CROSS JOIN digits AS d1 CROSS JOIN digits AS d2 CROSS JOIN digits AS d3 CROSS JOIN digits AS d4 CROSS JOIN digits AS d5) AS seq WHERE seq.n <= {row_count}",
+    "ANALYZE TABLE channel, communication"
+  ],
+  "tables": [
+    {
+      "name": "digits",
+      "purpose": "helper table for bounded synthetic number generation",
+      "target_rows": 10,
+      "distribution_notes": "Uniform 0-9 digits used to build deterministic row numbers without recursion."
+    },
+    {
+      "name": "channel",
+      "purpose": "hot parent/reference table used to create lock contention on a specific key",
+      "target_rows": 100,
+      "distribution_notes": "Key 11 is intentionally special and should be the value the blocked insert targets."
+    },
+    {
+      "name": "communication",
+      "purpose": "main OLTP child table with multiple secondary indexes to simulate insert-maintenance cost",
+      "target_rows": 1000000,
+      "distribution_notes": "Skew the foreign key so channel 11 is hot but still common enough that the insert path is realistic; keep `Deskwork` as a minority value so the targeted insert is selective rather than a point lookup."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "digits": 10,
+      "channel": 100,
+      "communication": 1000000
+    },
+    "value_skew": {
+      "communication.comm_channelid": "channel 11 is intentionally hot and is the target of the blocked insert; about 1% of rows reference it",
+      "communication.comm_action": "`Deskwork` is a minority value, roughly 1/33 of rows, to keep the insert predicate selective"
+    },
+    "predicate_selectivity": {
+      "comm_action='Deskwork' AND comm_channelid=11": "very selective but not unique; intended to exercise a composite lookup and a realistic insert path"
+    },
+    "join_selectivity": {
+      "communication.comm_channelid = channel.id": "many-to-one"
+    }
+  },
+  "analyze_tables": [
+    "channel",
+    "communication"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT c.id, c.comm_action, c.comm_channelid, c.created_at FROM communication AS c WHERE c.comm_action = 'Deskwork' AND c.comm_channelid = 11 ORDER BY c.created_at DESC LIMIT 10",
+      "objective": "Check that the synthetic distribution and composite indexes make the hot insert target selective and visible in the plan.",
+      "expected_evidence": [
+        "The plan should show a nontrivial access path on the selective predicate rather than a full table scan.",
+        "The composite relationship between action and channel should be visible in EXPLAIN.",
+        "The chosen access path should reflect the hot key and secondary indexes that make insert maintenance realistic."
+      ]
+    },
+    {
+      "sql": "SELECT c.id FROM channel AS ch JOIN communication AS c ON c.comm_channelid = ch.id WHERE ch.id = 11 AND c.comm_action = 'Deskwork' ORDER BY c.id DESC LIMIT 10",
+      "objective": "Confirm that the child row is still anchored to a single hot parent key and that the join shape matches the blocking scenario.",
+      "expected_evidence": [
+        "The plan should show the parent key as a narrow driver.",
+        "The child side should be reached through the foreign-key-related key path.",
+        "The evidence should distinguish this from a trivial point lookup on a unique row."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 100000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

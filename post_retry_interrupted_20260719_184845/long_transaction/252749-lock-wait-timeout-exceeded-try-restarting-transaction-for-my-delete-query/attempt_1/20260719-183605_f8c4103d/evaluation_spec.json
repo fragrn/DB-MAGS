@@ -1,0 +1,20 @@
+{
+  "validation_criteria": [
+    "A concurrent uncommitted transaction holds at least one row lock on a qualifying `EVENT_DETAILS` row.",
+    "A concurrent delete against the same predicate blocks and can time out with `Lock wait timeout exceeded; try restarting transaction`.",
+    "`information_schema.innodb_lock_waits` ties the waiting delete to the blocker transaction.",
+    "`SHOW ENGINE INNODB STATUS` references `GEN_CLUST_INDEX` for the waiting lock.",
+    "Undo log entries increase as the blocker transaction performs more row-modifying work before commit."
+  ],
+  "symptom_evidence": [
+    "Blocked delete waits on a row lock instead of failing immediately.",
+    "InnoDB status and trx views expose a long-lived blocker session.",
+    "The table-without-PK symptom appears as locking on the hidden clustered index."
+  ],
+  "mechanism_evidence": [
+    "A row lock in an open transaction is the immediate blocker.",
+    "The purge query's date-leading scan and later component filter create a large enough walk to encounter the locked row.",
+    "The absence of a PRIMARY KEY forces InnoDB to use the hidden clustered index for record locking."
+  ],
+  "minimum_plan_similarity": 0.6
+}

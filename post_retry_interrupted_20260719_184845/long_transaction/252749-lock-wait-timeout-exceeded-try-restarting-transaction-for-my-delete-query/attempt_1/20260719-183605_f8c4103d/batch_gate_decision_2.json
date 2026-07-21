@@ -1,0 +1,56 @@
+{
+  "gate": {
+    "status": "waiting_human",
+    "phase": "calibration",
+    "reasons": [
+      "domain_judgment_required",
+      "unresolved_critical_questions",
+      "privileged_or_global_operation",
+      "calibration_weak_match"
+    ],
+    "summary": "Calibration found a weak match; DBA judgment is required",
+    "allowed_decisions": [
+      "approve",
+      "reject",
+      "revise",
+      "feedback"
+    ],
+    "editable_roots": [
+      "data_spec.calibration_queries",
+      "data_spec.constraints",
+      "data_spec.scale_strategy",
+      "data_spec.tables",
+      "dependencies",
+      "evaluation_spec",
+      "experiment_request",
+      "incident_spec.assumptions",
+      "incident_spec.unknowns",
+      "risk_assessment",
+      "task_specs",
+      "workload_spec"
+    ],
+    "timestamp": 1784457654.8651872,
+    "details": {
+      "calibration": {
+        "status": "weak_match",
+        "decision": "weak_match",
+        "concerns": [
+          "The calibration query is a read-only SELECT, so it cannot directly prove the blocking DELETE's lock behavior.",
+          "Because the plan is covering, the exact write-path contention against the clustered record remains inferred rather than observed."
+        ],
+        "recommended_changes": [
+          "If stronger confirmation is needed, calibrate with the actual DELETE statement or a SELECT that forces base-row access.",
+          "Consider adding a PRIMARY KEY in a follow-up test only if the goal is to compare locking behavior, not to reproduce the incident as-is."
+        ]
+      }
+    }
+  },
+  "decision": {
+    "decision": "approve",
+    "patch": null,
+    "feedback": "",
+    "actor": "batch",
+    "timestamp": 1784457654.8664792
+  },
+  "repairs": []
+}

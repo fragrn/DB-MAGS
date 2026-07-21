@@ -1,0 +1,24 @@
+{
+  "decision": "accept",
+  "reasoning": "The EXPLAIN plan supports the intended CPU-heavy join mechanism: it starts with a full scan of the large `fact_order_item` table, then performs nested-loop primary-key lookups into `fact_order`, `dim_customer`, and `dim_product`, with filters applied after each lookup. The plan also shows temporary-table aggregation and a final sort, which are consistent with a CPU-intensive read-heavy workload. This is sufficiently aligned with the reproduction objective.",
+  "query_assessments": [
+    {
+      "query_id": "calibration_query_1",
+      "sql": "SELECT o.order_id, c.region, SUM(oi.quantity * oi.unit_price) AS revenue FROM `fact_order` o JOIN `dim_customer` c ON c.customer_id = o.customer_id JOIN `fact_order_item` oi ON oi.order_id = o.order_id JOIN `dim_product` p ON p.product_id = oi.product_id WHERE o.status = 'COMPLETE' AND c.region = 'NA' AND p.category = 'featured' GROUP BY o.order_id, c.region ORDER BY revenue DESC LIMIT 20",
+      "matched": true,
+      "observed_plan_summary": "Nested-loop join plan driven by a full scan of `fact_order_item`, with single-row primary-key lookups into `fact_order`, `dim_customer`, and `dim_product`, followed by temporary-table aggregation and a filesort for the top-N result.",
+      "supporting_evidence": [
+        "The plan includes all four tables in the intended join chain.",
+        "The largest fact table (`oi`) is scanned first, which is consistent with expensive join processing.",
+        "Predicates on `o.status`, `c.region`, and `p.category` are visible as filters in the plan.",
+        "The plan uses nested loops plus temporary aggregation/sort, which fits a CPU-heavy read workload."
+      ],
+      "discrepancies": []
+    }
+  ],
+  "concerns": [],
+  "recommended_changes": [],
+  "missing_information": [],
+  "round": 1,
+  "matched": true
+}

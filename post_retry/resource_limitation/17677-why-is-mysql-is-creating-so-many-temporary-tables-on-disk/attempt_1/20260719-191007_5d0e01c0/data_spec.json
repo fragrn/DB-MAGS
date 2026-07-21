@@ -1,0 +1,81 @@
+{
+  "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS bucket_dim (bucket_id INT NOT NULL PRIMARY KEY, bucket_label VARCHAR(32) NOT NULL) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS wide_events (id BIGINT UNSIGNED NOT NULL PRIMARY KEY, bucket_id INT NOT NULL, status TINYINT NOT NULL, grp_key VARCHAR(600) CHARACTER SET utf8mb4 NOT NULL, payload TEXT NOT NULL, created_at DATE NOT NULL, KEY idx_bucket_id (bucket_id), KEY idx_status (status), KEY idx_status_bucket (status, bucket_id)) ENGINE=InnoDB"
+  ],
+  "generation_sql": [
+    "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT IGNORE INTO bucket_dim (bucket_id, bucket_label) SELECT n, CONCAT('bucket_', LPAD(n, 2, '0')) FROM (SELECT d1.d + d2.d * 10 + 1 AS n FROM digits d1 CROSS JOIN digits d2) AS x WHERE n <= 32",
+    "INSERT IGNORE INTO wide_events (id, bucket_id, status, grp_key, payload, created_at) SELECT n, 1 + MOD(n, 32), CASE WHEN MOD(n, 10) = 0 THEN 1 ELSE 0 END, CASE WHEN MOD(n, 100) = 0 THEN CONCAT('hot_', LPAD(MOD(n, 20), 2, '0'), REPEAT('x', 560)) ELSE CONCAT('grp_', LPAD(MOD(n, 1000), 4, '0'), REPEAT('y', 560)) END, CONCAT('payload_', n, REPEAT('z', 100)), DATE_ADD('2024-01-01', INTERVAL MOD(n, 365) DAY) FROM (SELECT d1.d + d2.d * 10 + d3.d * 100 + d4.d * 1000 + d5.d * 10000 + d6.d * 100000 + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS nums WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "digits",
+      "purpose": "Small deterministic number source for bounded, idempotent synthetic data generation.",
+      "target_rows": 10,
+      "distribution_notes": "Uniform seed values 0-9."
+    },
+    {
+      "name": "bucket_dim",
+      "purpose": "Small lookup table used to create a many-to-one join relationship.",
+      "target_rows": 32,
+      "distribution_notes": "Uniform buckets, one row per bucket identifier."
+    },
+    {
+      "name": "wide_events",
+      "purpose": "Fact table whose wide grouped key and TEXT payload drive internal temporary-table spill behavior.",
+      "target_rows": 1000,
+      "distribution_notes": "bucket_id is uniform across 32 buckets; status is 10% true and 90% false; grp_key is a UTF8MB4 VARCHAR(600) with repeated hot values and a wide suffix; payload is TEXT and present in the grouped result."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "digits": 10,
+      "bucket_dim": 32,
+      "wide_events": 1000
+    },
+    "value_skew": {
+      "wide_events.status": "Approximately 10% value 1 and 90% value 0",
+      "wide_events.grp_key": "Small hot subset repeats frequently; strings remain wider than 512 bytes to match the mechanism"
+    },
+    "predicate_selectivity": {
+      "wide_events.status = 1": 0.1
+    },
+    "join_selectivity": {
+      "wide_events.bucket_id = bucket_dim.bucket_id": "many-to-one, approximately 32 fact rows per dimension row on average"
+    }
+  },
+  "analyze_tables": [
+    "digits",
+    "bucket_dim",
+    "wide_events"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT d.bucket_label, e.grp_key, MIN(e.payload) AS sample_payload, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.grp_key ORDER BY d.bucket_label, e.grp_key",
+      "objective": "Verify that the wide grouped result set and TEXT aggregate drive the intended internal temp-table mechanism in EXPLAIN.",
+      "expected_evidence": [
+        "The plan reflects grouping and ordering over the wide synthetic columns.",
+        "The join to the small dimension table is visible but not the dominant access pattern.",
+        "The plan shape is consistent with an internal temporary-table path rather than a trivial point lookup."
+      ]
+    },
+    {
+      "sql": "SELECT d.bucket_label, e.bucket_id, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.bucket_id ORDER BY d.bucket_label, e.bucket_id",
+      "objective": "Provide a narrower control query so the wide-column reproduction can be compared against a less spill-prone grouping pattern.",
+      "expected_evidence": [
+        "The join shape remains similar to the main query.",
+        "The grouped columns are narrower than the wide reproduction query.",
+        "The control helps separate general GROUP BY behavior from the wide-column spill mechanism."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

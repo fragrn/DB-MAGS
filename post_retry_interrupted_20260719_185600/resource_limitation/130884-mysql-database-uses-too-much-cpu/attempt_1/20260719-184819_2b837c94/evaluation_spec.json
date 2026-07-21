@@ -1,0 +1,18 @@
+{
+  "validation_criteria": [
+    "The concurrent benchmark reproduces sustained high CPU in the isolated MySQL environment.",
+    "EXPLAIN for the calibration query shows a join path with broad row estimates and no secondary index support on the join columns.",
+    "The synthetic data preserves the intended skew and fanout relationships that make the join path expensive."
+  ],
+  "symptom_evidence": [
+    "CPU rises sharply under concurrent read-only workload.",
+    "I/O wait remains secondary to CPU consumption.",
+    "The workload remains read-dominant."
+  ],
+  "mechanism_evidence": [
+    "The join predicates operate on non-indexed foreign-key columns.",
+    "The plan is consistent with repeated scan/probe work across large tables.",
+    "The rare filter and fanout combine to produce high row-examination cost."
+  ],
+  "minimum_plan_similarity": 0.6
+}

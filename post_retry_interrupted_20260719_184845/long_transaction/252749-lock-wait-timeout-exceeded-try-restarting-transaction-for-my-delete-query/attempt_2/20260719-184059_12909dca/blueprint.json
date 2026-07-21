@@ -1,0 +1,350 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "A daily DELETE on `EVENT_DETAILS` times out because another long-lived InnoDB transaction keeps row locks on the same qualifying date/component range. The table has no PRIMARY KEY, so the wait is reported on the hidden clustered index, and the blocker transaction accumulates undo log entries as it modifies rows and stays open.",
+    "symptoms": [
+      "`DELETE ... WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'` intermittently fails with `Lock wait timeout exceeded; try restarting transaction`",
+      "InnoDB status shows the waiter blocked on a record lock for `GEN_CLUST_INDEX` on `EVENT_DETAILS`",
+      "A separate transaction stays ACTIVE for minutes or hours with row locks and nonzero undo log entries",
+      "`information_schema.innodb_lock_waits` identifies a waiting DELETE and a blocking transaction on the same table",
+      "Processlist shows sleeping or delayed-commit sessions that outlive the DELETE window"
+    ],
+    "mechanism": "A long-running transaction updates and holds X locks on rows inside the same low-cardinality `UPDATE_DATE`/`COMPONENT_NAME` range scanned by the DELETE; because `EVENT_DETAILS` has no PRIMARY KEY, the conflict is surfaced on InnoDB's hidden clustered index. The blocker's open transaction also accumulates undo log entries proportional to the number of modified rows.",
+    "facts": [
+      {
+        "key": "dbms_and_hosting",
+        "value": {
+          "dbms": "MySQL",
+          "platform": "RDS Aurora"
+        },
+        "source": "explicit_post",
+        "evidence": "\"I'm using RDS Aurora with MySQL 5.6.\"",
+        "confidence": 0.98
+      },
+      {
+        "key": "table_has_no_primary_key",
+        "value": {
+          "table": "EVENT_DETAILS",
+          "primary_key": "absent"
+        },
+        "source": "explicit_post",
+        "evidence": "\"Table has no primary Keys and Index is not Unique.\"",
+        "confidence": 0.99
+      },
+      {
+        "key": "existing_secondary_index",
+        "value": {
+          "index": "STATE_INDEX",
+          "columns": [
+            "UPDATE_DATE",
+            "UPDATE_TIME",
+            "ORG_ID",
+            "CONFIG_KEY",
+            "COMPONENT_NAME",
+            "STATUS",
+            "CLIENT"
+          ],
+          "unique": false
+        },
+        "source": "explicit_post",
+        "evidence": "`INDEX STATE_INDEX  (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT)`",
+        "confidence": 0.99
+      },
+      {
+        "key": "failing_delete_predicate",
+        "value": {
+          "sql": "DELETE from CONFIGSTOREQASTAGINGREL.EVENT_DETAILS where UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'"
+        },
+        "source": "explicit_post",
+        "evidence": "The post shows the DELETE text in the InnoDB status and processlist output.",
+        "confidence": 0.99
+      },
+      {
+        "key": "wait_on_hidden_clustered_index",
+        "value": {
+          "index": "GEN_CLUST_INDEX",
+          "lock_mode": "X"
+        },
+        "source": "explicit_post",
+        "evidence": "`RECORD LOCKS ... index GEN_CLUST_INDEX of table CONFIGSTOREQASTAGINGREL.EVENT_DETAILS ... lock_mode X waiting`",
+        "confidence": 0.99
+      },
+      {
+        "key": "long_running_blocker_transaction",
+        "value": {
+          "trx_active_sec": 390,
+          "rows_locked": 6,
+          "undo_log_entries": 34
+        },
+        "source": "explicit_post",
+        "evidence": "`---TRANSACTION 39661213, ACTIVE 390 sec ... 6 row lock(s), undo log entries 34`",
+        "confidence": 0.98
+      },
+      {
+        "key": "default_transaction_mode",
+        "value": {
+          "autocommit": "enabled",
+          "isolation": "REPEATABLE READ"
+        },
+        "source": "explicit_post",
+        "evidence": "\"AutoCommit is enabled and Transaction isolation level is default REPEATABLE READ\"",
+        "confidence": 0.95
+      },
+      {
+        "key": "pool_reuse_hypothesis",
+        "value": {
+          "same_thread_id_multiple_queries": "observed"
+        },
+        "source": "post_hypothesis",
+        "evidence": "\"multiple queries with the same thread id, probably they might be using the same connection from the tomcat pool\"",
+        "confidence": 0.74
+      }
+    ],
+    "assumptions": [
+      "A synthetic dataset can preserve the key locking shape by clustering many qualifying rows under the same DELETE predicate.",
+      "The blocker is a row-modifying transaction, not a metadata lock or a deadlock cycle.",
+      "The exact Aurora 5.6 patch level is not required to reproduce the mechanism.",
+      "The lock wait timeout can be observed within the experiment window without changing global server settings."
+    ],
+    "unknowns": [
+      "Exact application code path that leaves transactions open",
+      "Whether the blocker is caused by explicit transactions, connection-pool reuse, or an ORM/session bug",
+      "True production row counts and daily delete volume",
+      "Whether any triggers, foreign keys, or additional indexes exist in production",
+      "Exact lock_wait_timeout value on the target instance"
+    ],
+    "confidence": 0.88
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "MySQL/InnoDB row-lock contention, hidden clustered-index waits on tables without a PRIMARY KEY, and undo-log growth from long-running write transactions are all reproducible with synthetic data and concurrent sessions. The exact Aurora incident, session history, and production skew cannot be reproduced exactly because the original data and workload are unavailable.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact production data skew and cardinality",
+      "Exact blocking application session behavior",
+      "Aurora-specific operational context and history"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+    "requirements": [
+      "Dedicated isolated MySQL test database",
+      "InnoDB storage engine",
+      "Ability to run concurrent transaction and DELETE workloads"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS digits (n TINYINT NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS seq_100000 (n INT NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS event_details_loaded (org_id CHAR(32) NOT NULL, request_id CHAR(32) NOT NULL, PRIMARY KEY (org_id, request_id)) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS event_details (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT)) ENGINE=InnoDB"
+    ],
+    "generation_sql": [
+      "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+      "INSERT IGNORE INTO seq_100000 (n) SELECT a.n + b.n * 10 + c.n * 100 + d.n * 1000 + e.n * 10000 + 1 FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e",
+      "INSERT INTO event_details (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT LPAD(HEX(s.n), 32, '0'), LPAD(HEX(s.n * 17), 32, '0'), CASE WHEN s.n <= 10000 THEN 'health' ELSE CONCAT('component_', LPAD(MOD(s.n, 200), 3, '0')) END, LPAD(HEX(s.n * 19), 32, '0'), CASE WHEN s.n <= 10000 THEN 20191001 + MOD(s.n, 14) ELSE 20191101 + MOD(s.n, 14) END, CASE WHEN s.n <= 10000 THEN 80000 + MOD(s.n, 5000) ELSE 200000 + MOD(s.n, 5000) END, CASE WHEN MOD(s.n, 4) = 0 THEN 'data-collector' ELSE 'batch' END, MOD(s.n, 5), CONCAT('event_', s.n), CONCAT('msg_', s.n) FROM seq_100000 s WHERE s.n <= {row_count} AND NOT EXISTS (SELECT 1 FROM event_details_loaded l WHERE l.org_id = LPAD(HEX(s.n), 32, '0') AND l.request_id = LPAD(HEX(s.n * 19), 32, '0'))",
+      "INSERT IGNORE INTO event_details_loaded (org_id, request_id) SELECT LPAD(HEX(s.n), 32, '0'), LPAD(HEX(s.n * 19), 32, '0') FROM seq_100000 s WHERE s.n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "event_details",
+        "purpose": "Primary synthetic fact table that reproduces the delete-vs-long-transaction lock conflict on a non-PK InnoDB table",
+        "target_rows": 100000,
+        "distribution_notes": "First 10k rows are clustered into the hot predicate region (`COMPONENT_NAME='health'` and `UPDATE_DATE < 20191015`) so the DELETE and blocker touch the same qualifying range in index order; the table intentionally has no PRIMARY KEY so waits are reported on the hidden clustered index."
+      },
+      {
+        "name": "digits",
+        "purpose": "Helper table used to generate a bounded numeric sequence deterministically",
+        "target_rows": 10,
+        "distribution_notes": "Uniform 0-9 seed values for cross-join expansion."
+      },
+      {
+        "name": "seq_100000",
+        "purpose": "Helper sequence table for idempotent row synthesis and controlled scaling",
+        "target_rows": 100000,
+        "distribution_notes": "Monotonic sequence used to create stable, repeatable synthetic keys and date/component skew."
+      },
+      {
+        "name": "event_details_loaded",
+        "purpose": "Idempotence gate that records which synthetic rows were already loaded",
+        "target_rows": 100000,
+        "distribution_notes": "Primary-keyed helper table that prevents duplicate loads without adding a PRIMARY KEY to `event_details`."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "event_details": 100000,
+        "digits": 10,
+        "seq_100000": 100000,
+        "event_details_loaded": 100000
+      },
+      "value_skew": {
+        "event_details.COMPONENT_NAME": "About 10% of rows are concentrated in the hot `health` value set; the rest are spread across many non-matching component names.",
+        "event_details.UPDATE_DATE": "The hottest 10% of rows use pre-cutoff dates and are ordered early in the secondary index to make lock conflicts deterministic."
+      },
+      "predicate_selectivity": {
+        "event_details.UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'": 0.1
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "digits",
+      "seq_100000",
+      "event_details_loaded",
+      "event_details"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME FROM event_details WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health' ORDER BY UPDATE_DATE, UPDATE_TIME LIMIT 20",
+        "objective": "Verify that the synthetic distribution makes the delete predicate target the intended date-leading index range and that the qualifying rows are clustered early enough to create contention with the blocker transaction.",
+        "expected_evidence": [
+          "The plan should read the qualifying date range from the date-leading secondary index rather than a single-row lookup.",
+          "The component filter should appear as an additional condition on the same scan path.",
+          "The result shape should reflect a sizable hot subset instead of a trivial point query."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "The DELETE waits on a row lock held by a concurrent transaction and eventually fails with a lock wait timeout.",
+      "`information_schema.innodb_lock_waits` shows the waiting DELETE and the blocking updater on `event_details`.",
+      "The blocker transaction shows undo log entries that grow with the number of rows it updates before sleeping.",
+      "The wait is attributable to InnoDB row locks on the hidden clustered index, not a metadata/table lock.",
+      "The calibration EXPLAIN confirms the DELETE predicate rides the intended date-leading range on the synthetic data."
+    ],
+    "symptom_evidence": [
+      "Lock wait timeout error from the DELETE",
+      "Blocking waiter/blocker pair visible in lock-wait metadata",
+      "Long-lived active transaction with row locks"
+    ],
+    "mechanism_evidence": [
+      "Blocking transaction holds X locks on qualifying rows",
+      "Undo log entries increase with rows modified in one open transaction",
+      "No PRIMARY KEY means waits are reported on `GEN_CLUST_INDEX` / hidden clustered index"
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Intermittent lock wait timeout on a daily DELETE due to a long-lived transaction holding row locks on the same qualifying `EVENT_DETAILS` range",
+    "target_database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+    "dba_description": "Random lock wait timeouts occur on a daily DELETE from `EVENT_DETAILS` while other sessions remain open for a long time. The suspected mechanism is a long-running write transaction that holds row locks on the same predicate range, causing the DELETE to wait on the hidden clustered index until lock_wait_timeout expires.",
+    "target_path": [
+      "Long-lived updater locks qualifying `EVENT_DETAILS` rows",
+      "Daily DELETE scans the same `UPDATE_DATE`/`COMPONENT_NAME` range",
+      "DELETE waits on the hidden clustered index and times out"
+    ],
+    "injected_nodes": [
+      "long_running_updater_transaction",
+      "daily_delete_statement"
+    ],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "hold_hot_row_locks",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+          "duration_sec": 59,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": false,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+                },
+                {
+                  "sql": "UPDATE event_details SET STATUS = STATUS + 1 WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health' ORDER BY UPDATE_DATE, UPDATE_TIME LIMIT 2000"
+                },
+                {
+                  "sql": "DO SLEEP(58)"
+                },
+                {
+                  "sql": "ROLLBACK"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "rows_modified_min": 2000,
+        "rows_locked_min": 2000,
+        "undo_log_entries_min": 2000
+      },
+      "success_criteria": {
+        "transaction_remains_open_during_sleep": true,
+        "undo_log_growth_visible": true
+      },
+      "risk_assessment": "low",
+      "cleanup_actions": [],
+      "metadata": {
+        "root_cause": "Long-lived write transaction that holds locks on the same hot predicate range as the DELETE"
+      }
+    },
+    {
+      "task_id": "run_conflicting_delete",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+          "sql": "DELETE FROM event_details WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'",
+          "concurrency": 1,
+          "duration_sec": 59
+        }
+      ],
+      "expected_metrics": {
+        "lock_wait_timeout_errors_min": 1
+      },
+      "success_criteria": {
+        "delete_hits_lock_wait_timeout": true,
+        "conflict_is_on_same_predicate_range": true
+      },
+      "risk_assessment": "low",
+      "cleanup_actions": [],
+      "metadata": {
+        "root_cause": "DELETE on the same hot range blocked by the open updater transaction"
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "Whether the production blocker is an explicit transaction or a connection-pool/session-management leak",
+    "Whether any additional indexes, triggers, or foreign keys affect the exact locking path",
+    "The true production row count and daily delete batch size"
+  ],
+  "rationale": "The blueprint reproduces the mechanism described in the post rather than the exact incident: a table without a PRIMARY KEY, a nonunique date-leading secondary index, a hot cluster of qualifying rows, a concurrent updater that keeps row locks open long enough to accumulate undo log entries, and a conflicting DELETE on the same predicate. The calibration query checks that the synthetic distribution preserves the intended access path before running the concurrent lock test."
+}

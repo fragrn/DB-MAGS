@@ -1,0 +1,411 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "dbms_adapters": [
+        "mysql"
+      ],
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "No SQL Server/PostgreSQL execution adapter in v1",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_mysql_global_variables",
+    "arguments": {},
+    "result": {
+      "variables": {
+        "log_output": "FILE",
+        "log_queries_not_using_indexes": "OFF",
+        "long_query_time": "10.000000",
+        "min_examined_row_limit": "0",
+        "slow_query_log": "OFF",
+        "slow_query_log_file": "/opt/homebrew/var/mysql/neodeMacBook-Air-2-slow.log"
+      },
+      "error": ""
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_resource_limitation_130884_mysql_data_a4"
+    },
+    "result": {
+      "schema": {
+        "digits": {
+          "columns": [
+            {
+              "name": "d",
+              "type": "tinyint",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "tinyint unsigned",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "d",
+              "non_unique": false,
+              "seq": 1
+            }
+          ]
+        },
+        "dim_customer": {
+          "columns": [
+            {
+              "name": "customer_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int unsigned",
+              "default": null
+            },
+            {
+              "name": "region",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(16)",
+              "default": null
+            },
+            {
+              "name": "customer_tier",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(16)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "customer_id",
+              "non_unique": false,
+              "seq": 1
+            }
+          ]
+        },
+        "dim_product": {
+          "columns": [
+            {
+              "name": "product_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int unsigned",
+              "default": null
+            },
+            {
+              "name": "category",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(16)",
+              "default": null
+            },
+            {
+              "name": "active",
+              "type": "tinyint",
+              "nullable": false,
+              "key": "",
+              "column_type": "tinyint(1)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "product_id",
+              "non_unique": false,
+              "seq": 1
+            }
+          ]
+        },
+        "fact_order": {
+          "columns": [
+            {
+              "name": "order_id",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int unsigned",
+              "default": null
+            },
+            {
+              "name": "customer_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int unsigned",
+              "default": null
+            },
+            {
+              "name": "status",
+              "type": "varchar",
+              "nullable": false,
+              "key": "",
+              "column_type": "varchar(16)",
+              "default": null
+            },
+            {
+              "name": "order_date",
+              "type": "date",
+              "nullable": false,
+              "key": "",
+              "column_type": "date",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "order_id",
+              "non_unique": false,
+              "seq": 1
+            }
+          ]
+        },
+        "fact_order_item": {
+          "columns": [
+            {
+              "name": "order_item_id",
+              "type": "bigint",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "bigint unsigned",
+              "default": null
+            },
+            {
+              "name": "order_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int unsigned",
+              "default": null
+            },
+            {
+              "name": "product_id",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int unsigned",
+              "default": null
+            },
+            {
+              "name": "quantity",
+              "type": "int",
+              "nullable": false,
+              "key": "",
+              "column_type": "int unsigned",
+              "default": null
+            },
+            {
+              "name": "unit_price",
+              "type": "decimal",
+              "nullable": false,
+              "key": "",
+              "column_type": "decimal(10,2)",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "order_item_id",
+              "non_unique": false,
+              "seq": 1
+            }
+          ]
+        },
+        "seq_1m": {
+          "columns": [
+            {
+              "name": "n",
+              "type": "int",
+              "nullable": false,
+              "key": "PRI",
+              "column_type": "int unsigned",
+              "default": null
+            }
+          ],
+          "indexes": [
+            {
+              "index_name": "PRIMARY",
+              "column": "n",
+              "non_unique": false,
+              "seq": 1
+            }
+          ]
+        }
+      },
+      "table_stats": [
+        {
+          "TABLE_NAME": "seq_1m",
+          "TABLE_ROWS": 990740,
+          "DATA_LENGTH": 81379328,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 82,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "fact_order_item",
+          "TABLE_ROWS": 598575,
+          "DATA_LENGTH": 33095680,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 55,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "fact_order",
+          "TABLE_ROWS": 199870,
+          "DATA_LENGTH": 8929280,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 44,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "dim_customer",
+          "TABLE_ROWS": 48580,
+          "DATA_LENGTH": 2637824,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 54,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "dim_product",
+          "TABLE_ROWS": 5000,
+          "DATA_LENGTH": 196608,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 39,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        },
+        {
+          "TABLE_NAME": "digits",
+          "TABLE_ROWS": 10,
+          "DATA_LENGTH": 16384,
+          "INDEX_LENGTH": 0,
+          "AVG_ROW_LENGTH": 1638,
+          "TABLE_COLLATION": "utf8mb4_0900_ai_ci"
+        }
+      ],
+      "db_metrics": {
+        "Aborted_connects": "14",
+        "Binlog_cache_disk_use": "24",
+        "Com_commit": "3624541",
+        "Com_delete": "1458134",
+        "Com_insert": "8367621",
+        "Com_select": "79630709",
+        "Com_update": "37156566",
+        "Created_tmp_disk_tables": "9",
+        "Created_tmp_tables": "246615",
+        "Innodb_buffer_pool_read_requests": "3194910408",
+        "Innodb_buffer_pool_reads": "96574305",
+        "Innodb_log_waits": "0",
+        "Innodb_row_lock_time": "17244809",
+        "Innodb_row_lock_time_avg": "3",
+        "Innodb_row_lock_waits": "4762532",
+        "Max_used_connections": "70",
+        "Slow_queries": "23",
+        "Sort_merge_passes": "56",
+        "Threads_connected": "1",
+        "Threads_running": "2",
+        "innodb_lock_wait_timeout": "50",
+        "max_connections": 151,
+        "wait_timeout": "28800",
+        "processlist": [
+          {
+            "Id": 5,
+            "User": "event_scheduler",
+            "Host": "localhost",
+            "db": null,
+            "Command": "Daemon",
+            "Time": 454023,
+            "State": "Waiting on empty queue",
+            "Info": null
+          },
+          {
+            "Id": 3316,
+            "User": "root",
+            "Host": "localhost:64561",
+            "db": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "Command": "Query",
+            "Time": 0,
+            "State": "init",
+            "Info": "SHOW FULL PROCESSLIST"
+          }
+        ],
+        "metadata_lock_wait_count": 0,
+        "metadata_lock_evidence": ""
+      },
+      "os_metrics": {
+        "platform": "Darwin",
+        "load_average": {
+          "1m": 1.29,
+          "5m": 1.42,
+          "15m": 1.42
+        },
+        "cpu_usage": {
+          "user_pct": 5.43,
+          "sys_pct": 10.27,
+          "idle_pct": 84.28,
+          "usage_ratio": 0.157
+        },
+        "memory": {
+          "total_kb": 2184836,
+          "active_kb": 1570996,
+          "wired_kb": 522480,
+          "free_kb": 91360,
+          "usage_ratio": 0.9582
+        },
+        "disk": {
+          "total_bytes": 494384795648,
+          "used_bytes": 470686494720,
+          "free_bytes": 23698300928,
+          "usage_ratio": 0.9521
+        },
+        "disk_io": {},
+        "network": {},
+        "file_descriptors": {
+          "open_fds": -1
+        }
+      }
+    }
+  },
+  {
+    "step": 2,
+    "tool": "explain_sql",
+    "arguments": {
+      "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+      "query_id": "q1",
+      "sql": "SELECT c.region, SUM(oi.quantity * oi.unit_price) AS revenue\nFROM fact_order o\nJOIN fact_order_item oi ON oi.order_id = o.order_id\nJOIN dim_customer c ON c.customer_id = o.customer_id\nJOIN dim_product p ON p.product_id = oi.product_id\nWHERE o.status = 'SHIPPED' AND c.customer_tier = 'gold' AND p.active = 1\nGROUP BY c.region"
+    },
+    "result": {
+      "sql": "SELECT c.region, SUM(oi.quantity * oi.unit_price) AS revenue\nFROM fact_order o\nJOIN fact_order_item oi ON oi.order_id = o.order_id\nJOIN dim_customer c ON c.customer_id = o.customer_id\nJOIN dim_product p ON p.product_id = oi.product_id\nWHERE o.status = 'SHIPPED' AND c.customer_tier = 'gold' AND p.active = 1\nGROUP BY c.region",
+      "plan": [
+        {
+          "EXPLAIN": "-> Table scan on <temporary>\n    -> Aggregate using temporary table\n        -> Nested loop inner join  (cost=292909 rows=599)\n            -> Nested loop inner join  (cost=290814 rows=5986)\n                -> Nested loop inner join  (cost=269864 rows=59858)\n                    -> Table scan on oi  (cost=60362 rows=598575)\n                    -> Filter: (p.`active` = 1)  (cost=0.25 rows=0.1)\n                        -> Single-row index lookup on p using PRIMARY (product_id = oi.product_id)  (cost=0.25 rows=1)\n                -> Filter: (o.`status` = 'SHIPPED')  (cost=0.25 rows=0.1)\n                    -> Single-row index lookup on o using PRIMARY (order_id = oi.order_id)  (cost=0.25 rows=1)\n            -> Filter: (c.customer_tier = 'gold')  (cost=0.25 rows=0.1)\n                -> Single-row index lookup on c using PRIMARY (customer_id = o.customer_id)  (cost=0.25 rows=1)\n"
+        }
+      ]
+    }
+  }
+]

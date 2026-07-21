@@ -1,0 +1,94 @@
+{
+  "database": "post_retry_blocking_129302_unpredicatable_single_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS communication (id BIGINT UNSIGNED NOT NULL PRIMARY KEY, comm_action VARCHAR(64) NOT NULL, comm_channelid INT NOT NULL, customer_id BIGINT UNSIGNED NOT NULL, status TINYINT NOT NULL, priority TINYINT NOT NULL, created_at DATETIME NOT NULL, updated_at DATETIME NOT NULL, agent_id INT NOT NULL, region_id INT NOT NULL, is_archived TINYINT NOT NULL, category_id INT NOT NULL, source_system VARCHAR(32) NOT NULL, batch_id BIGINT UNSIGNED NOT NULL, owner_id INT NOT NULL, team_id INT NOT NULL, route_id INT NOT NULL, flag_a TINYINT NOT NULL, flag_b TINYINT NOT NULL, flag_c TINYINT NOT NULL, payload VARCHAR(512) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
+    "CREATE INDEX IF NOT EXISTS idx_communication_comm_action ON communication (comm_action)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_comm_channelid ON communication (comm_channelid)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_customer_id ON communication (customer_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_status ON communication (status)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_priority ON communication (priority)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_created_at ON communication (created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_updated_at ON communication (updated_at)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_agent_id ON communication (agent_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_region_id ON communication (region_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_is_archived ON communication (is_archived)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_category_id ON communication (category_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_source_system ON communication (source_system)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_batch_id ON communication (batch_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_owner_id ON communication (owner_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_team_id ON communication (team_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_route_id ON communication (route_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_flag_a ON communication (flag_a)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_flag_b ON communication (flag_b)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_flag_c ON communication (flag_c)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_payload_prefix ON communication (payload(64))",
+    "CREATE INDEX IF NOT EXISTS idx_communication_channel_created ON communication (comm_channelid, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_channel_status ON communication (comm_channelid, status)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_channel_priority ON communication (comm_channelid, priority)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_channel_customer ON communication (comm_channelid, customer_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_customer_created ON communication (customer_id, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_customer_status ON communication (customer_id, status)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_region_team ON communication (region_id, team_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_owner_route ON communication (owner_id, route_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_category_source ON communication (category_id, source_system)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_batch_owner ON communication (batch_id, owner_id)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_agent_updated ON communication (agent_id, updated_at)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_status_priority ON communication (status, priority)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_archived_created ON communication (is_archived, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_communication_action_channel ON communication (comm_action, comm_channelid)"
+  ],
+  "generation_sql": [
+    "INSERT IGNORE INTO communication (id, comm_action, comm_channelid, customer_id, status, priority, created_at, updated_at, agent_id, region_id, is_archived, category_id, source_system, batch_id, owner_id, team_id, route_id, flag_a, flag_b, flag_c, payload) SELECT seq.n, CASE WHEN MOD(seq.n, 10) = 0 THEN 'Deskwork' ELSE ELT(1 + MOD(seq.n, 5), 'Support', 'Call', 'Email', 'Chat', 'Review') END, CASE WHEN MOD(seq.n, 100) = 0 THEN 11 ELSE 100 + MOD(seq.n, 400) END, 100000 + seq.n, MOD(seq.n, 5), MOD(seq.n, 7), TIMESTAMPADD(SECOND, seq.n, '2020-01-01 00:00:00'), TIMESTAMPADD(SECOND, seq.n, '2020-01-01 00:00:00'), 1 + MOD(seq.n, 50), 1 + MOD(seq.n, 8), MOD(seq.n, 2), 1 + MOD(seq.n, 20), ELT(1 + MOD(seq.n, 4), 'app', 'api', 'import', 'legacy'), 900000 + seq.n, 1 + MOD(seq.n, 200), 1 + MOD(seq.n, 25), 1 + MOD(seq.n, 60), MOD(seq.n, 2), MOD(seq.n, 3) = 0, MOD(seq.n, 5) = 0, CONCAT('row_', seq.n) FROM (SELECT ((d1.d * 100000) + (d2.d * 10000) + (d3.d * 1000) + (d4.d * 100) + (d5.d * 10) + d6.d) + 1 AS n FROM (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d1 CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d2 CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d3 CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d4 CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d5 CROSS JOIN (SELECT 0 AS d UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) AS d6) AS seq WHERE seq.n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "communication",
+      "purpose": "Primary synthetic table used to reproduce a blocked single-row insert against a hot key while also mirroring the heavy index maintenance burden described in the post.",
+      "target_rows": 800000,
+      "distribution_notes": "Rows are mostly spread across comm_channelid values 100-499, with comm_channelid=11 forced into a hot 1% hotspot. The table is deliberately over-indexed with 34 secondary indexes to mirror the reported OLTP design, but the reproduced outlier should come from lock blocking, not raw index count."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "communication": 800000
+    },
+    "value_skew": {
+      "communication.comm_channelid": "11 is a deliberate hotspot at roughly 1% of rows; other values are broadly spread across 100-499",
+      "communication.comm_action": "Deskwork is more common than the other labels to keep the insert shape realistic"
+    },
+    "predicate_selectivity": {
+      "communication.comm_channelid = 11": 0.01,
+      "communication.comm_channelid = 101": 0.0025
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "communication"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT id, comm_action FROM communication WHERE comm_channelid = 11 ORDER BY id DESC LIMIT 10",
+      "objective": "Verify that the hot key is visible as a narrow secondary-index access path and that the data shape is selective enough for a key-range lock to matter.",
+      "expected_evidence": [
+        "The plan should use the comm_channelid access path rather than a broad table scan.",
+        "The plan should reflect a narrow predicate on the hot channel value.",
+        "The plan shape should be compatible with a lock-heavy hot key reproduction."
+      ]
+    },
+    {
+      "sql": "SELECT id, comm_action FROM communication WHERE comm_channelid = 101 ORDER BY id DESC LIMIT 10",
+      "objective": "Provide a cold-key comparison that should remain selective and help distinguish a hotspot from the normal insert path.",
+      "expected_evidence": [
+        "The plan should still be narrow and index-driven.",
+        "The comparison key should not be part of the artificial hotspot.",
+        "The result helps separate contention from ordinary write cost."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 250000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

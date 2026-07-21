@@ -1,0 +1,85 @@
+{
+  "approved": true,
+  "reasons": [],
+  "warnings": [],
+  "normalized_task_dag": {
+    "tasks": {
+      "hold_hot_row_locks": {
+        "task_id": "hold_hot_row_locks",
+        "task_type": "raw_transaction_script",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+            "duration_sec": 59,
+            "scripts": [
+              {
+                "role": "configure",
+                "autocommit": false,
+                "concurrency": 1,
+                "steps": [
+                  {
+                    "sql": "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+                  },
+                  {
+                    "sql": "UPDATE event_details SET STATUS = STATUS + 1 WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health' ORDER BY UPDATE_DATE, UPDATE_TIME LIMIT 2000"
+                  },
+                  {
+                    "sql": "DO SLEEP(58)"
+                  },
+                  {
+                    "sql": "ROLLBACK"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "expected_metrics": {
+          "rows_modified_min": 2000,
+          "rows_locked_min": 2000,
+          "undo_log_entries_min": 2000
+        },
+        "success_criteria": {
+          "transaction_remains_open_during_sleep": true,
+          "undo_log_growth_visible": true
+        },
+        "risk_assessment": "low",
+        "cleanup_actions": [],
+        "metadata": {
+          "root_cause": "Long-lived write transaction that holds locks on the same hot predicate range as the DELETE"
+        }
+      },
+      "run_conflicting_delete": {
+        "task_id": "run_conflicting_delete",
+        "task_type": "raw_sql_workload",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+            "sql": "DELETE FROM event_details WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'",
+            "concurrency": 1,
+            "duration_sec": 59
+          }
+        ],
+        "expected_metrics": {
+          "lock_wait_timeout_errors_min": 1
+        },
+        "success_criteria": {
+          "delete_hits_lock_wait_timeout": true,
+          "conflict_is_on_same_predicate_range": true
+        },
+        "risk_assessment": "low",
+        "cleanup_actions": [],
+        "metadata": {
+          "root_cause": "DELETE on the same hot range blocked by the open updater transaction"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "hold_hot_row_locks": 0.0,
+      "run_conflicting_delete": 0.0
+    }
+  }
+}

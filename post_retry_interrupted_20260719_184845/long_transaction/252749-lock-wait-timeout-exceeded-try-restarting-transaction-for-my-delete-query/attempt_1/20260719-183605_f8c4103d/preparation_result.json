@@ -1,0 +1,10 @@
+{
+  "database": "post_retry_long_transaction_252749_lock_wait_tim_a1",
+  "statement_count": 4,
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS digits (d TINYINT NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS event_details (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT)) ENGINE=InnoDB",
+    "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT INTO event_details (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT LPAD(CONV(seq.n, 10, 16), 32, '0'), LPAD(CONV(seq.n + 100000, 10, 16), 32, '0'), CASE WHEN MOD(seq.n, 20) < 5 THEN 'health' WHEN MOD(seq.n, 5) = 0 THEN 'batch' ELSE 'api' END, LPAD(CONV(seq.n + 200000, 10, 16), 32, '0'), CASE WHEN MOD(seq.n, 5) = 0 THEN 20191001 + MOD(seq.n, 14) ELSE 20191015 + MOD(seq.n, 30) END, 100000 + MOD(seq.n, 86400), CASE WHEN MOD(seq.n, 4) = 0 THEN 'data-collector' ELSE 'tomcat-pool' END, MOD(seq.n, 7), RPAD(CONCAT('payload_', seq.n), 128, 'x'), RPAD(CONCAT('msg_', seq.n), 64, 'y') FROM (SELECT @row:=@row+1 AS n FROM digits a, digits b, digits c, digits d, digits e, digits f, (SELECT @row:=0) init) seq WHERE seq.n <= 10000 AND NOT EXISTS (SELECT 1 FROM event_details LIMIT 1)"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "validation_criteria": [
+    "The DELETE waits on a row lock held by a concurrent transaction and eventually fails with a lock wait timeout.",
+    "`information_schema.innodb_lock_waits` shows the waiting DELETE and the blocking updater on `event_details`.",
+    "The blocker transaction shows undo log entries that grow with the number of rows it updates before sleeping.",
+    "The wait is attributable to InnoDB row locks on the hidden clustered index, not a metadata/table lock.",
+    "The calibration EXPLAIN confirms the DELETE predicate rides the intended date-leading range on the synthetic data."
+  ],
+  "symptom_evidence": [
+    "Lock wait timeout error from the DELETE",
+    "Blocking waiter/blocker pair visible in lock-wait metadata",
+    "Long-lived active transaction with row locks"
+  ],
+  "mechanism_evidence": [
+    "Blocking transaction holds X locks on qualifying rows",
+    "Undo log entries increase with rows modified in one open transaction",
+    "No PRIMARY KEY means waits are reported on `GEN_CLUST_INDEX` / hidden clustered index"
+  ],
+  "minimum_plan_similarity": 0.6
+}

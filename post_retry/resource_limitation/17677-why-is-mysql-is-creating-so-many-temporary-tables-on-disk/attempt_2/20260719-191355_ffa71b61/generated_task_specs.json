@@ -1,0 +1,157 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_schema",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS digits (n TINYINT NOT NULL PRIMARY KEY)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS accounts (account_id INT NOT NULL PRIMARY KEY, active TINYINT NOT NULL, segment VARCHAR(20) NOT NULL, created_at DATE NOT NULL)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS wide_events (event_id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, wide_group_key VARCHAR(768) NOT NULL, payload TEXT NOT NULL, amount DECIMAL(10,2) NOT NULL, event_date DATE NOT NULL, KEY idx_account_date (account_id, event_date), KEY idx_event_date (event_date))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS narrow_events (event_id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, narrow_group_key VARCHAR(64) NOT NULL, payload VARCHAR(128) NOT NULL, amount DECIMAL(10,2) NOT NULL, event_date DATE NOT NULL, KEY idx_account_date (account_id, event_date), KEY idx_event_date (event_date))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "tables_created": [
+          "digits",
+          "accounts",
+          "wide_events",
+          "narrow_events"
+        ]
+      },
+      "success_criteria": {
+        "schema_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Internal temporary tables spill to disk when grouped queries involve wide keys or TEXT-heavy rows."
+      }
+    },
+    {
+      "task_id": "load_data",
+      "task_type": "load",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO accounts (account_id, active, segment, created_at) SELECT a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, IF(MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 5) = 0, 0, 1), CONCAT('seg_', MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 10)), DATE_ADD('2024-01-01', INTERVAL MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 365) DAY) FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO wide_events (event_id, account_id, wide_group_key, payload, amount, event_date) SELECT seq.event_id, MOD(seq.event_id, 10000) + 1, CASE WHEN MOD(seq.event_id, 5) = 0 THEN RPAD('hot_group', 700, 'h') ELSE RPAD(CONCAT('grp_', LPAD(MOD(seq.event_id, 999), 6, '0')), 700, 'g') END, RPAD(CONCAT('payload_', LPAD(seq.event_id, 6, '0')), 1024, 'x'), MOD(seq.event_id, 1000) / 10.0, DATE_ADD('2024-01-01', INTERVAL MOD(seq.event_id, 365) DAY) FROM (SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n + 1 AS event_id FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e) AS seq"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO narrow_events (event_id, account_id, narrow_group_key, payload, amount, event_date) SELECT seq.event_id, MOD(seq.event_id, 10000) + 1, CASE WHEN MOD(seq.event_id, 5) = 0 THEN 'hot_group' ELSE CONCAT('grp_', LPAD(MOD(seq.event_id, 999), 6, '0')) END, CONCAT('payload_', LPAD(seq.event_id, 6, '0')), MOD(seq.event_id, 1000) / 10.0, DATE_ADD('2024-01-01', INTERVAL MOD(seq.event_id, 365) DAY) FROM (SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n + 1 AS event_id FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e) AS seq"
+                },
+                {
+                  "sql": "ANALYZE TABLE accounts, wide_events, narrow_events"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "row_counts": {
+          "digits": 10,
+          "accounts": 10000,
+          "wide_events": 100000,
+          "narrow_events": 100000
+        }
+      },
+      "success_criteria": {
+        "data_loaded_and_analyzed": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data shapes the same many-to-one join and aggregation pattern while isolating width-driven temp-table spill."
+      }
+    },
+    {
+      "task_id": "measure_tmp_tables",
+      "task_type": "validation",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SHOW SESSION STATUS LIKE 'Created_tmp_disk_tables'"
+                },
+                {
+                  "sql": "SELECT e.wide_group_key, COUNT(*) AS cnt, SUM(e.amount) AS total_amount FROM wide_events e JOIN accounts a ON a.account_id = e.account_id WHERE a.active = 1 AND e.event_date >= '2024-10-01' GROUP BY e.wide_group_key ORDER BY total_amount DESC LIMIT 25"
+                },
+                {
+                  "sql": "SHOW SESSION STATUS LIKE 'Created_tmp_disk_tables'"
+                },
+                {
+                  "sql": "SELECT e.narrow_group_key, COUNT(*) AS cnt, SUM(e.amount) AS total_amount FROM narrow_events e JOIN accounts a ON a.account_id = e.account_id WHERE a.active = 1 AND e.event_date >= '2024-10-01' GROUP BY e.narrow_group_key ORDER BY total_amount DESC LIMIT 25"
+                },
+                {
+                  "sql": "SHOW SESSION STATUS LIKE 'Created_tmp_disk_tables'"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "wide_query_disk_tmp_increase": true,
+        "wide_query_more_spill_prone_than_control": true
+      },
+      "success_criteria": {
+        "wide_query_creates_more_disk_temp_pressure_than_control": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Disk temp tables are expected from the wide grouped key and TEXT-heavy row shape, not from a MEMORY-engine base table choice."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_schema",
+      "load_data"
+    ],
+    [
+      "load_data",
+      "measure_tmp_tables"
+    ]
+  ]
+}

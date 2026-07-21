@@ -1,0 +1,55 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "dbms_adapters": [
+        "mysql"
+      ],
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "No SQL Server/PostgreSQL execution adapter in v1",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_mysql_global_variables",
+    "arguments": {},
+    "result": {
+      "variables": {
+        "log_output": "FILE",
+        "log_queries_not_using_indexes": "OFF",
+        "long_query_time": "10.000000",
+        "min_examined_row_limit": "0",
+        "slow_query_log": "OFF",
+        "slow_query_log_file": "/opt/homebrew/var/mysql/neodeMacBook-Air-2-slow.log"
+      },
+      "error": ""
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": "{\"database\":\"post_retry_long_transaction_252749_lock_wait_tim_a2\"}",
+    "error": "(1049, \"Unknown database 'post_retry_long_transaction_252749_lock_wait_tim_a2'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\"incident_spec\":{\"dbms\":\"mysql\",\"dbms_version\":null,\"summary\":\"A daily DELETE on `EVENT_DETAILS` times out because another long-lived InnoDB transaction keeps row locks on the same qualifying date/component range. The table has no PRIMARY KEY, so the wait is reported on the hidden clustered index, and the blocker transaction accumulates undo log entries as it modifies rows and stays open.\",\"symptoms\":[\"`DELETE ... WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'` intermittently fails with `Lock wait timeout exceeded; try restarting transaction`\",\"InnoDB status shows the waiter blocked on a record lock for `GEN_CLUST_INDEX` on `EVENT_DETAILS`\",\"A separate transaction stays ACTIVE for minutes or hours with row locks and nonzero undo log entries\",\"`information_schema.innodb_lock_waits` identifies a waiting DELETE and a blocking transaction on the same table\",\"Processlist shows sleeping or delayed-commit sessions that outlive the DELETE window\"],\"mechanism\":\"A long-running transaction updates and holds X locks on rows inside the same low-cardinality `UPDATE_DATE`/`COMPONENT_NAME` range scanned by the DELETE; because `EVENT_DETAILS` has no PRIMARY KEY, the conflict is surfaced on InnoDB's hidden clustered index. The blocker's open transaction also accumulates undo log entries proportional to the number of modified rows.\",\"facts\":[{\"key\":\"dbms_and_hosting\",\"value\":{\"dbms\":\"MySQL\",\"platform\":\"RDS Aurora\"},\"source\":\"explicit_post\",\"evidence\":\"\\\"I'm using RDS Aurora with MySQL 5.6.\\\"\",\"confidence\":0.98},{\"key\":\"table_has_no_primary_key\",\"value\":{\"table\":\"EVENT_DETAILS\",\"primary_key\":\"absent\"},\"source\":\"explicit_post\",\"evidence\":\"\\\"Table has no primary Keys and Index is not Unique.\\\"\",\"confidence\":0.99},{\"key\":\"existing_secondary_index\",\"value\":{\"index\":\"STATE_INDEX\",\"columns\":[\"UPDATE_DATE\",\"UPDATE_TIME\",\"ORG_ID\",\"CONFIG_KEY\",\"COMPONENT_NAME\",\"STATUS\",\"CLIENT\"],\"unique\":false},\"source\":\"explicit_post\",\"evidence\":\"`INDEX STATE_INDEX  (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT)`\",\"confidence\":0.99},{\"key\":\"failing_delete_predicate\",\"value\":{\"sql\":\"DELETE from CONFIGSTOREQASTAGINGREL.EVENT_DETAILS where UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'\"},\"source\":\"explicit_post\",\"evidence\":\"The post shows the DELETE text in the InnoDB status and processlist output.\",\"confidence\":0.99},{\"key\":\"wait_on_hidden_clustered_index\",\"value\":{\"index\":\"GEN_CLUST_INDEX\",\"lock_mode\":\"X\"},\"source\":\"explicit_post\",\"evidence\":\"`RECORD LOCKS ... index GEN_CLUST_INDEX of table CONFIGSTOREQASTAGINGREL.EVENT_DETAILS ... lock_mode X waiting`\",\"confidence\":0.99},{\"key\":\"long_running_blocker_transaction\",\"value\":{\"trx_active_sec\":390,\"rows_locked\":6,\"undo_log_entries\":34},\"source\":\"explicit_post\",\"evidence\":\"`---TRANSACTION 39661213, ACTIVE 390 sec ... 6 row lock(s), undo log entries 34`\",\"confidence\":0.98},{\"key\":\"default_transaction_mode\",\"value\":{\"autocommit\":\"enabled\",\"isolation\":\"REPEATABLE READ\"},\"source\":\"explicit_post\",\"evidence\":\"\\\"AutoCommit is enabled and Transaction isolation level is default REPEATABLE READ\\\"\",\"confidence\":0.95},{\"key\":\"pool_reuse_hypothesis\",\"value\":{\"same_thread_id_multiple_queries\":\"observed\"},\"source\":\"post_hypothesis\",\"evidence\":\"\\\"multiple queries with the same thread id, probably they might be using the same connection from the tomcat pool\\\"\",\"confidence\":0.74}],\"assumptions\":[\"A synthetic dataset can preserve the key locking shape by clustering many qualifying rows under the same DELETE predicate.\",\"The blocker is a row-modifying transaction, not a metadata lock or a deadlock cycle.\",\"The exact Aurora 5.6 patch level is not required to reproduce the mechanism.\",\"The lock wait timeout can be observed within the experiment window without changing global server settings.\"],\"unknowns\":[\"Exact application code path that leaves transactions open\",\"Whether the blocker is caused by explicit transactions, connection-pool reuse, or an ORM/session bug\",\"True production row counts and da"
+  }
+]

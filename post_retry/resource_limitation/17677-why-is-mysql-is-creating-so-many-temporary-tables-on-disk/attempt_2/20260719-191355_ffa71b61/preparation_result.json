@@ -1,0 +1,14 @@
+{
+  "database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+  "statement_count": 8,
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS digits (n TINYINT NOT NULL PRIMARY KEY)",
+    "CREATE TABLE IF NOT EXISTS accounts (account_id INT NOT NULL PRIMARY KEY, active TINYINT NOT NULL, segment VARCHAR(20) NOT NULL, created_at DATE NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS wide_events (event_id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, wide_group_key VARCHAR(768) NOT NULL, payload TEXT NOT NULL, amount DECIMAL(10,2) NOT NULL, event_date DATE NOT NULL, KEY idx_account_date (account_id, event_date), KEY idx_event_date (event_date))",
+    "CREATE TABLE IF NOT EXISTS narrow_events (event_id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, narrow_group_key VARCHAR(64) NOT NULL, payload VARCHAR(128) NOT NULL, amount DECIMAL(10,2) NOT NULL, event_date DATE NOT NULL, KEY idx_account_date (account_id, event_date), KEY idx_event_date (event_date))",
+    "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT IGNORE INTO accounts (account_id, active, segment, created_at) SELECT a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, IF(MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 5) = 0, 0, 1), CONCAT('seg_', MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 10)), DATE_ADD('2024-01-01', INTERVAL MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 365) DAY) FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d",
+    "INSERT IGNORE INTO wide_events (event_id, account_id, wide_group_key, payload, amount, event_date) SELECT seq.event_id, MOD(seq.event_id, 10000) + 1, CASE WHEN MOD(seq.event_id, 5) = 0 THEN RPAD('hot_group', 700, 'h') ELSE RPAD(CONCAT('grp_', LPAD(MOD(seq.event_id, 999), 6, '0')), 700, 'g') END, RPAD(CONCAT('payload_', LPAD(seq.event_id, 6, '0')), 1024, 'x'), MOD(seq.event_id, 1000) / 10.0, DATE_ADD('2024-01-01', INTERVAL MOD(seq.event_id, 365) DAY) FROM (SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n + 1 AS event_id FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e) AS seq",
+    "INSERT IGNORE INTO narrow_events (event_id, account_id, narrow_group_key, payload, amount, event_date) SELECT seq.event_id, MOD(seq.event_id, 10000) + 1, CASE WHEN MOD(seq.event_id, 5) = 0 THEN 'hot_group' ELSE CONCAT('grp_', LPAD(MOD(seq.event_id, 999), 6, '0')) END, CONCAT('payload_', LPAD(seq.event_id, 6, '0')), MOD(seq.event_id, 1000) / 10.0, DATE_ADD('2024-01-01', INTERVAL MOD(seq.event_id, 365) DAY) FROM (SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n + 1 AS event_id FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e) AS seq"
+  ]
+}

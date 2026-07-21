@@ -1,0 +1,118 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "The incident is best modeled as MySQL CPU saturation from a read-heavy benchmark dominated by inefficient multi-table joins, high concurrency, and missing supporting indexes on join/filter columns; query-cache churn may have been an additional factor in the original environment.",
+  "symptoms": [
+    "MySQL consumed most CPU time while the web servers did not show comparable load.",
+    "The benchmark was read-heavy and the database became the bottleneck.",
+    "MySQLTuner reported many joins without indexes and very poor table-cache hit rate.",
+    "Query cache efficiency was low and pruning was extremely frequent in the posted environment.",
+    "OS sampling showed high user-space CPU usage on the database VM."
+  ],
+  "mechanism": "Concurrent read-only queries drive CPU-heavy nested-loop style join work across a large fact table and smaller dimension tables, with selective predicates on unindexed columns and fanout from the item table. The original post also suggests query-cache mutex pressure and connection churn as possible amplifiers, but the core reproducible mechanism is join fanout plus missing indexes under concurrency.",
+  "facts": [
+    {
+      "key": "mysql_version",
+      "value": {
+        "version": "5.5.47-0ubuntu0.12.04.1"
+      },
+      "source": "explicit_post",
+      "evidence": "The post states the server is running MySQL 5.5.47 on Ubuntu 12.04.",
+      "confidence": 0.99
+    },
+    {
+      "key": "hardware_limit",
+      "value": {
+        "vcpu": 5,
+        "memory_gb": 4
+      },
+      "source": "explicit_post",
+      "evidence": "The post says the VM has 5 vCPU and 4 GB of memory.",
+      "confidence": 0.99
+    },
+    {
+      "key": "workload_character",
+      "value": {
+        "reads_percent": 100,
+        "writes_percent": 0,
+        "benchmarking": true
+      },
+      "source": "explicit_post",
+      "evidence": "The poster says they are benchmarking web-server queries and the Tuner output shows 100% reads / 0% writes.",
+      "confidence": 0.98
+    },
+    {
+      "key": "cpu_observation",
+      "value": {
+        "user_cpu_high": true,
+        "db_bottleneck": true
+      },
+      "source": "explicit_post",
+      "evidence": "vmstat shows high user CPU and the poster reports the database is the bottleneck.",
+      "confidence": 0.97
+    },
+    {
+      "key": "index_signal",
+      "value": {
+        "joins_without_indexes": 6782
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner reports \"Joins performed without indexes: 6782\".",
+      "confidence": 0.98
+    },
+    {
+      "key": "query_cache_signal",
+      "value": {
+        "query_cache_size": "16M",
+        "query_cache_limit": "1M",
+        "efficiency_percent": 7.8,
+        "prunes_per_day": 39159937
+      },
+      "source": "explicit_post",
+      "evidence": "The post includes the query cache settings and MySQLTuner reports low efficiency with very frequent pruning.",
+      "confidence": 0.95
+    },
+    {
+      "key": "connection_pressure",
+      "value": {
+        "highest_connection_usage_percent": 100,
+        "connections_peak": 152,
+        "max_connections": 151
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner reports highest connection usage at 100% with 152 of 151 max threads reached.",
+      "confidence": 0.96
+    },
+    {
+      "key": "likely_root_cause",
+      "value": {
+        "cause": "inefficient joins and/or locking contention"
+      },
+      "source": "post_hypothesis",
+      "evidence": "The accepted and top-voted answers point to unindexed joins, inefficient queries, and possible mutex/locking contention.",
+      "confidence": 0.78
+    },
+    {
+      "key": "reproduction_focus",
+      "value": {
+        "mechanism": "CPU-heavy join fanout under concurrency"
+      },
+      "source": "agent_inference",
+      "evidence": "The strongest common mechanism across the post is read-heavy multi-table joins with insufficient indexes and high concurrent load.",
+      "confidence": 0.87
+    }
+  ],
+  "assumptions": [
+    "The exact production schema is unknown, so a synthetic star-schema workload is used to preserve join fanout and filter selectivity.",
+    "The main reproducible issue is CPU burn from join work rather than a storage-engine-specific bug.",
+    "Query-cache contention may have existed in production, but the current target environment does not need it to reproduce the primary symptom.",
+    "The benchmark can be approximated with a single dominant read query class repeated at concurrency."
+  ],
+  "unknowns": [
+    "The exact application SQL and its parameter distributions are unknown.",
+    "The original index layout is unknown beyond the strong hint that many joins lacked indexes.",
+    "Whether the posted environment had query cache contention versus pure query inefficiency is not known.",
+    "Whether the database used mostly InnoDB or mixed engines in the benchmark is not fully specified."
+  ],
+  "confidence": 0.83
+}

@@ -1,0 +1,94 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "A single-row insert into a heavily indexed, large table sometimes stalls for minutes; the strongest evidence points to lock blocking from an idle or sleeping transaction, not table size alone.",
+  "symptoms": [
+    "A simple insert sometimes takes over 7 minutes.",
+    "The insert blocks other activity and appears to stall the system.",
+    "dm_exec_requests reports a blocking session id that does not appear as an active request.",
+    "The blocker session still exists in dm_exec_sessions and is sleeping.",
+    "Blocked requests report wait type LCK_M_S."
+  ],
+  "mechanism": "A long-lived open transaction holds a lock on the hot insert key or key range, so the insert waits behind that lock. The SQL Server-specific DMV mismatch is consistent with the blocker being an idle session that still owns locks rather than an actively running request. The many extra indexes may add normal write cost, but they do not explain a multi-minute outlier as well as blocking does.",
+  "facts": [
+    {
+      "key": "table_size",
+      "value": {
+        "rows": "about 8 million"
+      },
+      "source": "explicit_post",
+      "evidence": "“The table is something like 8 million rows”",
+      "confidence": 0.98
+    },
+    {
+      "key": "index_bloat",
+      "value": {
+        "clustered_index": true,
+        "other_indexes": 34
+      },
+      "source": "explicit_post",
+      "evidence": "“although this particular table does have a Clustered Index, it has 34 other indexes”",
+      "confidence": 0.97
+    },
+    {
+      "key": "trigger_status",
+      "value": {
+        "triggers_found": false
+      },
+      "source": "explicit_post",
+      "evidence": "“There are no triggers that I can see”",
+      "confidence": 0.94
+    },
+    {
+      "key": "insert_outlier",
+      "value": {
+        "latency": "over 7 minutes",
+        "scope": "single row insert"
+      },
+      "source": "explicit_post",
+      "evidence": "“The following simple insert took over 7 minutes”",
+      "confidence": 0.99
+    },
+    {
+      "key": "blocking_observation",
+      "value": {
+        "blocked_session_seen": true,
+        "missing_blocker_in_requests": true,
+        "sleeping_session_in_sessions": true
+      },
+      "source": "explicit_post",
+      "evidence": "The post describes a blocker id in dm_exec_requests that is absent from the requests DMV but present and sleeping in dm_exec_sessions.",
+      "confidence": 0.96
+    },
+    {
+      "key": "wait_type",
+      "value": {
+        "reported": "LCK_M_S"
+      },
+      "source": "explicit_post",
+      "evidence": "“the blocked requests ... was waiting for a LCK_M_S”",
+      "confidence": 0.95
+    },
+    {
+      "key": "interpretation",
+      "value": {
+        "likely_cause": "blocking rather than raw insert cost"
+      },
+      "source": "post_hypothesis",
+      "evidence": "Accepted answer argues the insert was likely blocked for most of its runtime.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "The slow insert is caused by a lock wait on the inserted key or range, not by CPU, I/O, or pure index maintenance alone.",
+    "comm_channelid = 11 is the hot value involved in the blocked path.",
+    "A MySQL InnoDB next-key or record lock can be used as a mechanism-level stand-in for the SQL Server blocking symptom."
+  ],
+  "unknowns": [
+    "The exact blocking SQL statement and isolation level are not known.",
+    "The exact SQL Server lock mode and object involved in production are not known.",
+    "It is unknown whether the blocker is an orphaned connection, an idle transaction, or another application bug.",
+    "The precise definitions of the 34 indexes are not available."
+  ],
+  "confidence": 0.72
+}

@@ -1,0 +1,23 @@
+{
+  "decision": "accept",
+  "reasoning": "The EXPLAIN plan matches the intended access path: the query performs an index range scan on `STATE_INDEX` using the date-leading range `UPDATE_DATE < 20191015`, and the `COMPONENT_NAME = 'health'` predicate is applied as an index condition on the same scan. The estimated fanout (`rows=21424`) also indicates this is not a trivial point lookup, which supports the hot-range contention mechanism the blueprint is trying to reproduce.",
+  "query_assessments": [
+    {
+      "query_id": "calibration_query_1",
+      "sql": "SELECT ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME FROM event_details WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health' ORDER BY UPDATE_DATE, UPDATE_TIME LIMIT 20",
+      "matched": true,
+      "observed_plan_summary": "Limit over an index range scan on `event_details` using `STATE_INDEX` with the range `UPDATE_DATE < 20191015`; `COMPONENT_NAME = 'health'` is evaluated as an index condition; estimated 21424 rows.",
+      "supporting_evidence": [
+        "EXPLAIN shows `Index range scan on event_details using STATE_INDEX over (UPDATE_DATE < 20191015)`.",
+        "EXPLAIN shows `index condition: ((event_details.COMPONENT_NAME = 'health') and (event_details.UPDATE_DATE < 20191015))`.",
+        "The estimate of `rows=21424` indicates a substantial qualifying range rather than a single-row lookup."
+      ],
+      "discrepancies": []
+    }
+  ],
+  "concerns": [],
+  "recommended_changes": [],
+  "missing_information": [],
+  "round": 1,
+  "matched": true
+}

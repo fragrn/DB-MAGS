@@ -1,0 +1,21 @@
+{
+  "target_anomaly": "A single-row insert intermittently stalls for minutes because a blocker session appears sleeping or missing from active requests.",
+  "target_database": "post_retry_blocking_129302_unpredicatable_single_a1",
+  "dba_description": "Reproduce a blocked single-row insert against a hot key in a heavily indexed table so the test can distinguish blocking from ordinary insert overhead.",
+  "target_path": [
+    "hot secondary-index key on comm_channelid = 11",
+    "sleeping transaction holds the lock",
+    "concurrent insert waits until commit"
+  ],
+  "injected_nodes": [
+    "sleeping blocker transaction",
+    "blocked single-row insert"
+  ],
+  "max_duration_sec": 60,
+  "max_retry_rounds": 2,
+  "risk_level": "low",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": false
+  }
+}

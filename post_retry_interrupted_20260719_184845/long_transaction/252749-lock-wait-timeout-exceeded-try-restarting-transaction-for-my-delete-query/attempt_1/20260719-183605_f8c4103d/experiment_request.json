@@ -1,0 +1,21 @@
+{
+  "target_anomaly": "intermittent lock wait timeout on daily DELETE from EVENT_DETAILS",
+  "target_database": "post_retry_long_transaction_252749_lock_wait_tim_a1",
+  "dba_description": "Reproduce the MySQL/Aurora pattern where a daily DELETE on EVENT_DETAILS times out waiting for a row lock, while other sessions show long-lived open transactions and undo log growth on a table that has no PRIMARY KEY.",
+  "target_path": [
+    "long-lived open transaction holding a row lock",
+    "daily DELETE scanning the date-leading secondary index",
+    "lock wait on the hidden clustered index"
+  ],
+  "injected_nodes": [
+    "uncommitted row-modifying transaction",
+    "concurrent purge DELETE"
+  ],
+  "max_duration_sec": 60,
+  "max_retry_rounds": 2,
+  "risk_level": "medium",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": false
+  }
+}

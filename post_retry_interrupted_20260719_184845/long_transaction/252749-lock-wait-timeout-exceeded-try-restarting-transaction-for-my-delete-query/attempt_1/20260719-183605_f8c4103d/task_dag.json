@@ -1,0 +1,145 @@
+{
+  "tasks": {
+    "setup_event_details_synthetic": {
+      "task_id": "setup_event_details_synthetic",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_252749_lock_wait_tim_a1",
+          "duration_sec": 10,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS digits (d TINYINT NOT NULL PRIMARY KEY) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS event_details (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT)) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "INSERT INTO event_details (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT LPAD(CONV(seq.n, 10, 16), 32, '0'), LPAD(CONV(seq.n + 100000, 10, 16), 32, '0'), CASE WHEN MOD(seq.n, 20) < 5 THEN 'health' WHEN MOD(seq.n, 5) = 0 THEN 'batch' ELSE 'api' END, LPAD(CONV(seq.n + 200000, 10, 16), 32, '0'), CASE WHEN MOD(seq.n, 5) = 0 THEN 20191001 + MOD(seq.n, 14) ELSE 20191015 + MOD(seq.n, 30) END, 100000 + MOD(seq.n, 86400), CASE WHEN MOD(seq.n, 4) = 0 THEN 'data-collector' ELSE 'tomcat-pool' END, MOD(seq.n, 7), RPAD(CONCAT('payload_', seq.n), 128, 'x'), RPAD(CONCAT('msg_', seq.n), 64, 'y') FROM (SELECT @row:=@row+1 AS n FROM digits a, digits b, digits c, digits d, digits e, digits f, (SELECT @row:=0) init) seq WHERE seq.n <= 100000 AND NOT EXISTS (SELECT 1 FROM event_details LIMIT 1)"
+                },
+                {
+                  "sql": "ANALYZE TABLE digits"
+                },
+                {
+                  "sql": "ANALYZE TABLE event_details"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "rows_loaded": "~100000",
+        "health_row_fraction": "~0.05",
+        "old_date_fraction": "~0.20"
+      },
+      "success_criteria": {
+        "schema_created": true,
+        "data_loaded": true,
+        "statistics_updated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Missing PRIMARY KEY plus a long-lived uncommitted transaction on a qualifying row"
+      }
+    },
+    "hold_open_row_lock": {
+      "task_id": "hold_open_row_lock",
+      "task_type": "contention",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_252749_lock_wait_tim_a1",
+          "duration_sec": 60,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET autocommit=0"
+                },
+                {
+                  "sql": "START TRANSACTION"
+                },
+                {
+                  "sql": "UPDATE event_details SET STATUS = STATUS + 1 WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health' ORDER BY UPDATE_DATE, UPDATE_TIME LIMIT 1"
+                },
+                {
+                  "sql": "DO SLEEP(55)"
+                },
+                {
+                  "sql": "COMMIT"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "trx_state": "RUNNING",
+        "trx_rows_locked_min": 1,
+        "trx_rows_modified_min": 1
+      },
+      "success_criteria": {
+        "transaction_remains_open_during_sleep": true,
+        "row_lock_held": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Long-lived pooled connection retaining an open transaction"
+      }
+    },
+    "run_daily_delete": {
+      "task_id": "run_daily_delete",
+      "task_type": "contention",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_long_transaction_252749_lock_wait_tim_a1",
+          "sql": "DELETE FROM event_details WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'",
+          "concurrency": 1,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "error_contains": "Lock wait timeout exceeded; try restarting transaction"
+      },
+      "success_criteria": {
+        "delete_blocks_or_times_out": true,
+        "waiting_on_blocker": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Bulk daily delete colliding with an uncommitted row lock"
+      }
+    }
+  },
+  "edges": [
+    {
+      "source": "setup_event_details_synthetic",
+      "target": "hold_open_row_lock",
+      "condition": ""
+    },
+    {
+      "source": "setup_event_details_synthetic",
+      "target": "run_daily_delete",
+      "condition": ""
+    }
+  ],
+  "schedule": {
+    "setup_event_details_synthetic": 0.0,
+    "hold_open_row_lock": 0.0,
+    "run_daily_delete": 0.0
+  }
+}

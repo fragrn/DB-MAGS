@@ -1,0 +1,372 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MySQL CPU saturation during a read-heavy benchmark is most plausibly explained by concurrent join-heavy SELECTs that lack supporting indexes on the join columns. The post also shows connection pressure and weak query cache efficiency, but the synthetic reproduction focuses on the join fanout mechanism because that is the most directly reproducible signal.",
+    "symptoms": [
+      "Database VM/domain consumes about 471% CPU across vCPUs.",
+      "Workload is read-dominant with effectively no writes.",
+      "MySQLTuner reports 6,782 joins performed without indexes.",
+      "Connection usage reaches 152/151 and query cache pruning is extremely high.",
+      "Table cache hit rate is very low, suggesting avoidable overhead under load."
+    ],
+    "mechanism": "Concurrent read-only queries repeatedly join large tables on non-indexed foreign-key columns, producing broad scans and high row-examination fanout. The query cache is likely not helping and may amplify contention in the original environment, but the core CPU mechanism is the join plan itself.",
+    "facts": [
+      {
+        "key": "mysql_version",
+        "value": {
+          "version": "5.5.47-0ubuntu0.12.04.1"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner reports \"Currently running supported MySQL version 5.5.47-0ubuntu0.12.04.1\".",
+        "confidence": 0.99
+      },
+      {
+        "key": "host_resources",
+        "value": {
+          "vcpus": 5,
+          "memory_gb": 4
+        },
+        "source": "explicit_post",
+        "evidence": "The question states the VM has 5 vCPU and 4GB of memory.",
+        "confidence": 0.99
+      },
+      {
+        "key": "read_heavy_workload",
+        "value": {
+          "reads_pct": 100,
+          "writes_pct": 0
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner shows \"Reads / Writes: 100% / 0%\" and the user says they are benchmarking web servers querying the database.",
+        "confidence": 0.97
+      },
+      {
+        "key": "cpu_saturation",
+        "value": {
+          "database_domain_cpu_pct": 471.2
+        },
+        "source": "explicit_post",
+        "evidence": "The OCR of the xentop screenshot shows the database domain at 471.2% CPU.",
+        "confidence": 0.98
+      },
+      {
+        "key": "connection_pressure",
+        "value": {
+          "highest_connection_usage_pct": 100,
+          "connections": 152,
+          "max_connections": 151
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner reports \"Highest connection usage: 100% (152/151)\".",
+        "confidence": 0.98
+      },
+      {
+        "key": "unindexed_joins",
+        "value": {
+          "joins_without_indexes": 6782
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner reports \"Joins performed without indexes: 6782\".",
+        "confidence": 0.98
+      },
+      {
+        "key": "query_cache_issues",
+        "value": {
+          "efficiency_pct": 7.8,
+          "prunes_per_day": 39159937,
+          "query_cache_size_mb": 16
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner reports \"Query cache efficiency: 7.8%\" and \"Query cache prunes per day: 39159937\" with query_cache_size = 16M.",
+        "confidence": 0.96
+      },
+      {
+        "key": "target_database",
+        "value": {
+          "database": "post_retry_resource_limitation_130884_mysql_data_a1"
+        },
+        "source": "human_input",
+        "evidence": "Metadata instructs using this exact dedicated test database name for all MySQL setup and task actions.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The dominant CPU cost comes from query execution and join fanout rather than storage I/O saturation.",
+      "The benchmark workload is representative enough that reproducing one high-fanout read path is useful even if the exact production schema is unknown.",
+      "Missing secondary indexes on foreign-key/join columns are the main reproducible cause, while query cache effects are secondary or optional.",
+      "A synthetic schema with accounts, orders, and order_items can preserve the cardinality and skew needed for the mechanism.",
+      "Using SQL_NO_CACHE in the benchmark query is acceptable to keep query cache from masking the CPU cost of the join path."
+    ],
+    "unknowns": [
+      "The exact production schema and index layout.",
+      "The exact query text or query mix that drove the benchmark.",
+      "Whether mutex contention or query cache mutexes contributed materially to CPU burn.",
+      "Whether the observed CPU was entirely from this benchmark or from mixed background traffic.",
+      "Which tables, if any, were fragmented or had stale statistics in the original environment."
+    ],
+    "confidence": 0.84
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The exact accident cannot be reproduced because the original schema, data, and workload are unavailable, but the core mechanism is reproducible on MySQL: large concurrent read queries with join columns left unindexed, skewed foreign-key references, and enough row volume to produce expensive join fanout. The post itself strongly points to that mechanism via the high count of joins without indexes and the read-only benchmark profile.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact production data distribution is unknown.",
+      "Exact index definitions are unknown.",
+      "Potential query-cache mutex contention is not explicitly modeled in the synthetic workload.",
+      "No slow-log digest or real query trace is available."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_130884_mysql_data_a1",
+    "requirements": [
+      "Dedicated isolated MySQL test database",
+      "MySQL adapter available",
+      "No production data dump assumed"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_130884_mysql_data_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS digits (n TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS accounts (id INT NOT NULL PRIMARY KEY, segment VARCHAR(16) NOT NULL, region VARCHAR(16) NOT NULL, created_day SMALLINT UNSIGNED NOT NULL) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS orders (id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, status VARCHAR(16) NOT NULL, created_day SMALLINT UNSIGNED NOT NULL, amount_cents INT NOT NULL) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS order_items (id INT NOT NULL PRIMARY KEY, order_id INT NOT NULL, sku_id INT NOT NULL, qty TINYINT UNSIGNED NOT NULL, unit_price_cents INT NOT NULL) ENGINE=InnoDB"
+    ],
+    "generation_sql": [
+      "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+      "INSERT IGNORE INTO accounts (id, segment, region, created_day) SELECT seq.n, CASE WHEN seq.n <= 500 THEN 'premium' ELSE 'standard' END, ELT(1 + MOD(seq.n, 4), 'na', 'eu', 'apac', 'latam'), 1 + MOD(seq.n, 365) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5) AS seq WHERE seq.n <= {row_count}",
+      "INSERT IGNORE INTO orders (id, account_id, status, created_day, amount_cents) SELECT seq.n, CASE WHEN MOD(seq.n, 2) = 0 THEN 1 + MOD(seq.n, 500) ELSE 501 + MOD(seq.n, 49500) END, CASE WHEN MOD(seq.n, 20) < 17 THEN 'paid' WHEN MOD(seq.n, 20) < 19 THEN 'shipped' ELSE 'cancelled' END, 1 + MOD(seq.n, 365), 500 + MOD(seq.n, 50000) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n + 100000*d6.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= {row_count} * 3",
+      "INSERT IGNORE INTO order_items (id, order_id, sku_id, qty, unit_price_cents) SELECT seq.n, 1 + FLOOR((seq.n - 1) / 3), 1 + MOD(seq.n, 10000), 1 + MOD(seq.n, 5), 100 + MOD(seq.n, 900) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n + 100000*d6.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= {row_count} * 9",
+      "ANALYZE TABLE digits, accounts, orders, order_items"
+    ],
+    "tables": [
+      {
+        "name": "digits",
+        "purpose": "helper number source for bounded synthetic row generation",
+        "target_rows": 10,
+        "distribution_notes": "Fixed 0-9 seed table used only to generate larger row sets deterministically."
+      },
+      {
+        "name": "accounts",
+        "purpose": "parent entity with a rare premium segment filter and evenly spread regions",
+        "target_rows": 50000,
+        "distribution_notes": "Premium rows are sparse; region is roughly uniform across four values; primary key only, no secondary index on segment or region."
+      },
+      {
+        "name": "orders",
+        "purpose": "high-volume child table joined from accounts",
+        "target_rows": 150000,
+        "distribution_notes": "Half of the rows repeatedly point to the first 500 premium accounts; status is heavily skewed toward paid/shipped; no index on account_id or status."
+      },
+      {
+        "name": "order_items",
+        "purpose": "fanout table joined from orders",
+        "target_rows": 450000,
+        "distribution_notes": "Exactly three items per order on average; no index on order_id, so join fanout remains expensive under concurrency."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "digits": 10,
+        "accounts": 50000,
+        "orders": 150000,
+        "order_items": 450000
+      },
+      "value_skew": {
+        "accounts.segment": "premium is about 1% of accounts",
+        "orders.account_id": "about half the orders target the first 500 premium accounts to create repeated lookups",
+        "orders.status": "about 85% paid, 10% shipped, 5% cancelled",
+        "accounts.region": "approximately uniform across na, eu, apac, latam"
+      },
+      "predicate_selectivity": {
+        "accounts.segment = 'premium'": 0.01,
+        "orders.status IN ('paid','shipped')": 0.95
+      },
+      "join_selectivity": {
+        "orders.account_id = accounts.id": "many-to-one with high repetition on a small hot subset",
+        "order_items.order_id = orders.id": "one-to-many with average fanout of 3"
+      }
+    },
+    "analyze_tables": [
+      "digits",
+      "accounts",
+      "orders",
+      "order_items"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT SQL_NO_CACHE a.region, COUNT(*) AS item_count, SUM(oi.qty * oi.unit_price_cents) AS gross_cents FROM accounts a JOIN orders o ON o.account_id = a.id JOIN order_items oi ON oi.order_id = o.id WHERE a.segment = 'premium' AND o.status IN ('paid','shipped') GROUP BY a.region ORDER BY gross_cents DESC",
+        "objective": "Verify that the synthetic schema preserves the intended join fanout and forces the optimizer to consider a broad join path over the large child tables.",
+        "expected_evidence": [
+          "The plan shows the join order and broad row estimates for the orders and order_items tables.",
+          "The join predicates are visible without a supporting secondary index on account_id or order_id.",
+          "The plan reflects fanout-heavy scanning rather than a narrow point lookup."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "The concurrent benchmark reproduces sustained high CPU in the isolated MySQL environment.",
+      "EXPLAIN for the calibration query shows a join path with broad row estimates and no secondary index support on the join columns.",
+      "The synthetic data preserves the intended skew and fanout relationships that make the join path expensive."
+    ],
+    "symptom_evidence": [
+      "CPU rises sharply under concurrent read-only workload.",
+      "I/O wait remains secondary to CPU consumption.",
+      "The workload remains read-dominant."
+    ],
+    "mechanism_evidence": [
+      "The join predicates operate on non-indexed foreign-key columns.",
+      "The plan is consistent with repeated scan/probe work across large tables.",
+      "The rare filter and fanout combine to produce high row-examination cost."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "high_cpu_under_read_heavy_concurrent_joins",
+    "target_database": "post_retry_resource_limitation_130884_mysql_data_a1",
+    "dba_description": "Reproduce MySQL CPU saturation from a read-heavy benchmark using concurrent joins on large tables without supporting indexes, with synthetic skew and fanout shaped to match the post.",
+    "target_path": [
+      "concurrent_read_workload",
+      "unindexed_join_execution",
+      "join_fanout"
+    ],
+    "injected_nodes": [
+      "missing_foreign_key_indexes",
+      "skewed_account_id_distribution",
+      "read_only_benchmark_concurrency"
+    ],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "prepare_synthetic_join_data",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a1",
+          "duration_sec": 30,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS digits (n TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS accounts (id INT NOT NULL PRIMARY KEY, segment VARCHAR(16) NOT NULL, region VARCHAR(16) NOT NULL, created_day SMALLINT UNSIGNED NOT NULL) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS orders (id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, status VARCHAR(16) NOT NULL, created_day SMALLINT UNSIGNED NOT NULL, amount_cents INT NOT NULL) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS order_items (id INT NOT NULL PRIMARY KEY, order_id INT NOT NULL, sku_id INT NOT NULL, qty TINYINT UNSIGNED NOT NULL, unit_price_cents INT NOT NULL) ENGINE=InnoDB"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO accounts (id, segment, region, created_day) SELECT seq.n, CASE WHEN seq.n <= 500 THEN 'premium' ELSE 'standard' END, ELT(1 + MOD(seq.n, 4), 'na', 'eu', 'apac', 'latam'), 1 + MOD(seq.n, 365) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5) AS seq WHERE seq.n <= 50000"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO orders (id, account_id, status, created_day, amount_cents) SELECT seq.n, CASE WHEN MOD(seq.n, 2) = 0 THEN 1 + MOD(seq.n, 500) ELSE 501 + MOD(seq.n, 49500) END, CASE WHEN MOD(seq.n, 20) < 17 THEN 'paid' WHEN MOD(seq.n, 20) < 19 THEN 'shipped' ELSE 'cancelled' END, 1 + MOD(seq.n, 365), 500 + MOD(seq.n, 50000) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n + 100000*d6.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= 150000"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO order_items (id, order_id, sku_id, qty, unit_price_cents) SELECT seq.n, 1 + FLOOR((seq.n - 1) / 3), 1 + MOD(seq.n, 10000), 1 + MOD(seq.n, 5), 100 + MOD(seq.n, 900) FROM (SELECT (d1.n + 10*d2.n + 100*d3.n + 1000*d4.n + 10000*d5.n + 100000*d6.n) + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS seq WHERE seq.n <= 450000"
+                },
+                {
+                  "sql": "ANALYZE TABLE digits, accounts, orders, order_items"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "row_counts": {
+          "accounts": 50000,
+          "orders": 150000,
+          "order_items": 450000
+        }
+      },
+      "success_criteria": {
+        "tables_created": true,
+        "statistics_collected": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "missing_index_join_fanout"
+      }
+    },
+    {
+      "task_id": "baseline_cpu_repro",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a1",
+          "sql": "SELECT SQL_NO_CACHE a.region, COUNT(*) AS item_count, SUM(oi.qty * oi.unit_price_cents) AS gross_cents FROM accounts a JOIN orders o ON o.account_id = a.id JOIN order_items oi ON oi.order_id = o.id WHERE a.segment = 'premium' AND o.status IN ('paid','shipped') GROUP BY a.region ORDER BY gross_cents DESC",
+          "concurrency": 32,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "cpu_saturation": "high",
+        "io_wait": "low",
+        "rows_examined": "large",
+        "plan_shape": "scan_heavy_join_path"
+      },
+      "success_criteria": {
+        "sustained_cpu_pressure": true,
+        "row_examination_is_broad": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "missing_index_join_fanout"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "prepare_synthetic_join_data",
+      "baseline_cpu_repro"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "What exact queries dominated the production benchmark?",
+    "Which join columns lacked indexes in production?",
+    "Did query-cache mutex contention materially contribute to CPU usage?",
+    "Were there additional locking or concurrency hotspots beyond the join workload?"
+  ],
+  "rationale": "The post contains strong explicit evidence for a MySQL 5.5 read-heavy environment under high connection pressure, with a large number of joins lacking indexes. That combination is enough to design a mechanism-level synthetic reproduction: create skewed parent/child tables, omit secondary indexes on the join keys, and drive a concurrent read-only aggregation that forces broad join work. This reproduces the likely CPU mechanism without claiming to recreate the exact production accident, which is impossible without the original schema, indexes, and query trace."
+}

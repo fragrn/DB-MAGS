@@ -1,0 +1,15 @@
+# Unsupported Tools / Capabilities
+
+- `blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table` attempt 1: sqlserver execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected sqlserver post before LLM planning.)
+- `blocking/132851-database-frozen-on-alter-table` attempt 1: postgresql execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected postgresql post before LLM planning.)
+- `blocking/284397-concurrent-update-statements-of-single-row-in-small-table-takes-minutes` attempt 1: postgresql execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected postgresql post before LLM planning.)
+- `long_transaction/222262-performance-of-large-transactions-and-concurrency` attempt 1: postgresql execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected postgresql post before LLM planning.)
+- `long_transaction/72191-why-is-my-select-statement-so-slow` attempt 1: sqlserver execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected sqlserver post before LLM planning.)
+- `resource_limitation/108454-postgres-4x-slower-than-it-was` attempt 1: postgresql execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected postgresql post before LLM planning.)
+- `resource_limitation/220486-slow-query-with-resource-semaphore-wait-info` attempt 1: sqlserver execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected sqlserver post before LLM planning.)
+- `resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use` attempt 1: sqlserver execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected sqlserver post before LLM planning.)
+- `slowsql/224651-stored-procedure-infinite-looping-after-index-updates` attempt 1: sqlserver execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected sqlserver post before LLM planning.)
+- `slowsql/297892-query-slow-when-a-sub-select-is-used` attempt 1: postgresql execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected postgresql post before LLM planning.)
+- `slowsql/increasing-work-mem-and-shared-buffers-on-postgres-9-2-significantly-slows-down` attempt 1: postgresql execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected postgresql post before LLM planning.)
+- `slowsql/why-does-adding-a-top-1-dramatically-worsen-performance` attempt 1: sqlserver execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected sqlserver post before LLM planning.)
+- `slowsql/why-is-my-query-suddenly-slower-than-it-was-yesterday` attempt 1: sqlserver execution adapter (Current InputAnalysisAgent v1 only executes MySQL-compatible reproductions; detected sqlserver post before LLM planning.)

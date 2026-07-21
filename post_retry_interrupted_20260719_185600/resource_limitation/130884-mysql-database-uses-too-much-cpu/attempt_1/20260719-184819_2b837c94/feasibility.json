@@ -1,0 +1,12 @@
+{
+  "level": "mechanism",
+  "rationale": "The exact accident cannot be reproduced because the original schema, data, and workload are unavailable, but the core mechanism is reproducible on MySQL: large concurrent read queries with join columns left unindexed, skewed foreign-key references, and enough row volume to produce expensive join fanout. The post itself strongly points to that mechanism via the high count of joins without indexes and the read-only benchmark profile.",
+  "missing_capabilities": [],
+  "unmatched_conditions": [
+    "Exact production data distribution is unknown.",
+    "Exact index definitions are unknown.",
+    "Potential query-cache mutex contention is not explicitly modeled in the synthetic workload.",
+    "No slow-log digest or real query trace is available."
+  ],
+  "confidence": 0.8
+}

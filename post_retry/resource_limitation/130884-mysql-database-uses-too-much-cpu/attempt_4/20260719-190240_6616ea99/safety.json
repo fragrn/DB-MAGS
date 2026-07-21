@@ -1,0 +1,171 @@
+{
+  "approved": true,
+  "reasons": [],
+  "warnings": [],
+  "normalized_task_dag": {
+    "tasks": {
+      "bootstrap_dataset": {
+        "task_id": "bootstrap_dataset",
+        "task_type": "sql",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "CREATE DATABASE IF NOT EXISTS `post_retry_resource_limitation_130884_mysql_data_a4`",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "CREATE TABLE IF NOT EXISTS `digits` (`d` TINYINT UNSIGNED NOT NULL PRIMARY KEY)",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "CREATE TABLE IF NOT EXISTS `seq_1m` (`n` INT UNSIGNED NOT NULL PRIMARY KEY)",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "CREATE TABLE IF NOT EXISTS `dim_customer` (`customer_id` INT UNSIGNED NOT NULL PRIMARY KEY, `region` VARCHAR(16) NOT NULL, `customer_tier` VARCHAR(16) NOT NULL)",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "CREATE TABLE IF NOT EXISTS `dim_product` (`product_id` INT UNSIGNED NOT NULL PRIMARY KEY, `category` VARCHAR(16) NOT NULL, `active` TINYINT(1) NOT NULL)",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "CREATE TABLE IF NOT EXISTS `fact_order` (`order_id` INT UNSIGNED NOT NULL PRIMARY KEY, `customer_id` INT UNSIGNED NOT NULL, `status` VARCHAR(16) NOT NULL, `order_date` DATE NOT NULL)",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "CREATE TABLE IF NOT EXISTS `fact_order_item` (`order_item_id` BIGINT UNSIGNED NOT NULL PRIMARY KEY, `order_id` INT UNSIGNED NOT NULL, `product_id` INT UNSIGNED NOT NULL, `quantity` INT UNSIGNED NOT NULL, `unit_price` DECIMAL(10,2) NOT NULL)",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "INSERT IGNORE INTO `digits` (`d`) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "INSERT IGNORE INTO `seq_1m` (`n`) SELECT 1 + d1.d + 10 * d2.d + 100 * d3.d + 1000 * d4.d + 10000 * d5.d + 100000 * d6.d FROM `digits` d1 CROSS JOIN `digits` d2 CROSS JOIN `digits` d3 CROSS JOIN `digits` d4 CROSS JOIN `digits` d5 CROSS JOIN `digits` d6 WHERE 1 + d1.d + 10 * d2.d + 100 * d3.d + 1000 * d4.d + 10000 * d5.d + 100000 * d6.d <= 1000000",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "INSERT IGNORE INTO `dim_customer` (`customer_id`, `region`, `customer_tier`) SELECT n, CASE WHEN MOD(n, 100) < 70 THEN 'NA' WHEN MOD(n, 100) < 90 THEN 'EU' WHEN MOD(n, 100) < 99 THEN 'APAC' ELSE 'LATAM' END, CASE WHEN MOD(n, 10) < 8 THEN 'standard' ELSE 'vip' END FROM `seq_1m` WHERE n <= 50000",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "INSERT IGNORE INTO `dim_product` (`product_id`, `category`, `active`) SELECT n, CASE WHEN MOD(n, 100) = 0 THEN 'featured' WHEN MOD(n, 20) = 0 THEN 'seasonal' ELSE 'regular' END, CASE WHEN MOD(n, 50) = 0 THEN 0 ELSE 1 END FROM `seq_1m` WHERE n <= 5000",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "INSERT IGNORE INTO `fact_order` (`order_id`, `customer_id`, `status`, `order_date`) SELECT n, 1 + MOD(n * 37, 50000), CASE WHEN MOD(n, 100) < 85 THEN 'COMPLETE' WHEN MOD(n, 100) < 95 THEN 'PENDING' ELSE 'CANCELLED' END, DATE_ADD('2020-01-01', INTERVAL MOD(n, 730) DAY) FROM `seq_1m` WHERE n <= 200000",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "INSERT IGNORE INTO `fact_order_item` (`order_item_id`, `order_id`, `product_id`, `quantity`, `unit_price`) SELECT ((o.n - 1) * 3) + i.item_no, o.n, CASE WHEN MOD(o.n, 100) = 0 AND i.item_no = 1 THEN 1 + MOD(o.n, 50) ELSE 1 + MOD(o.n * 13 + i.item_no * 7, 5000) END, 1 + MOD(o.n + i.item_no, 5), ROUND(100 + MOD(o.n * 17 + i.item_no * 11, 9900) / 100, 2) FROM `seq_1m` o JOIN (SELECT 1 AS item_no UNION ALL SELECT 2 UNION ALL SELECT 3) i WHERE o.n <= 200000",
+            "concurrency": 1,
+            "duration_sec": 1
+          },
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "ANALYZE TABLE `dim_customer`, `dim_product`, `fact_order`, `fact_order_item`",
+            "concurrency": 1,
+            "duration_sec": 1
+          }
+        ],
+        "expected_metrics": {
+          "row_counts": {
+            "digits": 10,
+            "seq_1m": 1000000,
+            "dim_customer": 50000,
+            "dim_product": 5000,
+            "fact_order": 200000,
+            "fact_order_item": 600000
+          }
+        },
+        "success_criteria": {
+          "tables_created": true,
+          "data_loaded": true,
+          "stats_collected": true
+        },
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "Missing supporting indexes on join/filter columns create CPU-heavy nested-loop join work under read-heavy concurrency.",
+          "cleanup_actions": []
+        }
+      },
+      "run_benchmark": {
+        "task_id": "run_benchmark",
+        "task_type": "sql",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+            "sql": "SELECT o.order_id, c.region, SUM(oi.quantity * oi.unit_price) AS revenue FROM `fact_order` o JOIN `dim_customer` c ON c.customer_id = o.customer_id JOIN `fact_order_item` oi ON oi.order_id = o.order_id JOIN `dim_product` p ON p.product_id = oi.product_id WHERE o.status = 'COMPLETE' AND c.region = 'NA' AND p.category = 'featured' GROUP BY o.order_id, c.region ORDER BY revenue DESC LIMIT 20",
+            "concurrency": 24,
+            "duration_sec": 45
+          }
+        ],
+        "expected_metrics": {
+          "cpu_bound": true,
+          "high_join_fanout": true,
+          "many_rows_examined": true
+        },
+        "success_criteria": {
+          "stable_high_cpu": true,
+          "plan_shape_matches_mechanism": true
+        },
+        "risk_assessment": "medium",
+        "metadata": {
+          "root_cause": "Concurrent read-only joins without index support drive CPU saturation.",
+          "cleanup_actions": []
+        }
+      }
+    },
+    "edges": [
+      {
+        "source": "bootstrap_dataset",
+        "target": "run_benchmark",
+        "condition": ""
+      }
+    ],
+    "schedule": {
+      "bootstrap_dataset": 0.0,
+      "run_benchmark": 0.0
+    }
+  }
+}

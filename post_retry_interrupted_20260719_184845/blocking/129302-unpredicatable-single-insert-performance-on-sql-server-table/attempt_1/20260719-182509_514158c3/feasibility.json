@@ -1,0 +1,15 @@
+{
+  "level": "mechanism",
+  "rationale": "Exact SQL Server DMV behavior and the `LCK_M_S` symptom cannot be reproduced with the available MySQL-only adapter, but the core mechanism — a blocked insert waiting on locks held by an open transaction on a hot referenced row — can be reproduced at mechanism level with synthetic data and concurrent sessions.",
+  "missing_capabilities": [
+    "SQL Server execution adapter",
+    "SQL Server DMVs such as `sys.dm_exec_requests` and `sys.dm_exec_sessions`",
+    "SQL Server-specific wait types and blocker visibility semantics"
+  ],
+  "unmatched_conditions": [
+    "Exact 7-minute latency profile",
+    "Exact ghost-blocker DMV discrepancy",
+    "Exact production index definitions and statistics"
+  ],
+  "confidence": 0.86
+}

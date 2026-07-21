@@ -1,0 +1,19 @@
+{
+  "validation_criteria": [
+    "EXPLAIN for the calibration query shows a scan-heavy join path on `orders` and `events` with no usable secondary index on the join predicate.",
+    "Running the concurrent workload materially raises MySQL CPU while iowait remains low.",
+    "The mechanism is preserved if indexes are still absent and becomes much less CPU-intensive once the join/filter columns are indexed in a follow-up comparison."
+  ],
+  "symptom_evidence": [
+    "High user CPU on the database host",
+    "Low iowait relative to CPU saturation",
+    "Large connection count during benchmark",
+    "Frequent joins without indexes"
+  ],
+  "mechanism_evidence": [
+    "Full scans or block nested loops on the fact tables",
+    "High row-examined-to-row-returned ratio",
+    "Concurrency amplifies CPU use even though the workload is read-only"
+  ],
+  "minimum_plan_similarity": 0.6
+}

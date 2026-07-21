@@ -1,0 +1,316 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "The post describes MySQL creating a large number of internal temporary tables, with a significant fraction spilling to disk. The most plausible mechanism is a query shape that forces grouped or sorted intermediate results to include wide columns or TEXT/BLOB data, which causes internal temp tables to fall back to on-disk storage.",
+    "symptoms": [
+      "mysqltuner reports many temp tables, with 30-38% created on disk.",
+      "The same database on another machine shows far fewer disk temp tables.",
+      "Increasing tmp_table_size and max_heap_table_size reduced but did not eliminate disk temp tables.",
+      "The user suspects MyISAM versus MEMORY for group-by tables, but the discussion indicates that internal temp tables are the relevant mechanism."
+    ],
+    "mechanism": "MySQL creates internal temporary tables for GROUP BY, ORDER BY, UNION, derived-table materialization, and similar operations. If the intermediate result includes TEXT/BLOB columns or wide columns used in grouping/sorting, or if the temp table exceeds tmp_table_size/max_heap_table_size, MySQL spills from MEMORY to on-disk internal temp tables (typically MyISAM in the referenced version).",
+    "facts": [
+      {
+        "key": "dbms",
+        "value": {
+          "name": "MySQL"
+        },
+        "source": "explicit_post",
+        "evidence": "The user explicitly says they are using MySQL and asks about MySQL temporary tables.",
+        "confidence": 1.0
+      },
+      {
+        "key": "disk_temp_table_fraction_reported_by_mysqltuner",
+        "value": {
+          "reported_disk_fraction": "30-38%",
+          "reported_temp_table_counts": [
+            17158,
+            23725,
+            580
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "The post quotes mysqltuner output showing a substantial fraction of temp tables created on disk.",
+        "confidence": 1.0
+      },
+      {
+        "key": "configuration_changes_tried",
+        "value": {
+          "tmp_table_size": "200M",
+          "max_heap_table_size": "200M",
+          "previous_values": "16M"
+        },
+        "source": "explicit_post",
+        "evidence": "The user says they changed tmp_table_size and max_heap_table_size from 16M to 200M.",
+        "confidence": 1.0
+      },
+      {
+        "key": "other_config_parameters",
+        "value": {
+          "engine": "myisam",
+          "group_concat_max_len": 32768,
+          "key_buffer_size": "3.7 GB",
+          "table_cache": 125,
+          "query_cache_limit": "1M",
+          "query_cache_size": "16M",
+          "join_buffer_size": "2.00 M",
+          "max_connections": 800
+        },
+        "source": "explicit_post",
+        "evidence": "The post lists these server settings as the current configuration.",
+        "confidence": 1.0
+      },
+      {
+        "key": "internal_temp_table_rules",
+        "value": {
+          "disk_spill_triggers": [
+            "TEXT or BLOB columns",
+            "temp table size exceeding tmp_table_size/max_heap_table_size",
+            "columns over 512 bytes used in GROUP BY/ORDER BY/UNION"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "The accepted answer explains the common reasons internal temp tables are created on disk.",
+        "confidence": 0.93
+      },
+      {
+        "key": "likely_root_cause_is_workload_shape",
+        "value": {
+          "hypothesis": "The query pattern, not a simple server knob, is driving disk temp tables."
+        },
+        "source": "agent_inference",
+        "evidence": "The same database behaves differently across machines, and the answer says temp tables are expected for some query shapes.",
+        "confidence": 0.84
+      }
+    ],
+    "assumptions": [
+      "The problematic workload includes at least one GROUP BY, ORDER BY, UNION, or derived-table materialization step.",
+      "At least one grouped or sorted column is wide enough to trigger disk temp table behavior, or a TEXT/BLOB value is part of the internal result.",
+      "The mysqltuner counts are aggregate server statistics, not a single isolated query.",
+      "The exact production schema is unavailable, so a synthetic schema that reproduces the same mechanism is sufficient."
+    ],
+    "unknowns": [
+      "The exact SQL statement(s) responsible for the temp tables.",
+      "Whether the original schema includes TEXT/BLOB columns or only wide VARCHAR/CHAR columns.",
+      "MySQL server version and exact internal temp table implementation details on the production system.",
+      "Whether the high disk-temp-table rate is performance-relevant or only a tuning report artifact."
+    ],
+    "confidence": 0.81
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The underlying MySQL behavior is well understood and can be reproduced synthetically by creating wide grouped/sorted rows and/or TEXT payloads that force internal temp tables onto disk. Exact production accident reproduction is not possible because the original query and schema are unknown, but the mechanism-level symptom is reproducible.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Original query text is unavailable",
+      "Original schema and data distribution are unavailable",
+      "Exact MySQL version is unknown",
+      "The mysqltuner metric is aggregate and not directly attributable to one statement"
+    ],
+    "confidence": 0.87
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+    "requirements": [
+      "Dedicated test database only",
+      "No production data required",
+      "MySQL adapter available",
+      "Sufficient storage for synthetic rows and temp-table spill testing"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS digits (d TINYINT UNSIGNED NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS bucket_dim (bucket_id INT NOT NULL PRIMARY KEY, bucket_label VARCHAR(32) NOT NULL) ENGINE=InnoDB",
+      "CREATE TABLE IF NOT EXISTS wide_events (id BIGINT UNSIGNED NOT NULL PRIMARY KEY, bucket_id INT NOT NULL, status TINYINT NOT NULL, grp_key VARCHAR(600) CHARACTER SET utf8mb4 NOT NULL, payload TEXT NOT NULL, created_at DATE NOT NULL, KEY idx_bucket_id (bucket_id), KEY idx_status (status), KEY idx_status_bucket (status, bucket_id)) ENGINE=InnoDB"
+    ],
+    "generation_sql": [
+      "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+      "INSERT IGNORE INTO bucket_dim (bucket_id, bucket_label) SELECT n, CONCAT('bucket_', LPAD(n, 2, '0')) FROM (SELECT d1.d + d2.d * 10 + 1 AS n FROM digits d1 CROSS JOIN digits d2) AS x WHERE n <= 32",
+      "INSERT IGNORE INTO wide_events (id, bucket_id, status, grp_key, payload, created_at) SELECT n, 1 + MOD(n, 32), CASE WHEN MOD(n, 10) = 0 THEN 1 ELSE 0 END, CASE WHEN MOD(n, 100) = 0 THEN CONCAT('hot_', LPAD(MOD(n, 20), 2, '0'), REPEAT('x', 560)) ELSE CONCAT('grp_', LPAD(MOD(n, 1000), 4, '0'), REPEAT('y', 560)) END, CONCAT('payload_', n, REPEAT('z', 100)), DATE_ADD('2024-01-01', INTERVAL MOD(n, 365) DAY) FROM (SELECT d1.d + d2.d * 10 + d3.d * 100 + d4.d * 1000 + d5.d * 10000 + d6.d * 100000 + 1 AS n FROM digits d1 CROSS JOIN digits d2 CROSS JOIN digits d3 CROSS JOIN digits d4 CROSS JOIN digits d5 CROSS JOIN digits d6) AS nums WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "digits",
+        "purpose": "Small deterministic number source for bounded, idempotent synthetic data generation.",
+        "target_rows": 10,
+        "distribution_notes": "Uniform seed values 0-9."
+      },
+      {
+        "name": "bucket_dim",
+        "purpose": "Small lookup table used to create a many-to-one join relationship.",
+        "target_rows": 32,
+        "distribution_notes": "Uniform buckets, one row per bucket identifier."
+      },
+      {
+        "name": "wide_events",
+        "purpose": "Fact table whose wide grouped key and TEXT payload drive internal temporary-table spill behavior.",
+        "target_rows": 1000,
+        "distribution_notes": "bucket_id is uniform across 32 buckets; status is 10% true and 90% false; grp_key is a UTF8MB4 VARCHAR(600) with repeated hot values and a wide suffix; payload is TEXT and present in the grouped result."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "digits": 10,
+        "bucket_dim": 32,
+        "wide_events": 1000
+      },
+      "value_skew": {
+        "wide_events.status": "Approximately 10% value 1 and 90% value 0",
+        "wide_events.grp_key": "Small hot subset repeats frequently; strings remain wider than 512 bytes to match the mechanism"
+      },
+      "predicate_selectivity": {
+        "wide_events.status = 1": 0.1
+      },
+      "join_selectivity": {
+        "wide_events.bucket_id = bucket_dim.bucket_id": "many-to-one, approximately 32 fact rows per dimension row on average"
+      }
+    },
+    "analyze_tables": [
+      "digits",
+      "bucket_dim",
+      "wide_events"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT d.bucket_label, e.grp_key, MIN(e.payload) AS sample_payload, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.grp_key ORDER BY d.bucket_label, e.grp_key",
+        "objective": "Verify that the wide grouped result set and TEXT aggregate drive the intended internal temp-table mechanism in EXPLAIN.",
+        "expected_evidence": [
+          "The plan reflects grouping and ordering over the wide synthetic columns.",
+          "The join to the small dimension table is visible but not the dominant access pattern.",
+          "The plan shape is consistent with an internal temporary-table path rather than a trivial point lookup."
+        ]
+      },
+      {
+        "sql": "SELECT d.bucket_label, e.bucket_id, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.bucket_id ORDER BY d.bucket_label, e.bucket_id",
+        "objective": "Provide a narrower control query so the wide-column reproduction can be compared against a less spill-prone grouping pattern.",
+        "expected_evidence": [
+          "The join shape remains similar to the main query.",
+          "The grouped columns are narrower than the wide reproduction query.",
+          "The control helps separate general GROUP BY behavior from the wide-column spill mechanism."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "EXPLAIN on the wide query shows a grouping/sorting plan consistent with internal temp-table use.",
+      "Executing the wide query against the synthetic data produces non-zero disk temp table activity.",
+      "The control query remains similar in join shape but is less dependent on the wide TEXT/VARCHAR mechanism.",
+      "The reproduction demonstrates a workload-driven cause rather than a server-config-only cause."
+    ],
+    "symptom_evidence": [
+      "Created_tmp_disk_tables increases during the wide workload",
+      "The wide query produces more disk temp table activity than the control query",
+      "The symptom persists even without changing MySQL global temp-table thresholds"
+    ],
+    "mechanism_evidence": [
+      "Wide UTF8MB4 grouped columns are present in the plan",
+      "TEXT participates in the grouped or aggregated result",
+      "The grouped result is joined to a small dimension table and then ordered"
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Internal temporary tables spill to disk for wide GROUP BY/ORDER BY queries",
+    "target_database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+    "dba_description": "Reproduce MySQL's on-disk internal temporary table behavior using a synthetic schema with a wide UTF8MB4 grouping key, TEXT payload, and a small dimension join. The goal is to match the mechanism described in the DBA post, not to reproduce exact production data or exact temp-table counts.",
+    "target_path": [
+      "internal_temporary_tables",
+      "group_by_order_by",
+      "wide_columns_and_text"
+    ],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "wide_groupby_temp_table_repro",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+          "sql": "SELECT d.bucket_label, e.grp_key, MIN(e.payload) AS sample_payload, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.grp_key ORDER BY d.bucket_label, e.grp_key",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "Created_tmp_disk_tables": "nonzero",
+        "Created_tmp_tables": "increases",
+        "plan_shape": "grouped and ordered wide result"
+      },
+      "success_criteria": {
+        "disk_temp_tables_observed": true,
+        "query_executes_successfully": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Wide grouped columns plus TEXT in the result force internal temp tables toward on-disk storage."
+      }
+    },
+    {
+      "task_id": "narrow_groupby_control",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a1",
+          "sql": "SELECT d.bucket_label, e.bucket_id, COUNT(*) AS cnt FROM wide_events e JOIN bucket_dim d ON d.bucket_id = e.bucket_id WHERE e.status = 1 GROUP BY d.bucket_label, e.bucket_id ORDER BY d.bucket_label, e.bucket_id",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "Created_tmp_disk_tables": "lower than the wide workload",
+        "Created_tmp_tables": "increases"
+      },
+      "success_criteria": {
+        "query_executes_successfully": true,
+        "serves_as_control": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Control path keeps the same general join pattern while removing the wide TEXT/VARCHAR spill driver."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "wide_groupby_temp_table_repro",
+      "narrow_groupby_control"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "What exact query pattern in production is creating the disk temp tables?",
+    "Does the production schema use TEXT/BLOB columns or only wide VARCHAR/CHAR columns?",
+    "Which MySQL version and sql_mode were in effect during the incident?"
+  ],
+  "rationale": "The forum post is consistent with a common MySQL mechanism: internal temporary tables are created for grouping and sorting, and they spill to disk when the result set is wide or includes TEXT/BLOB values. A synthetic dataset with a wide UTF8MB4 grouping key, a TEXT aggregate, and a small join reproduces the mechanism-level behavior without needing the original data. The plan deliberately avoids claiming exact reproduction of the production incident or exact mysqltuner numbers."
+}

@@ -1,0 +1,410 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MySQL is creating many on-disk internal temporary tables for a grouped workload; the evidence points to query/schema shape, especially wide grouped columns and TEXT-like rows, rather than a simple server-memory setting.",
+    "symptoms": [
+      "mysqltuner reports a large fraction of temp tables created on disk",
+      "Raising tmp_table_size and max_heap_table_size from 16M to 200M reduced but did not eliminate the disk-temp-table share",
+      "The same database on another machine shows a much lower on-disk temp-table percentage",
+      "The user is considering changing table engines to address GROUP BY behavior"
+    ],
+    "mechanism": "MySQL internal temporary tables can spill to disk when GROUP BY / ORDER BY / UNION work has wide rows, TEXT/BLOB columns, or other row-shape limits that prevent MEMORY-based temp tables from being used efficiently. A workload with a wide grouped key, text payloads, and join fanout can keep creating disk-backed temporary tables even after tmp_table_size and max_heap_table_size are increased. Switching base tables from MyISAM to MEMORY does not change how MySQL builds internal temp tables for the query.",
+    "facts": [
+      {
+        "key": "disk_temp_table_share_reported",
+        "value": {
+          "temp_tables_observed": 17158,
+          "disk_temp_table_share": "30%",
+          "previous_disk_temp_table_share": "38%"
+        },
+        "source": "explicit_post",
+        "evidence": "The post says 'Of 17158 temp tables, 30% were created on disk' and earlier 'Of 23725 temp tables 38% were created on disk'.",
+        "confidence": 0.99
+      },
+      {
+        "key": "tmp_memory_settings_increased",
+        "value": {
+          "tmp_table_size": "200M",
+          "max_heap_table_size": "200M",
+          "previous_value": "16M"
+        },
+        "source": "explicit_post",
+        "evidence": "The author says they changed max_heap_table_size and tmp_table_size from 16m to 200m and the disk-temp-table percentage dropped.",
+        "confidence": 0.98
+      },
+      {
+        "key": "reported_configuration",
+        "value": {
+          "engine": "myisam",
+          "group_concat_max_len": 32768,
+          "key_buffer_size": "3.7 GB",
+          "thread_stack": "256k",
+          "table_cache": 125,
+          "query_cache_limit": "1M",
+          "query_cache_size": "16M",
+          "join_buffer_size": "2.00 M",
+          "max_connections": 800
+        },
+        "source": "explicit_post",
+        "evidence": "The post lists the server configuration values.",
+        "confidence": 0.97
+      },
+      {
+        "key": "comparison_host",
+        "value": {
+          "same_database_other_machine_disk_tmp_share": "1%",
+          "default_configuration_reference": true
+        },
+        "source": "explicit_post",
+        "evidence": "The post says another system with default configuration shows 'of 23725 temp tables, 1% were created on disk' with the same database.",
+        "confidence": 0.96
+      },
+      {
+        "key": "internal_temp_table_rule",
+        "value": {
+          "disk_trigger_candidates": [
+            "TEXT/BLOB columns",
+            "row size exceeds tmp_table_size/max_heap_table_size",
+            "columns over 512 bytes used with GROUP BY / UNION / ORDER BY"
+          ]
+        },
+        "source": "agent_inference",
+        "evidence": "This is the known MySQL internal temporary-table behavior referenced by the accepted answer and consistent with the user's GROUP BY concern.",
+        "confidence": 0.88
+      }
+    ],
+    "assumptions": [
+      "The problematic workload includes aggregation or ordering over a wide grouped key or text-heavy rows",
+      "The high on-disk temporary-table fraction reflects query mix and row shape, not just RAM shortage",
+      "The reported mysqltuner counters are for MySQL internal temporary tables, not user-created TEMPORARY TABLE statements"
+    ],
+    "unknowns": [
+      "Exact SQL statements that produce the temp tables",
+      "Exact table definitions and indexes in the production database",
+      "Exact MySQL version and internal temp-table implementation details",
+      "Whether the user is observing latency, I/O pressure, or only mysqltuner counters",
+      "Whether any queries involve TEXT/BLOB, GROUP_CONCAT, or very wide VARCHAR columns"
+    ],
+    "confidence": 0.77
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "Exact reproduction is blocked because the original schema and query text are unavailable, but MySQL's disk-backed internal temporary-table mechanism is directly reproducible with synthetic wide-key and text-heavy grouped queries.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "original production schema unavailable",
+      "original query mix unavailable",
+      "production data unavailable"
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+    "requirements": [
+      "Dedicated test database only",
+      "MySQL internal status counters available for validation",
+      "Sufficient tmpdir space for synthetic spill testing"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS digits (n TINYINT NOT NULL PRIMARY KEY)",
+      "CREATE TABLE IF NOT EXISTS accounts (account_id INT NOT NULL PRIMARY KEY, active TINYINT NOT NULL, segment VARCHAR(20) NOT NULL, created_at DATE NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS wide_events (event_id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, wide_group_key VARCHAR(768) NOT NULL, payload TEXT NOT NULL, amount DECIMAL(10,2) NOT NULL, event_date DATE NOT NULL, KEY idx_account_date (account_id, event_date), KEY idx_event_date (event_date))",
+      "CREATE TABLE IF NOT EXISTS narrow_events (event_id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, narrow_group_key VARCHAR(64) NOT NULL, payload VARCHAR(128) NOT NULL, amount DECIMAL(10,2) NOT NULL, event_date DATE NOT NULL, KEY idx_account_date (account_id, event_date), KEY idx_event_date (event_date))"
+    ],
+    "generation_sql": [
+      "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+      "INSERT IGNORE INTO accounts (account_id, active, segment, created_at) SELECT a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, IF(MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 5) = 0, 0, 1), CONCAT('seg_', MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 10)), DATE_ADD('2024-01-01', INTERVAL MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 365) DAY) FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d",
+      "INSERT IGNORE INTO wide_events (event_id, account_id, wide_group_key, payload, amount, event_date) SELECT seq.event_id, MOD(seq.event_id, 10000) + 1, CASE WHEN MOD(seq.event_id, 5) = 0 THEN RPAD('hot_group', 700, 'h') ELSE RPAD(CONCAT('grp_', LPAD(MOD(seq.event_id, 999), 6, '0')), 700, 'g') END, RPAD(CONCAT('payload_', LPAD(seq.event_id, 6, '0')), 1024, 'x'), MOD(seq.event_id, 1000) / 10.0, DATE_ADD('2024-01-01', INTERVAL MOD(seq.event_id, 365) DAY) FROM (SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n + 1 AS event_id FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e) AS seq",
+      "INSERT IGNORE INTO narrow_events (event_id, account_id, narrow_group_key, payload, amount, event_date) SELECT seq.event_id, MOD(seq.event_id, 10000) + 1, CASE WHEN MOD(seq.event_id, 5) = 0 THEN 'hot_group' ELSE CONCAT('grp_', LPAD(MOD(seq.event_id, 999), 6, '0')) END, CONCAT('payload_', LPAD(seq.event_id, 6, '0')), MOD(seq.event_id, 1000) / 10.0, DATE_ADD('2024-01-01', INTERVAL MOD(seq.event_id, 365) DAY) FROM (SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n + 1 AS event_id FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e) AS seq"
+    ],
+    "tables": [
+      {
+        "name": "digits",
+        "purpose": "Deterministic helper table for bounded synthetic data generation",
+        "target_rows": 10,
+        "distribution_notes": "Uniform digits 0-9 used to build larger row sets without recursion."
+      },
+      {
+        "name": "accounts",
+        "purpose": "Lookup table for many-to-one joins and modest selectivity filtering",
+        "target_rows": 10000,
+        "distribution_notes": "Approximately 80% active, 20% inactive; segment values are uniform; account_id is unique and referenced by both fact tables."
+      },
+      {
+        "name": "wide_events",
+        "purpose": "Mechanism-driving fact table with a wide grouped key and TEXT payload to force on-disk internal temp tables",
+        "target_rows": 100000,
+        "distribution_notes": "20% hot-group skew, remaining keys spread across many distinct values; wide_group_key is 700 bytes; payload is TEXT and large enough to make internal temp tables row-heavy; account_id is many-to-one to accounts; event_date is evenly distributed across the year."
+      },
+      {
+        "name": "narrow_events",
+        "purpose": "Control fact table with the same cardinality and skew but narrower rows to compare against the wide-text case",
+        "target_rows": 100000,
+        "distribution_notes": "Matches wide_events cardinality, join pattern, and skew, but uses short group keys and short payloads so the row shape is much friendlier to in-memory temp tables."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "digits": 10,
+        "accounts": 10000,
+        "wide_events": 100000,
+        "narrow_events": 100000
+      },
+      "value_skew": {
+        "wide_events.wide_group_key": "hot_group appears in about 20% of rows; other groups are spread across many distinct 700-byte values",
+        "narrow_events.narrow_group_key": "same skew shape as wide_events, but with short key values",
+        "accounts.active": "about 80% 1, 20% 0"
+      },
+      "predicate_selectivity": {
+        "accounts.active = 1": 0.8,
+        "wide_events.event_date >= '2024-10-01'": 0.25,
+        "narrow_events.event_date >= '2024-10-01'": 0.25
+      },
+      "join_selectivity": {
+        "wide_events.account_id = accounts.account_id": "many-to-one",
+        "narrow_events.account_id = accounts.account_id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "accounts",
+      "wide_events",
+      "narrow_events"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT e.wide_group_key, COUNT(*) AS cnt, SUM(e.amount) AS total_amount FROM wide_events e JOIN accounts a ON a.account_id = e.account_id WHERE a.active = 1 AND e.event_date >= '2024-10-01' GROUP BY e.wide_group_key ORDER BY total_amount DESC LIMIT 25",
+        "objective": "Verify that the wide grouped-key workload preserves the join-and-aggregate shape that should pressure internal temporary tables.",
+        "expected_evidence": [
+          "The plan shows a join from the fact table to the lookup table.",
+          "The plan includes a grouped aggregation and a final ordering step.",
+          "The wide grouped key is visible in the plan shape and is not reduced to a trivial point lookup."
+        ]
+      },
+      {
+        "sql": "SELECT e.narrow_group_key, COUNT(*) AS cnt, SUM(e.amount) AS total_amount FROM narrow_events e JOIN accounts a ON a.account_id = e.account_id WHERE a.active = 1 AND e.event_date >= '2024-10-01' GROUP BY e.narrow_group_key ORDER BY total_amount DESC LIMIT 25",
+        "objective": "Provide a control query with the same logical pattern but narrower rows, so the reproduction can contrast width-driven temp-table behavior.",
+        "expected_evidence": [
+          "The plan has the same join-and-aggregate structure as the wide query.",
+          "The narrow grouped-key control makes the row-shape difference explicit.",
+          "The control preserves cardinality and selectivity while removing the wide/TEXT pressure."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "The wide grouped-query workload causes a measurable increase in Created_tmp_disk_tables relative to baseline",
+      "The narrow control query shares the same join-and-aggregate structure but should show materially lower disk-temp pressure than the wide query",
+      "EXPLAIN for the calibration queries preserves the join and grouped-aggregation shape needed for the mechanism",
+      "The reproduction demonstrates that row width and TEXT-like payloads matter even when tmp_table_size and max_heap_table_size are large"
+    ],
+    "symptom_evidence": [
+      "Created_tmp_disk_tables increases during the wide query",
+      "Created_tmp_tables also rises, showing internal temp-table creation rather than a point lookup",
+      "The wide query produces more disk-temp activity than the narrow control"
+    ],
+    "mechanism_evidence": [
+      "The wide query groups by a 700-byte key and scans a TEXT-heavy row shape",
+      "The narrow control keeps the same row counts and join pattern but removes the width-triggering conditions",
+      "The plan retains a grouped aggregation and ordering step that can require internal temporary storage"
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "excess on-disk internal temporary tables for grouped MySQL queries",
+    "target_database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+    "dba_description": "Reproduce the reported MySQL symptom where a workload generates many on-disk temporary tables despite large tmp_table_size/max_heap_table_size values, using synthetic wide-group and TEXT-heavy data rather than the original production schema.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_schema",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS digits (n TINYINT NOT NULL PRIMARY KEY)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS accounts (account_id INT NOT NULL PRIMARY KEY, active TINYINT NOT NULL, segment VARCHAR(20) NOT NULL, created_at DATE NOT NULL)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS wide_events (event_id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, wide_group_key VARCHAR(768) NOT NULL, payload TEXT NOT NULL, amount DECIMAL(10,2) NOT NULL, event_date DATE NOT NULL, KEY idx_account_date (account_id, event_date), KEY idx_event_date (event_date))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS narrow_events (event_id INT NOT NULL PRIMARY KEY, account_id INT NOT NULL, narrow_group_key VARCHAR(64) NOT NULL, payload VARCHAR(128) NOT NULL, amount DECIMAL(10,2) NOT NULL, event_date DATE NOT NULL, KEY idx_account_date (account_id, event_date), KEY idx_event_date (event_date))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "tables_created": [
+          "digits",
+          "accounts",
+          "wide_events",
+          "narrow_events"
+        ]
+      },
+      "success_criteria": {
+        "schema_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Internal temporary tables spill to disk when grouped queries involve wide keys or TEXT-heavy rows."
+      }
+    },
+    {
+      "task_id": "load_data",
+      "task_type": "load",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT IGNORE INTO digits (n) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO accounts (account_id, active, segment, created_at) SELECT a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, IF(MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 5) = 0, 0, 1), CONCAT('seg_', MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 10)), DATE_ADD('2024-01-01', INTERVAL MOD(a.n * 1000 + b.n * 100 + c.n * 10 + d.n + 1, 365) DAY) FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO wide_events (event_id, account_id, wide_group_key, payload, amount, event_date) SELECT seq.event_id, MOD(seq.event_id, 10000) + 1, CASE WHEN MOD(seq.event_id, 5) = 0 THEN RPAD('hot_group', 700, 'h') ELSE RPAD(CONCAT('grp_', LPAD(MOD(seq.event_id, 999), 6, '0')), 700, 'g') END, RPAD(CONCAT('payload_', LPAD(seq.event_id, 6, '0')), 1024, 'x'), MOD(seq.event_id, 1000) / 10.0, DATE_ADD('2024-01-01', INTERVAL MOD(seq.event_id, 365) DAY) FROM (SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n + 1 AS event_id FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e) AS seq"
+                },
+                {
+                  "sql": "INSERT IGNORE INTO narrow_events (event_id, account_id, narrow_group_key, payload, amount, event_date) SELECT seq.event_id, MOD(seq.event_id, 10000) + 1, CASE WHEN MOD(seq.event_id, 5) = 0 THEN 'hot_group' ELSE CONCAT('grp_', LPAD(MOD(seq.event_id, 999), 6, '0')) END, CONCAT('payload_', LPAD(seq.event_id, 6, '0')), MOD(seq.event_id, 1000) / 10.0, DATE_ADD('2024-01-01', INTERVAL MOD(seq.event_id, 365) DAY) FROM (SELECT a.n * 10000 + b.n * 1000 + c.n * 100 + d.n * 10 + e.n + 1 AS event_id FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e) AS seq"
+                },
+                {
+                  "sql": "ANALYZE TABLE accounts, wide_events, narrow_events"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "row_counts": {
+          "digits": 10,
+          "accounts": 10000,
+          "wide_events": 100000,
+          "narrow_events": 100000
+        }
+      },
+      "success_criteria": {
+        "data_loaded_and_analyzed": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data shapes the same many-to-one join and aggregation pattern while isolating width-driven temp-table spill."
+      }
+    },
+    {
+      "task_id": "measure_tmp_tables",
+      "task_type": "validation",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_is_mysq_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SHOW SESSION STATUS LIKE 'Created_tmp_disk_tables'"
+                },
+                {
+                  "sql": "SELECT e.wide_group_key, COUNT(*) AS cnt, SUM(e.amount) AS total_amount FROM wide_events e JOIN accounts a ON a.account_id = e.account_id WHERE a.active = 1 AND e.event_date >= '2024-10-01' GROUP BY e.wide_group_key ORDER BY total_amount DESC LIMIT 25"
+                },
+                {
+                  "sql": "SHOW SESSION STATUS LIKE 'Created_tmp_disk_tables'"
+                },
+                {
+                  "sql": "SELECT e.narrow_group_key, COUNT(*) AS cnt, SUM(e.amount) AS total_amount FROM narrow_events e JOIN accounts a ON a.account_id = e.account_id WHERE a.active = 1 AND e.event_date >= '2024-10-01' GROUP BY e.narrow_group_key ORDER BY total_amount DESC LIMIT 25"
+                },
+                {
+                  "sql": "SHOW SESSION STATUS LIKE 'Created_tmp_disk_tables'"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {
+        "wide_query_disk_tmp_increase": true,
+        "wide_query_more_spill_prone_than_control": true
+      },
+      "success_criteria": {
+        "wide_query_creates_more_disk_temp_pressure_than_control": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Disk temp tables are expected from the wide grouped key and TEXT-heavy row shape, not from a MEMORY-engine base table choice."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_schema",
+      "load_data"
+    ],
+    [
+      "load_data",
+      "measure_tmp_tables"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "What exact production query or query family was responsible for the disk temp tables?",
+    "Were any source columns TEXT/BLOB or wider than 512 bytes in the grouped or ordered expressions?",
+    "Was the observed issue performance impact or only a counters-only mysqltuner concern?",
+    "Which MySQL version was running in production?"
+  ],
+  "rationale": "The post is about MySQL disk temporary tables, and the accepted answer points to internal temporary-table rules rather than base-table engine choice. Because the original schema and query text are unavailable, the best reproduction is mechanism-level: synthesize a many-to-one join and grouped aggregation with a wide grouped key and TEXT-heavy payloads, then contrast it with a narrow control table of the same cardinality and skew. That reproduces the likely spill mechanism without claiming the exact original accident."
+}

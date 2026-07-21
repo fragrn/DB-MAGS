@@ -1,0 +1,12 @@
+{
+  "level": "mechanism",
+  "rationale": "The core mechanism can be reproduced on MySQL with a dedicated InnoDB test database: a non-PK table, a long-lived open transaction holding a row lock, and a concurrent delete that scans the same predicate range. Exact production timing and the sporadic nature of the incident cannot be reproduced without the original application workload, but the lock-wait mechanism and EXPLAIN shape are reproducible.",
+  "missing_capabilities": [],
+  "unmatched_conditions": [
+    "Random intermittent timing from the production app",
+    "Exact connection-pool behavior and thread reuse",
+    "Exact production row counts and data skew",
+    "Exact MySQL/Aurora patch-level behavior"
+  ],
+  "confidence": 0.86
+}

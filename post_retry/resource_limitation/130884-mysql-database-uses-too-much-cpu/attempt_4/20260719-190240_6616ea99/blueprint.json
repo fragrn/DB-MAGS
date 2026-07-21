@@ -1,0 +1,467 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "The incident is best modeled as MySQL CPU saturation from a read-heavy benchmark dominated by inefficient multi-table joins, high concurrency, and missing supporting indexes on join/filter columns; query-cache churn may have been an additional factor in the original environment.",
+    "symptoms": [
+      "MySQL consumed most CPU time while the web servers did not show comparable load.",
+      "The benchmark was read-heavy and the database became the bottleneck.",
+      "MySQLTuner reported many joins without indexes and very poor table-cache hit rate.",
+      "Query cache efficiency was low and pruning was extremely frequent in the posted environment.",
+      "OS sampling showed high user-space CPU usage on the database VM."
+    ],
+    "mechanism": "Concurrent read-only queries drive CPU-heavy nested-loop style join work across a large fact table and smaller dimension tables, with selective predicates on unindexed columns and fanout from the item table. The original post also suggests query-cache mutex pressure and connection churn as possible amplifiers, but the core reproducible mechanism is join fanout plus missing indexes under concurrency.",
+    "facts": [
+      {
+        "key": "mysql_version",
+        "value": {
+          "version": "5.5.47-0ubuntu0.12.04.1"
+        },
+        "source": "explicit_post",
+        "evidence": "The post states the server is running MySQL 5.5.47 on Ubuntu 12.04.",
+        "confidence": 0.99
+      },
+      {
+        "key": "hardware_limit",
+        "value": {
+          "vcpu": 5,
+          "memory_gb": 4
+        },
+        "source": "explicit_post",
+        "evidence": "The post says the VM has 5 vCPU and 4 GB of memory.",
+        "confidence": 0.99
+      },
+      {
+        "key": "workload_character",
+        "value": {
+          "reads_percent": 100,
+          "writes_percent": 0,
+          "benchmarking": true
+        },
+        "source": "explicit_post",
+        "evidence": "The poster says they are benchmarking web-server queries and the Tuner output shows 100% reads / 0% writes.",
+        "confidence": 0.98
+      },
+      {
+        "key": "cpu_observation",
+        "value": {
+          "user_cpu_high": true,
+          "db_bottleneck": true
+        },
+        "source": "explicit_post",
+        "evidence": "vmstat shows high user CPU and the poster reports the database is the bottleneck.",
+        "confidence": 0.97
+      },
+      {
+        "key": "index_signal",
+        "value": {
+          "joins_without_indexes": 6782
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner reports \"Joins performed without indexes: 6782\".",
+        "confidence": 0.98
+      },
+      {
+        "key": "query_cache_signal",
+        "value": {
+          "query_cache_size": "16M",
+          "query_cache_limit": "1M",
+          "efficiency_percent": 7.8,
+          "prunes_per_day": 39159937
+        },
+        "source": "explicit_post",
+        "evidence": "The post includes the query cache settings and MySQLTuner reports low efficiency with very frequent pruning.",
+        "confidence": 0.95
+      },
+      {
+        "key": "connection_pressure",
+        "value": {
+          "highest_connection_usage_percent": 100,
+          "connections_peak": 152,
+          "max_connections": 151
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner reports highest connection usage at 100% with 152 of 151 max threads reached.",
+        "confidence": 0.96
+      },
+      {
+        "key": "likely_root_cause",
+        "value": {
+          "cause": "inefficient joins and/or locking contention"
+        },
+        "source": "post_hypothesis",
+        "evidence": "The accepted and top-voted answers point to unindexed joins, inefficient queries, and possible mutex/locking contention.",
+        "confidence": 0.78
+      },
+      {
+        "key": "reproduction_focus",
+        "value": {
+          "mechanism": "CPU-heavy join fanout under concurrency"
+        },
+        "source": "agent_inference",
+        "evidence": "The strongest common mechanism across the post is read-heavy multi-table joins with insufficient indexes and high concurrent load.",
+        "confidence": 0.87
+      }
+    ],
+    "assumptions": [
+      "The exact production schema is unknown, so a synthetic star-schema workload is used to preserve join fanout and filter selectivity.",
+      "The main reproducible issue is CPU burn from join work rather than a storage-engine-specific bug.",
+      "Query-cache contention may have existed in production, but the current target environment does not need it to reproduce the primary symptom.",
+      "The benchmark can be approximated with a single dominant read query class repeated at concurrency."
+    ],
+    "unknowns": [
+      "The exact application SQL and its parameter distributions are unknown.",
+      "The original index layout is unknown beyond the strong hint that many joins lacked indexes.",
+      "Whether the posted environment had query cache contention versus pure query inefficiency is not known.",
+      "Whether the database used mostly InnoDB or mixed engines in the benchmark is not fully specified."
+    ],
+    "confidence": 0.83
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "A mechanism-level reproduction is feasible because the environment has a MySQL adapter and the post strongly indicates join-heavy CPU saturation from missing indexes and high concurrency. Exact reproduction is not feasible because the original schema, query mix, and query-cache state are unknown, and the inspected local MySQL instance differs from the posted configuration.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact production SQL workload and parameter mix",
+      "Exact original index set and table cardinalities",
+      "Original query-cache contention state; the inspected instance currently has query_cache disabled"
+    ],
+    "confidence": 0.82
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+    "requirements": [
+      "Dedicated test database permission",
+      "Ability to create tables and bulk-load synthetic data",
+      "MySQL-compatible execution"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+    "schema_sql": [
+      "CREATE DATABASE IF NOT EXISTS `post_retry_resource_limitation_130884_mysql_data_a4`",
+      "CREATE TABLE IF NOT EXISTS `digits` (`d` TINYINT UNSIGNED NOT NULL PRIMARY KEY)",
+      "CREATE TABLE IF NOT EXISTS `seq_1m` (`n` INT UNSIGNED NOT NULL PRIMARY KEY)",
+      "CREATE TABLE IF NOT EXISTS `dim_customer` (`customer_id` INT UNSIGNED NOT NULL PRIMARY KEY, `region` VARCHAR(16) NOT NULL, `customer_tier` VARCHAR(16) NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS `dim_product` (`product_id` INT UNSIGNED NOT NULL PRIMARY KEY, `category` VARCHAR(16) NOT NULL, `active` TINYINT(1) NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS `fact_order` (`order_id` INT UNSIGNED NOT NULL PRIMARY KEY, `customer_id` INT UNSIGNED NOT NULL, `status` VARCHAR(16) NOT NULL, `order_date` DATE NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS `fact_order_item` (`order_item_id` BIGINT UNSIGNED NOT NULL PRIMARY KEY, `order_id` INT UNSIGNED NOT NULL, `product_id` INT UNSIGNED NOT NULL, `quantity` INT UNSIGNED NOT NULL, `unit_price` DECIMAL(10,2) NOT NULL)"
+    ],
+    "generation_sql": [
+      "INSERT IGNORE INTO `digits` (`d`) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+      "INSERT IGNORE INTO `seq_1m` (`n`) SELECT 1 + d1.d + 10 * d2.d + 100 * d3.d + 1000 * d4.d + 10000 * d5.d + 100000 * d6.d FROM `digits` d1 CROSS JOIN `digits` d2 CROSS JOIN `digits` d3 CROSS JOIN `digits` d4 CROSS JOIN `digits` d5 CROSS JOIN `digits` d6 WHERE 1 + d1.d + 10 * d2.d + 100 * d3.d + 1000 * d4.d + 10000 * d5.d + 100000 * d6.d <= 1000000",
+      "INSERT IGNORE INTO `dim_customer` (`customer_id`, `region`, `customer_tier`) SELECT n, CASE WHEN MOD(n, 100) < 70 THEN 'NA' WHEN MOD(n, 100) < 90 THEN 'EU' WHEN MOD(n, 100) < 99 THEN 'APAC' ELSE 'LATAM' END, CASE WHEN MOD(n, 10) < 8 THEN 'standard' ELSE 'vip' END FROM `seq_1m` WHERE n <= 50000",
+      "INSERT IGNORE INTO `dim_product` (`product_id`, `category`, `active`) SELECT n, CASE WHEN MOD(n, 100) = 0 THEN 'featured' WHEN MOD(n, 20) = 0 THEN 'seasonal' ELSE 'regular' END, CASE WHEN MOD(n, 50) = 0 THEN 0 ELSE 1 END FROM `seq_1m` WHERE n <= 5000",
+      "INSERT IGNORE INTO `fact_order` (`order_id`, `customer_id`, `status`, `order_date`) SELECT n, 1 + MOD(n * 37, 50000), CASE WHEN MOD(n, 100) < 85 THEN 'COMPLETE' WHEN MOD(n, 100) < 95 THEN 'PENDING' ELSE 'CANCELLED' END, DATE_ADD('2020-01-01', INTERVAL MOD(n, 730) DAY) FROM `seq_1m` WHERE n <= 200000",
+      "INSERT IGNORE INTO `fact_order_item` (`order_item_id`, `order_id`, `product_id`, `quantity`, `unit_price`) SELECT ((o.n - 1) * 3) + i.item_no, o.n, CASE WHEN MOD(o.n, 100) = 0 AND i.item_no = 1 THEN 1 + MOD(o.n, 50) ELSE 1 + MOD(o.n * 13 + i.item_no * 7, 5000) END, 1 + MOD(o.n + i.item_no, 5), ROUND(100 + MOD(o.n * 17 + i.item_no * 11, 9900) / 100, 2) FROM `seq_1m` o JOIN (SELECT 1 AS item_no UNION ALL SELECT 2 UNION ALL SELECT 3) i WHERE o.n <= 200000",
+      "ANALYZE TABLE `dim_customer`, `dim_product`, `fact_order`, `fact_order_item`"
+    ],
+    "tables": [
+      {
+        "name": "digits",
+        "purpose": "Small helper table for bounded number generation",
+        "target_rows": 10,
+        "distribution_notes": "Uniform digits 0-9; used only to build a synthetic sequence table."
+      },
+      {
+        "name": "seq_1m",
+        "purpose": "Bounded helper sequence table used to generate deterministic synthetic rows",
+        "target_rows": 1000000,
+        "distribution_notes": "Dense contiguous integers provide stable bulk-load generation and reproducible cardinalities."
+      },
+      {
+        "name": "dim_customer",
+        "purpose": "Customer dimension used in selective joins and region filtering",
+        "target_rows": 50000,
+        "distribution_notes": "Region is skewed toward NA to create a common filter with moderate selectivity; customer tier is secondary skew."
+      },
+      {
+        "name": "dim_product",
+        "purpose": "Product dimension used in selective joins and category filtering",
+        "target_rows": 5000,
+        "distribution_notes": "Category is highly skewed, with featured products rare so the filter stays selective and amplifies join work."
+      },
+      {
+        "name": "fact_order",
+        "purpose": "Order fact table providing the main filtered join driver",
+        "target_rows": 200000,
+        "distribution_notes": "Status is skewed heavily toward COMPLETE to keep many rows participating; customer_id spreads across the customer dimension."
+      },
+      {
+        "name": "fact_order_item",
+        "purpose": "High-fanout line-item fact table that drives repeated join work",
+        "target_rows": 600000,
+        "distribution_notes": "Three items per order on average; join to order_id has no supporting index beyond the primary key on order_item_id."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "digits": 10,
+        "seq_1m": 1000000,
+        "dim_customer": 50000,
+        "dim_product": 5000,
+        "fact_order": 200000,
+        "fact_order_item": 600000
+      },
+      "value_skew": {
+        "dim_customer.region": "70% NA, 20% EU, 9% APAC, 1% LATAM",
+        "dim_product.category": "1% featured, 4% seasonal, 95% regular",
+        "fact_order.status": "85% COMPLETE, 10% PENDING, 5% CANCELLED",
+        "fact_order_item.product_id": "mostly spread across regular products with a rare featured-product overlap"
+      },
+      "predicate_selectivity": {
+        "fact_order.status = 'COMPLETE'": 0.85,
+        "dim_customer.region = 'NA'": 0.7,
+        "dim_product.category = 'featured'": 0.01
+      },
+      "join_selectivity": {
+        "fact_order.customer_id = dim_customer.customer_id": "many-to-one",
+        "fact_order_item.order_id = fact_order.order_id": "many-to-one with average fanout of 3",
+        "fact_order_item.product_id = dim_product.product_id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "digits",
+      "seq_1m",
+      "dim_customer",
+      "dim_product",
+      "fact_order",
+      "fact_order_item"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT o.order_id, c.region, SUM(oi.quantity * oi.unit_price) AS revenue FROM `fact_order` o JOIN `dim_customer` c ON c.customer_id = o.customer_id JOIN `fact_order_item` oi ON oi.order_id = o.order_id JOIN `dim_product` p ON p.product_id = oi.product_id WHERE o.status = 'COMPLETE' AND c.region = 'NA' AND p.category = 'featured' GROUP BY o.order_id, c.region ORDER BY revenue DESC LIMIT 20",
+        "objective": "Verify that the synthetic data produces a join-heavy plan with selective filters and enough fanout to make CPU the dominant resource.",
+        "expected_evidence": [
+          "The plan includes all four tables and preserves the multi-stage join structure from the incident description.",
+          "The predicates on status, region, and category materially affect the estimated row counts.",
+          "The large fact table dominates the work because the line-item join lacks a direct supporting index on order_id."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 50000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      {
+        "sql": "SELECT o.order_id, c.region, SUM(oi.quantity * oi.unit_price) AS revenue FROM `fact_order` o JOIN `dim_customer` c ON c.customer_id = o.customer_id JOIN `fact_order_item` oi ON oi.order_id = o.order_id JOIN `dim_product` p ON p.product_id = oi.product_id WHERE o.status = 'COMPLETE' AND c.region = 'NA' AND p.category = 'featured' GROUP BY o.order_id, c.region ORDER BY revenue DESC LIMIT 20",
+        "concurrency": 24,
+        "duration_sec": 45
+      }
+    ],
+    "concurrency": 24,
+    "duration_sec": 45
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "The benchmark should sustain elevated MySQL CPU while remaining read-only.",
+      "EXPLAIN for the calibration query should show a multi-table join with row estimates consistent with the configured selectivity and fanout.",
+      "The mechanism should be sensitive to missing supporting indexes on the fact-table join path.",
+      "If secondary query-cache effects are absent, the join/fanout mechanism should still reproduce the core CPU symptom."
+    ],
+    "symptom_evidence": [
+      "High user-space CPU on the database host during the workload.",
+      "Low throughput or rising latency as concurrency increases.",
+      "No comparable CPU saturation on the application/web tier."
+    ],
+    "mechanism_evidence": [
+      "Join fanout is visible in the plan and data shape.",
+      "Selective predicates are present but not enough to eliminate the large fact-table join work.",
+      "Rows examined remain high relative to the returned result set."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "MySQL CPU saturation under a read-heavy benchmark",
+    "target_database": "post_retry_resource_limitation_130884_mysql_data_a4",
+    "dba_description": "The post describes a MySQL 5.5 database on a small VM that burns CPU under benchmarking, with many joins without indexes, very frequent query-cache pruning, and high connection usage. The likely mechanism is inefficient concurrent joins plus possible query-cache contention.",
+    "target_path": [
+      "read-heavy multi-table joins",
+      "missing supporting indexes on join/filter columns",
+      "high concurrency benchmark"
+    ],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "bootstrap_dataset",
+      "task_type": "sql",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "CREATE DATABASE IF NOT EXISTS `post_retry_resource_limitation_130884_mysql_data_a4`",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "CREATE TABLE IF NOT EXISTS `digits` (`d` TINYINT UNSIGNED NOT NULL PRIMARY KEY)",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "CREATE TABLE IF NOT EXISTS `seq_1m` (`n` INT UNSIGNED NOT NULL PRIMARY KEY)",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "CREATE TABLE IF NOT EXISTS `dim_customer` (`customer_id` INT UNSIGNED NOT NULL PRIMARY KEY, `region` VARCHAR(16) NOT NULL, `customer_tier` VARCHAR(16) NOT NULL)",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "CREATE TABLE IF NOT EXISTS `dim_product` (`product_id` INT UNSIGNED NOT NULL PRIMARY KEY, `category` VARCHAR(16) NOT NULL, `active` TINYINT(1) NOT NULL)",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "CREATE TABLE IF NOT EXISTS `fact_order` (`order_id` INT UNSIGNED NOT NULL PRIMARY KEY, `customer_id` INT UNSIGNED NOT NULL, `status` VARCHAR(16) NOT NULL, `order_date` DATE NOT NULL)",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "CREATE TABLE IF NOT EXISTS `fact_order_item` (`order_item_id` BIGINT UNSIGNED NOT NULL PRIMARY KEY, `order_id` INT UNSIGNED NOT NULL, `product_id` INT UNSIGNED NOT NULL, `quantity` INT UNSIGNED NOT NULL, `unit_price` DECIMAL(10,2) NOT NULL)",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "INSERT IGNORE INTO `digits` (`d`) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "INSERT IGNORE INTO `seq_1m` (`n`) SELECT 1 + d1.d + 10 * d2.d + 100 * d3.d + 1000 * d4.d + 10000 * d5.d + 100000 * d6.d FROM `digits` d1 CROSS JOIN `digits` d2 CROSS JOIN `digits` d3 CROSS JOIN `digits` d4 CROSS JOIN `digits` d5 CROSS JOIN `digits` d6 WHERE 1 + d1.d + 10 * d2.d + 100 * d3.d + 1000 * d4.d + 10000 * d5.d + 100000 * d6.d <= 1000000",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "INSERT IGNORE INTO `dim_customer` (`customer_id`, `region`, `customer_tier`) SELECT n, CASE WHEN MOD(n, 100) < 70 THEN 'NA' WHEN MOD(n, 100) < 90 THEN 'EU' WHEN MOD(n, 100) < 99 THEN 'APAC' ELSE 'LATAM' END, CASE WHEN MOD(n, 10) < 8 THEN 'standard' ELSE 'vip' END FROM `seq_1m` WHERE n <= 50000",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "INSERT IGNORE INTO `dim_product` (`product_id`, `category`, `active`) SELECT n, CASE WHEN MOD(n, 100) = 0 THEN 'featured' WHEN MOD(n, 20) = 0 THEN 'seasonal' ELSE 'regular' END, CASE WHEN MOD(n, 50) = 0 THEN 0 ELSE 1 END FROM `seq_1m` WHERE n <= 5000",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "INSERT IGNORE INTO `fact_order` (`order_id`, `customer_id`, `status`, `order_date`) SELECT n, 1 + MOD(n * 37, 50000), CASE WHEN MOD(n, 100) < 85 THEN 'COMPLETE' WHEN MOD(n, 100) < 95 THEN 'PENDING' ELSE 'CANCELLED' END, DATE_ADD('2020-01-01', INTERVAL MOD(n, 730) DAY) FROM `seq_1m` WHERE n <= 200000",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "INSERT IGNORE INTO `fact_order_item` (`order_item_id`, `order_id`, `product_id`, `quantity`, `unit_price`) SELECT ((o.n - 1) * 3) + i.item_no, o.n, CASE WHEN MOD(o.n, 100) = 0 AND i.item_no = 1 THEN 1 + MOD(o.n, 50) ELSE 1 + MOD(o.n * 13 + i.item_no * 7, 5000) END, 1 + MOD(o.n + i.item_no, 5), ROUND(100 + MOD(o.n * 17 + i.item_no * 11, 9900) / 100, 2) FROM `seq_1m` o JOIN (SELECT 1 AS item_no UNION ALL SELECT 2 UNION ALL SELECT 3) i WHERE o.n <= 200000",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "ANALYZE TABLE `dim_customer`, `dim_product`, `fact_order`, `fact_order_item`",
+          "concurrency": 1,
+          "duration_sec": 1
+        }
+      ],
+      "expected_metrics": {
+        "row_counts": {
+          "digits": 10,
+          "seq_1m": 1000000,
+          "dim_customer": 50000,
+          "dim_product": 5000,
+          "fact_order": 200000,
+          "fact_order_item": 600000
+        }
+      },
+      "success_criteria": {
+        "tables_created": true,
+        "data_loaded": true,
+        "stats_collected": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Missing supporting indexes on join/filter columns create CPU-heavy nested-loop join work under read-heavy concurrency.",
+        "cleanup_actions": []
+      }
+    },
+    {
+      "task_id": "run_benchmark",
+      "task_type": "sql",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a4",
+          "sql": "SELECT o.order_id, c.region, SUM(oi.quantity * oi.unit_price) AS revenue FROM `fact_order` o JOIN `dim_customer` c ON c.customer_id = o.customer_id JOIN `fact_order_item` oi ON oi.order_id = o.order_id JOIN `dim_product` p ON p.product_id = oi.product_id WHERE o.status = 'COMPLETE' AND c.region = 'NA' AND p.category = 'featured' GROUP BY o.order_id, c.region ORDER BY revenue DESC LIMIT 20",
+          "concurrency": 24,
+          "duration_sec": 45
+        }
+      ],
+      "expected_metrics": {
+        "cpu_bound": true,
+        "high_join_fanout": true,
+        "many_rows_examined": true
+      },
+      "success_criteria": {
+        "stable_high_cpu": true,
+        "plan_shape_matches_mechanism": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Concurrent read-only joins without index support drive CPU saturation.",
+        "cleanup_actions": []
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "bootstrap_dataset",
+      "run_benchmark"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "Exact production query text and parameter distributions",
+    "Exact original index set and whether query cache was enabled during the incident"
+  ],
+  "rationale": "The post strongly points to MySQL CPU saturation from read-heavy benchmarking, with the strongest concrete indicator being many joins without indexes. The synthetic schema intentionally preserves the key mechanism: a selective but not trivial multi-table join, a large fanout fact table, skewed predicates, and concurrency high enough to saturate CPU. This is a mechanism-level reproduction, not an exact accident replay, because the original schema and workload are unavailable."
+}

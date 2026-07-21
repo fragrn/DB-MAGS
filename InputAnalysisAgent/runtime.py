@@ -27,6 +27,7 @@ from InputAnalysisAgent.hitl import (
     write_gate,
     write_json,
 )
+from InputAnalysisAgent.db_adapters import PostgresAdapter, SqlServerAdapter, normalize_dbms, supported_execution_dbms
 from InputAnalysisAgent.react import (
     ReproductionPlanningError,
     calibrate_reproduction,
@@ -231,13 +232,14 @@ class ReproductionRuntime:
                     "Reproduction is blocked by missing capabilities: "
                     + "; ".join(blueprint.feasibility.missing_capabilities)
                 )
-            if blueprint.incident_spec.dbms not in {"mysql", "mariadb", "percona"}:
+            dbms = normalize_dbms(blueprint.incident_spec.dbms)
+            if dbms not in supported_execution_dbms():
                 raise RuntimeError(f"No execution adapter for DBMS: {blueprint.incident_spec.dbms}")
 
             if "preparation" not in state.completed_phases:
                 state.phase = "preparation"
                 save_state(run_dir, state)
-                prep = self._prepare_mysql(blueprint)
+                prep = self._prepare_database(blueprint)
                 write_json(run_dir / "preparation_result.json", prep)
                 state.artifacts["preparation"] = "preparation_result.json"
                 self._complete_phase(run_dir, state, "preparation")
@@ -474,6 +476,30 @@ class ReproductionRuntime:
             connection.close()
         return {"database": database, "statement_count": len(executed), "statements": executed}
 
+    def _prepare_database(self, blueprint: ReproductionBlueprint) -> dict[str, Any]:
+        dbms = normalize_dbms(blueprint.incident_spec.dbms)
+        if dbms == "postgresql":
+            spec = blueprint.data_spec
+            database = self._safe_database_name(spec.database)
+            return PostgresAdapter().prepare(
+                database,
+                list(spec.schema_sql),
+                list(spec.generation_sql),
+                list(spec.analyze_tables),
+                row_count=spec.scale_strategy.initial_rows,
+            )
+        if dbms == "sqlserver":
+            spec = blueprint.data_spec
+            database = self._safe_database_name(spec.database)
+            return SqlServerAdapter().prepare(
+                database,
+                list(spec.schema_sql),
+                list(spec.generation_sql),
+                list(spec.analyze_tables),
+                row_count=spec.scale_strategy.initial_rows,
+            )
+        return self._prepare_mysql(blueprint)
+
     def _calibrate(
         self,
         run_dir: Path,
@@ -528,6 +554,8 @@ class ReproductionRuntime:
         }
 
     def _execute(self, blueprint: ReproductionBlueprint, run_dir: Path) -> dict[str, Any]:
+        if normalize_dbms(blueprint.incident_spec.dbms) in {"postgresql", "sqlserver"}:
+            return self._execute_external_dbms(blueprint, run_dir)
         dag = agent_tools.build_task_dag(blueprint.task_specs, blueprint.dependencies)
         request = blueprint.experiment_request
         safety = agent_tools.check_safety(
@@ -567,6 +595,59 @@ class ReproductionRuntime:
             "safety": safety,
             "slow_log_evidence": slow_log_evidence,
         }
+
+    def _execute_external_dbms(self, blueprint: ReproductionBlueprint, run_dir: Path) -> dict[str, Any]:
+        dbms = normalize_dbms(blueprint.incident_spec.dbms)
+        adapter = SqlServerAdapter() if dbms == "sqlserver" else PostgresAdapter()
+        dag = agent_tools.build_task_dag(blueprint.task_specs, blueprint.dependencies)
+        request = blueprint.experiment_request
+        safety = agent_tools.check_safety(
+            dag,
+            self.config,
+            max_duration_sec=float(request.get("max_duration_sec", self.config.max_duration_sec)),
+            expected_workload=request.get("workload") or {},
+        )
+        write_json(run_dir / "task_dag.json", dag)
+        write_json(run_dir / "safety.json", safety)
+        if not safety.get("approved"):
+            raise RuntimeError("TaskSpec safety check failed: " + "; ".join(safety.get("reasons", [])))
+        before = {
+            "schema": adapter.schema(blueprint.data_spec.database),
+            "table_stats": adapter.table_stats(blueprint.data_spec.database),
+            "db_metrics": adapter.db_metrics(blueprint.data_spec.database),
+        }
+        trace = {"tasks": {}, "cleanup_status": "not_started", "cleanup_errors": []}
+        with self._background_workload(blueprint):
+            for task in blueprint.task_specs:
+                task_id = str(task.get("task_id") or f"task_{len(trace['tasks']) + 1}")
+                result = {"task_id": task_id, "status": "success", "actions": [], "errors": []}
+                for action in task.get("actions") or []:
+                    try:
+                        kind = action.get("kind")
+                        if kind == "raw_sql_workload":
+                            action_result = adapter.run_sql_workload(action, task_id=task_id, round_dir=run_dir)
+                        elif kind == "raw_transaction_script":
+                            action_result = adapter.run_transaction_script(action)
+                        else:
+                            raise RuntimeError(f"{dbms} executor does not support action kind: {kind}")
+                        result["actions"].append(action_result)
+                    except Exception as exc:
+                        result["status"] = "failed"
+                        result["errors"].append(str(exc))
+                        break
+                trace["tasks"][task_id] = result
+                if result["status"] != "success":
+                    break
+            trace["cleanup_status"] = "success"
+        failed = [task for task in trace["tasks"].values() if task.get("status") != "success"]
+        if failed:
+            raise RuntimeError(f"{dbms} TaskSpec execution failed: " + json.dumps(failed[:3], ensure_ascii=False))
+        after = {
+            "schema": adapter.schema(blueprint.data_spec.database),
+            "table_stats": adapter.table_stats(blueprint.data_spec.database),
+            "db_metrics": adapter.db_metrics(blueprint.data_spec.database),
+        }
+        return {"baseline": before, "execution_trace": trace, "after": after, "task_dag": dag, "safety": safety}
 
     def _evaluate(self, blueprint: ReproductionBlueprint, execution: dict[str, Any]) -> ReproductionEvaluation:
         objective = None
@@ -612,6 +693,32 @@ class ReproductionRuntime:
             raise ValueError("SQL background workload requires query strings")
         stop = threading.Event()
         errors: list[str] = []
+        external_dbms = normalize_dbms(blueprint.incident_spec.dbms)
+        if external_dbms in {"postgresql", "sqlserver"}:
+            adapter = SqlServerAdapter() if external_dbms == "sqlserver" else PostgresAdapter()
+
+            def pg_worker() -> None:
+                try:
+                    while not stop.is_set():
+                        for query in queries:
+                            if stop.is_set():
+                                break
+                            adapter.execute(blueprint.data_spec.database, query, timeout=30)
+                except Exception as exc:
+                    errors.append(str(exc))
+
+            threads = [threading.Thread(target=pg_worker, daemon=True) for _ in range(max(1, int(spec.get("concurrency", 1))))]
+            for thread in threads:
+                thread.start()
+            try:
+                yield
+            finally:
+                stop.set()
+                for thread in threads:
+                    thread.join(timeout=5)
+            if errors:
+                raise RuntimeError(f"background workload failed: {errors[:3]}")
+            return
 
         def worker() -> None:
             import pymysql

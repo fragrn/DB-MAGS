@@ -1,0 +1,123 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/4717/too-many-connections
+Canonical URL: https://dba.stackexchange.com/questions/4717/too-many-connections
+Title: Too Many Connections
+Question ID: 4717
+License: CC BY-SA 3.0; author: Mokus
+
+# Question
+
+I'm using MATLAB to feed the database but after a time I'm getting a `too many connections` error. I always using opendb and closedb in pair. Is it to fast the feeding? Do I have to wait after I inserted a row?```
+Connecting to  host = localhost  user = root  password = ***
+Uptime: 1591  Threads: 149  Questions: 2956294  Slow queries: 0  Opens: 196391  Flush tables: 1  Open tables: 81  Queries per second avg: 1858.135
+Current database is "forwind"
+Connection closed, current status:
+No connections open
+add row
+Connecting to  host = localhost  user = root  password = ****
+Uptime: 1591  Threads: 150  Questions: 2956402  Slow queries: 0  Opens: 196491  Flush tables: 1  Open tables: 75  Queries per second avg: 1858.203
+Current database is "forwind"
+Connection closed, current status:
+No connections open
+add row
+
+```
+
+# Answers
+
+## Answer 1
+Author: Richard
+Accepted: yes
+Score: 8
+License: CC BY-SA 3.0
+
+MySQL, by default, only allows 151 connections (http://dev.mysql.com/doc/refman/5.1/en/too-many-connections.html) (plus one more for a super user).
+
+In your MATLAB output, you show 149 then 150 threads. I presume that the majority of those are connecting to the database. 150 MATLAB threads will generate 150 connections.
+
+There are few ways you could try to fix this.
+
+-
+One possibility is to limit the number of threads in MATLAB. You can do that using the maxNumberCompThreads (http://www.mathworks.com/help/techdoc/ref/maxnumcompthreads.html) function. Note that this is only available in R2007b through R2010a (and it will give you warning as of R2009b). Alternatively, the -singleCompThread (http://www.mathworks.com/help/techdoc/matlab_env/f8-4994.html#bq24t0c) option will work as well, but limits you to one thread.
+
+-
+Try to limit the time that you have a connection open to the absolute shortest interval possible: Open the connection, process the database work, close the connection. This may work, depending upon how much other (non-database) work each thread is doing.
+
+-
+Finally, you could increase the number of connections allowed to the database. You will need to change the max_connections server option (http://dev.mysql.com/doc/refman/5.0/en/server-system-variables.html#sysvar_max_connections). Just use the command "SET MAX_CONNECTIONS = 500".
+
+## Answer 2
+Author: Derek Downey
+Accepted: no
+Score: 6
+License: CC BY-SA 3.0
+
+As Richard pointed out, you're hitting the max_connections limit. You COULD increase it, but you're probably only delaying the inevitable of reaching the limit again.
+
+Instead of opening a connection, adding an insert, then closing the connection, try to schedule operations: open a connection, feed a bunch of the changes, then close the connection.
+
+## Answer 3
+Author: RolandoMySQLDBA
+Accepted: no
+Score: 3
+License: CC BY-SA 4.0
+
+@Richard and @DTest already have good advice in their answers, but I would like add a little as well.
+
+RECOMMENDATION #1 : Check SUPER Privilege for all DB Users (http://dev.mysql.com/doc/refman/5.1/en/privileges-provided.html#priv_super)
+
+Make sure all users do not have SUPER privilege. Once you hit max_connections, mysqld will only allow one more connection to itself, and that user must have SUPER privilege. If all users have SUPER privilege, no DBA or sysadmin can ever login to MySQL and do admin tasks. Please do an inventory of all users and make sure that only necessary users have SUPER privilege.
+
+RECOMMENDATION #2 : Check MySQL Connections from the OS Point-of-View
+
+If you cannot connect to mysqld, try running this in Linux on the DB Server```
+netstat | grep -i mysql | grep TIME_WAIT
+
+```This will show how many DB Connections have not completely closed, even if mysqld was told to close a connection via mysql_close (https://www.php.net/manual/en/function.mysql-close.php). Keep your eyes open for TIME_WAIT state of netstat that are associated with mysql connections (http://mysql.livejournal.com/82879.html).
+
+This would be good to look at if MATLAB is a Windows program hitting a MySQL DB. Note this excerpt from MySQL Website on TIME_WAIT:
+
+C.5.2.2.1. Connection to MySQL Server Failing on Windows (http://dev.mysql.com/doc/refman/5.1/en/can-not-connect-to-server.html)
+
+When you're running a MySQL server on Windows with many TCP/IP
+connections to it, and you're experiencing that quite often your
+clients get a Can't connect to MySQL server error, the reason might be
+that Windows does not allow for enough ephemeral (short-lived) ports
+to serve those connections.
+
+The purpose of TIME_WAIT is to keep a connection accepting packets
+even after the connection has been closed. This is because Internet
+routing can cause a packet to take a slow route to its destination and
+it may arrive after both sides have agreed to close. If the port is in
+use for a new connection, that packet from the old connection could
+break the protocol or compromise personal information from the
+original connection. The TIME_WAIT delay prevents this by ensuring
+that the port cannot be reused until after some time has been
+permitted for those delayed packets to arrive.
+
+It is safe to reduce TIME_WAIT greatly on LAN connections because
+there is little chance of packets arriving at very long delays, as
+they could through the Internet with its comparatively large distances
+and latencies.
+
+Windows permits ephemeral (short-lived) TCP ports to the user. After
+any port is closed it will remain in a TIME_WAIT status for 120
+seconds. The port will not be available again until this time expires.
+The default range of port numbers depends on the version of Windows,
+with a more limited number of ports in older versions:
+
+• Windows through Server 2003: Ports in range 1025–5000
+
+• Windows Vista, Server 2008, and newer: Ports in range 49152–65535
+
+With a small stack of available TCP ports (5000) and a high number of
+TCP ports being open and closed over a short period of time along with
+the TIME_WAIT status you have a good chance for running out of ports.
+There are two ways to address this problem:
+
+• Reduce the number of TCP ports consumed quickly by investigating
+connection pooling or persistent connections where possible
+
+• Tune some settings in the Windows registry (see below)
+
+[Batch planner note: the original full post is saved as source_post.txt. This planning input was compacted to remove linked-page snapshots or excessive length.]

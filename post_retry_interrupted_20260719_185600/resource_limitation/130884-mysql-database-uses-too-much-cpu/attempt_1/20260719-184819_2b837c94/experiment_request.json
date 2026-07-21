@@ -1,0 +1,22 @@
+{
+  "target_anomaly": "high_cpu_under_read_heavy_concurrent_joins",
+  "target_database": "post_retry_resource_limitation_130884_mysql_data_a1",
+  "dba_description": "Reproduce MySQL CPU saturation from a read-heavy benchmark using concurrent joins on large tables without supporting indexes, with synthetic skew and fanout shaped to match the post.",
+  "target_path": [
+    "concurrent_read_workload",
+    "unindexed_join_execution",
+    "join_fanout"
+  ],
+  "injected_nodes": [
+    "missing_foreign_key_indexes",
+    "skewed_account_id_distribution",
+    "read_only_benchmark_concurrency"
+  ],
+  "max_duration_sec": 60,
+  "max_retry_rounds": 2,
+  "risk_level": "low",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": false
+  }
+}

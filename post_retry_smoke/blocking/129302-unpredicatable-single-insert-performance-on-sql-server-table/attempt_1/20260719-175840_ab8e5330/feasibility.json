@@ -1,0 +1,15 @@
+{
+  "level": "symptom_only",
+  "rationale": "The available executor only supports MySQL, so the SQL Server-specific DMV behavior and LCK_M_S naming cannot be reproduced exactly. A mechanism-level reproduction of the symptom is still feasible by holding a lock on a hot secondary-index key in MySQL and showing that the insert blocks until the sleeping transaction commits.",
+  "missing_capabilities": [
+    "SQL Server execution adapter",
+    "SQL Server DMV visibility for sys.dm_exec_requests/sys.dm_exec_sessions",
+    "SQL Server-specific wait type reporting"
+  ],
+  "unmatched_conditions": [
+    "Cannot reproduce the exact dm_exec_requests blocker-missing artifact",
+    "Cannot reproduce the exact LCK_M_S wait label",
+    "Cannot claim exact production accident reproduction"
+  ],
+  "confidence": 0.68
+}

@@ -1,0 +1,99 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "The post describes MySQL creating a large number of internal temporary tables, with a significant fraction spilling to disk. The most plausible mechanism is a query shape that forces grouped or sorted intermediate results to include wide columns or TEXT/BLOB data, which causes internal temp tables to fall back to on-disk storage.",
+  "symptoms": [
+    "mysqltuner reports many temp tables, with 30-38% created on disk.",
+    "The same database on another machine shows far fewer disk temp tables.",
+    "Increasing tmp_table_size and max_heap_table_size reduced but did not eliminate disk temp tables.",
+    "The user suspects MyISAM versus MEMORY for group-by tables, but the discussion indicates that internal temp tables are the relevant mechanism."
+  ],
+  "mechanism": "MySQL creates internal temporary tables for GROUP BY, ORDER BY, UNION, derived-table materialization, and similar operations. If the intermediate result includes TEXT/BLOB columns or wide columns used in grouping/sorting, or if the temp table exceeds tmp_table_size/max_heap_table_size, MySQL spills from MEMORY to on-disk internal temp tables (typically MyISAM in the referenced version).",
+  "facts": [
+    {
+      "key": "dbms",
+      "value": {
+        "name": "MySQL"
+      },
+      "source": "explicit_post",
+      "evidence": "The user explicitly says they are using MySQL and asks about MySQL temporary tables.",
+      "confidence": 1.0
+    },
+    {
+      "key": "disk_temp_table_fraction_reported_by_mysqltuner",
+      "value": {
+        "reported_disk_fraction": "30-38%",
+        "reported_temp_table_counts": [
+          17158,
+          23725,
+          580
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The post quotes mysqltuner output showing a substantial fraction of temp tables created on disk.",
+      "confidence": 1.0
+    },
+    {
+      "key": "configuration_changes_tried",
+      "value": {
+        "tmp_table_size": "200M",
+        "max_heap_table_size": "200M",
+        "previous_values": "16M"
+      },
+      "source": "explicit_post",
+      "evidence": "The user says they changed tmp_table_size and max_heap_table_size from 16M to 200M.",
+      "confidence": 1.0
+    },
+    {
+      "key": "other_config_parameters",
+      "value": {
+        "engine": "myisam",
+        "group_concat_max_len": 32768,
+        "key_buffer_size": "3.7 GB",
+        "table_cache": 125,
+        "query_cache_limit": "1M",
+        "query_cache_size": "16M",
+        "join_buffer_size": "2.00 M",
+        "max_connections": 800
+      },
+      "source": "explicit_post",
+      "evidence": "The post lists these server settings as the current configuration.",
+      "confidence": 1.0
+    },
+    {
+      "key": "internal_temp_table_rules",
+      "value": {
+        "disk_spill_triggers": [
+          "TEXT or BLOB columns",
+          "temp table size exceeding tmp_table_size/max_heap_table_size",
+          "columns over 512 bytes used in GROUP BY/ORDER BY/UNION"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The accepted answer explains the common reasons internal temp tables are created on disk.",
+      "confidence": 0.93
+    },
+    {
+      "key": "likely_root_cause_is_workload_shape",
+      "value": {
+        "hypothesis": "The query pattern, not a simple server knob, is driving disk temp tables."
+      },
+      "source": "agent_inference",
+      "evidence": "The same database behaves differently across machines, and the answer says temp tables are expected for some query shapes.",
+      "confidence": 0.84
+    }
+  ],
+  "assumptions": [
+    "The problematic workload includes at least one GROUP BY, ORDER BY, UNION, or derived-table materialization step.",
+    "At least one grouped or sorted column is wide enough to trigger disk temp table behavior, or a TEXT/BLOB value is part of the internal result.",
+    "The mysqltuner counts are aggregate server statistics, not a single isolated query.",
+    "The exact production schema is unavailable, so a synthetic schema that reproduces the same mechanism is sufficient."
+  ],
+  "unknowns": [
+    "The exact SQL statement(s) responsible for the temp tables.",
+    "Whether the original schema includes TEXT/BLOB columns or only wide VARCHAR/CHAR columns.",
+    "MySQL server version and exact internal temp table implementation details on the production system.",
+    "Whether the high disk-temp-table rate is performance-relevant or only a tuning report artifact."
+  ],
+  "confidence": 0.81
+}

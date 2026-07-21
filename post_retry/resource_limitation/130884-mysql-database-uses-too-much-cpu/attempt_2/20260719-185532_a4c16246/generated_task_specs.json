@@ -1,0 +1,56 @@
+{
+  "task_specs": [
+    {
+      "task_id": "baseline_read_only_join",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a2",
+          "sql": "SELECT a.tenant_id, COUNT(*) AS matched_rows FROM accounts a JOIN orders o ON o.account_id = a.id JOIN events e ON e.account_id = a.id WHERE a.status = 'active' AND o.order_state = 'open' AND e.event_type = 'checkout' GROUP BY a.tenant_id",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "query_executes": true,
+        "baseline_cost_visible": true
+      },
+      "risk_assessment": "low",
+      "cleanup_actions": [],
+      "metadata": {
+        "root_cause": "missing_join_indexes"
+      }
+    },
+    {
+      "task_id": "concurrent_read_only_join",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_resource_limitation_130884_mysql_data_a2",
+          "sql": "SELECT a.tenant_id, COUNT(*) AS matched_rows FROM accounts a JOIN orders o ON o.account_id = a.id JOIN events e ON e.account_id = a.id WHERE a.status = 'active' AND o.order_state = 'open' AND e.event_type = 'checkout' GROUP BY a.tenant_id",
+          "concurrency": 24,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "cpu_saturation": "observed",
+        "read_only_join_pressure": "sustained"
+      },
+      "risk_assessment": "medium",
+      "cleanup_actions": [],
+      "metadata": {
+        "root_cause": "missing_join_indexes"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "baseline_read_only_join",
+      "concurrent_read_only_join"
+    ]
+  ]
+}

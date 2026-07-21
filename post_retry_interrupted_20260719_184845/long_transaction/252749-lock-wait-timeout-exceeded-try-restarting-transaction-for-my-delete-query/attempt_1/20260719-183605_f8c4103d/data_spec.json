@@ -1,0 +1,61 @@
+{
+  "database": "post_retry_long_transaction_252749_lock_wait_tim_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS digits (d TINYINT NOT NULL PRIMARY KEY) ENGINE=InnoDB",
+    "CREATE TABLE IF NOT EXISTS event_details (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT)) ENGINE=InnoDB"
+  ],
+  "generation_sql": [
+    "INSERT IGNORE INTO digits (d) VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9)",
+    "INSERT INTO event_details (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT LPAD(CONV(seq.n, 10, 16), 32, '0'), LPAD(CONV(seq.n + 100000, 10, 16), 32, '0'), CASE WHEN MOD(seq.n, 20) < 5 THEN 'health' WHEN MOD(seq.n, 5) = 0 THEN 'batch' ELSE 'api' END, LPAD(CONV(seq.n + 200000, 10, 16), 32, '0'), CASE WHEN MOD(seq.n, 5) = 0 THEN 20191001 + MOD(seq.n, 14) ELSE 20191015 + MOD(seq.n, 30) END, 100000 + MOD(seq.n, 86400), CASE WHEN MOD(seq.n, 4) = 0 THEN 'data-collector' ELSE 'tomcat-pool' END, MOD(seq.n, 7), RPAD(CONCAT('payload_', seq.n), 128, 'x'), RPAD(CONCAT('msg_', seq.n), 64, 'y') FROM (SELECT @row:=@row+1 AS n FROM digits a, digits b, digits c, digits d, digits e, digits f, (SELECT @row:=0) init) seq WHERE seq.n <= {row_count} AND NOT EXISTS (SELECT 1 FROM event_details LIMIT 1)"
+  ],
+  "tables": [
+    {
+      "name": "digits",
+      "purpose": "Helper sequence table for bounded synthetic row generation",
+      "target_rows": 10,
+      "distribution_notes": "Contains exactly one row per digit 0-9 and is only used to generate deterministic row numbers."
+    },
+    {
+      "name": "event_details",
+      "purpose": "Primary synthetic table that reproduces the non-PK InnoDB locking and daily-delete contention pattern",
+      "target_rows": 100000,
+      "distribution_notes": "No PRIMARY KEY; wide rows; `UPDATE_DATE` is skewed so about 20% of rows are older than the cutoff and about 5% overall have `COMPONENT_NAME='health'`. The date-leading secondary index makes the delete scan a broad range before filtering on component name."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "digits": 10,
+      "event_details": 100000
+    },
+    "value_skew": {
+      "event_details.COMPONENT_NAME": "`health` is a minority value; most rows use `api`, `batch`, or `tomcat-pool`-style names.",
+      "event_details.UPDATE_DATE": "About 20% of rows fall below the purge cutoff date and are candidates for the daily delete.",
+      "event_details.CLIENT": "`data-collector` is common to mimic the reported environment."
+    },
+    "predicate_selectivity": {
+      "event_details.UPDATE_DATE < 20191015 AND event_details.COMPONENT_NAME = 'health'": 0.05
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "digits",
+    "event_details"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT ORG_ID, CONFIG_KEY, COMPONENT_NAME, UPDATE_DATE, UPDATE_TIME FROM event_details WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'",
+      "objective": "Verify that the prepared distribution and secondary index produce a broad date-range access pattern with a residual component-name filter, matching the purge/delete mechanism.",
+      "expected_evidence": [
+        "The optimizer chooses a range-oriented access path driven by the leading date column rather than a single-row lookup.",
+        "The estimated row count is materially larger than one row, showing that the delete can walk through many candidate rows.",
+        "The plan reflects row fetches from the table because the secondary index is not covering for the full row payload and the table has no PRIMARY KEY."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

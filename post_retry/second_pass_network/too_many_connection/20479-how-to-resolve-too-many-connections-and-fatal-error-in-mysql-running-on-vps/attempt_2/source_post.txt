@@ -1,0 +1,148 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/20479/how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps
+Canonical URL: https://dba.stackexchange.com/questions/20479/how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps
+Title: How to resolve too many connections and fatal error in mysql running on vps
+Question ID: 20479
+License: CC BY-SA 3.0; author: Shashank
+
+# Question
+
+I am running an application PHPlist on my linode server, simultaneously running 12 PHP scripts, each of which opens a MySQL connection. Now when I access PHPlist it often shows this error:
+
+Fatal Error: Sorry, the server is currently too busy, please try again
+later.
+
+When I am trying to access phpMyAdmin, it shows me a #1040 error.
+Output of my PHP scripts which run through `cron` jobs shows:
+
+PHP Warning: mysqli_connect(): (HY000/1040): Too many connections
+
+I am using the LAMP stack on the server with phpMyAdmin; the `top` output in terminal shows `mysqld` using 100-130% CPU. When I am trying to troubleshoot this problem I got some clues:
+
+- Increase max_connection variable : I am using 200 (100 by default)
+
+- Open table cache: 512 (400 by default)
+
+There are lots of variables to set but I can't determine what specific ones, I am getting some reference from:
+too many connections (https://stackoverflow.com/questions/5040048/php-mysql-too-many-connections-to-database-error.)
+and http://dev.mysql.com/doc/refman/5.5/en/table-cache.html (http://dev.mysql.com/doc/refman/5.5/en/table-cache.html)
+
+But according to my usage how to increase memory and what is the maximum memory difficult for me.
+
+On my server I am using around 12 PHP scripts, PHPlist application for sending emails, and a major database for user registrations.
+
+Kindly help me to resolve this problem.
+
+# Answers
+
+## Answer 1
+Author: Mahesh Patil
+Accepted: no
+Score: 2
+License: CC BY-SA 3.0
+
+- The global variable `max_connections` determines the maximum number of concurrent connections to MySQL. Make sure that you have a high value for this variable. You can increase this value to 300 or 400 and try restarting MySQL after this settings.
+
+- Design your application such that a MySQL connection is kept open for a very short period of time.
+
+- You should also check that client code is not using persistent connections (such as mysql_pconnect()) improperly.
+
+Also execute `Flush status;` command on MySQl server to reduce this value.
+
+I hope these suggestions helps.
+
+## Answer 2
+Author: RolandoMySQLDBA
+Accepted: yes
+Score: 12
+License: CC BY-SA 3.0
+
+First you need to do is run this query:```
+SELECT user,host FROM mysql.user
+WHERE super_priv='Y' AND
+CONCAT(user,'@',host) <> 'root@localhost';
+
+```This will list all users that have SUPER privilege (http://dev.mysql.com/doc/refman/5.5/en/privileges-provided.html#priv_super). Most users that do application-related DB processing do not require this privilege. According to the MySQL Documentation (http://dev.mysql.com/doc/refman/5.5/en/privileges-provided.html#priv_super), those with SUPER privilege can do the following:
+
+- Run CHANGE MASTER TO for controlling replication coordinates
+
+- KILL or `mysqladmin kill` to kill threads belonging to other accounts
+
+- PURGE BINARY LOGS to systemically delete binary logs
+
+- Make configuration changes using SET GLOBAL to modify global system variables
+
+- mysqladmin debug command
+
+- enabling or disabling logging
+
+- performing updates even if the *read_only* (http://dev.mysql.com/doc/refman/5.5/en/server-system-variables.html#sysvar_read_only) system variable is enabled
+
+- starting and stopping replication on slave servers
+
+- specification of any account in the DEFINER attribute of stored programs and views
+
+- HERE IS THE MOST IMPORTANT ONE FOR YOUR PROBLEM: : Enables you to connect (once) even if the connection limit controlled by the max_connections (http://dev.mysql.com/doc/refman/5.5/en/server-system-variables.html#sysvar_max_connections) system variable is reached.
+
+You will need to login as root@localhost and revoke SUPER privilege as follows:```
+UPDATE mysql.user SET super_priv='N'
+WHERE super_priv='Y' AND
+CONCAT(user,'@',host) <> 'root@localhost';
+FLUSH PRIVILEGES;
+
+```Once you do this, whenever all users flood mysql connections, only `root@localhost` can login. After all, if everybody and his grandmother had SUPER privilege, this would bar `root@localhost` from ever connecting ahead of everybody else. If max_connections is at 200 and you need to raise it to 300 without having to restart mysqld, you can dynamically increase the max_connections (http://dev.mysql.com/doc/refman/5.5/en/server-system-variables.html#sysvar_max_connections) with this command:```
+mysql> SET GLOBAL max_connections = 300;
+
+```That will allow more connections effective immediately, but don't just arbitrarily increase the number on whim. You have to make sure mysql has enough RAM to accommodate the increase.
+
+CAVEAT : If you change max_connections dynamically to 300, please put it in /etc/my.cnf```
+[mysqld]
+max_connections=300
+
+```You can run mysqltuner.pl on your MySQL DB Server. If you do not have it, then run the following:```
+cd
+wget mysqltuner.pl
+perl mysqltuner.pl
+
+```The 3rd line under Performance Metrics has this```
+-------- Performance Metrics -------------------------------------------------
+[--] Up for: 8d 20h 46m 22s (8M q [10.711 qps], 129K conn, TX: 90B, RX: 19B)
+[--] Reads / Writes: 4% / 96%
+[--] Total buffers: 2.1G global + 5.4M per thread (2000 max threads)
+[OK] Maximum possible memory usage: 12.6G (80% of installed RAM)
+
+```See the 5.4M per thread? That is multipled by max_connections. In this example, that would be a maximum of about 10.8G of RAM. Therefore, each time you bump up max_connections, you should run mysqltuner.pl and check if you are pressing the OS for too much memory.
+
+In any case, limiting who has SUPER privileges give such users opportunity to mitigate flooding mysqld with DB Connections.
+
+## Answer 3
+Author: rubo77
+Accepted: no
+Score: 0
+License: CC BY-SA 4.0
+
+Check if your disk is full, this can cause the same error:```
+df -h
+
+```will show you the remaining space on each partition, you probably have to check the root partition `/` (or /var/ in case you have an extra partition for this):```
+df -h /
+
+```
+
+# Linked Page Snapshots
+
+- URL: http://dev.mysql.com/doc/refman/5.5/en/table-cache.html
+  Title: 
+  Description/Error: HTTP Error 403: Forbidden
+
+- URL: http://dev.mysql.com/doc/refman/5.5/en/privileges-provided.html#priv_super
+  Title: 
+  Description/Error: HTTP Error 403: Forbidden
+
+- URL: http://dev.mysql.com/doc/refman/5.5/en/server-system-variables.html#sysvar_read_only
+  Title: 
+  Description/Error: HTTP Error 403: Forbidden
+
+- URL: http://dev.mysql.com/doc/refman/5.5/en/server-system-variables.html#sysvar_max_connections
+  Title: 
+  Description/Error: HTTP Error 403: Forbidden

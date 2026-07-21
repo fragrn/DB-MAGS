@@ -1,0 +1,595 @@
+{
+  "baseline": {
+    "db_metrics": {
+      "Aborted_connects": "4",
+      "Binlog_cache_disk_use": "16",
+      "Com_commit": "3624491",
+      "Com_delete": "1458113",
+      "Com_insert": "8367619",
+      "Com_select": "79630648",
+      "Com_update": "37156565",
+      "Created_tmp_disk_tables": "9",
+      "Created_tmp_tables": "246565",
+      "Innodb_buffer_pool_read_requests": "3186782976",
+      "Innodb_buffer_pool_reads": "96573716",
+      "Innodb_log_waits": "0",
+      "Innodb_row_lock_time": "17186598",
+      "Innodb_row_lock_time_avg": "3",
+      "Innodb_row_lock_waits": "4762530",
+      "Max_used_connections": "70",
+      "Slow_queries": "21",
+      "Sort_merge_passes": "56",
+      "Threads_connected": "1",
+      "Threads_running": "2",
+      "innodb_lock_wait_timeout": "50",
+      "max_connections": 151,
+      "wait_timeout": "28800",
+      "processlist": [
+        {
+          "Id": 5,
+          "User": "event_scheduler",
+          "Host": "localhost",
+          "db": null,
+          "Command": "Daemon",
+          "Time": 452182,
+          "State": "Waiting on empty queue",
+          "Info": null
+        },
+        {
+          "Id": 3223,
+          "User": "root",
+          "Host": "localhost:63287",
+          "db": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+          "Command": "Query",
+          "Time": 0,
+          "State": "init",
+          "Info": "SHOW FULL PROCESSLIST"
+        }
+      ],
+      "metadata_lock_wait_count": 0,
+      "metadata_lock_evidence": ""
+    },
+    "workload": {
+      "qps": 0.0,
+      "tps": 0.0,
+      "interval_sec": 3.0,
+      "performance_schema_slow_sql": {
+        "available": true,
+        "schema": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+        "slow_threshold_sec": 10.0,
+        "effective_threshold_sec": 10.0,
+        "total_statement_count": 14,
+        "slow_statement_count": 0,
+        "slow_ratio": 0.0,
+        "reset_detected": false
+      },
+      "performance_schema_query_latency": {
+        "available": true,
+        "schema": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+        "top10": [
+          {
+            "digest": "b0a2105f85f781a2af3593f66431f1528f14f14566499839ea27e23911fb9a5a",
+            "digest_text": "SHOW GLOBAL STATUS WHERE `Variable_name` IN (...)",
+            "execution_count": 2,
+            "avg_latency_ms": 1.686,
+            "median_latency_ms": 1.66,
+            "p95_latency_ms": 1.738,
+            "max_latency_ms": 1.738,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 3.372
+          },
+          {
+            "digest": "6d631211d940af327fe3f82a008b908dc6cba3912cae61881353006e73354eee",
+            "digest_text": "SET NAMES `utf8mb4`",
+            "execution_count": 4,
+            "avg_latency_ms": 0.103,
+            "median_latency_ms": 0.1,
+            "p95_latency_ms": 0.145,
+            "max_latency_ms": 0.145,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 0.412
+          },
+          {
+            "digest": "f2b9be5f0f32ca7507e4ddf133cd2fad0993a1c26fde9caa6f067b1af2b7603c",
+            "digest_text": "COMMIT",
+            "execution_count": 2,
+            "avg_latency_ms": 0.053,
+            "median_latency_ms": 0.044,
+            "p95_latency_ms": 0.066,
+            "max_latency_ms": 0.066,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 0.107
+          },
+          {
+            "digest": "41eb3b98a0a8ca5242efb496b77bb03b31d873053653fed8bd7543d714afec7c",
+            "digest_text": "SET `AUTOCOMMIT` = ?",
+            "execution_count": 4,
+            "avg_latency_ms": 0.052,
+            "median_latency_ms": 0.044,
+            "p95_latency_ms": 0.063,
+            "max_latency_ms": 0.063,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 0.207
+          },
+          {
+            "digest": "4c101e52f4652489213e0e5d227bc483f9c8fdb9a2c85f299fc4232cbbda3edd",
+            "digest_text": "USE `performance_schema`",
+            "execution_count": 2,
+            "avg_latency_ms": 0.044,
+            "median_latency_ms": 0.046,
+            "p95_latency_ms": 0.046,
+            "max_latency_ms": 0.046,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 0.089
+          }
+        ],
+        "overall": {
+          "count": 14,
+          "avg_latency_ms": 0.299,
+          "median_latency_ms": 0.063,
+          "p95_latency_ms": 1.738,
+          "max_latency_ms": 1.738,
+          "total_latency_ms": 4.187
+        },
+        "reset_detected": false
+      }
+    },
+    "os_metrics": {
+      "platform": "Darwin",
+      "load_average": {
+        "1m": 2.08,
+        "5m": 1.65,
+        "15m": 1.88
+      },
+      "cpu_usage": {
+        "user_pct": 11.23,
+        "sys_pct": 9.98,
+        "idle_pct": 78.78,
+        "usage_ratio": 0.212
+      },
+      "memory": {
+        "total_kb": 2175132,
+        "active_kb": 1526112,
+        "wired_kb": 522420,
+        "free_kb": 126600,
+        "usage_ratio": 0.9418
+      },
+      "disk": {
+        "total_bytes": 494384795648,
+        "used_bytes": 470492057600,
+        "free_bytes": 23892738048,
+        "usage_ratio": 0.9517
+      },
+      "disk_io": {},
+      "network": {},
+      "file_descriptors": {
+        "open_fds": -1
+      }
+    },
+    "timestamp": 1784458007.013376
+  },
+  "execution_trace": {
+    "tasks": {
+      "hold_hot_row_locks": {
+        "task_id": "hold_hot_row_locks",
+        "status": "completed",
+        "start_time": "2026-07-19T10:46:47+00:00",
+        "end_time": "2026-07-19T10:47:45+00:00",
+        "stdout": "{'kind': 'raw_transaction_script', 'database': 'post_retry_long_transaction_252749_lock_wait_tim_a2', 'script_count': 1, 'thread_count': 1, 'executed_steps': 4, 'error_count': 0, 'expected_error_count': 0, 'errors': [], 'expected_errors': [], 'expected_error_codes': []}\n",
+        "stderr": "",
+        "errors": [],
+        "metrics": {
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "result": {
+                "kind": "raw_transaction_script",
+                "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+                "script_count": 1,
+                "thread_count": 1,
+                "executed_steps": 4,
+                "error_count": 0,
+                "expected_error_count": 0,
+                "errors": [],
+                "expected_errors": [],
+                "expected_error_codes": []
+              }
+            }
+          ]
+        }
+      },
+      "run_conflicting_delete": {
+        "task_id": "run_conflicting_delete",
+        "status": "completed",
+        "start_time": "2026-07-19T10:46:47+00:00",
+        "end_time": "2026-07-19T10:47:46+00:00",
+        "stdout": "{'kind': 'raw_sql_workload', 'database': 'post_retry_long_transaction_252749_lock_wait_tim_a2', 'concurrency': 1, 'duration_sec': 59.0, 'executions': 20, 'slow_threshold_sec': 10.0, 'slow_threshold_ms': 10000.0, 'latency_artifact': '/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry/long_transaction/252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query/attempt_2/20260719-184059_12909dca/run_conflicting_delete_raw_sql_workload_latencies.json', 'min_ms': 22.52, 'avg_ms': 392.38, 'median_ms': 22.642, 'p95_ms': 23.162, 'max_ms': 7416.227, 'top10_slowest_ms': [7416.227, 23.162, 23.088, 22.864, 22.788, 22.745, 22.743, 22.708, 22.696, 22.651], 'above_long_query_time_count': 0, 'error_count': 1, 'errors': [\"(1205, 'Lock wait timeout exceeded; try restarting transaction')\"], 'latency_ms': {'min': 22.52, 'p50': 22.642, 'p95': 23.162, 'max': 7416.227}}\n",
+        "stderr": "",
+        "errors": [],
+        "metrics": {
+          "actions": [
+            {
+              "kind": "raw_sql_workload",
+              "result": {
+                "kind": "raw_sql_workload",
+                "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+                "concurrency": 1,
+                "duration_sec": 59.0,
+                "executions": 20,
+                "slow_threshold_sec": 10.0,
+                "slow_threshold_ms": 10000.0,
+                "latency_artifact": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry/long_transaction/252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query/attempt_2/20260719-184059_12909dca/run_conflicting_delete_raw_sql_workload_latencies.json",
+                "min_ms": 22.52,
+                "avg_ms": 392.38,
+                "median_ms": 22.642,
+                "p95_ms": 23.162,
+                "max_ms": 7416.227,
+                "top10_slowest_ms": [
+                  7416.227,
+                  23.162,
+                  23.088,
+                  22.864,
+                  22.788,
+                  22.745,
+                  22.743,
+                  22.708,
+                  22.696,
+                  22.651
+                ],
+                "above_long_query_time_count": 0,
+                "error_count": 1,
+                "errors": [
+                  "(1205, 'Lock wait timeout exceeded; try restarting transaction')"
+                ],
+                "latency_ms": {
+                  "min": 22.52,
+                  "p50": 22.642,
+                  "p95": 23.162,
+                  "max": 7416.227
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "cleanup_status": "completed",
+    "cleanup_errors": [],
+    "safety_events": []
+  },
+  "after": {
+    "db_metrics": {
+      "Aborted_connects": "4",
+      "Binlog_cache_disk_use": "17",
+      "Com_commit": "3624500",
+      "Com_delete": "1458134",
+      "Com_insert": "8367619",
+      "Com_select": "79630656",
+      "Com_update": "37156566",
+      "Created_tmp_disk_tables": "9",
+      "Created_tmp_tables": "246571",
+      "Innodb_buffer_pool_read_requests": "3187784077",
+      "Innodb_buffer_pool_reads": "96573719",
+      "Innodb_log_waits": "0",
+      "Innodb_row_lock_time": "17244809",
+      "Innodb_row_lock_time_avg": "3",
+      "Innodb_row_lock_waits": "4762532",
+      "Max_used_connections": "70",
+      "Slow_queries": "23",
+      "Sort_merge_passes": "56",
+      "Threads_connected": "2",
+      "Threads_running": "2",
+      "innodb_lock_wait_timeout": "50",
+      "max_connections": 151,
+      "wait_timeout": "28800",
+      "processlist": [
+        {
+          "Id": 5,
+          "User": "event_scheduler",
+          "Host": "localhost",
+          "db": null,
+          "Command": "Daemon",
+          "Time": 452246,
+          "State": "Waiting on empty queue",
+          "Info": null
+        },
+        {
+          "Id": 3233,
+          "User": "root",
+          "Host": "localhost:63344",
+          "db": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+          "Command": "Query",
+          "Time": 0,
+          "State": "init",
+          "Info": "SHOW FULL PROCESSLIST"
+        }
+      ],
+      "metadata_lock_wait_count": 0,
+      "metadata_lock_evidence": ""
+    },
+    "workload": {
+      "qps": 0.0,
+      "tps": 0.0,
+      "interval_sec": 3.0,
+      "performance_schema_slow_sql": {
+        "available": true,
+        "schema": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+        "slow_threshold_sec": 10.0,
+        "effective_threshold_sec": 10.0,
+        "total_statement_count": 14,
+        "slow_statement_count": 0,
+        "slow_ratio": 0.0,
+        "reset_detected": false
+      },
+      "performance_schema_query_latency": {
+        "available": true,
+        "schema": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+        "top10": [
+          {
+            "digest": "b0a2105f85f781a2af3593f66431f1528f14f14566499839ea27e23911fb9a5a",
+            "digest_text": "SHOW GLOBAL STATUS WHERE `Variable_name` IN (...)",
+            "execution_count": 2,
+            "avg_latency_ms": 0.815,
+            "median_latency_ms": 0.457,
+            "p95_latency_ms": 1.202,
+            "max_latency_ms": 1.202,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 1.629
+          },
+          {
+            "digest": "6d631211d940af327fe3f82a008b908dc6cba3912cae61881353006e73354eee",
+            "digest_text": "SET NAMES `utf8mb4`",
+            "execution_count": 4,
+            "avg_latency_ms": 0.09,
+            "median_latency_ms": 0.087,
+            "p95_latency_ms": 0.115,
+            "max_latency_ms": 0.115,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 0.36
+          },
+          {
+            "digest": "41eb3b98a0a8ca5242efb496b77bb03b31d873053653fed8bd7543d714afec7c",
+            "digest_text": "SET `AUTOCOMMIT` = ?",
+            "execution_count": 4,
+            "avg_latency_ms": 0.042,
+            "median_latency_ms": 0.042,
+            "p95_latency_ms": 0.06,
+            "max_latency_ms": 0.06,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 0.169
+          },
+          {
+            "digest": "f2b9be5f0f32ca7507e4ddf133cd2fad0993a1c26fde9caa6f067b1af2b7603c",
+            "digest_text": "COMMIT",
+            "execution_count": 2,
+            "avg_latency_ms": 0.032,
+            "median_latency_ms": 0.021,
+            "p95_latency_ms": 0.046,
+            "max_latency_ms": 0.046,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 0.064
+          },
+          {
+            "digest": "4c101e52f4652489213e0e5d227bc483f9c8fdb9a2c85f299fc4232cbbda3edd",
+            "digest_text": "USE `performance_schema`",
+            "execution_count": 2,
+            "avg_latency_ms": 0.044,
+            "median_latency_ms": 0.044,
+            "p95_latency_ms": 0.046,
+            "max_latency_ms": 0.046,
+            "max_latency_source": "window_histogram_bucket_high",
+            "total_latency_ms": 0.088
+          }
+        ],
+        "overall": {
+          "count": 14,
+          "avg_latency_ms": 0.165,
+          "median_latency_ms": 0.048,
+          "p95_latency_ms": 1.202,
+          "max_latency_ms": 1.202,
+          "total_latency_ms": 2.31
+        },
+        "reset_detected": false
+      }
+    },
+    "os_metrics": {
+      "platform": "Darwin",
+      "load_average": {
+        "1m": 1.48,
+        "5m": 1.56,
+        "15m": 1.82
+      },
+      "cpu_usage": {
+        "user_pct": 14.79,
+        "sys_pct": 9.99,
+        "idle_pct": 75.21,
+        "usage_ratio": 0.248
+      },
+      "memory": {
+        "total_kb": 2179380,
+        "active_kb": 1527032,
+        "wired_kb": 532664,
+        "free_kb": 119684,
+        "usage_ratio": 0.9451
+      },
+      "disk": {
+        "total_bytes": 494384795648,
+        "used_bytes": 470486614016,
+        "free_bytes": 23898181632,
+        "usage_ratio": 0.9517
+      },
+      "disk_io": {},
+      "network": {},
+      "file_descriptors": {
+        "open_fds": -1
+      }
+    },
+    "timestamp": 1784458070.749238
+  },
+  "task_dag": {
+    "tasks": {
+      "hold_hot_row_locks": {
+        "task_id": "hold_hot_row_locks",
+        "task_type": "raw_transaction_script",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+            "duration_sec": 59,
+            "scripts": [
+              {
+                "role": "configure",
+                "autocommit": false,
+                "concurrency": 1,
+                "steps": [
+                  {
+                    "sql": "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+                  },
+                  {
+                    "sql": "UPDATE event_details SET STATUS = STATUS + 1 WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health' ORDER BY UPDATE_DATE, UPDATE_TIME LIMIT 2000"
+                  },
+                  {
+                    "sql": "DO SLEEP(58)"
+                  },
+                  {
+                    "sql": "ROLLBACK"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "expected_metrics": {
+          "rows_modified_min": 2000,
+          "rows_locked_min": 2000,
+          "undo_log_entries_min": 2000
+        },
+        "success_criteria": {
+          "transaction_remains_open_during_sleep": true,
+          "undo_log_growth_visible": true
+        },
+        "risk_assessment": "low",
+        "cleanup_actions": [],
+        "metadata": {
+          "root_cause": "Long-lived write transaction that holds locks on the same hot predicate range as the DELETE"
+        }
+      },
+      "run_conflicting_delete": {
+        "task_id": "run_conflicting_delete",
+        "task_type": "raw_sql_workload",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+            "sql": "DELETE FROM event_details WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'",
+            "concurrency": 1,
+            "duration_sec": 59
+          }
+        ],
+        "expected_metrics": {
+          "lock_wait_timeout_errors_min": 1
+        },
+        "success_criteria": {
+          "delete_hits_lock_wait_timeout": true,
+          "conflict_is_on_same_predicate_range": true
+        },
+        "risk_assessment": "low",
+        "cleanup_actions": [],
+        "metadata": {
+          "root_cause": "DELETE on the same hot range blocked by the open updater transaction"
+        }
+      }
+    },
+    "edges": [],
+    "schedule": {
+      "hold_hot_row_locks": 0.0,
+      "run_conflicting_delete": 0.0
+    }
+  },
+  "safety": {
+    "approved": true,
+    "reasons": [],
+    "warnings": [],
+    "normalized_task_dag": {
+      "tasks": {
+        "hold_hot_row_locks": {
+          "task_id": "hold_hot_row_locks",
+          "task_type": "raw_transaction_script",
+          "actions": [
+            {
+              "kind": "raw_transaction_script",
+              "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+              "duration_sec": 59,
+              "scripts": [
+                {
+                  "role": "configure",
+                  "autocommit": false,
+                  "concurrency": 1,
+                  "steps": [
+                    {
+                      "sql": "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ"
+                    },
+                    {
+                      "sql": "UPDATE event_details SET STATUS = STATUS + 1 WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health' ORDER BY UPDATE_DATE, UPDATE_TIME LIMIT 2000"
+                    },
+                    {
+                      "sql": "DO SLEEP(58)"
+                    },
+                    {
+                      "sql": "ROLLBACK"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "expected_metrics": {
+            "rows_modified_min": 2000,
+            "rows_locked_min": 2000,
+            "undo_log_entries_min": 2000
+          },
+          "success_criteria": {
+            "transaction_remains_open_during_sleep": true,
+            "undo_log_growth_visible": true
+          },
+          "risk_assessment": "low",
+          "cleanup_actions": [],
+          "metadata": {
+            "root_cause": "Long-lived write transaction that holds locks on the same hot predicate range as the DELETE"
+          }
+        },
+        "run_conflicting_delete": {
+          "task_id": "run_conflicting_delete",
+          "task_type": "raw_sql_workload",
+          "actions": [
+            {
+              "kind": "raw_sql_workload",
+              "database": "post_retry_long_transaction_252749_lock_wait_tim_a2",
+              "sql": "DELETE FROM event_details WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'",
+              "concurrency": 1,
+              "duration_sec": 59
+            }
+          ],
+          "expected_metrics": {
+            "lock_wait_timeout_errors_min": 1
+          },
+          "success_criteria": {
+            "delete_hits_lock_wait_timeout": true,
+            "conflict_is_on_same_predicate_range": true
+          },
+          "risk_assessment": "low",
+          "cleanup_actions": [],
+          "metadata": {
+            "root_cause": "DELETE on the same hot range blocked by the open updater transaction"
+          }
+        }
+      },
+      "edges": [],
+      "schedule": {
+        "hold_hot_row_locks": 0.0,
+        "run_conflicting_delete": 0.0
+      }
+    }
+  },
+  "slow_log_evidence": null
+}
