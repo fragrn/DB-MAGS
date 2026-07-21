@@ -1,0 +1,61 @@
+{
+  "database": "post_retry_resource_limitation_220486_slow_r825485_a3",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS workload_table (id INT PRIMARY KEY, category VARCHAR(64), payload NVARCHAR(MAX), memory_grant INT, execution_time INT)",
+    "CREATE TABLE IF NOT EXISTS metadata_table (id INT PRIMARY KEY, description NVARCHAR(255))"
+  ],
+  "generation_sql": [
+    "INSERT INTO workload_table (id, category, payload, memory_grant, execution_time) SELECT n, CASE WHEN n % 10 = 0 THEN 'high' ELSE 'low' END, REPLICATE('A', 1000), CASE WHEN n % 10 = 0 THEN 100 ELSE 10 END, CASE WHEN n % 10 = 0 THEN 500 ELSE 50 END FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers",
+    "INSERT INTO metadata_table (id, description) SELECT n, CONCAT('Metadata ', n) FROM (SELECT TOP 100 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers"
+  ],
+  "tables": [
+    {
+      "name": "workload_table",
+      "purpose": "Simulates queries with varying memory grants and execution times.",
+      "target_rows": 10000,
+      "distribution_notes": "High memory grant rows are sparse and simulate contention."
+    },
+    {
+      "name": "metadata_table",
+      "purpose": "Reference table for joins or metadata queries.",
+      "target_rows": 100,
+      "distribution_notes": "Uniform distribution for metadata."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "workload_table": 10000,
+      "metadata_table": 100
+    },
+    "value_skew": {
+      "workload_table.category": "High memory grant rows are sparse."
+    },
+    "predicate_selectivity": {
+      "workload_table.category = 'high'": 0.1
+    },
+    "join_selectivity": {
+      "workload_table.id = metadata_table.id": "one-to-one for the first 100 rows."
+    }
+  },
+  "analyze_tables": [
+    "workload_table",
+    "metadata_table"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT w.* FROM workload_table w JOIN metadata_table m ON w.id = m.id WHERE w.category = 'high' ORDER BY w.execution_time DESC",
+      "objective": "Verify that high memory grant rows are prioritized and cause contention.",
+      "expected_evidence": [
+        "The plan shows memory grants for high memory rows.",
+        "The query execution involves parallelism.",
+        "RESOURCE_SEMAPHORE waits are visible in the plan."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

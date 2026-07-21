@@ -1,0 +1,36 @@
+{
+  "task_specs": [
+    {
+      "task_id": "create_database",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_252749_lock_wa_r904374_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_long_transaction_252749_lock_wa_r904374_a4"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database does not exist."
+      }
+    }
+  ],
+  "dependencies": []
+}

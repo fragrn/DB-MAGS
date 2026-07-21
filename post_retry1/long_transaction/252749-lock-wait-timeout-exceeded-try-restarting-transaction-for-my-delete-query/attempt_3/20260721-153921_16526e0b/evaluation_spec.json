@@ -1,0 +1,15 @@
+{
+  "validation_criteria": [
+    "The DELETE query fails with a lock wait timeout error when long-running transactions are active.",
+    "Long-running transactions hold row locks, as observed in the process list or InnoDB status."
+  ],
+  "symptom_evidence": [
+    "Lock wait timeout error during DELETE query.",
+    "Long-running transactions holding locks."
+  ],
+  "mechanism_evidence": [
+    "Row locks held by long-running transactions block the DELETE query.",
+    "Lock contention observed in InnoDB status or process list."
+  ],
+  "minimum_plan_similarity": 0.7
+}

@@ -1,0 +1,14 @@
+{
+  "validation_criteria": [
+    "Transaction 2 is blocked until Transaction 1 commits or rolls back.",
+    "Transaction 2 completes successfully if Transaction 1 commits.",
+    "Transaction 2 fails with a conflict error if Transaction 1 rolls back."
+  ],
+  "symptom_evidence": [
+    "Blocked transactions when two sessions attempt to update the same row."
+  ],
+  "mechanism_evidence": [
+    "PostgreSQL's MVCC behavior ensures that reads do not block writes and vice versa."
+  ],
+  "minimum_plan_similarity": 0.6
+}

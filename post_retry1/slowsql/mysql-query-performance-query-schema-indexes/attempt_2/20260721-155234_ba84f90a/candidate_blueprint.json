@@ -1,0 +1,128 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Performance issues with a query on a large table containing call data. The query involves multiple conditions and returns a large dataset, but takes excessive time to execute.",
+    "symptoms": [
+      "Query takes over 7 minutes to execute",
+      "Subquery takes 4.5 seconds",
+      "EXPLAIN shows scanning 1.6M rows"
+    ],
+    "mechanism": "Inefficient index usage due to range conditions and IN clause, leading to high row scan counts.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "main_query": ">7 minutes",
+          "subquery": "4.5 seconds"
+        },
+        "source": "explicit_post",
+        "evidence": "DBA described query runtime issues.",
+        "confidence": 0.9
+      },
+      {
+        "key": "table_cardinality",
+        "value": {
+          "calls": 30,
+          "000,000 rows approx.": null
+        },
+        "source": "explicit_post",
+        "evidence": "DBA provided table size estimate.",
+        "confidence": 0.8
+      },
+      {
+        "key": "index_usage",
+        "value": {
+          "idx_CustID_DateStart": "used",
+          "EXPLAIN rows": "1,660,009"
+        },
+        "source": "explicit_post",
+        "evidence": "EXPLAIN output provided.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The IN clause prevents optimal index usage.",
+      "Range conditions limit index effectiveness.",
+      "Low cardinality columns may not benefit from indexing."
+    ],
+    "unknowns": [
+      "Exact distribution of data in the 'calls' table.",
+      "Impact of disk IO on query performance.",
+      "Effectiveness of alternative indexes."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing setup and reproduction.",
+    "missing_capabilities": [
+      "Existing target database"
+    ],
+    "unmatched_conditions": [
+      "Database environment inspection failed"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_mysql_query_performance_r354839_a2",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_mysql_query_performance_r354839_a2",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Slow query performance due to inefficient index usage",
+    "target_database": "post_retry_slowsql_mysql_query_performance_r354839_a2",
+    "dba_description": "Performance issues with a query on a large table containing call data. The query involves multiple conditions and returns a large dataset, but takes excessive time to execute.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How can the database environment be restored or recreated?"
+  ],
+  "rationale": "The target database does not exist, blocking all reproduction efforts. Further steps require resolving this issue."
+}

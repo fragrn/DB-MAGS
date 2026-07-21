@@ -1,0 +1,83 @@
+{
+  "database": "post_retry_slowsql_224651_stored_procedure_r59_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS EDI_PSI_HDR (ODBC_ID VARCHAR(10) PRIMARY KEY, TRANSACTION_SET VARCHAR(5), CUST_ID VARCHAR(15), ST_ID VARCHAR(15), PO_NUM VARCHAR(22), V_STATUS VARCHAR(20), V_STATUS_DT DATETIME)",
+    "CREATE TABLE IF NOT EXISTS CUSTOMER (ID VARCHAR(15) PRIMARY KEY, SALESREP_ID VARCHAR(15), TERRITORY VARCHAR(15))",
+    "CREATE TABLE IF NOT EXISTS CUST_ADDRESS (CUSTOMER_ID VARCHAR(15), ADDR_NO INT, NAME VARCHAR(50), ADDR_1 VARCHAR(50), ADDR_2 VARCHAR(50), ADDR_3 VARCHAR(50), CITY VARCHAR(50), STATE VARCHAR(50), ZIPCODE VARCHAR(10), COUNTRY VARCHAR(50), SHIPTO_ID VARCHAR(15), PRIMARY KEY (CUSTOMER_ID, ADDR_NO))",
+    "CREATE TABLE IF NOT EXISTS CUSTOMER_ORDER (ID VARCHAR(15) PRIMARY KEY, CUSTOMER_PO_REF VARCHAR(22), SHIPTO_ID VARCHAR(15))",
+    "CREATE TABLE IF NOT EXISTS CUSTOMER_ORDER_LINE (CUST_ORDER_ID VARCHAR(15), PART_ID VARCHAR(30), PROMISE_DEL_DATE DATETIME, TOTAL_SHIPPED_QTY DECIMAL(14,4), PRIMARY KEY (CUST_ORDER_ID, PART_ID))"
+  ],
+  "generation_sql": [
+    "INSERT INTO EDI_PSI_HDR (ODBC_ID, TRANSACTION_SET, CUST_ID, ST_ID, PO_NUM, V_STATUS, V_STATUS_DT) SELECT RIGHT('0000' + CAST(n AS VARCHAR), 10), '830', 'C01558', 'ST001', 'PO' + CAST(n AS VARCHAR), 'READY', GETDATE() FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM master.dbo.spt_values) AS numbers",
+    "INSERT INTO CUSTOMER (ID, SALESREP_ID, TERRITORY) SELECT 'C01558', 'SR001', 'TERR001'",
+    "INSERT INTO CUST_ADDRESS (CUSTOMER_ID, ADDR_NO, NAME, ADDR_1, ADDR_2, ADDR_3, CITY, STATE, ZIPCODE, COUNTRY, SHIPTO_ID) SELECT 'C01558', 1, 'Customer Name', 'Addr1', 'Addr2', 'Addr3', 'City', 'State', '12345', 'Country', 'ST001'",
+    "INSERT INTO CUSTOMER_ORDER (ID, CUSTOMER_PO_REF, SHIPTO_ID) SELECT 'ORD001', 'PO1', 'ST001'",
+    "INSERT INTO CUSTOMER_ORDER_LINE (CUST_ORDER_ID, PART_ID, PROMISE_DEL_DATE, TOTAL_SHIPPED_QTY) SELECT 'ORD001', 'PART001', GETDATE() + 15, 0"
+  ],
+  "tables": [
+    {
+      "name": "EDI_PSI_HDR",
+      "purpose": "Primary table for simulating the stored procedure's cursor logic.",
+      "target_rows": 1000,
+      "distribution_notes": "Simulates a queue of records to process."
+    },
+    {
+      "name": "CUSTOMER",
+      "purpose": "Reference table for customer data.",
+      "target_rows": 1,
+      "distribution_notes": "Single customer for simplicity."
+    },
+    {
+      "name": "CUST_ADDRESS",
+      "purpose": "Reference table for customer addresses.",
+      "target_rows": 1,
+      "distribution_notes": "Single address for simplicity."
+    },
+    {
+      "name": "CUSTOMER_ORDER",
+      "purpose": "Simulates existing orders.",
+      "target_rows": 1,
+      "distribution_notes": "Single order for simplicity."
+    },
+    {
+      "name": "CUSTOMER_ORDER_LINE",
+      "purpose": "Simulates order lines.",
+      "target_rows": 1,
+      "distribution_notes": "Single order line for simplicity."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "EDI_PSI_HDR": 1000,
+      "CUSTOMER": 1,
+      "CUST_ADDRESS": 1,
+      "CUSTOMER_ORDER": 1,
+      "CUSTOMER_ORDER_LINE": 1
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "EDI_PSI_HDR",
+    "CUSTOMER",
+    "CUST_ADDRESS",
+    "CUSTOMER_ORDER",
+    "CUSTOMER_ORDER_LINE"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY' AND TRANSACTION_SET = '830'",
+      "objective": "Verify that the data generation produces the expected rows for processing.",
+      "expected_evidence": [
+        "The query returns rows with V_STATUS = 'READY' and TRANSACTION_SET = '830'."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

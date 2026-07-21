@@ -1,0 +1,228 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "ALTER TABLE operation caused a database freeze due to lock contention.",
+    "symptoms": [
+      "Database freeze",
+      "Login failures",
+      "Blocked queries"
+    ],
+    "mechanism": "The ALTER TABLE operation requires an ACCESS EXCLUSIVE lock, which was blocked by a long-lived weak lock, causing subsequent queries to queue behind the waiting lock.",
+    "facts": [
+      {
+        "key": "ALTER TABLE operation",
+        "value": {
+          "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA explicitly mentioned the SQL statement causing the issue.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Table structure",
+        "value": {
+          "table_name": "cliente",
+          "columns": [
+            "rut",
+            "nombre",
+            "razon_social",
+            "direccion",
+            "comuna",
+            "ciudad",
+            "codigo_pais",
+            "activo",
+            "id",
+            "stock",
+            "vigente",
+            "clase",
+            "plan",
+            "plantilla",
+            "facturable",
+            "toolkit",
+            "propietario",
+            "creacion",
+            "codelco",
+            "familia",
+            "enabled_machines",
+            "enabled_canbus",
+            "enabled_horometro",
+            "enabled_comap",
+            "enabled_frio",
+            "enabled_panico",
+            "enabled_puerta",
+            "enabled_rpm",
+            "enabled_supervisor",
+            "demo",
+            "interno",
+            "mqtt_enable",
+            "topicos"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "The table structure was provided in the post.",
+        "confidence": 0.5
+      },
+      {
+        "key": "PostgreSQL version",
+        "value": "9.4.5",
+        "source": "explicit_post",
+        "evidence": "The DBA mentioned the PostgreSQL version in the post.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Lock contention",
+        "value": {
+          "type": "ACCESS EXCLUSIVE",
+          "cause": "long-lived weak lock"
+        },
+        "source": "post_hypothesis",
+        "evidence": "The second answer hypothesizes that a long-lived weak lock caused the issue.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database environment is similar to the one described in the post.",
+      "The table structure and constraints are accurately represented in the post.",
+      "The issue is reproducible with synthetic data and similar locking conditions."
+    ],
+    "unknowns": [
+      "The exact workload and query patterns during the incident.",
+      "Whether any other operations were running concurrently with the ALTER TABLE."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of lock contention during an ALTER TABLE operation can be reproduced using synthetic data and simulated locking scenarios.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact workload patterns during the incident are unknown."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_132851_database_frozen_on_al_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_132851_database_frozen_on_al_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL UNIQUE, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false);"
+    ],
+    "generation_sql": [
+      "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo) SELECT 'rut_' || n, 'nombre_' || n, 'razon_' || n, 'direccion_' || n, 'comuna_' || n, 'ciudad_' || n, 'CL', true FROM generate_series(1, {row_count}) n;"
+    ],
+    "tables": [
+      {
+        "name": "cliente",
+        "purpose": "Primary table to simulate the ALTER TABLE operation and lock contention.",
+        "target_rows": 100000,
+        "distribution_notes": "Uniform distribution of rows with no specific skew."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "cliente": 100000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "cliente"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM cliente WHERE rut = 'rut_1';",
+        "objective": "Verify that the table is populated and accessible before the ALTER TABLE operation.",
+        "expected_evidence": [
+          "The query returns a single row with the expected data."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT * FROM cliente WHERE rut = 'rut_1';",
+      "SELECT COUNT(*) FROM cliente;"
+    ],
+    "concurrency": 10,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database remains responsive during workload.",
+      "ALTER TABLE operation completes successfully."
+    ],
+    "symptom_evidence": [
+      "Database freeze observed during ALTER TABLE operation."
+    ],
+    "mechanism_evidence": [
+      "Lock contention observed in pg_locks during ALTER TABLE operation."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "lock_contention",
+    "target_database": "post_retry_blocking_132851_database_frozen_on_al_a1",
+    "dba_description": "Simulate lock contention during an ALTER TABLE operation to reproduce database freeze.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL UNIQUE, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false);"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "lock_contention"
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident is caused by lock contention during an ALTER TABLE operation. The reproduction plan focuses on simulating this mechanism using synthetic data and workload."
+}

@@ -1,0 +1,99 @@
+{
+  "task_specs": [
+    {
+      "task_id": "initialize_database",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_222262_perform_r66990_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_long_transaction_222262_perform_r66990_a3;"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "schema_initialized": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database initialization for experiment."
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO tools (description) SELECT 'tool_' || g FROM generate_series(1, 1000) g;",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {
+        "rows_inserted": 1000
+      },
+      "success_criteria": {
+        "data_populated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data population for transaction workload."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 500; COMMIT;",
+          "concurrency": 1,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id BETWEEN 250 AND 750; COMMIT;",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "transaction_blocking": true
+      },
+      "success_criteria": {
+        "transactions_blocked": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Transaction blocking due to overlapping updates."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "initialize_database",
+      "populate_data"
+    ],
+    [
+      "populate_data",
+      "run_workload"
+    ]
+  ]
+}

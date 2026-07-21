@@ -1,0 +1,55 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "Query with subqueries is slow due to multiple table scans and inefficient joins.",
+  "symptoms": [
+    "Query takes 3 minutes to return 10 rows.",
+    "Subqueries cause repeated table scans."
+  ],
+  "mechanism": "Subqueries in SELECT clause lead to multiple scans of the same tables, causing performance degradation.",
+  "facts": [
+    {
+      "key": "query_structure",
+      "value": {
+        "subqueries": 4,
+        "joins": [
+          "ainvdet",
+          "ainvhead"
+        ],
+        "filter_conditions": [
+          "date_part('year', h.order_date)"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Original query provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "performance_issue",
+      "value": {
+        "execution_time": "3 minutes for 10 rows"
+      },
+      "source": "explicit_post",
+      "evidence": "User reported query execution time in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "suggested_optimization",
+      "value": {
+        "rewrite_query": "Replace subqueries with CASE statements or filtered aggregates."
+      },
+      "source": "post_hypothesis",
+      "evidence": "Accepted answer suggests rewriting the query to avoid subqueries.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "The database schema includes tables `grpdesc`, `ainvdet`, and `ainvhead`.",
+    "Indexes are not optimized for the query's join and filter conditions."
+  ],
+  "unknowns": [
+    "Exact schema of the tables involved.",
+    "Presence and structure of indexes on the tables."
+  ],
+  "confidence": 0.8
+}

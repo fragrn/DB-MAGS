@@ -1,0 +1,51 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Query performance issue when filtering databases based on table existence and state.",
+  "symptoms": [
+    "Slow execution of SELECT statement filtering databases based on table existence and state."
+  ],
+  "mechanism": "Potential blocking due to long-running transactions or inefficient metadata access.",
+  "facts": [
+    {
+      "key": "query_structure",
+      "value": {
+        "original_query": "SELECT name FROM sys.databases WHERE name NOT IN (...) AND CASE WHEN state_desc = 'ONLINE' THEN OBJECT_ID(...) END IS NOT NULL"
+      },
+      "source": "explicit_post",
+      "evidence": "Query structure provided in the DBA post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "execution_plan",
+      "value": {
+        "clustered_index_seeks": [
+          22,
+          24,
+          48
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Execution plan percentages mentioned in the post.",
+      "confidence": 0.9
+    },
+    {
+      "key": "environment_constraints",
+      "value": {
+        "index_modification": false
+      },
+      "source": "explicit_post",
+      "evidence": "Post explicitly states no control over indexes.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The query performance issue is reproducible in a synthetic environment.",
+    "Blocking due to long-running transactions is a plausible cause."
+  ],
+  "unknowns": [
+    "Exact database schema and table distributions.",
+    "Whether isolation level changes would mitigate the issue."
+  ],
+  "confidence": 0.8
+}

@@ -1,0 +1,55 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "Concurrent UPDATE statements on a single row in a small table experience significant delays due to locking contention.",
+  "symptoms": [
+    "UPDATE statements take minutes to complete despite the small table size.",
+    "Exclusive locks are observed on the target row during concurrent updates."
+  ],
+  "mechanism": "Row-level locking contention caused by multiple concurrent updates targeting the same row.",
+  "facts": [
+    {
+      "key": "table_schema",
+      "value": {
+        "columns": [
+          "scan_uuid",
+          "num_shards_completed"
+        ],
+        "indexes": []
+      },
+      "source": "explicit_post",
+      "evidence": "Table schema provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "update_query",
+      "value": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1",
+      "source": "explicit_post",
+      "evidence": "SQL query provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "lock_type",
+      "value": "ExclusiveLock",
+      "source": "explicit_post",
+      "evidence": "Lock type observed in the provided query output.",
+      "confidence": 1.0
+    },
+    {
+      "key": "concurrency",
+      "value": "hundreds of nodes performing updates",
+      "source": "explicit_post",
+      "evidence": "Concurrency described in the post.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The database is PostgreSQL based on the schema and locking behavior.",
+    "The issue is caused by row-level locking contention due to concurrent updates."
+  ],
+  "unknowns": [
+    "Exact PostgreSQL version.",
+    "Whether the table has any hidden constraints or triggers."
+  ],
+  "confidence": 0.9
+}

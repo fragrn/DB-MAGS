@@ -1,0 +1,44 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to blocking and lock contention in a SQL Server table with many indexes.",
+  "symptoms": [
+    "Single insert operations occasionally take an unusually long time (e.g., 7 minutes).",
+    "Blocking sessions appear in `sys.dm_exec_requests` but the blocking session ID does not correspond to an active query.",
+    "Blocked requests show `LCK_M_S` as the wait type."
+  ],
+  "mechanism": "Excessive indexing on the table leads to increased contention and locking issues during high-concurrency insert operations. Additionally, uncommitted transactions may hold locks, causing blocking.",
+  "facts": [
+    {
+      "key": "Table has 34 non-clustered indexes.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions the table has 34 indexes.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Blocked requests show `LCK_M_S` wait type.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions the wait type for blocked requests.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Blocking session IDs do not correspond to active queries.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions that blocking session IDs appear in `sys.dm_exec_requests` but are not active.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The table schema includes a clustered index and 34 non-clustered indexes.",
+    "The workload involves high-concurrency insert operations."
+  ],
+  "unknowns": [
+    "The exact schema of the table and its indexes.",
+    "The distribution of data and the frequency of insert operations.",
+    "Whether there are long-running uncommitted transactions contributing to the blocking."
+  ],
+  "confidence": 0.9
+}

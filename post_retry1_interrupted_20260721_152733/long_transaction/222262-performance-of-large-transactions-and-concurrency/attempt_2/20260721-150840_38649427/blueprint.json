@@ -1,0 +1,249 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Investigating the performance and concurrency behavior of large transactions in PostgreSQL.",
+    "symptoms": [
+      "Blocked transactions when attempting to update rows locked by another transaction.",
+      "Potential serialization errors in higher isolation levels."
+    ],
+    "mechanism": "PostgreSQL's MVCC (Multiversion Concurrency Control) model and transaction isolation levels determine the behavior of concurrent transactions and their impact on performance.",
+    "facts": [
+      {
+        "key": "MVCC allows reads and writes to not block each other.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Postgres documentation on MVCC and concurrency control.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Transactions can block each other when attempting to update the same rows.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Example provided in the DBA post with two sessions updating the same row.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Higher isolation levels can lead to serialization errors.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Postgres documentation on transaction isolation levels.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The PostgreSQL version used for reproduction will behave similarly to version 9.3 as described in the post.",
+      "The synthetic data and workload will sufficiently mimic the described scenario to reproduce the behavior."
+    ],
+    "unknowns": [
+      "Exact schema and data distribution of the original database.",
+      "Whether the issue is specific to PostgreSQL 9.3 or generalizable to other versions."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction focuses on PostgreSQL's MVCC and transaction isolation mechanisms, which are well-documented and can be simulated with synthetic data.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_long_transaction_222262_perform_r720805_a2",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_222262_perform_r720805_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+    ],
+    "generation_sql": [
+      "INSERT INTO tools (description) SELECT CONCAT('tool_', g.i) FROM generate_series(1, {row_count}) AS g(i);"
+    ],
+    "tables": [
+      {
+        "name": "tools",
+        "purpose": "Simulate a table with rows being updated and read during transactions.",
+        "target_rows": 1000,
+        "distribution_notes": "Uniform distribution of rows with unique IDs."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "tools": 1000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "tools"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM tools WHERE id = 1;",
+        "objective": "Verify that the table and data are correctly set up for the experiment.",
+        "expected_evidence": [
+          "The query retrieves the row with id = 1.",
+          "The row's description matches the expected value."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      {
+        "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id = 1; -- Simulate a long transaction",
+        "concurrency": 1,
+        "duration_sec": 30
+      },
+      {
+        "sql": "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id = 1; -- Simulate a conflicting transaction",
+        "concurrency": 1,
+        "duration_sec": 30
+      }
+    ],
+    "concurrency": 2,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Transaction conflicts are observed when two transactions attempt to update the same row.",
+      "The second transaction is blocked until the first transaction commits or rolls back."
+    ],
+    "symptom_evidence": [
+      "Blocked transactions when attempting to update rows locked by another transaction.",
+      "Potential serialization errors in higher isolation levels."
+    ],
+    "mechanism_evidence": [
+      "PostgreSQL's MVCC model allows reads to proceed during writes.",
+      "Transaction isolation levels affect the behavior of concurrent transactions."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Transaction blocking and concurrency behavior in PostgreSQL.",
+    "target_database": "post_retry_long_transaction_222262_perform_r720805_a2",
+    "dba_description": "Investigate the performance and concurrency behavior of large transactions in PostgreSQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_222262_perform_r720805_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_long_transaction_222262_perform_r720805_a2;"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Setup the environment for reproducing the transaction concurrency issue."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_222262_perform_r720805_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO tools (description) SELECT CONCAT('tool_', g.i) FROM generate_series(1, 1000) AS g(i);"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Generate synthetic data for the tools table."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id = 1; -- Simulate a long transaction",
+          "concurrency": 1,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id = 1; -- Simulate a conflicting transaction",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Simulate the concurrency behavior of transactions in PostgreSQL."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on PostgreSQL's MVCC and transaction isolation mechanisms, which are well-documented and can be simulated with synthetic data. The tasks are designed to set up the environment, generate data, and simulate the described concurrency behavior."
+}

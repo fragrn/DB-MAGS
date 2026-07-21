@@ -1,0 +1,113 @@
+{
+  "tasks": {
+    "setup_environment": {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r669841_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_142243_mysq_r669841_a2"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_142243_mysq_r669841_a2"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, job_type VARCHAR(64), status VARCHAR(32), created_at DATETIME, updated_at DATETIME)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "type": "database_exists",
+        "database": "post_retry_too_many_connection_142243_mysq_r669841_a2"
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "High concurrency from background jobs."
+      }
+    },
+    "generate_data": {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r669841_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO jobs (job_type, status, created_at, updated_at) SELECT CONCAT('type_', FLOOR(RAND() * 10)), 'pending', NOW(), NOW() FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS tmp"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "type": "row_count",
+        "table": "jobs",
+        "min_rows": 1000
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "High concurrency from background jobs."
+      }
+    },
+    "run_workload": {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM jobs WHERE status = 'pending' LIMIT 10",
+          "concurrency": 800,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "type": "connection_errors",
+        "threshold": 10
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "High concurrency from background jobs."
+      }
+    }
+  },
+  "edges": [
+    {
+      "source": "setup_environment",
+      "target": "generate_data",
+      "condition": ""
+    },
+    {
+      "source": "generate_data",
+      "target": "run_workload",
+      "condition": ""
+    }
+  ],
+  "schedule": {
+    "setup_environment": 0.0,
+    "generate_data": 0.0,
+    "run_workload": 0.0
+  }
+}

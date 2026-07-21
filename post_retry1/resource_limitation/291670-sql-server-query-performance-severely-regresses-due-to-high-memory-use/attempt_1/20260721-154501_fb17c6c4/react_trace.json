@@ -1,0 +1,55 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 2,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_resource_limitation_291670_sql_r901852_a1"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_resource_limitation_291670_sql_r901852_a1'\")"
+  },
+  {
+    "step": 3,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"dbms_version\": null,\n    \"summary\": \"Query performance regression due to high memory usage and parameter sniffing in SQL Server.\",\n    \"symptoms\": [\n      \"Query timeouts for large accounts when SQL Server memory is filled.\",\n      \"Queries run fast in SSMS but timeout in the application.\",\n      \"Performance improves after restarting SQL Server.\"\n    ],\n    \"mechanism\": \"Parameter sniffing and memory pressure leading to suboptimal execution plans and excessive disk I/O.\",\n    \"facts\": [\n      {\n        \"key\": \"Query timeouts occur for large accounts when memory is filled.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post describes timeouts for large accounts when SQL Server memory is filled.\"\n      },\n      {\n        \"key\": \"Performance improves after restarting SQL Server.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post mentions that restarting SQL Server resolves the issue temporarily.\"\n      },\n      {\n        \"key\": \"SSMS queries perform better than application queries.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post highlights that queries run faster in SSMS compared to the application.\"\n      },\n      {\n        \"key\": \"Parameter sniffing identified as a root cause.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post explicitly mentions parameter sniffing as a root cause after investigation.\"\n      }\n    ],\n    \"assumptions\": [\n      \"The database schema and workload can be approximated based on the post.\",\n      \"The SQL Server environment is compatible with Azure SQL Edge for reproduction.\"\n    ],\n    \"unknowns\": [\n      \"Exact schema details for the affected tables.\",\n      \"Specific execution plans and query patterns causing the issue.\"\n    ],\n    \"confidence\": 0.9\n  },\n  \"feasibility\": {\n    \"level\": \"mechanism\",\n    \"rationale\": \"The reproduction can focus on parameter sniffing and memory pressure mechanisms without requiring exact schema details.\",\n    \"missing_capabilities\": [],\n    \"unmatched_conditions\": [\"Exact schema details are unavailable.\"],\n    \"confidence\": 0.8\n  },\n  \"environment_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"database\": \"post_retry_resource_limitation_291670_sql_r901852_a1\",\n    \"requirements\": [\"Azure SQL Edge compatibility\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_resource_limitation_291670_sql_r901852_a1\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS accounts (id INT PRIMARY KEY, name NVARCHAR(255), category NVARCHAR(50), created_at DATETIME2)\",\n      \"CREATE TABLE IF NOT EXISTS notifications (id INT PRIMARY KEY, account_id INT, notified_at DATETIME2, payload NVARCHAR(MAX), FOREIGN KEY (account_id) REFERENCES accounts(id))\"\n    ],\n    \"generation_sql\": [\n      \"INSERT INTO accounts (id, name, category, created_at) SELECT n, CONCAT('Account_', n), CASE WHEN n % 4 = 0 THEN 'large' ELSE 'small' END, DATEADD(DAY, -n, GETDATE()) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers\",\n      \"INSERT INTO notifications (id, account_id, notified_at, payload) SELECT n, 1 + (n % 100), DATEADD(MINUTE, -n, GETDATE()), REPLICATE('A', 1000) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers\"\n    ],\n    \"tables\": [\n      {\n        \"name\": \"accounts\",\n        \"purpose\": \"Simulate accounts with varying sizes and categories.\",\n        \"target_rows\": 100,\n        \"distribution_notes\": \"Large accounts are sparse but critical for reproduction.\"\n      },\n      {\n        \"name\": \"notifications\",\n        \"purpose\": \"Simulate notifications tied to accounts to reproduce query patterns.\",\n        \"target_rows\": 10000,\n        \"distribution_notes\": \"Notifications are distributed across accounts with skew towards large accounts.\"\n      }\n    ]"
+  }
+]

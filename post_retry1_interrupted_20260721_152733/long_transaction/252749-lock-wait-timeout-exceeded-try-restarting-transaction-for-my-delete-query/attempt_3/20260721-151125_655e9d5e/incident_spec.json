@@ -1,0 +1,57 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Lock wait timeout exceeded during DELETE query due to long-running transactions and lack of primary key/index optimization.",
+  "symptoms": [
+    "Lock wait timeout exceeded",
+    "DELETE query fails intermittently",
+    "Long-running transactions observed in InnoDB status"
+  ],
+  "mechanism": "DELETE query blocked by long-running transactions holding row locks, exacerbated by lack of primary key and suboptimal indexing.",
+  "facts": [
+    {
+      "key": "dbms",
+      "value": "MySQL 5.6",
+      "source": "explicit_post",
+      "evidence": "The post specifies RDS Aurora with MySQL 5.6.",
+      "confidence": 1.0
+    },
+    {
+      "key": "table_schema",
+      "value": "EVENT_DETAILS table schema provided",
+      "source": "explicit_post",
+      "evidence": "The schema is explicitly shared in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "lock_wait_timeout",
+      "value": 50,
+      "source": "explicit_post",
+      "evidence": "The post mentions the default lock wait timeout of 50 seconds.",
+      "confidence": 1.0
+    },
+    {
+      "key": "long_running_transactions",
+      "value": true,
+      "source": "explicit_post",
+      "evidence": "InnoDB status shows transactions active for hours.",
+      "confidence": 1.0
+    },
+    {
+      "key": "indexing_issue",
+      "value": true,
+      "source": "post_hypothesis",
+      "evidence": "The answer suggests adding an index on COMPONENT_NAME and UPDATE_DATE to optimize DELETE.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The DELETE query is blocked due to row locks held by long-running transactions.",
+    "The absence of a primary key and suboptimal indexing contributes to the issue."
+  ],
+  "unknowns": [
+    "Exact workload patterns causing long-running transactions.",
+    "Whether the suggested index would fully resolve the issue."
+  ],
+  "confidence": 0.9
+}

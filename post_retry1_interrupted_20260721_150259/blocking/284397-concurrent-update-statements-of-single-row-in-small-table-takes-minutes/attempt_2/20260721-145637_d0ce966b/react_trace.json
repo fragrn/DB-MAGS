@@ -1,0 +1,62 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_blocking_284397_concurrent_upda_r997400_a2"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_blocking_284397_concurrent_upda_r997400_a2'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"postgresql\",\n    \"dbms_version\": null,\n    \"summary\": \"Concurrent UPDATE statements on a single row in a small table experience significant delays due to locking contention.\",\n    \"symptoms\": [\"UPDATE statements take minutes to complete despite the small table size.\", \"Locks are held for extended durations.\"],\n    \"mechanism\": \"Lock contention caused by concurrent updates to the same row in a table without indexes.\",\n    \"facts\": [\n      {\"key\": \"table_structure\", \"value\": {\"columns\": [\"scan_uuid\", \"num_shards_completed\"], \"indexes\": \"none\"}, \"source\": \"explicit_post\", \"evidence\": \"Table schema provided in the post.\", \"confidence\": 1.0},\n      {\"key\": \"update_pattern\", \"value\": {\"sql\": \"UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1\"}, \"source\": \"explicit_post\", \"evidence\": \"SQL query provided in the post.\", \"confidence\": 1.0},\n      {\"key\": \"locking_behavior\", \"value\": {\"locks\": [\"ExclusiveLock\", \"RowExclusiveLock\"], \"duration\": \"minutes\"}, \"source\": \"explicit_post\", \"evidence\": \"Lock information provided in the post.\", \"confidence\": 1.0},\n      {\"key\": \"concurrency\", \"value\": {\"nodes\": \"hundreds\", \"connections\": \"direct\"}, \"source\": \"explicit_post\", \"evidence\": \"Concurrency details provided in the post.\", \"confidence\": 1.0}\n    ],\n    \"assumptions\": [\"The DBMS is PostgreSQL as indicated by the table schema and locking behavior.\", \"The issue is caused by row-level locking due to concurrent updates.\"],\n    \"unknowns\": [\"Exact PostgreSQL version.\", \"Whether adding an index or changing the update pattern would resolve the issue.\"],\n    \"confidence\": 0.9\n  },\n  \"feasibility\": {\n    \"level\": \"blocked\",\n    \"rationale\": \"The specified target database does not exist, preventing setup and reproduction.\",\n    \"missing_capabilities\": [\"Target database environment\"],\n    \"unmatched_conditions\": [\"Database 'post_retry_blocking_284397_concurrent_upda_r997400_a2' must exist.\"],\n    \"confidence\": 0.95\n  },\n  \"environment_spec\": {\n    \"dbms\": \"postgresql\",\n    \"database\": \"post_retry_blocking_284397_concurrent_upda_r997400_a2\",\n    \"requirements\": [\"Dedicated test database must exist.\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_blocking_284397_concurrent_upda_r997400_a2\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)\"\n    ],\n    \"generation_sql\": [\n      \"INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) SELECT gen_random_uuid(), 0 FROM generate_series(1, {row_count})\"\n    ],\n    \"tables\": [\n      {\n        \"name\": \"host_scan_complete_log_counts\",\n        \"purpose\": \"Reproduce locking contention during concurrent updates.\",\n        \"target_rows\": 1,\n        \"distribution_notes\": \"Single-row table to simulate contention.\"\n      }\n    ],\n    \"constraints\": {\n      \"cardinality\": {\"host_scan_complete_log_counts\": 1},\n      \"value_skew\": {},\n      \"predicate_selectivity\": {\"scan_uuid = $1\": 1.0},\n      \"join_selectivity\": {}\n    },\n    \"analyze_tables\": [\"host_scan_complete_log_counts\"],\n    \"calibration_queries\": [\n      {\n        \"sql\": \"SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = gen_random_uuid()\",\n        \"objective\": \"Verify table structure and data generation.\",\n        \"expected_evidence\": [\"Table contains the expected single row.\"]\n      }\n    ],\n    \"scale_strategy\": {\n      \"initial_rows\": 1,\n      \"max_rows\": 1,\n      \"growth_factor\": 1.0,\n      \"max_rounds\": 1\n    }\n  },\n  \"workload_spec\": {\n    \"enabled\": false,\n    \"method\": \"none\",\n    \"queries\": [],\n    \"concurrency\": 1,\n    \"duration_sec\": 30\n  },\n  \"evaluation_spec\": {\n    \"validation_criteria\": [\"Lock contention is observable during concurrent updates.\"],\n    \"symptom_evidence\": [\"Extended lock durations during concurrent updates.\"],\n    \"mechanism_evidence\": [\"Row-level l"
+  },
+  {
+    "step": "final_validation",
+    "event": "canonicalized_blueprint",
+    "changes": [
+      "normalized data_spec.scale_strategy"
+    ]
+  }
+]

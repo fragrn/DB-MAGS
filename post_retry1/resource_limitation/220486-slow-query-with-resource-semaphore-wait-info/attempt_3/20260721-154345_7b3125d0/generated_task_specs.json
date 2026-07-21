@@ -1,0 +1,57 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r825485_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET MAXDOP 0"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Parallelism and memory grants causing RESOURCE_SEMAPHORE waits."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM workload_table WHERE category = 'high' OPTION (MAXDOP 0)",
+          "concurrency": 10,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Parallelism and memory grants causing RESOURCE_SEMAPHORE waits."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "run_workload"
+    ]
+  ]
+}

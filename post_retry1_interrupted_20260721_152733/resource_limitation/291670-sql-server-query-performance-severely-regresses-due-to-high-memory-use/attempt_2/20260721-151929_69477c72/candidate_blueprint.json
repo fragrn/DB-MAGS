@@ -1,0 +1,244 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "SQL Server query performance regresses severely due to high memory use and parameter sniffing issues.",
+    "symptoms": [
+      "Queries timeout under high memory usage.",
+      "Performance differences between SSMS and application queries.",
+      "Memory consumption spikes and fails to release efficiently."
+    ],
+    "mechanism": "Parameter sniffing combined with memory pressure and inefficient query plans.",
+    "facts": [
+      {
+        "key": "High memory consumption leads to query timeouts.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post describes memory filling up and queries failing until SQL Server is restarted.",
+        "confidence": 0.9
+      },
+      {
+        "key": "SSMS and application queries behave differently due to ARITHABORT setting.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post identifies ARITHABORT as a key difference causing plan divergence.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Parameter sniffing affects execution plans.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post references Erland Sommarskog's article on parameter sniffing and its impact.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Sort operations and tempdb usage contribute to performance issues.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post describes sort operations going to tempdb multiple times.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The described behavior is reproducible in a synthetic environment.",
+      "The database schema and workload can be approximated based on the post."
+    ],
+    "unknowns": [
+      "Exact schema details for the tables involved.",
+      "Precise workload characteristics and query patterns."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The described mechanism involving parameter sniffing and memory pressure can be reproduced in a synthetic SQL Server environment.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and workload details are unavailable."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_291670_sql_r369282_a2",
+    "requirements": [
+      "Azure SQL Edge compatibility"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_291670_sql_r369282_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS Notifications (id INT PRIMARY KEY, account_id INT, notified_at_utc DATETIME, payload NVARCHAR(MAX))",
+      "CREATE TABLE IF NOT EXISTS Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, report_data NVARCHAR(MAX))"
+    ],
+    "generation_sql": [
+      "INSERT INTO Notifications (id, account_id, notified_at_utc, payload) SELECT n, MOD(n, 1000), DATEADD(SECOND, n, '2023-01-01T00:00:00'), CONCAT('Payload_', n) FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO Reports (id, account_id, received_at_utc, report_data) SELECT n, MOD(n, 1000), DATEADD(SECOND, n, '2023-01-01T00:00:00'), CONCAT('Report_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "Notifications",
+        "purpose": "Primary table for synthetic workload simulating high memory use and sort operations.",
+        "target_rows": 100000,
+        "distribution_notes": "Simulates high cardinality and temporal sorting."
+      },
+      {
+        "name": "Reports",
+        "purpose": "Secondary table for join operations and sorting.",
+        "target_rows": 100000,
+        "distribution_notes": "Simulates temporal sorting and join fanout."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "Notifications": 100000,
+        "Reports": 100000
+      },
+      "value_skew": {
+        "Notifications.account_id": "Uniform distribution across 1000 accounts."
+      },
+      "predicate_selectivity": {
+        "Notifications.account_id = 1": 0.001
+      },
+      "join_selectivity": {
+        "Notifications.account_id = Reports.account_id": "one-to-one"
+      }
+    },
+    "analyze_tables": [
+      "Notifications",
+      "Reports"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT n.* FROM Notifications n JOIN Reports r ON r.account_id = n.account_id WHERE n.account_id = 1 ORDER BY n.notified_at_utc DESC",
+        "objective": "Verify that the synthetic data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan includes sort operations and tempdb usage.",
+          "The join behavior matches the described mechanism.",
+          "The plan evidence distinguishes this mechanism from trivial point lookups."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query plans match the described mechanism.",
+      "Memory consumption patterns align with the post.",
+      "Performance differences between SSMS and application queries are observable."
+    ],
+    "symptom_evidence": [
+      "Queries timeout under high memory usage.",
+      "Performance differences between SSMS and application queries."
+    ],
+    "mechanism_evidence": [
+      "Parameter sniffing affects execution plans.",
+      "Sort operations and tempdb usage contribute to performance issues."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance regression due to high memory use and parameter sniffing.",
+    "target_database": "post_retry_resource_limitation_291670_sql_r369282_a2",
+    "dba_description": "Reproduce query performance regression caused by high memory use and parameter sniffing in SQL Server.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r369282_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_291670_sql_r369282_a2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup for reproduction"
+      }
+    },
+    {
+      "task_id": "load_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r369282_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE Notifications (id INT PRIMARY KEY, account_id INT, notified_at_utc DATETIME, payload NVARCHAR(MAX))"
+                },
+                {
+                  "sql": "CREATE TABLE Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, report_data NVARCHAR(MAX))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_loaded": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema setup for reproduction"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "load_schema"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on the described mechanism of query performance regression due to high memory use and parameter sniffing. Synthetic data and schema are designed to approximate the described workload and query patterns."
+}

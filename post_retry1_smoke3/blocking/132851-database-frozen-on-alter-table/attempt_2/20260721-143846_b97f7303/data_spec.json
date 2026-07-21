@@ -1,0 +1,48 @@
+{
+  "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL UNIQUE NOT NULL, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false NOT NULL, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false NOT NULL, CONSTRAINT fk_cliente_familiaid FOREIGN KEY (familia) REFERENCES cliente_familia (id), CONSTRAINT pk_pais FOREIGN KEY (codigo_pais) REFERENCES pais (codigo));",
+    "CREATE INDEX IF NOT EXISTS index_cliente ON cliente (rut);",
+    "CREATE INDEX IF NOT EXISTS index_cliente_activo ON cliente (activo);",
+    "CREATE INDEX IF NOT EXISTS index_cliente_id_activo ON cliente (id, activo);",
+    "CREATE INDEX IF NOT EXISTS index_cliente_rut_activo ON cliente (rut, activo);"
+  ],
+  "generation_sql": [
+    "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo, stock, vigente, clase, plan, plantilla, facturable, toolkit, propietario, creacion, codelco, familia, enabled_machines, enabled_canbus, enabled_horometro, enabled_comap, enabled_frio, enabled_panico, enabled_puerta, enabled_rpm, enabled_supervisor, demo, interno, mqtt_enable) SELECT md5(i::text), 'Name_' || i, 'Razon_' || i, 'Direccion_' || i, 'Comuna_' || i, 'Ciudad_' || i, 'CL', true, false, true, 1, 1, 'WAYPOINT', 1, 0, 0, now(), false, 0, false, false, false, false, false, false, false, false, 0, false, false, false FROM generate_series(1, {row_count}) AS i;"
+  ],
+  "tables": [
+    {
+      "name": "cliente",
+      "purpose": "Primary table to simulate the lock contention during ALTER TABLE.",
+      "target_rows": 100000,
+      "distribution_notes": "Uniform distribution of rows with unique primary keys and some default values."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "cliente": 100000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "cliente"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM cliente WHERE rut = 'some_rut';",
+      "objective": "Verify that SELECT queries on the 'cliente' table are blocked during the ALTER TABLE operation.",
+      "expected_evidence": [
+        "The SELECT query is blocked during the ALTER TABLE operation.",
+        "The EXPLAIN plan shows a simple index scan on the 'rut' column."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

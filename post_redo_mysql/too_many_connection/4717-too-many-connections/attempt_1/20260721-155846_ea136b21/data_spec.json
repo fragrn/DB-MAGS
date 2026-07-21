@@ -1,0 +1,43 @@
+{
+  "database": "post_retry_too_many_connection_4717_too_ma_r726463_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS synthetic_table (id INT PRIMARY KEY, payload VARCHAR(255))"
+  ],
+  "generation_sql": [
+    "INSERT INTO synthetic_table (id, payload) SELECT n, CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "synthetic_table",
+      "purpose": "Simulate rapid row insertion workload causing connection churn.",
+      "target_rows": 10000,
+      "distribution_notes": "Uniform distribution of rows to simulate consistent workload."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "synthetic_table": 10000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "synthetic_table"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT COUNT(*) FROM synthetic_table",
+      "objective": "Verify that the table is populated correctly.",
+      "expected_evidence": [
+        "Row count matches the expected number of inserted rows."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

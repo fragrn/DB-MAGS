@@ -1,0 +1,158 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Database froze during an ALTER TABLE operation adding a column to a table.",
+    "symptoms": [
+      "Database locked during ALTER TABLE operation",
+      "Login functionality blocked due to table lock"
+    ],
+    "mechanism": "ALTER TABLE operations in PostgreSQL take an ACCESS EXCLUSIVE lock, which blocks all other operations on the table. Long-lived weak locks (e.g., idle transactions) can exacerbate the issue by preventing the lock from being acquired.",
+    "facts": [
+      {
+        "key": "ALTER TABLE locks",
+        "value": {
+          "type": "ACCESS EXCLUSIVE"
+        },
+        "source": "explicit_post",
+        "evidence": "PostgreSQL documentation and DBA post",
+        "confidence": 0.9
+      },
+      {
+        "key": "Idle transactions",
+        "value": {
+          "state": "idle in transaction"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Answer 2 analysis and pg_stat_activity query example",
+        "confidence": 0.8
+      },
+      {
+        "key": "Table structure",
+        "value": {
+          "name": "cliente",
+          "columns": [
+            "rut",
+            "nombre",
+            "topicos"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Provided table schema",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "Idle transactions or weak locks were present during the ALTER TABLE operation",
+      "The ALTER TABLE command was executed without a maintenance window"
+    ],
+    "unknowns": [
+      "Exact state of pg_locks and pg_stat_activity during the incident",
+      "Whether additional operations were performed after the ALTER TABLE"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema setup and reproduction.",
+    "missing_capabilities": [
+      "Existing database environment for reproduction"
+    ],
+    "unmatched_conditions": [
+      "Database environment setup"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+    "requirements": [
+      "Dedicated test database with PostgreSQL 9.4.5 or compatible"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) NOT NULL, nombre VARCHAR(150) NOT NULL, topicos VARCHAR(20)[], PRIMARY KEY (rut))"
+    ],
+    "generation_sql": [
+      "INSERT INTO cliente (rut, nombre) SELECT 'rut_' || n, 'nombre_' || n FROM generate_series(1, {row_count}) AS n"
+    ],
+    "tables": [
+      {
+        "name": "cliente",
+        "purpose": "Primary table involved in the ALTER TABLE operation and locking issue",
+        "target_rows": 1000,
+        "distribution_notes": "Uniform distribution of rows to simulate typical production workload"
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "cliente": 1000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "cliente"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM cliente WHERE rut = 'rut_1'",
+        "objective": "Verify basic table access and ensure no locks are present before ALTER TABLE.",
+        "expected_evidence": [
+          "Query executes without blocking or errors"
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "ALTER TABLE operation reproduces locking symptoms"
+    ],
+    "symptom_evidence": [
+      "Database locks observed during ALTER TABLE"
+    ],
+    "mechanism_evidence": [
+      "ACCESS EXCLUSIVE lock behavior confirmed"
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "ALTER TABLE locking issue",
+    "target_database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+    "dba_description": "Database froze during ALTER TABLE operation due to locking behavior.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Why does the target database not exist?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database environment. Further steps require database setup or clarification of the environment."
+}

@@ -1,0 +1,130 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "High CPU usage in a MySQL database during benchmarking, potentially caused by inefficient queries, lack of indexes, or contention issues.",
+    "symptoms": [
+      "High CPU usage",
+      "Low query cache efficiency",
+      "High number of joins performed without indexes",
+      "High connection usage"
+    ],
+    "mechanism": "Inefficient queries, lack of indexes, and potential contention issues leading to high CPU usage.",
+    "facts": [
+      {
+        "key": "High CPU usage",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The user reported high CPU usage during benchmarking.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Low query cache efficiency",
+        "value": {
+          "query_cache_efficiency": "7.8%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output indicates low query cache efficiency.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Joins performed without indexes",
+        "value": {
+          "joins_without_indexes": 6782
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output shows a high number of joins performed without indexes.",
+        "confidence": 0.5
+      },
+      {
+        "key": "High connection usage",
+        "value": {
+          "connection_usage": "100%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output indicates 100% connection usage.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database schema and workload involve queries with joins that lack proper indexing.",
+      "The query cache is contributing to contention issues."
+    ],
+    "unknowns": [
+      "The exact schema and workload causing the high CPU usage.",
+      "Whether mutex contention is a significant factor."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema setup and reproduction.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database 'post_retry_resource_limitation_130884_mysq_r317220_a1' is unavailable."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_130884_mysq_r317220_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_130884_mysq_r317220_a1",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High CPU usage in MySQL database",
+    "target_database": "post_retry_resource_limitation_130884_mysq_r317220_a1",
+    "dba_description": "High CPU usage during benchmarking, potentially caused by inefficient queries, lack of indexes, or contention issues.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "What is the exact schema and workload causing the high CPU usage?",
+    "Is mutex contention a significant factor in this scenario?"
+  ],
+  "rationale": "The target database does not exist, preventing the setup of the schema and data generation required for reproduction. This blocks further experimentation."
+}

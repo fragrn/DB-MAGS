@@ -1,0 +1,163 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Lock wait timeout exceeded during DELETE query execution on a table with frequent concurrent operations.",
+    "symptoms": [
+      "Lock wait timeout exceeded",
+      "Long-running transactions blocking DELETE operations",
+      "High row lock contention"
+    ],
+    "mechanism": "Concurrent transactions holding locks on rows or indexes prevent DELETE operations from acquiring necessary locks within the timeout period.",
+    "facts": [
+      {
+        "key": "delete_query",
+        "value": {
+          "sql": "DELETE FROM EVENT_DETAILS WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'"
+        },
+        "source": "explicit_post",
+        "evidence": "Query provided in the post",
+        "confidence": 1.0
+      },
+      {
+        "key": "table_schema",
+        "value": {
+          "schema": "EVENT_DETAILS table with no primary key and a composite index"
+        },
+        "source": "explicit_post",
+        "evidence": "Schema provided in the post",
+        "confidence": 1.0
+      },
+      {
+        "key": "transaction_isolation",
+        "value": "REPEATABLE READ",
+        "source": "explicit_post",
+        "evidence": "Isolation level mentioned in the post",
+        "confidence": 1.0
+      },
+      {
+        "key": "autocommit_enabled",
+        "value": true,
+        "source": "explicit_post",
+        "evidence": "Autocommit status mentioned in the post",
+        "confidence": 1.0
+      },
+      {
+        "key": "lock_wait_timeout",
+        "value": 50,
+        "source": "explicit_post",
+        "evidence": "Default timeout mentioned in the post",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The blocking transactions are caused by frequent inserts and selects on the table.",
+      "The lack of a primary key and the composite index may contribute to inefficient locking and contention."
+    ],
+    "unknowns": [
+      "Exact workload patterns causing contention",
+      "Distribution of UPDATE_DATE values in the table",
+      "Impact of the composite index on query performance"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database 'post_retry_long_transaction_252749_lock_wa_r509435_a1' does not exist, preventing schema creation and reproduction.",
+    "missing_capabilities": [
+      "Existing target database"
+    ],
+    "unmatched_conditions": [
+      "Database environment inspection failed"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_long_transaction_252749_lock_wa_r509435_a1",
+    "requirements": [
+      "Dedicated test database must exist"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_252749_lock_wa_r509435_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS EVENT_DETAILS (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT))"
+    ],
+    "generation_sql": [
+      "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT UUID(), UUID(), CASE WHEN MOD(n, 1000) = 0 THEN 'health' ELSE 'other' END, UUID(), 20191015 + MOD(n, 100), MOD(n, 24), UUID(), MOD(n, 5), CONCAT('event_', n), CONCAT('message_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "EVENT_DETAILS",
+        "purpose": "Primary table for reproducing lock contention during DELETE operations",
+        "target_rows": 100000,
+        "distribution_notes": "Simulate frequent inserts and selects with skewed UPDATE_DATE values."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "EVENT_DETAILS": 100000
+      },
+      "value_skew": {
+        "EVENT_DETAILS.COMPONENT_NAME": "Skewed towards 'health' for DELETE query relevance"
+      },
+      "predicate_selectivity": {
+        "EVENT_DETAILS.UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'": 0.01
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "EVENT_DETAILS"
+    ],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Lock contention observed during DELETE query execution"
+    ],
+    "symptom_evidence": [
+      "Lock wait timeout exceeded"
+    ],
+    "mechanism_evidence": [
+      "Long-running transactions blocking DELETE operations"
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Lock wait timeout exceeded during DELETE query",
+    "target_database": "post_retry_long_transaction_252749_lock_wa_r509435_a1",
+    "dba_description": "Reproduce lock contention and timeout during DELETE query execution on EVENT_DETAILS table.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Why does the target database not exist?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database. Synthetic data generation and schema creation cannot proceed without resolving this issue."
+}

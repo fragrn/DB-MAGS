@@ -1,0 +1,19 @@
+{
+  "changes": [
+    {
+      "path": "workload_spec.queries",
+      "before": [
+        {
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = '00000000-0000-0000-0000-000000000001'",
+          "concurrency": 100,
+          "duration_sec": 30
+        }
+      ],
+      "after": [
+        "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = '00000000-0000-0000-0000-000000000001'"
+      ],
+      "reason": "Runtime SQL background workload expects query strings."
+    }
+  ],
+  "timestamp": 1784617605.116226
+}

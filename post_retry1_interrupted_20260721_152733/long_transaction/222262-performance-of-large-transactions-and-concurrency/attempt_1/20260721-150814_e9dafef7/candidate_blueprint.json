@@ -1,0 +1,226 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Investigating performance implications and concurrency behavior of large transactions in PostgreSQL.",
+    "symptoms": [
+      "Blocked transactions due to row-level locks.",
+      "Potential serialization errors in higher isolation levels."
+    ],
+    "mechanism": "PostgreSQL's MVCC model and transaction isolation levels dictate how reads and writes interact during large transactions.",
+    "facts": [
+      {
+        "key": "MVCC model",
+        "value": {
+          "description": "PostgreSQL uses Multiversion Concurrency Control (MVCC) to ensure data consistency."
+        },
+        "source": "explicit_post",
+        "evidence": "PostgreSQL documentation cited in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Transaction isolation levels",
+        "value": {
+          "description": "Higher isolation levels may lead to serialization errors."
+        },
+        "source": "explicit_post",
+        "evidence": "PostgreSQL documentation cited in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Blocked transactions",
+        "value": {
+          "description": "Transactions attempting to update rows locked by another transaction are blocked until the lock is released."
+        },
+        "source": "explicit_post",
+        "evidence": "Example provided in the DBA post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The target database uses PostgreSQL 9.3 or a compatible version.",
+      "The synthetic data will mimic the row-level locking behavior observed in the example."
+    ],
+    "unknowns": [
+      "Exact schema and data distribution of the production environment.",
+      "Specific workload patterns that trigger blocking or serialization errors."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "PostgreSQL adapter is available, and the incident mechanism can be reproduced using synthetic data. However, the target database does not exist, requiring setup.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Target database does not exist."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_long_transaction_222262_perform_r694580_a1",
+    "requirements": [
+      "Dedicated test database setup"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_222262_perform_r694580_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+    ],
+    "generation_sql": [
+      "INSERT INTO tools (description) SELECT CONCAT('tool_', n) FROM generate_series(1, {row_count}) AS n;"
+    ],
+    "tables": [
+      {
+        "name": "tools",
+        "purpose": "Primary table for simulating row-level locking and transaction behavior.",
+        "target_rows": 100000,
+        "distribution_notes": "Uniform distribution of rows with unique descriptions."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "tools": 100000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "tools"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM tools WHERE id = 1;",
+        "objective": "Verify that reads are not blocked by the update transaction.",
+        "expected_evidence": [
+          "Query returns the old value of the row until the transaction commits."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id = 1; COMMIT;",
+      "BEGIN; UPDATE tools SET description = 'another_update' WHERE id = 1; COMMIT;"
+    ],
+    "concurrency": 2,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Transaction blocking behavior is observed.",
+      "Reads are not blocked by updates."
+    ],
+    "symptom_evidence": [
+      "Blocked transactions due to row-level locks.",
+      "Serialization errors in higher isolation levels."
+    ],
+    "mechanism_evidence": [
+      "MVCC model ensures data consistency.",
+      "Transaction isolation levels dictate blocking and serialization behavior."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocked transactions and serialization errors in PostgreSQL.",
+    "target_database": "post_retry_long_transaction_222262_perform_r694580_a1",
+    "dba_description": "Investigating performance implications and concurrency behavior of large transactions in PostgreSQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_222262_perform_r694580_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_long_transaction_222262_perform_r694580_a1;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Target database does not exist."
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_222262_perform_r694580_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+                },
+                {
+                  "sql": "INSERT INTO tools (description) SELECT CONCAT('tool_', n) FROM generate_series(1, 10000) AS n;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_populated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data setup for reproduction."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "populate_data"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on the mechanism of row-level locking and transaction isolation in PostgreSQL. Synthetic data and calibration queries are designed to simulate the described behavior."
+}

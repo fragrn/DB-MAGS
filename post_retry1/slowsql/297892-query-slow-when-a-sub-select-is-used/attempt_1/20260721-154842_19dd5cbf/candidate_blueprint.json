@@ -1,0 +1,128 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Query with subqueries is slow due to multiple table scans and inefficient joins.",
+    "symptoms": [
+      "Query takes 3 minutes to return 10 rows.",
+      "Subqueries cause repeated table scans."
+    ],
+    "mechanism": "Subqueries in SELECT clause lead to multiple scans of the same tables, causing performance degradation.",
+    "facts": [
+      {
+        "key": "query_structure",
+        "value": {
+          "subqueries": 4,
+          "joins": [
+            "ainvdet",
+            "ainvhead"
+          ],
+          "filter_conditions": [
+            "date_part('year', h.order_date)"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Original query provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "performance_issue",
+        "value": {
+          "execution_time": "3 minutes for 10 rows"
+        },
+        "source": "explicit_post",
+        "evidence": "User reported query execution time in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "suggested_optimization",
+        "value": {
+          "rewrite_query": "Replace subqueries with CASE statements or filtered aggregates."
+        },
+        "source": "post_hypothesis",
+        "evidence": "Accepted answer suggests rewriting the query to avoid subqueries.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The database schema includes tables `grpdesc`, `ainvdet`, and `ainvhead`.",
+      "Indexes are not optimized for the query's join and filter conditions."
+    ],
+    "unknowns": [
+      "Exact schema of the tables involved.",
+      "Presence and structure of indexes on the tables."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema inspection and further reproduction steps.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database 'post_retry_slowsql_297892_query_slow_when_r122608_a1' is unavailable."
+    ],
+    "confidence": 1.0
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_slowsql_297892_query_slow_when_r122608_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_297892_query_slow_when_r122608_a1",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query with subqueries is slow due to multiple table scans and inefficient joins.",
+    "target_database": "post_retry_slowsql_297892_query_slow_when_r122608_a1",
+    "dba_description": "Query takes 3 minutes to return 10 rows due to subqueries causing repeated table scans.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "What is the exact schema of the database?",
+    "Are there any existing indexes on the tables?"
+  ],
+  "rationale": "The target database does not exist, blocking schema inspection and synthetic data generation. Without schema details, it is impossible to design a reproduction mechanism."
+}

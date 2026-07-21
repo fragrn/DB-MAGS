@@ -1,0 +1,17 @@
+{
+  "changes": [
+    {
+      "path": "task_specs[1].actions[0].scripts[0].steps[0].sql",
+      "before": "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM (SELECT @row := @row + 1 AS n FROM (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t1, (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t2, (SELECT @row := 0) t3 LIMIT 100) numbers",
+      "after": "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t1, (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t2, (SELECT 'repro_value' := 0) t3 LIMIT 100) numbers",
+      "reason": "Replace unresolved SQL placeholders with synthetic literals."
+    },
+    {
+      "path": "task_specs[1].actions[0].scripts[0].steps[1].sql",
+      "before": "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM (SELECT @row := @row + 1 AS n FROM (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t1, (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t2, (SELECT @row := 0) t3 LIMIT 100000) numbers",
+      "after": "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t1, (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t2, (SELECT 'repro_value' := 0) t3 LIMIT 100000) numbers",
+      "reason": "Replace unresolved SQL placeholders with synthetic literals."
+    }
+  ],
+  "timestamp": 1784618068.130655
+}

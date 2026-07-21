@@ -1,0 +1,292 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Lock wait timeout exceeded during DELETE query on a table with high concurrent activity and no primary key.",
+    "symptoms": [
+      "DELETE query fails with 'Lock wait timeout exceeded; try restarting transaction'.",
+      "Long-running transactions holding locks on rows.",
+      "High contention on table with frequent INSERT and SELECT operations."
+    ],
+    "mechanism": "Row-level locks held by long-running transactions block DELETE operations, leading to lock wait timeouts.",
+    "facts": [
+      {
+        "key": "dbms",
+        "value": "MySQL 5.6 (RDS Aurora)",
+        "source": "explicit_post",
+        "evidence": "The post explicitly mentions using RDS Aurora with MySQL 5.6.",
+        "confidence": 0.5
+      },
+      {
+        "key": "table_schema",
+        "value": {
+          "table_name": "EVENT_DETAILS",
+          "columns": [
+            {
+              "name": "ORG_ID",
+              "type": "CHAR(32)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "CONFIG_KEY",
+              "type": "CHAR(32)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "COMPONENT_NAME",
+              "type": "VARCHAR(512)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "REQUEST_ID",
+              "type": "CHAR(32)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "UPDATE_DATE",
+              "type": "INT",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "UPDATE_TIME",
+              "type": "INT",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "CLIENT",
+              "type": "CHAR(16)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "STATUS",
+              "type": "INT",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "EVENT_DATA",
+              "type": "VARCHAR(1024)",
+              "constraints": []
+            },
+            {
+              "name": "MESSAGE",
+              "type": "VARCHAR(512)",
+              "constraints": []
+            },
+            {
+              "name": "INSERTED_TIME",
+              "type": "TIMESTAMP",
+              "constraints": [
+                "DEFAULT CURRENT_TIMESTAMP",
+                "NOT NULL"
+              ]
+            }
+          ],
+          "indexes": [
+            {
+              "name": "STATE_INDEX",
+              "columns": [
+                "UPDATE_DATE",
+                "UPDATE_TIME",
+                "ORG_ID",
+                "CONFIG_KEY",
+                "COMPONENT_NAME",
+                "STATUS",
+                "CLIENT"
+              ],
+              "unique": false
+            }
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "The table schema is provided in the post.",
+        "confidence": 0.5
+      },
+      {
+        "key": "isolation_level",
+        "value": "REPEATABLE READ",
+        "source": "explicit_post",
+        "evidence": "The post explicitly states that the transaction isolation level is REPEATABLE READ.",
+        "confidence": 0.5
+      },
+      {
+        "key": "autocommit",
+        "value": true,
+        "source": "explicit_post",
+        "evidence": "The post explicitly mentions that autocommit is enabled.",
+        "confidence": 0.5
+      },
+      {
+        "key": "lock_wait_timeout",
+        "value": 50,
+        "source": "explicit_post",
+        "evidence": "The post mentions that the lock wait timeout is 50 seconds.",
+        "confidence": 0.5
+      },
+      {
+        "key": "long-running_transactions",
+        "value": true,
+        "source": "explicit_post",
+        "evidence": "The post mentions transactions active for hours, holding locks.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The DELETE query is attempting to delete a significant number of rows, leading to contention.",
+      "The table's lack of a primary key contributes to inefficient locking and contention.",
+      "The workload involves frequent concurrent INSERT and SELECT operations on the table."
+    ],
+    "unknowns": [
+      "Exact workload patterns and query frequencies.",
+      "Whether the blocking transactions are caused by specific application behavior or external factors.",
+      "The size of the table and the number of rows affected by the DELETE query."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction of the mechanism is feasible by simulating long-running transactions and concurrent activity on a table with a similar schema and workload.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "The target database does not exist, so it must be created."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_long_transaction_252749_lock_wa_r904374_a4",
+    "requirements": [
+      "Create the target database before proceeding."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_252749_lock_wa_r904374_a4",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS EVENT_DETAILS (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT))"
+    ],
+    "generation_sql": [
+      "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT LPAD(FLOOR(RAND() * 1000000), 32, '0'), LPAD(FLOOR(RAND() * 1000000), 32, '0'), CONCAT('Component_', FLOOR(RAND() * 100)), LPAD(FLOOR(RAND() * 1000000), 32, '0'), FLOOR(RAND() * 100000), FLOOR(RAND() * 100000), LPAD(FLOOR(RAND() * 1000), 16, '0'), FLOOR(RAND() * 10), REPEAT('Data', 10), REPEAT('Message', 5) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "EVENT_DETAILS",
+        "purpose": "Simulate the table with high concurrent activity and locking issues.",
+        "target_rows": 100000,
+        "distribution_notes": "Randomized data with a mix of unique and non-unique values to simulate contention."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "EVENT_DETAILS": 100000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {
+        "UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'": 0.01
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "EVENT_DETAILS"
+    ],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) VALUES (LPAD(FLOOR(RAND() * 1000000), 32, '0'), LPAD(FLOOR(RAND() * 1000000), 32, '0'), CONCAT('Component_', FLOOR(RAND() * 100)), LPAD(FLOOR(RAND() * 1000000), 32, '0'), FLOOR(RAND() * 100000), FLOOR(RAND() * 100000), LPAD(FLOOR(RAND() * 1000), 16, '0'), FLOOR(RAND() * 10), REPEAT('Data', 10), REPEAT('Message', 5))",
+      "SELECT * FROM EVENT_DETAILS WHERE COMPONENT_NAME = 'Component_50' AND STATUS = 1"
+    ],
+    "concurrency": 10,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "The DELETE query encounters lock wait timeouts under high concurrent workload.",
+      "Long-running transactions are observed holding row-level locks."
+    ],
+    "symptom_evidence": [
+      "Lock wait timeout errors during DELETE query execution.",
+      "Long-running transactions holding locks on rows."
+    ],
+    "mechanism_evidence": [
+      "Row-level locks held by long-running transactions block DELETE operations.",
+      "High contention on the table due to concurrent INSERT and SELECT operations."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "lock_wait_timeout",
+    "target_database": "post_retry_long_transaction_252749_lock_wa_r904374_a4",
+    "dba_description": "Simulate lock wait timeout errors during DELETE query execution on a table with high concurrent activity.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "create_database",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "mysql",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_long_transaction_252749_lock_wa_r904374_a4"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database does not exist."
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident involves lock wait timeouts caused by long-running transactions and high concurrency. The reproduction plan includes creating a synthetic environment with a similar schema, workload, and contention patterns to observe the mechanism."
+}

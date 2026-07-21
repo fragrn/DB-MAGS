@@ -1,0 +1,58 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to potential blocking and excessive indexing.",
+  "symptoms": [
+    "Single insert operation takes an unusually long time (e.g., 7 minutes).",
+    "Blocking sessions reported in sys.dm_exec_requests but the blocker session appears to be sleeping or absent.",
+    "Wait type observed: LCK_M_S (lock mode shared)."
+  ],
+  "mechanism": "Excessive indexing combined with blocking caused by uncommitted transactions or lock contention.",
+  "facts": [
+    {
+      "key": "table_size",
+      "value": {
+        "rows": 8000000
+      },
+      "source": "explicit_post",
+      "evidence": "The table is described as having 8 million rows.",
+      "confidence": 0.5
+    },
+    {
+      "key": "index_count",
+      "value": {
+        "indexes": 34
+      },
+      "source": "explicit_post",
+      "evidence": "The table has 34 non-clustered indexes in addition to a clustered index.",
+      "confidence": 0.5
+    },
+    {
+      "key": "blocking_behavior",
+      "value": {
+        "blocking_session_id": "reported but absent"
+      },
+      "source": "explicit_post",
+      "evidence": "Blocking session IDs are reported but the sessions appear to be sleeping or absent.",
+      "confidence": 0.5
+    },
+    {
+      "key": "wait_type",
+      "value": {
+        "type": "LCK_M_S"
+      },
+      "source": "explicit_post",
+      "evidence": "The wait type observed during blocking is LCK_M_S.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The blocking is caused by uncommitted transactions or lock contention.",
+    "The excessive number of indexes contributes to the poor insert performance."
+  ],
+  "unknowns": [
+    "The exact workload pattern that leads to blocking.",
+    "The specific locking or transaction behavior of the blocking sessions."
+  ],
+  "confidence": 0.85
+}

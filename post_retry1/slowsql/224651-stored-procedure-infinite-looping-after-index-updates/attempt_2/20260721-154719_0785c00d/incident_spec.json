@@ -1,0 +1,51 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Stored procedure enters infinite loop after index updates, causing deadlocks and failed inserts.",
+  "symptoms": [
+    "Infinite loop in stored procedure",
+    "Deadlocks on tables",
+    "Failed inserts due to triggers",
+    "Locks on tables during update statements inside triggers"
+  ],
+  "mechanism": "Index page locking and trigger-induced locking during stored procedure execution.",
+  "facts": [
+    {
+      "key": "stored_procedure_infinite_loop",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The stored procedure loops indefinitely after index updates.",
+      "confidence": 0.9
+    },
+    {
+      "key": "deadlocks_on_tables",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Deadlocks occurred after index updates.",
+      "confidence": 0.8
+    },
+    {
+      "key": "triggers_on_tables",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Multiple triggers exist on the target tables.",
+      "confidence": 0.7
+    },
+    {
+      "key": "index_page_locking",
+      "value": {},
+      "source": "post_hypothesis",
+      "evidence": "Deleting an index resolved the issue, suggesting page locking.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The infinite loop is caused by index page locking.",
+    "Triggers are contributing to locking during stored procedure execution."
+  ],
+  "unknowns": [
+    "Exact index configuration before and after updates",
+    "Specific trigger logic causing locking"
+  ],
+  "confidence": 0.8
+}

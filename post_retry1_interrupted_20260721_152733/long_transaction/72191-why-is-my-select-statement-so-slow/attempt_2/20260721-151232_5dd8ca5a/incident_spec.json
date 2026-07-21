@@ -1,0 +1,54 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Slow query execution when filtering databases based on table existence and state.",
+  "symptoms": [
+    "Query execution takes 9 seconds on a local dev machine with 4 databases.",
+    "Execution plan shows high cost for clustered index seeks."
+  ],
+  "mechanism": "Potential blocking due to long-running transactions or inefficiencies in metadata function calls like OBJECT_ID.",
+  "facts": [
+    {
+      "key": "query_execution_time",
+      "value": {
+        "before_where_clause": "21 seconds",
+        "after_where_clause": "9 seconds"
+      },
+      "source": "explicit_post",
+      "evidence": "DBA post mentions execution times before and after adding the WHERE clause.",
+      "confidence": 0.9
+    },
+    {
+      "key": "execution_plan",
+      "value": {
+        "clustered_index_seeks": [
+          22,
+          24,
+          48
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "DBA post mentions percentages of clustered index seeks in the execution plan.",
+      "confidence": 0.8
+    },
+    {
+      "key": "OBJECT_ID_behavior",
+      "value": {
+        "ignores_transaction_isolation": true
+      },
+      "source": "post_hypothesis",
+      "evidence": "Answer 1 suggests OBJECT_ID does not respect transaction isolation levels.",
+      "confidence": 0.7
+    }
+  ],
+  "assumptions": [
+    "The database environment is SQL Server or compatible with Azure SQL Edge.",
+    "The issue is reproducible with synthetic data and does not depend on specific production data.",
+    "The suspected mechanism involves blocking due to long-running transactions or inefficiencies in metadata function calls."
+  ],
+  "unknowns": [
+    "The exact schema and data distribution of the databases involved.",
+    "Whether long-running transactions are present in the environment."
+  ],
+  "confidence": 0.7
+}

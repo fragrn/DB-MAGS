@@ -1,0 +1,121 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MySQL database experiences excessive connection errors due to high concurrency from multiple applications, exceeding the configured max_connections limit.",
+    "symptoms": [
+      "High number of connection errors (Connection_errors_max_connections: 19102)",
+      "Tens of thousands of job failures due to connection limits",
+      "Max_used_connections reaching the configured limit of 500",
+      "High number of total connection attempts (Connections: 3068)"
+    ],
+    "mechanism": "Excessive concurrent connections from multiple applications (e.g., Sidekiq with 800 connections) exceed the configured max_connections limit, causing connection errors and job failures.",
+    "facts": [
+      {
+        "key": "max_connections",
+        "value": 500,
+        "source": "explicit_post",
+        "evidence": "The post explicitly states that max_connections is set to 500.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Connection_errors_max_connections",
+        "value": 19102,
+        "source": "explicit_post",
+        "evidence": "The post includes the output of 'show status like '%onn%'' showing Connection_errors_max_connections as 19102.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Sidekiq concurrency",
+        "value": 800,
+        "source": "explicit_post",
+        "evidence": "The post mentions Sidekiq running 4 processes, each with a pool of 200 jobs.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Max_used_connections",
+        "value": 501,
+        "source": "explicit_post",
+        "evidence": "The post includes the output of 'show status like '%onn%'' showing Max_used_connections as 501.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database is configured with default connection handling settings apart from max_connections.",
+      "The applications do not implement connection pooling or have suboptimal connection management."
+    ],
+    "unknowns": [
+      "The exact workload characteristics of the applications (e.g., query patterns, transaction durations).",
+      "Whether the applications are using persistent connections or creating new connections for each job."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database 'post_retry_too_many_connection_142243_mysq_r634836_a1' does not exist, preventing schema creation and reproduction.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database environment is not available."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "excessive_connection_errors",
+    "target_database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+    "dba_description": "MySQL database has way too many connections due to high concurrency from applications, leading to job failures.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction is blocked because the specified database does not exist, and no schema or data generation can proceed without it. The incident analysis is based on the provided DBA post and available information."
+}

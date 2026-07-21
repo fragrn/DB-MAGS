@@ -1,0 +1,219 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Slow query involving correlated subqueries and aggregate functions in MySQL.",
+    "symptoms": [
+      "Slow query execution time (8.794 seconds)",
+      "High rows examined (4,742,825)",
+      "Dependent subqueries in EXPLAIN plan"
+    ],
+    "mechanism": "The query uses correlated subqueries for each row in the outer query, resulting in repeated scans of the `customer_payment_options` table. This leads to high rows examined and slow performance.",
+    "facts": [
+      {
+        "key": "query_time",
+        "value": {
+          "seconds": 8.794
+        },
+        "source": "explicit_post",
+        "evidence": "Query_time: 8.794170 in the slow query log",
+        "confidence": 1.0
+      },
+      {
+        "key": "rows_examined",
+        "value": 4742825,
+        "source": "explicit_post",
+        "evidence": "Rows_examined: 4742825 in the slow query log",
+        "confidence": 1.0
+      },
+      {
+        "key": "dependent_subqueries",
+        "value": true,
+        "source": "explicit_post",
+        "evidence": "EXPLAIN plan shows DEPENDENT SUBQUERY for `customer_payment_options`",
+        "confidence": 1.0
+      },
+      {
+        "key": "indexes",
+        "value": [
+          "company_id",
+          "tran_id",
+          "ce_id",
+          "wallet_id"
+        ],
+        "source": "explicit_post",
+        "evidence": "Indexes listed in the post for `customer_payment_options`",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The schema provided in the post is accurate.",
+      "The slow query log configuration matches the described environment."
+    ],
+    "unknowns": [
+      "Exact data distribution in the tables",
+      "Whether additional indexes are present beyond those listed in the post"
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of the slow query can be reproduced using synthetic data and schema. However, exact reproduction of the performance metrics (e.g., query time) is not guaranteed without access to the original data distribution.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "The target database does not exist, requiring schema and data creation."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_improve_mysql_query_per_r257516_a3",
+    "requirements": [
+      "Create schema and populate synthetic data to simulate the slow query."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_improve_mysql_query_per_r257516_a3",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS customer_payment_options (id INT AUTO_INCREMENT PRIMARY KEY, company_id INT NOT NULL, local_branch_id INT NOT NULL, tran_id BIGINT DEFAULT NULL, ce_id INT DEFAULT NULL, wallet_id INT DEFAULT NULL, reward_credit_id INT DEFAULT NULL, ce_invoice_id VARCHAR(32) DEFAULT NULL, ce_type ENUM('IN','OUT') DEFAULT NULL, payment_type ENUM('CASH','DEBIT','CREDIT','CHEQUE','DRAFT','BANK_DEPOSIT','EWIRE','WALLET','LOAN','REWARD_CREDIT') NOT NULL, payment_amount DECIMAL(10,2) NOT NULL, payment_type_number VARCHAR(100) DEFAULT NULL, source_country_id INT NOT NULL, real_account_id INT DEFAULT NULL, real_account_type ENUM('LOCAL','HQ') DEFAULT NULL, date_added DATETIME NOT NULL, event_type ENUM('MONEY_TRANSFER','CURRENCY_EXCHANGE','WALLET') DEFAULT NULL, KEY(company_id), KEY(real_account_type), KEY(tran_id), KEY(ce_id), KEY(wallet_id))",
+      "CREATE TABLE IF NOT EXISTS customer_wallet (id INT AUTO_INCREMENT PRIMARY KEY, wallet_unique_id VARCHAR(100) DEFAULT NULL, company_id INT NOT NULL, branch_admin_id INT DEFAULT NULL, emp_id INT DEFAULT NULL, emp_type ENUM('SUPER_ADMIN','ADMIN','AGENT_ADMIN','AGENT','OVER_AGENT_ADMIN','OVER_AGENT') DEFAULT NULL, cus_id BIGINT NOT NULL, tran_id BIGINT DEFAULT NULL, beehive_id INT DEFAULT NULL, type ENUM('DEPOSIT','WITHDRAW','TRANSACTION') NOT NULL, sub_type ENUM('MONEY_TRANSFER','BEEHIVE_DEPOSIT') DEFAULT NULL, credit_in DECIMAL(10,2) DEFAULT NULL, credit_out DECIMAL(10,2) DEFAULT NULL, currency VARCHAR(20) NOT NULL, date_added DATETIME NOT NULL, note VARCHAR(255) DEFAULT NULL, location ENUM('DIRECT') DEFAULT NULL, is_approved ENUM('0','1') NOT NULL DEFAULT '1', idebit_issconf VARCHAR(50) DEFAULT NULL, idebit_issname VARCHAR(50) DEFAULT NULL, idebit_isstrack2 VARCHAR(100) DEFAULT NULL, KEY(cus_id), KEY(company_id), KEY(branch_admin_id), KEY(emp_id), KEY(tran_id), KEY(beehive_id))"
+    ],
+    "generation_sql": [
+      "INSERT INTO customer_wallet (id, company_id, currency, is_approved, date_added) SELECT n, 1, '40', '1', DATE_SUB(NOW(), INTERVAL n DAY) FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO customer_payment_options (id, wallet_id, ce_type, payment_amount, source_country_id, real_account_type, date_added) SELECT n, 1 + MOD(n, 100), CASE WHEN MOD(n, 2) = 0 THEN 'IN' ELSE 'OUT' END, ROUND(RAND() * 100, 2), 40, 'HQ', DATE_SUB(NOW(), INTERVAL n DAY) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "customer_wallet",
+        "purpose": "Primary table for wallet information, used in the outer query.",
+        "target_rows": 1000,
+        "distribution_notes": "Uniform distribution of wallet records with varying dates."
+      },
+      {
+        "name": "customer_payment_options",
+        "purpose": "Table for payment options, used in correlated subqueries.",
+        "target_rows": 10000,
+        "distribution_notes": "Skewed distribution with alternating 'IN' and 'OUT' types."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "customer_wallet": 1000,
+        "customer_payment_options": 10000
+      },
+      "value_skew": {
+        "customer_payment_options.ce_type": "Alternating 'IN' and 'OUT' values."
+      },
+      "predicate_selectivity": {
+        "customer_wallet.currency = '40'": 1.0,
+        "customer_payment_options.real_account_type = 'HQ'": 1.0
+      },
+      "join_selectivity": {
+        "customer_wallet.id = customer_payment_options.wallet_id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "customer_wallet",
+      "customer_payment_options"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT (SELECT SUM(payment_amount) FROM customer_payment_options cpo WHERE wallet_id=cw.id AND cpo.real_account_type='HQ' AND cpo.source_country_id='40' AND cpo.ce_type='IN') as debit, (SELECT SUM(payment_amount) FROM customer_payment_options cpo WHERE wallet_id=cw.id AND cpo.real_account_type='HQ' AND cpo.source_country_id='40' AND cpo.tran_id IS NOT NULL) as credit FROM customer_wallet cw WHERE cw.company_id='1' AND cw.currency='40' AND cw.is_approved='1' AND DATE(cw.date_added) < '2016-03-30'",
+        "objective": "Verify that the correlated subqueries and join behavior match the original query's EXPLAIN plan.",
+        "expected_evidence": [
+          "EXPLAIN shows DEPENDENT SUBQUERY for `customer_payment_options`.",
+          "The query scans `customer_wallet` and repeatedly accesses `customer_payment_options`."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "EXPLAIN plan matches expected subquery behavior.",
+      "Query execution time is measurable and consistent with the mechanism."
+    ],
+    "symptom_evidence": [
+      "High rows examined in EXPLAIN.",
+      "Dependent subqueries in EXPLAIN."
+    ],
+    "mechanism_evidence": [
+      "Correlated subqueries cause repeated scans of `customer_payment_options`."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "slow_query",
+    "target_database": "post_retry_slowsql_improve_mysql_query_per_r257516_a3",
+    "dba_description": "Reproduce and analyze a slow query involving correlated subqueries in MySQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_improve_mysql_query_per_r257516_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_slowsql_improve_mysql_query_per_r257516_a3"
+                },
+                {
+                  "sql": "USE post_retry_slowsql_improve_mysql_query_per_r257516_a3"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS customer_payment_options (id INT AUTO_INCREMENT PRIMARY KEY, company_id INT NOT NULL, local_branch_id INT NOT NULL, tran_id BIGINT DEFAULT NULL, ce_id INT DEFAULT NULL, wallet_id INT DEFAULT NULL, reward_credit_id INT DEFAULT NULL, ce_invoice_id VARCHAR(32) DEFAULT NULL, ce_type ENUM('IN','OUT') DEFAULT NULL, payment_type ENUM('CASH','DEBIT','CREDIT','CHEQUE','DRAFT','BANK_DEPOSIT','EWIRE','WALLET','LOAN','REWARD_CREDIT') NOT NULL, payment_amount DECIMAL(10,2) NOT NULL, payment_type_number VARCHAR(100) DEFAULT NULL, source_country_id INT NOT NULL, real_account_id INT DEFAULT NULL, real_account_type ENUM('LOCAL','HQ') DEFAULT NULL, date_added DATETIME NOT NULL, event_type ENUM('MONEY_TRANSFER','CURRENCY_EXCHANGE','WALLET') DEFAULT NULL, KEY(company_id), KEY(real_account_type), KEY(tran_id), KEY(ce_id), KEY(wallet_id))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS customer_wallet (id INT AUTO_INCREMENT PRIMARY KEY, wallet_unique_id VARCHAR(100) DEFAULT NULL, company_id INT NOT NULL, branch_admin_id INT DEFAULT NULL, emp_id INT DEFAULT NULL, emp_type ENUM('SUPER_ADMIN','ADMIN','AGENT_ADMIN','AGENT','OVER_AGENT_ADMIN','OVER_AGENT') DEFAULT NULL, cus_id BIGINT NOT NULL, tran_id BIGINT DEFAULT NULL, beehive_id INT DEFAULT NULL, type ENUM('DEPOSIT','WITHDRAW','TRANSACTION') NOT NULL, sub_type ENUM('MONEY_TRANSFER','BEEHIVE_DEPOSIT') DEFAULT NULL, credit_in DECIMAL(10,2) DEFAULT NULL, credit_out DECIMAL(10,2) DEFAULT NULL, currency VARCHAR(20) NOT NULL, date_added DATETIME NOT NULL, note VARCHAR(255) DEFAULT NULL, location ENUM('DIRECT') DEFAULT NULL, is_approved ENUM('0','1') NOT NULL DEFAULT '1', idebit_issconf VARCHAR(50) DEFAULT NULL, idebit_issname VARCHAR(50) DEFAULT NULL, idebit_isstrack2 VARCHAR(100) DEFAULT NULL, KEY(cus_id), KEY(company_id), KEY(branch_admin_id), KEY(emp_id), KEY(tran_id), KEY(beehive_id))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Correlated subqueries causing repeated scans."
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The slow query mechanism is well-understood and can be reproduced with synthetic data. The schema and query structure are explicitly provided in the post, allowing for targeted reproduction of the issue."
+}

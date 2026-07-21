@@ -1,0 +1,116 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/297892/query-slow-when-a-sub-select-is-used/297894#297894
+Canonical URL: https://dba.stackexchange.com/questions/297892/query-slow-when-a-sub-select-is-used
+Title: Query slow when a sub select is used
+Question ID: 297892
+License: CC BY-SA 4.0; author: Harrison Lievesley
+
+# Question
+
+I've created a query which brings back all revenue for specific groups with different columns for YTD, Last year, the year before and the year before that.
+
+It works but extremely slowly and from what I can tell its due to the subqueries I'm using. I've recently started a new job and previously using sub queries on MSSQL wasn't an issue and had little to no performance impact but I'm wondering if this is an issue with Postgres?
+
+I did I limit 10 on the last query I ran and it took 3 minutes to bring back 10 lines.
+
+code:```
+SELECT 
+g.id, 
+COALESCE(g.description, '') AS description,
+(select sum(d.total) from ainvdet d inner join ainvhead h USING (ainvheadid) where d.product_group = g.id and  date_part('year', h.order_date) = date_part('year', current_date)) as salesytd,
+(select sum(d.total) from ainvdet d inner join ainvhead h USING (ainvheadid) where d.product_group = g.id and  date_part('year', h.order_date) = date_part('year', current_date)-1) as salesytd1,
+(select sum(d.total) from ainvdet d inner join ainvhead h USING (ainvheadid) where d.product_group = g.id and  date_part('year', h.order_date) = date_part('year', current_date)-2) as salesytd2,
+(select sum(d.total) from ainvdet d inner join ainvhead h USING (ainvheadid) where d.product_group = g.id and  date_part('year', h.order_date) = date_part('year', current_date)-3) as salesytd3
+FROM grpdesc g 
+WHERE g.company = 1 AND g.record_type = 'G'
+GROUP BY g.id, g.description
+
+```
+
+# Answers
+
+## Answer 1
+Author: user212533
+Accepted: yes
+Score: 4
+License: CC BY-SA 4.0
+
+Without full table definitions and indexes it will be impossible to be certain, but this is most likely the case of the query being poorly written.
+
+This should return the same result, but require the query engine to access the rows once, instead of four times (once for each subquery).```
+SELECT 
+  g.id, 
+  COALESCE(g.description, '') AS description,
+  SUM
+    (
+      CASE
+        WHEN date_part('year', h.order_date) = date_part('year', current_date) THEN d.total
+        ELSE 0
+      END
+    ) AS salesytd,
+  SUM
+    (
+      CASE
+        WHEN date_part('year', h.order_date) = date_part('year', current_date) - 1 THEN d.total
+        ELSE 0
+      END
+    ) AS salesytd1,
+  SUM
+    (
+      CASE
+        WHEN date_part('year', h.order_date) = date_part('year', current_date) - 2 THEN d.total
+        ELSE 0
+      END
+    ) AS salesytd2,
+  SUM
+    (
+      CASE
+        WHEN date_part('year', h.order_date) = date_part('year', current_date) - 3 THEN d.total
+        ELSE 0
+      END
+    ) AS salesytd3
+FROM
+  grpdesc g
+LEFT JOIN
+  ainvdet d
+    ON d.product_group = g.id
+LEFT JOIN 
+  ainvhead h 
+    ON h.ainvheadid = d.ainvheadid
+        AND h.order_date >= date_trunc('YEAR',current_date - INTERVAL '3 YEARS')
+WHERE 
+  g.company = 1 
+    AND g.record_type = 'G'
+GROUP BY 
+  g.id,
+  g.description
+
+```I try to keep my answers as DB-agnostic as I can, but as A Horse With No Name (https://dba.stackexchange.com/users/1822/a-horse-with-no-name) points out, in place of the `CASE` statements you can use:```
+SUM(d.total) filter (where date_part(..) = date_part(...))
+
+```
+
+## Answer 2
+Author: V&#233;race
+Accepted: no
+Score: 1
+License: CC BY-SA 4.0
+
+You could also try:```
+SELECT 
+  g.id, 
+  COALESCE(g.description, '') AS description,
+  ' Sales for year: ' || DATE_TRUNC('YEAR', header.order_date)::TEXT || ' ', -- for presentation only - can be deleted!
+  SUM(line.total) OVER (PARTITION BY DATE_TRUNC('YEAR', header.order_date))
+FROM 
+  grpdesc g, 
+LEFT JOIN ainvdet  line   ON line.product_group = g.id
+LEFT JOIN ainvheadid header ON header.ainvheadid = line.ainvhead
+WHERE g.company = 1
+  AND g.record_type = 'G'
+  AND h.order_date >=  DATE_TRUNC('YEAR', CURRENT_DATE - INTERVAL '3 YEARS');
+ORDER BY DATE_TRUNC('YEAR', header.order_date) DESC;
+
+```You'll have to check for performance on your own system's h/ware - I suspect that @bbaird's might be marginally faster! Like his solution, there aren't 4 `JOIN`s from the `header` to the `line`!
+
+[Batch planner note: the original full post is saved as source_post.txt. This planning input was compacted to remove linked-page snapshots or excessive length.]

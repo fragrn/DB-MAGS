@@ -1,0 +1,85 @@
+{
+  "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/long_transaction/222262-performance-of-large-transactions-and-concurrency.txt",
+  "category": "long_transaction",
+  "slug": "222262-performance-of-large-transactions-and-concurrency",
+  "status": "abandoned",
+  "reason": "Stopped after 4 attempt(s): invalid reproduction blueprint: fact.source must be one of ['agent_inference', 'explicit_post', 'human_input', 'post_hypothesis']",
+  "attempts": [
+    {
+      "attempt": 1,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/222262-performance-of-large-transactions-and-concurrency/attempt_1/20260721-145652_9a94021d",
+      "status": "failed",
+      "reason": "invalid reproduction blueprint: fact.source must be one of ['agent_inference', 'explicit_post', 'human_input', 'post_hypothesis']",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "workload_spec.queries",
+          "before": [
+            {
+              "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+              "concurrency": 1,
+              "duration_sec": 30
+            },
+            {
+              "sql": "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+              "concurrency": 1,
+              "duration_sec": 30
+            }
+          ],
+          "after": [
+            "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+            "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id BETWEEN 1 AND 50000; COMMIT;"
+          ],
+          "reason": "Runtime SQL background workload expects query strings."
+        }
+      ],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 2,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/222262-performance-of-large-transactions-and-concurrency/attempt_2/20260721-145726_03801ffa",
+      "status": "failed",
+      "reason": "invalid reproduction blueprint: fact.source must be one of ['agent_inference', 'explicit_post', 'human_input', 'post_hypothesis']",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 3,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/222262-performance-of-large-transactions-and-concurrency/attempt_3/20260721-145746_41c50b1d",
+      "status": "failed",
+      "reason": "postgresql TaskSpec execution failed: [{\"task_id\": \"initialize_database\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"postgres raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'postgresql', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': ['configure[0]: ERROR:  CREATE DATABASE cannot run inside a transaction block']}\"]}]",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "workload_spec.queries",
+          "before": [
+            {
+              "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 500; COMMIT;",
+              "concurrency": 1
+            },
+            {
+              "sql": "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id BETWEEN 250 AND 750; COMMIT;",
+              "concurrency": 1
+            }
+          ],
+          "after": [
+            "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 500; COMMIT;",
+            "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id BETWEEN 250 AND 750; COMMIT;"
+          ],
+          "reason": "Runtime SQL background workload expects query strings."
+        }
+      ],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 4,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/222262-performance-of-large-transactions-and-concurrency/attempt_4/20260721-145809_c28b9c7d",
+      "status": "failed",
+      "reason": "invalid reproduction blueprint: fact.source must be one of ['agent_inference', 'explicit_post', 'human_input', 'post_hypothesis']",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    }
+  ]
+}

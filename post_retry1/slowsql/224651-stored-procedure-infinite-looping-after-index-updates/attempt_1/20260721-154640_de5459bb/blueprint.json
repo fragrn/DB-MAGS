@@ -1,0 +1,230 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Stored procedure enters an infinite loop after index updates, potentially due to page locking or trigger behavior.",
+    "symptoms": [
+      "Stored procedure loops indefinitely.",
+      "Deadlocks observed on tables.",
+      "Process fails to insert data.",
+      "Infinite looping occurs when an update statement is executed inside an insert trigger."
+    ],
+    "mechanism": "Page locking on an index combined with nested cursors and triggers causes infinite looping and deadlocks.",
+    "facts": [
+      {
+        "key": "Stored procedure uses nested cursors.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The stored procedure script provided in the post shows nested cursors.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Infinite looping occurs after index updates.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post explicitly states that the issue began after index updates.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Reverting index changes did not resolve the issue.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post mentions that reverting the indexes did not stop the infinite loop.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Triggers are present on the target tables.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post states that the database has multiple triggers on almost every table.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Deleting a single index resolved the issue.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The author of the post resolved the issue by deleting a single index.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The infinite loop is caused by a combination of page locking and trigger behavior.",
+      "The stored procedure's nested cursors exacerbate the issue by holding locks for extended periods."
+    ],
+    "unknowns": [
+      "The exact index that caused the issue.",
+      "The specific trigger logic contributing to the problem.",
+      "Whether the issue is reproducible in a synthetic environment."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The issue involves SQL Server-specific features like triggers, cursors, and index locking, which can be emulated in Azure SQL Edge. However, the exact index and trigger logic are unknown, requiring assumptions for synthetic reproduction.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.7
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_slowsql_224651_stored_procedure_r59_a1",
+    "requirements": [
+      "Azure SQL Edge compatibility for SQL Server features"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_224651_stored_procedure_r59_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS EDI_PSI_HDR (ODBC_ID VARCHAR(10) PRIMARY KEY, TRANSACTION_SET VARCHAR(5), CUST_ID VARCHAR(15), ST_ID VARCHAR(15), PO_NUM VARCHAR(22), V_STATUS VARCHAR(20), V_STATUS_DT DATETIME)",
+      "CREATE TABLE IF NOT EXISTS CUSTOMER (ID VARCHAR(15) PRIMARY KEY, SALESREP_ID VARCHAR(15), TERRITORY VARCHAR(15))",
+      "CREATE TABLE IF NOT EXISTS CUST_ADDRESS (CUSTOMER_ID VARCHAR(15), ADDR_NO INT, NAME VARCHAR(50), ADDR_1 VARCHAR(50), ADDR_2 VARCHAR(50), ADDR_3 VARCHAR(50), CITY VARCHAR(50), STATE VARCHAR(50), ZIPCODE VARCHAR(10), COUNTRY VARCHAR(50), SHIPTO_ID VARCHAR(15), PRIMARY KEY (CUSTOMER_ID, ADDR_NO))",
+      "CREATE TABLE IF NOT EXISTS CUSTOMER_ORDER (ID VARCHAR(15) PRIMARY KEY, CUSTOMER_PO_REF VARCHAR(22), SHIPTO_ID VARCHAR(15))",
+      "CREATE TABLE IF NOT EXISTS CUSTOMER_ORDER_LINE (CUST_ORDER_ID VARCHAR(15), PART_ID VARCHAR(30), PROMISE_DEL_DATE DATETIME, TOTAL_SHIPPED_QTY DECIMAL(14,4), PRIMARY KEY (CUST_ORDER_ID, PART_ID))"
+    ],
+    "generation_sql": [
+      "INSERT INTO EDI_PSI_HDR (ODBC_ID, TRANSACTION_SET, CUST_ID, ST_ID, PO_NUM, V_STATUS, V_STATUS_DT) SELECT RIGHT('0000' + CAST(n AS VARCHAR), 10), '830', 'C01558', 'ST001', 'PO' + CAST(n AS VARCHAR), 'READY', GETDATE() FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM master.dbo.spt_values) AS numbers",
+      "INSERT INTO CUSTOMER (ID, SALESREP_ID, TERRITORY) SELECT 'C01558', 'SR001', 'TERR001'",
+      "INSERT INTO CUST_ADDRESS (CUSTOMER_ID, ADDR_NO, NAME, ADDR_1, ADDR_2, ADDR_3, CITY, STATE, ZIPCODE, COUNTRY, SHIPTO_ID) SELECT 'C01558', 1, 'Customer Name', 'Addr1', 'Addr2', 'Addr3', 'City', 'State', '12345', 'Country', 'ST001'",
+      "INSERT INTO CUSTOMER_ORDER (ID, CUSTOMER_PO_REF, SHIPTO_ID) SELECT 'ORD001', 'PO1', 'ST001'",
+      "INSERT INTO CUSTOMER_ORDER_LINE (CUST_ORDER_ID, PART_ID, PROMISE_DEL_DATE, TOTAL_SHIPPED_QTY) SELECT 'ORD001', 'PART001', GETDATE() + 15, 0"
+    ],
+    "tables": [
+      {
+        "name": "EDI_PSI_HDR",
+        "purpose": "Primary table for simulating the stored procedure's cursor logic.",
+        "target_rows": 1000,
+        "distribution_notes": "Simulates a queue of records to process."
+      },
+      {
+        "name": "CUSTOMER",
+        "purpose": "Reference table for customer data.",
+        "target_rows": 1,
+        "distribution_notes": "Single customer for simplicity."
+      },
+      {
+        "name": "CUST_ADDRESS",
+        "purpose": "Reference table for customer addresses.",
+        "target_rows": 1,
+        "distribution_notes": "Single address for simplicity."
+      },
+      {
+        "name": "CUSTOMER_ORDER",
+        "purpose": "Simulates existing orders.",
+        "target_rows": 1,
+        "distribution_notes": "Single order for simplicity."
+      },
+      {
+        "name": "CUSTOMER_ORDER_LINE",
+        "purpose": "Simulates order lines.",
+        "target_rows": 1,
+        "distribution_notes": "Single order line for simplicity."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "EDI_PSI_HDR": 1000,
+        "CUSTOMER": 1,
+        "CUST_ADDRESS": 1,
+        "CUSTOMER_ORDER": 1,
+        "CUSTOMER_ORDER_LINE": 1
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "EDI_PSI_HDR",
+      "CUSTOMER",
+      "CUST_ADDRESS",
+      "CUSTOMER_ORDER",
+      "CUSTOMER_ORDER_LINE"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY' AND TRANSACTION_SET = '830'",
+        "objective": "Verify that the data generation produces the expected rows for processing.",
+        "expected_evidence": [
+          "The query returns rows with V_STATUS = 'READY' and TRANSACTION_SET = '830'."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Stored procedure completes without infinite looping.",
+      "No deadlocks occur during execution."
+    ],
+    "symptom_evidence": [
+      "Infinite looping observed in the stored procedure.",
+      "Deadlocks observed on tables."
+    ],
+    "mechanism_evidence": [
+      "Page locking on an index combined with nested cursors and triggers causes infinite looping and deadlocks."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Infinite looping in stored procedure due to index and trigger interaction.",
+    "target_database": "post_retry_slowsql_224651_stored_procedure_r59_a1",
+    "dba_description": "Stored procedure enters an infinite loop after index updates, potentially due to page locking or trigger behavior.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_224651_stored_procedure_r59_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_slowsql_224651_stored_procedure_r59_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup for reproduction."
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The issue involves SQL Server-specific features and behaviors, which can be emulated in Azure SQL Edge. The synthetic data and schema are designed to reproduce the mechanism of infinite looping and deadlocks caused by index and trigger interactions."
+}

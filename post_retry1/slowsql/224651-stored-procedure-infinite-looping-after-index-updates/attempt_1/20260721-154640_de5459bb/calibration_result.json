@@ -1,0 +1,32 @@
+{
+  "status": "accepted",
+  "matched": true,
+  "decision": "accept",
+  "weak_match": false,
+  "concerns": [],
+  "recommended_changes": [],
+  "rounds": [
+    {
+      "decision": "accept",
+      "reasoning": "The observed execution plan for the calibration query aligns with the expected behavior. The query performs a clustered index scan on the `EDI_PSI_HDR` table, applying the specified filters (`V_STATUS = 'READY'` and `TRANSACTION_SET = '830'`). This confirms that the data generation and indexing are functioning as intended to support the query's objective.",
+      "query_assessments": [
+        {
+          "query_id": "calibration_query_1",
+          "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY' AND TRANSACTION_SET = '830'",
+          "matched": true,
+          "observed_plan_summary": "Clustered Index Scan on EDI_PSI_HDR with filters V_STATUS = 'READY' and TRANSACTION_SET = '830'.",
+          "supporting_evidence": [
+            "The plan shows a clustered index scan on the EDI_PSI_HDR table.",
+            "The WHERE clause filters on V_STATUS = 'READY' and TRANSACTION_SET = '830', as expected."
+          ],
+          "discrepancies": []
+        }
+      ],
+      "concerns": [],
+      "recommended_changes": [],
+      "missing_information": [],
+      "round": 1,
+      "matched": true
+    }
+  ]
+}

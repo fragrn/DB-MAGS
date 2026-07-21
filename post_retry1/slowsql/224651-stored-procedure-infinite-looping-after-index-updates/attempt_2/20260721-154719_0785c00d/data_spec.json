@@ -1,0 +1,101 @@
+{
+  "database": "post_retry_slowsql_224651_stored_procedure_r39738_a2",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS EDI_PSI_HDR (ODBC_ID VARCHAR(10) PRIMARY KEY, TRANSACTION_SET VARCHAR(5), CUST_ID VARCHAR(15), ST_ID VARCHAR(15), PO_NUM VARCHAR(22), V_STATUS VARCHAR(20), V_STATUS_DT DATETIME)",
+    "CREATE TABLE IF NOT EXISTS CUSTOMER (ID VARCHAR(15) PRIMARY KEY, SALESREP_ID VARCHAR(15), TERRITORY VARCHAR(15))",
+    "CREATE TABLE IF NOT EXISTS CUST_ADDRESS (CUSTOMER_ID VARCHAR(15), ADDR_NO INT, NAME VARCHAR(50), ADDR_1 VARCHAR(50), ADDR_2 VARCHAR(50), ADDR_3 VARCHAR(50), CITY VARCHAR(50), STATE VARCHAR(50), ZIPCODE VARCHAR(15), COUNTRY VARCHAR(15), SHIPTO_ID VARCHAR(15), PRIMARY KEY (CUSTOMER_ID, ADDR_NO))",
+    "CREATE TABLE IF NOT EXISTS CUSTOMER_ORDER (ID VARCHAR(15) PRIMARY KEY, CUSTOMER_PO_REF VARCHAR(22), SHIPTO_ID VARCHAR(15))",
+    "CREATE TABLE IF NOT EXISTS CUSTOMER_ORDER_LINE (CUST_ORDER_ID VARCHAR(15), PART_ID VARCHAR(30), PROMISE_DEL_DATE DATETIME, TOTAL_SHIPPED_QTY DECIMAL(14,4), PRIMARY KEY (CUST_ORDER_ID, PART_ID))",
+    "CREATE TABLE IF NOT EXISTS EDI_PSI_DTL (ODBC_ID VARCHAR(10), ITEM_NO VARCHAR(30), ATTRIBUTE_1 CHAR(1), PRIMARY KEY (ODBC_ID, ITEM_NO))"
+  ],
+  "generation_sql": [
+    "INSERT INTO EDI_PSI_HDR (ODBC_ID, TRANSACTION_SET, CUST_ID, ST_ID, PO_NUM, V_STATUS, V_STATUS_DT) SELECT RIGHT('0000' + CAST(n AS VARCHAR), 4), '830', 'C01558', 'ST001', CONCAT('PO', n), 'READY', GETDATE() FROM (SELECT n FROM generate_series(1, {row_count}) AS n) AS series",
+    "INSERT INTO CUSTOMER (ID, SALESREP_ID, TERRITORY) SELECT CONCAT('CUST', n), CONCAT('REP', n), CONCAT('TERR', n) FROM (SELECT n FROM generate_series(1, 100) AS n) AS series",
+    "INSERT INTO CUST_ADDRESS (CUSTOMER_ID, ADDR_NO, NAME, ADDR_1, ADDR_2, ADDR_3, CITY, STATE, ZIPCODE, COUNTRY, SHIPTO_ID) SELECT CONCAT('CUST', n), n, CONCAT('Name', n), CONCAT('Addr1', n), CONCAT('Addr2', n), CONCAT('Addr3', n), CONCAT('City', n), CONCAT('State', n), CONCAT('Zip', n), 'Country', CONCAT('ST', n) FROM (SELECT n FROM generate_series(1, 100) AS n) AS series",
+    "INSERT INTO CUSTOMER_ORDER (ID, CUSTOMER_PO_REF, SHIPTO_ID) SELECT CONCAT('ORD', n), CONCAT('PO', n), CONCAT('ST', n) FROM (SELECT n FROM generate_series(1, 100) AS n) AS series",
+    "INSERT INTO CUSTOMER_ORDER_LINE (CUST_ORDER_ID, PART_ID, PROMISE_DEL_DATE, TOTAL_SHIPPED_QTY) SELECT CONCAT('ORD', n), CONCAT('PART', n), GETDATE() + n, 0 FROM (SELECT n FROM generate_series(1, 100) AS n) AS series",
+    "INSERT INTO EDI_PSI_DTL (ODBC_ID, ITEM_NO, ATTRIBUTE_1) SELECT RIGHT('0000' + CAST(n AS VARCHAR), 4), CONCAT('ITEM', n), 'C' FROM (SELECT n FROM generate_series(1, {row_count}) AS n) AS series"
+  ],
+  "tables": [
+    {
+      "name": "EDI_PSI_HDR",
+      "purpose": "Primary table for cursor processing in the stored procedure",
+      "target_rows": 1000,
+      "distribution_notes": "Simulates the header records processed by the stored procedure."
+    },
+    {
+      "name": "CUSTOMER",
+      "purpose": "Customer data for joins in the stored procedure",
+      "target_rows": 100,
+      "distribution_notes": "Simulates customer records referenced by the stored procedure."
+    },
+    {
+      "name": "CUST_ADDRESS",
+      "purpose": "Customer address data for inserts and updates in the stored procedure",
+      "target_rows": 100,
+      "distribution_notes": "Simulates address records referenced and inserted by the stored procedure."
+    },
+    {
+      "name": "CUSTOMER_ORDER",
+      "purpose": "Customer order data for updates in the stored procedure",
+      "target_rows": 100,
+      "distribution_notes": "Simulates customer orders referenced by the stored procedure."
+    },
+    {
+      "name": "CUSTOMER_ORDER_LINE",
+      "purpose": "Customer order line data for deletes in the stored procedure",
+      "target_rows": 100,
+      "distribution_notes": "Simulates order lines referenced by the stored procedure."
+    },
+    {
+      "name": "EDI_PSI_DTL",
+      "purpose": "Detail records for processing in the stored procedure",
+      "target_rows": 1000,
+      "distribution_notes": "Simulates detail records processed by the stored procedure."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "EDI_PSI_HDR": 1000,
+      "CUSTOMER": 100,
+      "CUST_ADDRESS": 100,
+      "CUSTOMER_ORDER": 100,
+      "CUSTOMER_ORDER_LINE": 100,
+      "EDI_PSI_DTL": 1000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "EDI_PSI_HDR",
+    "CUSTOMER",
+    "CUST_ADDRESS",
+    "CUSTOMER_ORDER",
+    "CUSTOMER_ORDER_LINE",
+    "EDI_PSI_DTL"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY' AND TRANSACTION_SET = '830' ORDER BY ODBC_ID ASC",
+      "objective": "Verify that the cursor query retrieves the expected rows for processing.",
+      "expected_evidence": [
+        "The query retrieves rows with V_STATUS = 'READY' and TRANSACTION_SET = '830'.",
+        "The rows are ordered by ODBC_ID."
+      ]
+    },
+    {
+      "sql": "SELECT * FROM CUSTOMER_ORDER_LINE WHERE PROMISE_DEL_DATE > GETDATE() + 14 AND TOTAL_SHIPPED_QTY = 0",
+      "objective": "Verify that the stored procedure can identify rows for deletion based on the PROMISE_DEL_DATE and TOTAL_SHIPPED_QTY conditions.",
+      "expected_evidence": [
+        "The query retrieves rows with PROMISE_DEL_DATE > GETDATE() + 14 and TOTAL_SHIPPED_QTY = 0."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

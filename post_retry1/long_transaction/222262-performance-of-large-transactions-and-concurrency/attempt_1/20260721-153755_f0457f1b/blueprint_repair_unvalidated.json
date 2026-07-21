@@ -1,0 +1,193 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Investigate performance implications and concurrency behavior of large transactions updating 50k rows in a multi-million row table under PostgreSQL MVCC.",
+    "symptoms": [
+      "Blocked transactions due to row-level locks.",
+      "Potential deadlocks or serialization errors under higher isolation levels."
+    ],
+    "mechanism": "PostgreSQL MVCC ensures that reads do not block writes and vice versa, but row-level locks can block concurrent updates.",
+    "facts": [
+      {
+        "key": "MVCC behavior",
+        "value": {
+          "reads do not block writes and writes do not block reads.": "explicit_post",
+          "evidence": "PostgreSQL documentation and DBA forum post.",
+          "confidence": 1.0
+        },
+        "Transaction isolation levels impact concurrency behavior and error handling.": "explicit_post",
+        "evidence": "PostgreSQL documentation and DBA forum post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The target database uses PostgreSQL 9.3 or a compatible version.",
+      "The synthetic schema and data will mimic the described workload and concurrency patterns."
+    ],
+    "unknowns": [
+      "Exact table schema and workload characteristics.",
+      "Specific isolation level used in the target environment."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "PostgreSQL MVCC behavior and transaction isolation levels can be reproduced using synthetic data and schema.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Target database does not exist; synthetic setup required."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_long_transaction_222262_perform_r475152_a1",
+    "requirements": [
+      "Dedicated test database setup."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_222262_perform_r475152_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description VARCHAR(255));"
+    ],
+    "generation_sql": [
+      "INSERT INTO tools (description) SELECT CONCAT('tool_', n) FROM generate_series(1, {row_count}) AS n;"
+    ],
+    "tables": [
+      {
+        "name": "tools",
+        "purpose": "Primary table for reproducing transaction and concurrency behavior.",
+        "target_rows": 1000000,
+        "distribution_notes": "Uniform distribution of rows with unique IDs and descriptions."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "tools": 1000000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "tools"
+    ],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id <= 50000; COMMIT;",
+      "BEGIN; UPDATE tools SET description = 'concurrent_update' WHERE id BETWEEN 25000 AND 75000; COMMIT;"
+    ],
+    "concurrency": 2,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Blocked transactions due to row-level locks.",
+      "No impact on read operations for rows not being updated."
+    ],
+    "symptom_evidence": [
+      "Blocked concurrent transactions attempting to update overlapping rows."
+    ],
+    "mechanism_evidence": [
+      "PostgreSQL MVCC behavior ensures reads do not block writes and vice versa."
+    ],
+    "minimum_plan_similarity": 0.8
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocked transactions and concurrency behavior under large updates.",
+    "target_database": "post_retry_long_transaction_222262_perform_r475152_a1",
+    "dba_description": "Investigate performance and concurrency behavior of large transactions updating 50k rows in a multi-million row table under PostgreSQL MVCC.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CREATE DATABASE post_retry_long_transaction_222262_perform_r475152_a1;",
+          "duration_sec": 1.0
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CREATE TABLE tools (id SERIAL PRIMARY KEY, description VARCHAR(255));",
+          "duration_sec": 1.0
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO tools (description) SELECT CONCAT('tool_', n) FROM generate_series(1, 1000000) AS n;",
+          "duration_sec": 1.0
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true,
+        "table_populated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic environment setup."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id <= 50000; COMMIT;",
+          "duration_sec": 1.0
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; UPDATE tools SET description = 'concurrent_update' WHERE id BETWEEN 25000 AND 75000; COMMIT;",
+          "duration_sec": 1.0
+        }
+      ],
+      "expected_metrics": {
+        "blocked_transactions": true
+      },
+      "success_criteria": {
+        "blocked_transactions": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Concurrency behavior under large updates."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Exact isolation level used in the target environment."
+  ],
+  "rationale": "Synthetic reproduction of PostgreSQL MVCC behavior and concurrency implications of large transactions updating 50k rows."
+}

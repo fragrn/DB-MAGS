@@ -1,0 +1,231 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Infinite looping in a stored procedure after index updates and trigger interactions.",
+    "symptoms": [
+      "Stored procedure enters infinite loop after index updates.",
+      "Deadlocks observed on tables during execution.",
+      "Stored procedure fails to insert data.",
+      "Infinite looping occurs when an update statement is executed inside an insert trigger."
+    ],
+    "mechanism": "The issue is likely caused by a combination of index changes and triggers that result in unexpected locking behavior or infinite loops during stored procedure execution.",
+    "facts": [
+      {
+        "key": "Stored procedure uses nested cursors and fetch statements.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The stored procedure code provided in the post shows nested cursors and fetch statements.",
+        "confidence": 0.5
+      },
+      {
+        "key": "The database contains multiple triggers on tables.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post explicitly mentions that the database has multiple triggers on almost every table.",
+        "confidence": 0.5
+      },
+      {
+        "key": "The issue started after index updates.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post states that the process was working fine until updates were made to indexes.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Reverting the indexes did not resolve the infinite loop issue.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post mentions that reverting the indexes did not stop the inner fetch from staying in an infinite loop.",
+        "confidence": 0.5
+      },
+      {
+        "key": "The infinite loop occurs when an update statement is executed inside an insert trigger.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The user explicitly states that the looping occurs when an update statement is executed inside an insert trigger.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Deleting a specific index resolved the issue.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The user resolved the issue by deleting a single index and suspects it was causing page locking.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The issue is reproducible in a SQL Server-compatible environment.",
+      "The infinite loop is caused by a combination of index locking and trigger behavior.",
+      "The stored procedure and triggers are representative of the production environment."
+    ],
+    "unknowns": [
+      "The exact index that caused the issue.",
+      "The specific triggers involved in the infinite loop.",
+      "The detailed locking behavior leading to the infinite loop."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The issue involves SQL Server-specific features such as triggers, cursors, and index locking, which can be reproduced in a SQL Server-compatible environment. However, the exact index and trigger causing the issue are unknown, so the reproduction will focus on the general mechanism rather than the exact scenario.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact index and trigger causing the issue are not identified."
+    ],
+    "confidence": 0.7
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_slowsql_224651_stored_procedure_r73811_a3",
+    "requirements": [
+      "Support for SQL Server triggers and cursors."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_224651_stored_procedure_r73811_a3",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS EDI_PSI_HDR (ODBC_ID VARCHAR(10) PRIMARY KEY, TRANSACTION_SET VARCHAR(5), CUST_ID VARCHAR(15), ST_ID VARCHAR(15), PO_NUM VARCHAR(22), V_STATUS VARCHAR(20), V_STATUS_DT DATETIME)",
+      "CREATE TABLE IF NOT EXISTS CUSTOMER (ID VARCHAR(15) PRIMARY KEY, SALESREP_ID VARCHAR(15), TERRITORY VARCHAR(15))",
+      "CREATE TABLE IF NOT EXISTS CUST_ADDRESS (CUSTOMER_ID VARCHAR(15), ADDR_NO INT, NAME VARCHAR(50), ADDR_1 VARCHAR(50), ADDR_2 VARCHAR(50), ADDR_3 VARCHAR(50), CITY VARCHAR(50), STATE VARCHAR(50), ZIPCODE VARCHAR(10), COUNTRY VARCHAR(50), DEF_SLS_TAX_GRP_ID VARCHAR(15), TAX_EXEMPT CHAR(1), SALESREP_ID VARCHAR(15), TERRITORY VARCHAR(15), SHIPTO_ID VARCHAR(15), ORDER_FILL_RATE DECIMAL(14,4), USER_3 VARCHAR(80), GENERATE_ASN CHAR(1), HOLD_TRANSFER_ASN CHAR(1), CUSTOMS_DOC_PRINT CHAR(1), ACCEPT_830 CHAR(1), ACCEPT_862 CHAR(1), CONSOL_SHIP_LINE CHAR(1), PALLET_DETAILS_REQ CHAR(1), GENERATE_WSA CHAR(1), HOLD_TRANSFER_WSA CHAR(1), PRIMARY KEY (CUSTOMER_ID, ADDR_NO))",
+      "CREATE TABLE IF NOT EXISTS CUSTOMER_ORDER (ID VARCHAR(15) PRIMARY KEY, CUSTOMER_PO_REF VARCHAR(22), SHIPTO_ID VARCHAR(15))",
+      "CREATE TABLE IF NOT EXISTS CUSTOMER_ORDER_LINE (CUST_ORDER_ID VARCHAR(15), PART_ID VARCHAR(30), PROMISE_DEL_DATE DATETIME, TOTAL_SHIPPED_QTY DECIMAL(14,4), PRIMARY KEY (CUST_ORDER_ID, PART_ID))",
+      "CREATE TABLE IF NOT EXISTS EDI_PSI_DTL (ODBC_ID VARCHAR(10), ITEM_NO VARCHAR(30), ATTRIBUTE_1 CHAR(1), PRIMARY KEY (ODBC_ID, ITEM_NO))"
+    ],
+    "generation_sql": [
+      "INSERT INTO EDI_PSI_HDR (ODBC_ID, TRANSACTION_SET, CUST_ID, ST_ID, PO_NUM, V_STATUS, V_STATUS_DT) SELECT RIGHT('0000' + CAST(n AS VARCHAR), 4), '830', 'C01558', 'ST01', 'PO' + CAST(n AS VARCHAR), 'READY', GETDATE() FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM master.dbo.spt_values) AS numbers",
+      "INSERT INTO CUSTOMER (ID, SALESREP_ID, TERRITORY) SELECT 'C01558', 'SR01', 'TERR01'",
+      "INSERT INTO CUST_ADDRESS (CUSTOMER_ID, ADDR_NO, NAME, ADDR_1, ADDR_2, ADDR_3, CITY, STATE, ZIPCODE, COUNTRY, DEF_SLS_TAX_GRP_ID, TAX_EXEMPT, SALESREP_ID, TERRITORY, SHIPTO_ID, ORDER_FILL_RATE, USER_3, GENERATE_ASN, HOLD_TRANSFER_ASN, CUSTOMS_DOC_PRINT, ACCEPT_830, ACCEPT_862, CONSOL_SHIP_LINE, PALLET_DETAILS_REQ, GENERATE_WSA, HOLD_TRANSFER_WSA) SELECT 'C01558', 1, 'Name1', 'Addr1', 'Addr2', 'Addr3', 'City', 'State', '12345', 'Country', NULL, 'N', 'SR01', 'TERR01', 'ST01', 0.00, 'User3', 'D', 'D', 'D', 'D', 'D', 'N', 'N', 'D', 'D'",
+      "INSERT INTO CUSTOMER_ORDER (ID, CUSTOMER_PO_REF, SHIPTO_ID) SELECT 'AL01', 'PO1', 'ST01'",
+      "INSERT INTO CUSTOMER_ORDER_LINE (CUST_ORDER_ID, PART_ID, PROMISE_DEL_DATE, TOTAL_SHIPPED_QTY) SELECT 'AL01', 'PART01', GETDATE() + 15, 0",
+      "INSERT INTO EDI_PSI_DTL (ODBC_ID, ITEM_NO, ATTRIBUTE_1) SELECT RIGHT('0000' + CAST(n AS VARCHAR), 4), 'ITEM' + CAST(n AS VARCHAR), 'C' FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM master.dbo.spt_values) AS numbers"
+    ],
+    "tables": [
+      {
+        "name": "EDI_PSI_HDR",
+        "purpose": "Header table for PSI data.",
+        "target_rows": 1000,
+        "distribution_notes": "Simulates PSI data with a small number of rows."
+      },
+      {
+        "name": "CUSTOMER",
+        "purpose": "Customer table for reference.",
+        "target_rows": 1,
+        "distribution_notes": "Single customer for simplicity."
+      },
+      {
+        "name": "CUST_ADDRESS",
+        "purpose": "Customer address table for reference.",
+        "target_rows": 1,
+        "distribution_notes": "Single address for simplicity."
+      },
+      {
+        "name": "CUSTOMER_ORDER",
+        "purpose": "Customer order table for reference.",
+        "target_rows": 1,
+        "distribution_notes": "Single order for simplicity."
+      },
+      {
+        "name": "CUSTOMER_ORDER_LINE",
+        "purpose": "Customer order line table for reference.",
+        "target_rows": 1,
+        "distribution_notes": "Single order line for simplicity."
+      },
+      {
+        "name": "EDI_PSI_DTL",
+        "purpose": "Detail table for PSI data.",
+        "target_rows": 1000,
+        "distribution_notes": "Simulates PSI detail data with a small number of rows."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "EDI_PSI_HDR": 1000,
+        "CUSTOMER": 1,
+        "CUST_ADDRESS": 1,
+        "CUSTOMER_ORDER": 1,
+        "CUSTOMER_ORDER_LINE": 1,
+        "EDI_PSI_DTL": 1000
+      },
+      "value_skew": {
+        "EDI_PSI_HDR.V_STATUS": "Most rows have 'READY' status."
+      },
+      "predicate_selectivity": {
+        "EDI_PSI_HDR.V_STATUS = 'READY'": 1.0
+      },
+      "join_selectivity": {
+        "EDI_PSI_HDR.CUST_ID = CUSTOMER.ID": "one-to-one",
+        "EDI_PSI_HDR.ST_ID = CUST_ADDRESS.SHIPTO_ID": "one-to-one"
+      }
+    },
+    "analyze_tables": [
+      "EDI_PSI_HDR",
+      "CUSTOMER",
+      "CUST_ADDRESS",
+      "CUSTOMER_ORDER",
+      "CUSTOMER_ORDER_LINE",
+      "EDI_PSI_DTL"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY'",
+        "objective": "Verify that the data generation produces rows with the expected status.",
+        "expected_evidence": [
+          "The query returns rows with V_STATUS = 'READY'.",
+          "The row count matches the target cardinality for EDI_PSI_HDR."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "The stored procedure executes without entering an infinite loop.",
+      "The triggers execute without causing deadlocks or unexpected locking behavior."
+    ],
+    "symptom_evidence": [
+      "Infinite looping observed in the stored procedure.",
+      "Deadlocks or locking issues observed during execution."
+    ],
+    "mechanism_evidence": [
+      "The issue is caused by index locking and trigger interactions."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Infinite looping in stored procedure due to index and trigger interaction.",
+    "target_database": "post_retry_slowsql_224651_stored_procedure_r73811_a3",
+    "dba_description": "Stored procedure enters infinite loop after index updates and trigger interactions.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "Which specific index caused the issue?",
+    "Which triggers are involved in the infinite loop?"
+  ],
+  "rationale": "The reproduction focuses on the mechanism of the issue, which involves index locking and trigger interactions. The exact index and trigger causing the issue are unknown, so the reproduction is designed to simulate the general conditions described in the post."
+}

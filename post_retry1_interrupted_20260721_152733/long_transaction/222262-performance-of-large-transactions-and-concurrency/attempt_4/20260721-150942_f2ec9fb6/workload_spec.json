@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "method": "sql",
+  "queries": [
+    "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id = 1; -- Transaction 1",
+    "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id = 1; -- Transaction 2"
+  ],
+  "concurrency": 2,
+  "duration_sec": 30
+}

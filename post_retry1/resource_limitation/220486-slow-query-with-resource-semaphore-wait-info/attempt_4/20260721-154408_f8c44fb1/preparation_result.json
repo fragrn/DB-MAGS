@@ -1,0 +1,11 @@
+{
+  "database": "post_retry_resource_limitation_220486_slow_r848989_a4",
+  "dbms": "sqlserver",
+  "statement_count": 4,
+  "statements": [
+    "IF OBJECT_ID(N'dbo.synthetic_queries', N'U') IS NULL CREATE TABLE dbo.synthetic_queries  (id INT PRIMARY KEY, query_pattern NVARCHAR(450), memory_grant INT, parallelism INT)",
+    "IF OBJECT_ID(N'dbo.query_execution_logs', N'U') IS NULL CREATE TABLE dbo.query_execution_logs  (id INT PRIMARY KEY, query_id INT, execution_time_ms INT, wait_type NVARCHAR(64))",
+    "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = ?', 100, 8)",
+    "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (2, 'SELECT COUNT(*) FROM large_table GROUP BY col2', 200, 16)"
+  ]
+}

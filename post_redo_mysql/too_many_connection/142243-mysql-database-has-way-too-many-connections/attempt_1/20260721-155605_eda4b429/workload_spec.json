@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "method": "sql",
+  "queries": [
+    "UPDATE jobs SET status = 'running' WHERE id = (SELECT MIN(id) FROM jobs WHERE status = 'pending')",
+    "INSERT INTO connections_log (connection_id, process_id, job_id, status) VALUES (CONNECTION_ID(), MOD(RAND()*4, 4)+1, MOD(RAND()*10000, 10000)+1, 'attempted')"
+  ],
+  "concurrency": 200,
+  "duration_sec": 30
+}

@@ -1,0 +1,51 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Slow query performance due to RESOURCE_SEMAPHORE waits and parallelism issues.",
+  "symptoms": [
+    "RESOURCE_SEMAPHORE waits observed during query execution.",
+    "Slow query performance under high user connection load.",
+    "High memory grants causing contention.",
+    "Parallel query execution with CXCONSUMER waits."
+  ],
+  "mechanism": "Excessive parallelism and memory grant contention leading to RESOURCE_SEMAPHORE waits.",
+  "facts": [
+    {
+      "key": "RESOURCE_SEMAPHORE waits observed",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The DBA observed RESOURCE_SEMAPHORE waits in sp_whoisactive output.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Parallel query execution with CXCONSUMER waits",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "CXCONSUMER waits were reported, indicating parallel query execution.",
+      "confidence": 0.9
+    },
+    {
+      "key": "MAXDOP set to 0",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The DBA mentioned that MAXDOP is set to 0, allowing queries to use all CPU cores.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Memory pressure affecting queries",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "11 forced grants were reported in sys.dm_exec_query_resource_semaphores.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The database environment has sufficient parallelism to reproduce CXCONSUMER waits.",
+    "Synthetic data can simulate memory grant contention effectively."
+  ],
+  "unknowns": [
+    "Exact query workload causing RESOURCE_SEMAPHORE waits.",
+    "Whether the observed waits are due to specific queries or overall workload."
+  ],
+  "confidence": 0.8
+}

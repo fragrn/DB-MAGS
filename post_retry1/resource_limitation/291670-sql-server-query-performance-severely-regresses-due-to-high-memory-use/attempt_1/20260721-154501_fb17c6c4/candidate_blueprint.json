@@ -1,0 +1,241 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Query performance regression due to high memory usage and parameter sniffing in SQL Server.",
+    "symptoms": [
+      "Query timeouts for large accounts when SQL Server memory is filled.",
+      "Queries run fast in SSMS but timeout in the application.",
+      "Performance improves after restarting SQL Server."
+    ],
+    "mechanism": "Parameter sniffing and memory pressure leading to suboptimal execution plans and excessive disk I/O.",
+    "facts": [
+      {
+        "key": "Query timeouts occur for large accounts when memory is filled.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post describes timeouts for large accounts when SQL Server memory is filled.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Performance improves after restarting SQL Server.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post mentions that restarting SQL Server resolves the issue temporarily.",
+        "confidence": 0.5
+      },
+      {
+        "key": "SSMS queries perform better than application queries.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post highlights that queries run faster in SSMS compared to the application.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Parameter sniffing identified as a root cause.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post explicitly mentions parameter sniffing as a root cause after investigation.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database schema and workload can be approximated based on the post.",
+      "The SQL Server environment is compatible with Azure SQL Edge for reproduction."
+    ],
+    "unknowns": [
+      "Exact schema details for the affected tables.",
+      "Specific execution plans and query patterns causing the issue."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction can focus on parameter sniffing and memory pressure mechanisms without requiring exact schema details.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema details are unavailable."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_291670_sql_r901852_a1",
+    "requirements": [
+      "Azure SQL Edge compatibility"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_291670_sql_r901852_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS accounts (id INT PRIMARY KEY, name NVARCHAR(255), category NVARCHAR(50), created_at DATETIME2)",
+      "CREATE TABLE IF NOT EXISTS notifications (id INT PRIMARY KEY, account_id INT, notified_at DATETIME2, payload NVARCHAR(MAX), FOREIGN KEY (account_id) REFERENCES accounts(id))"
+    ],
+    "generation_sql": [
+      "INSERT INTO accounts (id, name, category, created_at) SELECT n, CONCAT('Account_', n), CASE WHEN n % 4 = 0 THEN 'large' ELSE 'small' END, DATEADD(DAY, -n, GETDATE()) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers",
+      "INSERT INTO notifications (id, account_id, notified_at, payload) SELECT n, 1 + (n % 100), DATEADD(MINUTE, -n, GETDATE()), REPLICATE('A', 1000) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers"
+    ],
+    "tables": [
+      {
+        "name": "accounts",
+        "purpose": "Simulate accounts with varying sizes and categories.",
+        "target_rows": 100,
+        "distribution_notes": "Large accounts are sparse but critical for reproduction."
+      },
+      {
+        "name": "notifications",
+        "purpose": "Simulate notifications tied to accounts to reproduce query patterns.",
+        "target_rows": 10000,
+        "distribution_notes": "Notifications are distributed across accounts with skew towards large accounts."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "accounts": 100,
+        "notifications": 10000
+      },
+      "value_skew": {
+        "accounts.category": "Skewed towards 'small' with sparse 'large' accounts."
+      },
+      "predicate_selectivity": {
+        "accounts.category = 'large'": 0.25
+      },
+      "join_selectivity": {
+        "notifications.account_id = accounts.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "accounts",
+      "notifications"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT n.* FROM notifications n JOIN accounts a ON n.account_id = a.id WHERE a.category = 'large' ORDER BY n.notified_at DESC",
+        "objective": "Verify that parameter sniffing and memory pressure affect execution plans.",
+        "expected_evidence": [
+          "Execution plan shows a sort operation and high memory usage.",
+          "Plan differences observed when running under different memory conditions."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "EXEC GetLargeAccountNotifications @account_id = 1",
+      "EXEC GetLargeAccountNotifications @account_id = 2"
+    ],
+    "concurrency": 4,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query performance degrades under high memory usage.",
+      "Execution plans differ based on parameter sniffing."
+    ],
+    "symptom_evidence": [
+      "Query timeouts for large accounts.",
+      "Improved performance after restarting SQL Server."
+    ],
+    "mechanism_evidence": [
+      "Execution plan differences due to parameter sniffing.",
+      "High memory usage causing disk I/O bottlenecks."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance regression due to memory pressure and parameter sniffing.",
+    "target_database": "post_retry_resource_limitation_291670_sql_r901852_a1",
+    "dba_description": "Reproduce query performance regression caused by parameter sniffing and memory pressure in SQL Server.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 120,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r901852_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_291670_sql_r901852_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup for reproduction."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r901852_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS accounts (id INT PRIMARY KEY, name NVARCHAR(255), category NVARCHAR(50), created_at DATETIME2)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS notifications (id INT PRIMARY KEY, account_id INT, notified_at DATETIME2, payload NVARCHAR(MAX), FOREIGN KEY (account_id) REFERENCES accounts(id))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data generation for reproduction."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on parameter sniffing and memory pressure, which are well-documented mechanisms in SQL Server. Synthetic data constraints are designed to simulate the described workload and query patterns."
+}

@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "method": "sql",
+  "queries": [
+    "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) VALUES (LPAD(FLOOR(RAND() * 1000000), 32, '0'), LPAD(FLOOR(RAND() * 1000000), 32, '0'), CONCAT('Component_', FLOOR(RAND() * 100)), LPAD(FLOOR(RAND() * 1000000), 32, '0'), FLOOR(RAND() * 100000), FLOOR(RAND() * 100000), LPAD(FLOOR(RAND() * 1000), 16, '0'), FLOOR(RAND() * 10), REPEAT('Data', 10), REPEAT('Message', 5))",
+    "SELECT * FROM EVENT_DETAILS WHERE COMPONENT_NAME = 'Component_50' AND STATUS = 1"
+  ],
+  "concurrency": 10,
+  "duration_sec": 60
+}

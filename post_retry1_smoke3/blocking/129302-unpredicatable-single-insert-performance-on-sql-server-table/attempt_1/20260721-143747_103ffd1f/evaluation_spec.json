@@ -1,0 +1,16 @@
+{
+  "validation_criteria": [
+    "Blocking sessions are observed in `sys.dm_exec_requests`.",
+    "Wait type `LCK_M_S` is observed during blocking.",
+    "Insert performance degrades significantly under the synthetic setup."
+  ],
+  "symptom_evidence": [
+    "Blocking sessions with no active queries.",
+    "Wait type `LCK_M_S` observed."
+  ],
+  "mechanism_evidence": [
+    "Excessive indexing causing performance degradation during inserts.",
+    "Blocking due to uncommitted transactions or lock contention."
+  ],
+  "minimum_plan_similarity": 0.6
+}

@@ -1,0 +1,39 @@
+{
+  "database": "post_retry_long_transaction_252749_lock_wa_r580446_a4",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS EVENT_DETAILS (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT))"
+  ],
+  "generation_sql": [
+    "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT LPAD(FLOOR(RAND() * 1000000), 32, '0'), LPAD(FLOOR(RAND() * 1000000), 32, '0'), CONCAT('component_', FLOOR(RAND() * 10)), LPAD(FLOOR(RAND() * 1000000), 32, '0'), 20191001 + FLOOR(RAND() * 30), FLOOR(RAND() * 86400), LPAD(FLOOR(RAND() * 10000), 16, '0'), FLOOR(RAND() * 5), CONCAT('event_data_', FLOOR(RAND() * 100)), CONCAT('message_', FLOOR(RAND() * 100)) FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "EVENT_DETAILS",
+      "purpose": "Primary table to simulate lock contention during DELETE operations.",
+      "target_rows": 100000,
+      "distribution_notes": "Simulates a high-concurrency environment with frequent INSERTs and SELECTs."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "EVENT_DETAILS": 100000
+    },
+    "value_skew": {
+      "EVENT_DETAILS.COMPONENT_NAME": "Uniform distribution across 10 components."
+    },
+    "predicate_selectivity": {
+      "UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'": 0.1
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "EVENT_DETAILS"
+  ],
+  "calibration_queries": [],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

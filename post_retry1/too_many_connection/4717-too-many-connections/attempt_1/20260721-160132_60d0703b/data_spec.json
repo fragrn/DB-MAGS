@@ -1,0 +1,43 @@
+{
+  "database": "post_retry_too_many_connection_4717_too_ma_r892468_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS data_feed (id INT AUTO_INCREMENT PRIMARY KEY, payload VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+  ],
+  "generation_sql": [
+    "INSERT INTO data_feed (payload) SELECT CONCAT('data_', n) FROM (SELECT @rownum := @rownum + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) t1, (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) t2, (SELECT @rownum := 0) t3 LIMIT {row_count}) numbers"
+  ],
+  "tables": [
+    {
+      "name": "data_feed",
+      "purpose": "Simulate the table being fed by MATLAB.",
+      "target_rows": 10000,
+      "distribution_notes": "Uniform distribution of payload data."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "data_feed": 10000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "data_feed"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT COUNT(*) FROM data_feed",
+      "objective": "Verify that the data generation process creates the expected number of rows.",
+      "expected_evidence": [
+        "Row count matches the target_rows in the data_spec."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

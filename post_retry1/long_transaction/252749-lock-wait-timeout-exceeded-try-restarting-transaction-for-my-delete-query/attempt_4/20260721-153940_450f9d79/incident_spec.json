@@ -1,0 +1,71 @@
+{
+  "dbms": "mysql",
+  "dbms_version": "5.6 (Aurora RDS)",
+  "summary": "Lock wait timeout exceeded during DELETE query due to long-running transactions.",
+  "symptoms": [
+    "DELETE query fails with 'lock wait timeout exceeded' error.",
+    "Long-running transactions holding locks for extended periods.",
+    "High row lock contention observed in InnoDB status."
+  ],
+  "mechanism": "Row-level locks held by long-running transactions block DELETE operations, leading to lock wait timeout.",
+  "facts": [
+    {
+      "key": "delete_query",
+      "value": {
+        "sql": "DELETE FROM EVENT_DETAILS WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health'"
+      },
+      "source": "explicit_post",
+      "evidence": "Query provided in the forum post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "table_schema",
+      "value": {
+        "schema": "CREATE TABLE EVENT_DETAILS (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT))"
+      },
+      "source": "explicit_post",
+      "evidence": "Schema provided in the forum post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "isolation_level",
+      "value": "REPEATABLE READ",
+      "source": "explicit_post",
+      "evidence": "Default isolation level mentioned in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "autocommit",
+      "value": true,
+      "source": "explicit_post",
+      "evidence": "AutoCommit is enabled as stated in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "long_running_transactions",
+      "value": {
+        "examples": [
+          {
+            "trx_id": "39661213",
+            "active_time_sec": 390,
+            "locks_held": 6
+          }
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "InnoDB status and process list provided in the post.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The DELETE query is executed daily and targets a significant number of rows.",
+    "The table EVENT_DETAILS experiences frequent concurrent INSERT and SELECT operations.",
+    "The lock contention is primarily caused by long-running transactions."
+  ],
+  "unknowns": [
+    "Exact workload patterns causing the long-running transactions.",
+    "Whether the DELETE query is optimized with appropriate indexes.",
+    "The size of the EVENT_DETAILS table and the number of rows deleted daily."
+  ],
+  "confidence": 0.9
+}

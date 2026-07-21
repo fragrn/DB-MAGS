@@ -1,0 +1,15 @@
+{
+  "validation_criteria": [
+    "ALTER TABLE operation should cause lock contention.",
+    "SELECT queries should be blocked during the ALTER TABLE operation."
+  ],
+  "symptom_evidence": [
+    "Database freeze during ALTER TABLE operation.",
+    "Blocked SELECT queries on the 'cliente' table."
+  ],
+  "mechanism_evidence": [
+    "ACCESS EXCLUSIVE lock held by ALTER TABLE operation.",
+    "Subsequent lock requests queue behind the ACCESS EXCLUSIVE lock."
+  ],
+  "minimum_plan_similarity": 0.8
+}

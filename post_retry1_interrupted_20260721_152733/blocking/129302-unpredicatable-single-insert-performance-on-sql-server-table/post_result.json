@@ -1,0 +1,65 @@
+{
+  "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table.txt",
+  "category": "blocking",
+  "slug": "129302-unpredicatable-single-insert-performance-on-sql-server-table",
+  "status": "abandoned",
+  "reason": "Stopped after 4 attempt(s): sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_blocking_129302_unpredicatable_r465371_a4' already exists. Choose a different database name.\\\"]}\"]}]",
+  "attempts": [
+    {
+      "attempt": 1,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_1/20260721-150300_11a0f079",
+      "status": "failed",
+      "reason": "Msg 1934, Level 16, State 1, Server 883f252a88e4, Line 1\nCREATE INDEX failed because the following SET options have incorrect settings: 'QUOTED_IDENTIFIER'. Verify that SET options are correct for use with indexed views and/or indexes on computed columns and/or filtered indexes and/or query notifications and/or XML data type methods and/or spatial index operations.",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "workload_spec.queries",
+          "before": [
+            {
+              "sql": "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, REPLICATE('B', 100))",
+              "frequency": 1
+            }
+          ],
+          "after": [
+            "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, REPLICATE('B', 100))"
+          ],
+          "reason": "Runtime SQL background workload expects query strings."
+        },
+        {
+          "path": "task_specs[1].actions[0].duration_sec",
+          "before": 300,
+          "after": 60.0,
+          "reason": "Cap action duration to experiment_request.max_duration_sec."
+        }
+      ],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 2,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_2/20260721-150325_1e0a602b",
+      "status": "failed",
+      "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_blocking_129302_unpredicatable_r405841_a2' already exists. Choose a different database name.\\\"]}\"]}]",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 3,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_3/20260721-150400_e8a5f319",
+      "status": "failed",
+      "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_blocking_129302_unpredicatable_r440423_a3' already exists. Choose a different database name.\\\"]}\"]}]",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 4,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_4/20260721-150425_f14848cd",
+      "status": "failed",
+      "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_blocking_129302_unpredicatable_r465371_a4' already exists. Choose a different database name.\\\"]}\"]}]",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    }
+  ]
+}

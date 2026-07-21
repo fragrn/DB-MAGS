@@ -1,0 +1,59 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to potential blocking and excessive indexing.",
+  "symptoms": [
+    "Single insert operations occasionally take an excessively long time (e.g., 7 minutes).",
+    "Blocking sessions appear in `sys.dm_exec_requests` but the blocking session ID does not correspond to an active session.",
+    "Blocked requests show a `LCK_M_S` wait type."
+  ],
+  "mechanism": "Blocking caused by uncommitted transactions holding locks on resources, potentially exacerbated by a high number of indexes on the table.",
+  "facts": [
+    {
+      "key": "table_size",
+      "value": {
+        "rows": 8000000
+      },
+      "source": "explicit_post",
+      "evidence": "The table is described as having 8 million rows.",
+      "confidence": 0.5
+    },
+    {
+      "key": "index_count",
+      "value": {
+        "count": 34
+      },
+      "source": "explicit_post",
+      "evidence": "The table has 34 non-clustered indexes in addition to a clustered index.",
+      "confidence": 0.5
+    },
+    {
+      "key": "blocking_symptoms",
+      "value": {
+        "wait_type": "LCK_M_S"
+      },
+      "source": "explicit_post",
+      "evidence": "Blocked requests show a `LCK_M_S` wait type.",
+      "confidence": 0.5
+    },
+    {
+      "key": "blocking_session_behavior",
+      "value": {
+        "session_state": "sleeping",
+        "no_active_requests": true
+      },
+      "source": "explicit_post",
+      "evidence": "Blocking sessions appear as sleeping with no active requests in `sys.dm_exec_requests`.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The high number of indexes contributes to the locking contention during inserts.",
+    "Uncommitted transactions are holding locks on resources, causing blocking."
+  ],
+  "unknowns": [
+    "The exact workload pattern leading to the blocking behavior.",
+    "Whether the blocking sessions are caused by application logic or external factors."
+  ],
+  "confidence": 0.85
+}

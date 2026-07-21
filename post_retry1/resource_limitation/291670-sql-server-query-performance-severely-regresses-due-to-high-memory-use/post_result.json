@@ -1,0 +1,58 @@
+{
+  "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use.txt",
+  "category": "resource_limitation",
+  "slug": "291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use",
+  "status": "abandoned",
+  "reason": "Stopped after 4 attempt(s): Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+  "attempts": [
+    {
+      "attempt": 1,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use/attempt_1/20260721-154501_fb17c6c4",
+      "status": "failed",
+      "reason": "Msg 2627, Level 14, State 1, Server 883f252a88e4, Line 1\nViolation of PRIMARY KEY constraint 'PK__accounts__3213E83F2C6637B5'. Cannot insert duplicate key in object 'dbo.accounts'. The duplicate key value is (1).\nThe statement has been terminated.",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "workload_spec.queries",
+          "before": [
+            "EXEC GetLargeAccountNotifications @account_id = 1",
+            "EXEC GetLargeAccountNotifications @account_id = 2"
+          ],
+          "after": [
+            "EXEC GetLargeAccountNotifications 'repro_value' = 1",
+            "EXEC GetLargeAccountNotifications 'repro_value' = 2"
+          ],
+          "reason": "Replace unresolved SQL placeholders with synthetic literals."
+        }
+      ],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 2,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use/attempt_2/20260721-154527_bea99fca",
+      "status": "failed",
+      "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 3,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use/attempt_3/20260721-154550_dfc46b6c",
+      "status": "failed",
+      "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 4,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use/attempt_4/20260721-154611_762dbe75",
+      "status": "failed",
+      "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    }
+  ]
+}

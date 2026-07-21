@@ -1,0 +1,64 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Slow SELECT query on sys.databases with OBJECT_ID checks and filtering.",
+  "symptoms": [
+    "Query execution takes 9-21 seconds on a local dev machine with 4 databases."
+  ],
+  "mechanism": "Potential blocking due to long-running transactions or inefficiencies in OBJECT_ID function evaluation.",
+  "facts": [
+    {
+      "key": "Query involves OBJECT_ID function.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The query uses OBJECT_ID to check for the existence of a specific table in each database.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Query filters out system databases.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The query excludes 'master', 'model', 'msdb', 'tempdb', 'ReportServer', 'ReportServerTempDB', and '1303VISBOC'.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Execution plan shows clustered index seeks.",
+      "value": {
+        "percentages": [
+          22,
+          24,
+          48
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The DBA mentions clustered index seeks taking up 22%, 24%, and 48% of the execution plan.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Query performance improved with WHERE clause.",
+      "value": {
+        "before": 21,
+        "after": 9
+      },
+      "source": "explicit_post",
+      "evidence": "Adding the WHERE clause reduced execution time from 21 seconds to 9 seconds.",
+      "confidence": 1.0
+    },
+    {
+      "key": "DBA cannot modify database indexes.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The DBA explicitly states they have no control over the indexes of the databases.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The issue is caused by blocking due to long-running transactions or inefficiencies in OBJECT_ID evaluation.",
+    "The query is executed on a SQL Server-compatible environment."
+  ],
+  "unknowns": [
+    "Whether the issue is reproducible in the target environment.",
+    "The exact database schema and data distribution in the target environment."
+  ],
+  "confidence": 0.9
+}

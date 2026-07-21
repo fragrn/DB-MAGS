@@ -1,0 +1,100 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/17677/why-is-mysql-is-creating-so-many-temporary-tables-on-disk
+Canonical URL: https://dba.stackexchange.com/questions/17677/why-is-mysql-is-creating-so-many-temporary-tables-on-disk
+Title: Why is MySQL is creating so many temporary tables on disk?
+Question ID: 17677
+License: CC BY-SA 3.0; author: ananthan.nair
+
+# Question
+
+Can any configuration mistake lead to creating too many temp tables by mysql..mysql tuner shows```
+Current max_heap_table_size = 200 M
+Current tmp_table_size = 200 M
+Of 17158 temp tables, 30% were created on disk
+
+table_open_cache = 125 tables
+table_definition_cache = 256 tables
+You have a total of 97 tables
+You have 125 open tables.
+Current table_cache hit rate is 3%
+
+```Earlier temp table was "of the 23725 temp tables 38% were created on disk" but I changed max_heap and tmp_table to 200m from 16m and it lowered to 30%..
+
+Configuration:```
+engine myisam 
+group_concat_max_len = 32768
+key_buffer_size = 3.7 GB,
+thread_stack = 256k,
+table_cache = 125
+query_cache_limit = 1M
+query_cache_size = 16M
+join_buffer_size = 2.00 M
+max_connections = 800
+
+```Another system with default configuration is showing "of 23725 temp tables, 1% were created on disk" with the same database.
+
+I tried changing to default on the machine with this issue and it still shows "Of 580 temp tables, 16% were created on disk".
+
+I am using Ubuntu 11.4 64 bit with 48 gb ram. Can any one suggest a solution?
+
+Will changing the db engine from "myisam" to "memory" on tables using "group by" fix this? As explained here: http://www.mysqlperformanceblog.com/2007/08/16/how-much-overhead-is-caused-by-on-disk-temporary-tables/ (http://www.mysqlperformanceblog.com/2007/08/16/how-much-overhead-is-caused-by-on-disk-temporary-tables/)
+
+# Answers
+
+## Answer 1
+Author: Aaron Brown
+Accepted: yes
+Score: 19
+License: CC BY-SA 3.0
+
+mysqltuner rarely provides any useful information. It uses mostly irrelevant statistics about "hit rates" and puts arbitrary limits on what is an acceptable number of widgets are acceptable. If you are not facing a performance problem, then you don't actually need to solve any of the problems that it presents to you. That being said, here's a little background information about temporary tables...
+
+MySQL internally uses the MEMORY storage engine for creating implicit temporary tables. On disk temporary tables use the MyISAM storage engine.
+
+Temporary tables are created on disk when:
+
+- TEXT or BLOB fields are present (because MEMORY doesn't support these types)
+
+- the size of the resulting implicit temporary table exceeds the lesser of `tmp_table_size` or `max_heap_table_size`
+
+- If a column w/ more than 512 bytes is used with either a GROUP BY or UNION or ORDER BY
+
+Read the MySQL Documentation (http://dev.mysql.com/doc/refman/5.5/en/internal-temporary-tables.html) on Internal Temporary Tables for more details.
+
+What can you do about this? Presuming that it actually represents a performance problem (rather than just bothering you intelluctually):
+
+- Avoid TEXT/BLOB fields and instead use appropriately sized VARCHAR or CHAR fields where possible.
+
+- If TEXT/BLOB are unavoidable, sequester them to separate tables with a foreign key relationship and JOIN only when you need them.
+
+- Treat large columns, more than 512 bytes as you would the above mentioned TEXT/BLOB fields.
+
+- Make sure your queries are returning only the result set you need (appropriately selective WHERE clauses, avoid SELECT *)
+
+- Avoid subqueries and replace them with joins, especially if they return a large result set
+
+- Last resort - raise both `tmp_table_size` and `max_heap_table_size`. Don't do this unless you find that your queries cannot be optimized.
+
+If you are concerned about your MySQL configuration and are not comfortable with the available settings yourself, you might want to check out the Percona Configuration Wizard (https://tools.percona.com/) as a starting point.
+
+Will changing the db engine from "myisam" to "memory" on tables using
+"group by" fix this? as explained here
+
+No, it won't and it will make it such that your tables are never persisted to disk. Don't do this.
+
+## Answer 2
+Author: Rick James
+Accepted: no
+Score: 3
+License: CC BY-SA 3.0
+
+"using temporary" and "using filesort" are not the end of the world!
+
+SELECT ... GROUP BY a,b ORDER BY c,d --
+Requires 1 or 2 "temp tables".
+
+There are simply times when your queries will use temp tables. Temp tables may slow down a query by a small factor. But if the query is still "fast enough" then don't worry about it.
+
+If the query is too slow (with or without tmp tables), let's discuss it. Please provide SHOW CREATE TABLE, SHOW TABLE STATUS, and EXPLAIN.
+
+[Batch planner note: the original full post is saved as source_post.txt. This planning input was compacted to remove linked-page snapshots or excessive length.]

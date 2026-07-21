@@ -1,0 +1,128 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Investigating performance implications and concurrency behavior of large transactions in PostgreSQL.",
+    "symptoms": [
+      "Blocked transactions due to row-level locks.",
+      "Potential serialization errors in higher isolation levels."
+    ],
+    "mechanism": "PostgreSQL's MVCC (Multiversion Concurrency Control) and transaction isolation levels determine the behavior of concurrent transactions.",
+    "facts": [
+      {
+        "key": "MVCC behavior",
+        "value": {
+          "reads do not block writes and writes do not block reads.": "explicit_post",
+          "evidence": "PostgreSQL documentation and forum answers.",
+          "confidence": 1.0
+        },
+        "Transaction isolation levels impact concurrency behavior.": "explicit_post",
+        "evidence": "PostgreSQL documentation and forum answers.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The target database supports MVCC and transaction isolation levels similar to PostgreSQL 9.3."
+    ],
+    "unknowns": [
+      "Exact database version and configuration details."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing setup and execution.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database environment unavailable."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_long_transaction_222262_perform_r769737_a3",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_222262_perform_r769737_a3",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+    ],
+    "generation_sql": [
+      "INSERT INTO tools (description) SELECT 'tool_' || n FROM generate_series(1, {row_count}) AS n;"
+    ],
+    "tables": [
+      {
+        "name": "tools",
+        "purpose": "Simulates a table with concurrent updates and reads.",
+        "target_rows": 100000,
+        "distribution_notes": "Uniform distribution of rows with unique IDs."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "tools": 100000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "tools"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM tools WHERE id = 1;",
+        "objective": "Verify basic read behavior under concurrent transactions.",
+        "expected_evidence": [
+          "Reads should return consistent snapshots of data."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Transaction blocking behavior matches expected isolation level.",
+      "Performance impact of large transactions is measurable."
+    ],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Transaction blocking and concurrency behavior.",
+    "target_database": "post_retry_long_transaction_222262_perform_r769737_a3",
+    "dba_description": "Investigating performance and concurrency behavior of large transactions in PostgreSQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Database environment unavailable."
+  ],
+  "rationale": "The target database does not exist, blocking further experimentation."
+}

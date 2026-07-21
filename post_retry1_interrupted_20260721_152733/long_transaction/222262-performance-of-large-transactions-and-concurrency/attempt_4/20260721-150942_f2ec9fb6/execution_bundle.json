@@ -1,0 +1,280 @@
+{
+  "baseline": {
+    "schema": {
+      "tools": {
+        "columns": [
+          {
+            "name": "id",
+            "type": "integer",
+            "nullable": "NO"
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": "YES"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "tools_pkey",
+            "definition": "CREATE UNIQUE INDEX tools_pkey ON public.tools USING btree (id)"
+          }
+        ]
+      }
+    },
+    "table_stats": [
+      {
+        "table_name": "tools",
+        "estimated_rows": 1000,
+        "total_bytes": 122880
+      }
+    ],
+    "db_metrics": {
+      "dbms": "postgresql",
+      "version": "PostgreSQL 18.4 (Homebrew) on aarch64-apple-darwin24.6.0, compiled by Apple clang version 17.0.0 (clang-1700.6.4.2), 64-bit",
+      "activity": [
+        "|Activity|7",
+        "active||1",
+        "|Timeout|1"
+      ]
+    }
+  },
+  "execution_trace": {
+    "tasks": {
+      "setup_environment": {
+        "task_id": "setup_environment",
+        "status": "success",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "dbms": "postgresql",
+            "thread_count": 1,
+            "executed_steps": 1,
+            "error_count": 0,
+            "errors": []
+          }
+        ],
+        "errors": []
+      },
+      "generate_data": {
+        "task_id": "generate_data",
+        "status": "success",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "dbms": "postgresql",
+            "thread_count": 1,
+            "executed_steps": 1,
+            "error_count": 0,
+            "errors": []
+          }
+        ],
+        "errors": []
+      },
+      "run_workload": {
+        "task_id": "run_workload",
+        "status": "success",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "dbms": "postgresql",
+            "database": "",
+            "concurrency": 1,
+            "duration_sec": 10.0,
+            "executions": 0,
+            "latency_ms": {
+              "min": null,
+              "p50": null,
+              "p95": null,
+              "max": null
+            },
+            "error_count": 468,
+            "errors": [
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist"
+            ],
+            "latency_artifact": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/222262-performance-of-large-transactions-and-concurrency/attempt_4/20260721-150942_f2ec9fb6/run_workload_postgres_raw_sql_latencies.json"
+          },
+          {
+            "kind": "raw_sql_workload",
+            "dbms": "postgresql",
+            "database": "",
+            "concurrency": 1,
+            "duration_sec": 10.0,
+            "executions": 0,
+            "latency_ms": {
+              "min": null,
+              "p50": null,
+              "p95": null,
+              "max": null
+            },
+            "error_count": 457,
+            "errors": [
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist"
+            ],
+            "latency_artifact": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/222262-performance-of-large-transactions-and-concurrency/attempt_4/20260721-150942_f2ec9fb6/run_workload_postgres_raw_sql_latencies.json"
+          }
+        ],
+        "errors": []
+      }
+    },
+    "cleanup_status": "success",
+    "cleanup_errors": []
+  },
+  "after": {
+    "schema": {
+      "tools": {
+        "columns": [
+          {
+            "name": "id",
+            "type": "integer",
+            "nullable": "NO"
+          },
+          {
+            "name": "description",
+            "type": "text",
+            "nullable": "YES"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "tools_pkey",
+            "definition": "CREATE UNIQUE INDEX tools_pkey ON public.tools USING btree (id)"
+          }
+        ]
+      }
+    },
+    "table_stats": [
+      {
+        "table_name": "tools",
+        "estimated_rows": 2000,
+        "total_bytes": 385024
+      }
+    ],
+    "db_metrics": {
+      "dbms": "postgresql",
+      "version": "PostgreSQL 18.4 (Homebrew) on aarch64-apple-darwin24.6.0, compiled by Apple clang version 17.0.0 (clang-1700.6.4.2), 64-bit",
+      "activity": [
+        "|Activity|7",
+        "active||1",
+        "|Timeout|1"
+      ]
+    }
+  },
+  "task_dag": {
+    "tasks": {
+      "setup_environment": {
+        "task_id": "setup_environment",
+        "task_type": "raw_transaction_script",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "database": "post_retry_long_transaction_222262_perform_r782541_a4",
+            "duration_sec": 1,
+            "scripts": [
+              {
+                "role": "configure",
+                "autocommit": true,
+                "concurrency": 1,
+                "steps": [
+                  {
+                    "sql": "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "expected_metrics": {},
+        "success_criteria": {},
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "Setup the environment for the experiment."
+        }
+      },
+      "generate_data": {
+        "task_id": "generate_data",
+        "task_type": "raw_transaction_script",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "database": "post_retry_long_transaction_222262_perform_r782541_a4",
+            "duration_sec": 1,
+            "scripts": [
+              {
+                "role": "configure",
+                "autocommit": true,
+                "concurrency": 1,
+                "steps": [
+                  {
+                    "sql": "INSERT INTO tools (description) SELECT 'tool_' || g FROM generate_series(1, 1000) AS g;"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "expected_metrics": {},
+        "success_criteria": {},
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "Generate synthetic data for the experiment."
+        }
+      },
+      "run_workload": {
+        "task_id": "run_workload",
+        "task_type": "raw_sql_workload",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id = 1;",
+            "concurrency": 1,
+            "duration_sec": 10
+          },
+          {
+            "kind": "raw_sql_workload",
+            "sql": "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id = 1;",
+            "concurrency": 1,
+            "duration_sec": 10
+          }
+        ],
+        "expected_metrics": {},
+        "success_criteria": {},
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "Simulate concurrent transactions to observe blocking behavior."
+        }
+      }
+    },
+    "edges": [
+      {
+        "source": "setup_environment",
+        "target": "generate_data",
+        "condition": ""
+      },
+      {
+        "source": "generate_data",
+        "target": "run_workload",
+        "condition": ""
+      }
+    ],
+    "schedule": {
+      "setup_environment": 0.0,
+      "generate_data": 0.0,
+      "run_workload": 0.0
+    }
+  },
+  "safety": {
+    "approved": true,
+    "reasons": [],
+    "scope": "InputAnalysisAgent external DBMS dedicated database safety",
+    "dag_task_count": 3
+  }
+}

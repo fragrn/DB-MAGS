@@ -1,0 +1,177 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Unpredictable single insert performance due to blocking and excessive indexes.",
+    "symptoms": [
+      "Single insert operations occasionally take several minutes to complete.",
+      "Blocking sessions appear in `sys.dm_exec_requests` but do not correspond to active queries.",
+      "Blocked requests show `LCK_M_S` wait type."
+    ],
+    "mechanism": "Excessive indexes combined with blocking due to uncommitted transactions or other locking issues.",
+    "facts": [
+      {
+        "key": "Table has 34 non-clustered indexes.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post explicitly mentions the table has 34 indexes.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Blocking sessions appear in sys.dm_exec_requests.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post describes blocked sessions with `LCK_M_S` wait type.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Blocking sessions are sometimes 'sleeping' with no active requests.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post mentions sessions with blocking session IDs that are 'sleeping' and have no active requests.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database uses default isolation levels (likely READ COMMITTED).",
+      "The blocking is caused by uncommitted transactions or lock escalation."
+    ],
+    "unknowns": [
+      "Exact schema of the table and indexes.",
+      "Whether lock escalation or deadlocks are contributing to the issue."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction is feasible at the mechanism level by simulating excessive indexes and blocking behavior. However, the exact schema and workload are unknown.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema of the table and indexes."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_blocking_129302_unpredicatable_r599630_a1",
+    "requirements": [
+      "Dedicated SQL Server-compatible environment."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_129302_unpredicatable_r599630_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS Communication (id INT IDENTITY PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX));",
+      "CREATE NONCLUSTERED INDEX IF NOT EXISTS idx_comm_action ON Communication(comm_action);",
+      "CREATE NONCLUSTERED INDEX IF NOT EXISTS idx_comm_channelid ON Communication(comm_channelid);"
+    ],
+    "generation_sql": [
+      "INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT 'Action' + CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS NVARCHAR), ABS(CHECKSUM(NEWID()) % 100), REPLICATE('A', 100) FROM master.dbo.spt_values WHERE type = 'P' AND number <= {row_count};"
+    ],
+    "tables": [
+      {
+        "name": "Communication",
+        "purpose": "Primary table to simulate the insert performance issue.",
+        "target_rows": 8000000,
+        "distribution_notes": "Simulates a large table with multiple indexes."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "Communication": 8000000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "Communication"
+    ],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 1000000,
+      "max_rows": 8000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Blocking behavior is observed during insert operations.",
+      "The `LCK_M_S` wait type is visible in system views."
+    ],
+    "symptom_evidence": [
+      "Insert operations take significantly longer than expected.",
+      "Blocking sessions appear in system views."
+    ],
+    "mechanism_evidence": [
+      "Excessive indexes contribute to the blocking behavior.",
+      "Uncommitted transactions or lock escalation are observed."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocking and poor insert performance due to excessive indexes.",
+    "target_database": "post_retry_blocking_129302_unpredicatable_r599630_a1",
+    "dba_description": "Simulate blocking and poor insert performance caused by excessive indexes and locking behavior.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r599630_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE Communication (id INT IDENTITY PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX));"
+                },
+                {
+                  "sql": "CREATE NONCLUSTERED INDEX idx_comm_action ON Communication(comm_action);"
+                },
+                {
+                  "sql": "CREATE NONCLUSTERED INDEX idx_comm_channelid ON Communication(comm_channelid);"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Excessive indexes and blocking behavior."
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating the mechanism of blocking and poor insert performance caused by excessive indexes and locking behavior. The feasibility is at the mechanism level due to the lack of exact schema details."
+}

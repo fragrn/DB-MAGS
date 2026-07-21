@@ -1,0 +1,8 @@
+{
+  "database": "post_retry_too_many_connection_4717_too_ma_r892468_a1",
+  "statement_count": 2,
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS data_feed (id INT AUTO_INCREMENT PRIMARY KEY, payload VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+    "INSERT INTO data_feed (payload) SELECT CONCAT('data_', n) FROM (SELECT @rownum := @rownum + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) t1, (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) t2, (SELECT @rownum := 0) t3 LIMIT 1000) numbers"
+  ]
+}

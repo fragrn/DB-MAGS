@@ -1,0 +1,61 @@
+{
+  "database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS workload_table (id INT PRIMARY KEY, category VARCHAR(64), value INT, payload NVARCHAR(MAX))",
+    "CREATE TABLE IF NOT EXISTS reference_table (id INT PRIMARY KEY, status INT, description NVARCHAR(255))"
+  ],
+  "generation_sql": [
+    "INSERT INTO reference_table (id, status, description) SELECT n, MOD(n, 5), CONCAT('Description_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers",
+    "INSERT INTO workload_table (id, category, value, payload) SELECT n, CASE WHEN MOD(n, 1000) = 0 THEN 'high' ELSE 'low' END, n % 100, REPLICATE(CAST('A' AS NVARCHAR(MAX)), 100) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers"
+  ],
+  "tables": [
+    {
+      "name": "workload_table",
+      "purpose": "Simulates the primary workload with high cardinality and memory-intensive queries.",
+      "target_rows": 100000,
+      "distribution_notes": "The 'category' column has a skewed distribution with rare 'high' values."
+    },
+    {
+      "name": "reference_table",
+      "purpose": "Reference table for joins to simulate memory grant behavior.",
+      "target_rows": 100,
+      "distribution_notes": "Small table used for join operations."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "workload_table": 100000,
+      "reference_table": 100
+    },
+    "value_skew": {
+      "workload_table.category": "Rare 'high' values are sparse and intentionally positioned."
+    },
+    "predicate_selectivity": {
+      "workload_table.category = 'high'": 0.001
+    },
+    "join_selectivity": {
+      "workload_table.value = reference_table.id": "many-to-one"
+    }
+  },
+  "analyze_tables": [
+    "workload_table",
+    "reference_table"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT w.* FROM workload_table w JOIN reference_table r ON w.value = r.id WHERE w.category = 'high' ORDER BY w.id DESC",
+      "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+      "expected_evidence": [
+        "The plan shows memory grants and parallelism.",
+        "The join and predicate behavior align with the described mechanism.",
+        "The plan evidence distinguishes this mechanism from trivial point lookups."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

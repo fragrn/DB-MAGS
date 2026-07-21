@@ -1,0 +1,55 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_slowsql_why_does_adding_a_top_1_r543218_a4"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_slowsql_why_does_adding_a_top_1_r543218_a4'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"dbms_version\": null,\n    \"summary\": \"Adding a TOP 1 clause to a query dramatically worsens performance due to a change in query plan, likely caused by row goal optimization.\",\n    \"symptoms\": [\"Query with TOP 1 clause has significantly worse performance.\", \"Query plan changes from Hash Match to Nested Loops with a Table Spool.\"],\n    \"mechanism\": \"Row goal optimization alters the query plan to prioritize fetching a single row quickly, but this leads to inefficient execution paths in this case.\",\n    \"facts\": [\n      {\n        \"key\": \"query_with_top_1\",\n        \"value\": {\n          \"sql\": \"SELECT TOP 1 dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The DBA post includes the query and describes its poor performance.\"\n      },\n      {\n        \"key\": \"query_without_top_1\",\n        \"value\": {\n          \"sql\": \"SELECT dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The DBA post includes the query and describes its better performance.\"\n      },\n      {\n        \"key\": \"row_goal_optimization\",\n        \"value\": {\n          \"description\": \"Row goal optimization changes the query plan to prioritize fetching a single row quickly, often leading to Nested Loops joins and Table Spools.\"\n        },\n        \"source\": \"post_hypothesis\",\n        \"evidence\": \"The DBA post and community responses discuss row goal optimization as the likely cause.\"\n      },\n      {\n        \"key\": \"table_sizes\",\n        \"value\": {\n          \"DOCUMENT_QUEUE\": 5000,\n          \"CORRESPONDENCE_JOURNAL\": 1400000\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The DBA post specifies the approximate row counts for each table.\"\n      },\n      {\n        \"key\": \"indexes\",\n        \"value\": {\n          \"DOCUMENT_QUEUE\": [\"PK on D_ID\"],\n          \"CORRESPONDENCE_JOURNAL\": [\"PK on FILE_NUMBER, CORRESPONDENCE_ID\", \"Index on DOCUMENT_ID, FILE_NUMBER\"]\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The DBA post describes the indexes on the tables.\"\n      }\n    ],\n    \"assumptions\": [\n      \"The described query plans and performance issues are reproducible in a synthetic environment.\",\n      \"The row goal optimization mechanism behaves similarly in Azure SQL Edge as in full SQL Server.\"\n    ],\n    \"unknowns\": [\n      \"Exact query plan differences in the synthetic environment.\",\n      \"Impact of Azure SQL Edge's compatibility on row goal optimization behavior.\"\n    ],\n    \"confidence\": 0.9\n  },\n  \"feasibility\": {\n    \"level\": \"mechanism\",\n    \"rationale\": \"The described mechanism (row goal optimization) can be reproduced in a synthetic environment with similar table sizes, indexes, and query structure. However, exact reproduction of the query plans may be affected by differences between Azure SQL Edge and full SQL Server.\",\n    \"missing_capabilities\": [],\n    \"unmatched_conditions\": [\"Exact behavior of row goal optimization in Azure SQL Edge.\"],\n    \"confidence\": 0.8\n  },\n  \"environment_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"database\": \"post_retry_slowsql_why_does_adding_a_top_1_r543218_a4\",\n    \"requirements\": [\"Azure SQL Edge compatibility\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_slowsql_why_does_adding_a_top_1_r543218_a4\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS DOCUMENT_QUEUE (D_ID INT PRIMARY KEY, DOCUMENT_ID INT, COPIES INT, REQUESTOR NVARCHAR(255), QUEUE_DATE DATETIME, PRINT_LOCATION INT)\",\n      \"CREATE TABLE IF NO"
+  }
+]

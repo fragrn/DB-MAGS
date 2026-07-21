@@ -1,0 +1,54 @@
+{
+  "database": "post_retry_too_many_connection_20479_how_t_r673816_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255), email VARCHAR(255))",
+    "CREATE TABLE IF NOT EXISTS logs (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, action VARCHAR(255), timestamp DATETIME, FOREIGN KEY (user_id) REFERENCES users(id))"
+  ],
+  "generation_sql": [
+    "INSERT INTO users (username, email) SELECT CONCAT('user', n), CONCAT('user', n, '@example.com') FROM generated_numbers WHERE n <= {row_count}",
+    "INSERT INTO logs (user_id, action, timestamp) SELECT FLOOR(1 + (RAND() * {row_count})), 'login', NOW() FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "users",
+      "purpose": "Simulates user accounts for the application.",
+      "target_rows": 1000,
+      "distribution_notes": "Uniform distribution of user IDs."
+    },
+    {
+      "name": "logs",
+      "purpose": "Simulates application logs with user actions.",
+      "target_rows": 10000,
+      "distribution_notes": "Randomized user actions to simulate concurrent activity."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "users": 1000,
+      "logs": 10000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "users",
+    "logs"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT COUNT(*) FROM logs WHERE action = 'login'",
+      "objective": "Verify that the logs table has been populated with a realistic distribution of actions.",
+      "expected_evidence": [
+        "The query returns a count consistent with the target_rows for the logs table.",
+        "The action column contains the expected value 'login'."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

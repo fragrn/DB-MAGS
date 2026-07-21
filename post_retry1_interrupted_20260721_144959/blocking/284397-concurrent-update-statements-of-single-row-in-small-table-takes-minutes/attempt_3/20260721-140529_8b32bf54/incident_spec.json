@@ -1,0 +1,77 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "Concurrent UPDATE statements on a single row in a small table cause significant delays.",
+  "symptoms": [
+    "UPDATE statements take several minutes to complete.",
+    "Exclusive locks are observed on the table.",
+    "No deadlocks occur, but contention is evident."
+  ],
+  "mechanism": "High contention on a single row due to concurrent updates, leading to lock contention and delays.",
+  "facts": [
+    {
+      "key": "table_schema",
+      "value": {
+        "table_name": "host_scan_complete_log_counts",
+        "columns": [
+          {
+            "name": "scan_uuid",
+            "type": "uuid",
+            "constraints": [
+              "not null"
+            ]
+          },
+          {
+            "name": "num_shards_completed",
+            "type": "numeric",
+            "constraints": [
+              "default 0",
+              "not null"
+            ]
+          }
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The table schema was provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "update_query",
+      "value": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1",
+      "source": "explicit_post",
+      "evidence": "The query causing contention was explicitly described.",
+      "confidence": 1.0
+    },
+    {
+      "key": "lock_analysis",
+      "value": {
+        "lock_types": [
+          "ExclusiveLock",
+          "RowExclusiveLock"
+        ],
+        "lock_age": "several minutes"
+      },
+      "source": "explicit_post",
+      "evidence": "Lock analysis output was provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "concurrent_connections",
+      "value": "a few hundred nodes",
+      "source": "explicit_post",
+      "evidence": "The post mentions a few hundred nodes performing updates.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The workload involves frequent updates to the same row, causing contention.",
+    "The database is PostgreSQL based on the schema and query syntax.",
+    "The table is small, as stated in the post."
+  ],
+  "unknowns": [
+    "Exact PostgreSQL version and configuration.",
+    "Whether the database is running on a single-node or a distributed setup.",
+    "The exact frequency and distribution of the update queries."
+  ],
+  "confidence": 0.9
+}

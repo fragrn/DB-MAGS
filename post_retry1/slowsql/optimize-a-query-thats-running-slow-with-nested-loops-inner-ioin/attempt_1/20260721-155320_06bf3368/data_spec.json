@@ -1,0 +1,81 @@
+{
+  "database": "post_retry_slowsql_optimize_a_query_thats_r400772_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS category (category_id INT PRIMARY KEY, parent_category_id INT, level INT, version_id INT)",
+    "CREATE TABLE IF NOT EXISTS category_voc (category_id INT, language_code VARCHAR(10), category_name VARCHAR(255), PRIMARY KEY (category_id, language_code))",
+    "CREATE TABLE IF NOT EXISTS category_link (sku_id INT, category_id INT, is_primary BIT, PRIMARY KEY (sku_id, category_id))",
+    "CREATE TABLE IF NOT EXISTS temp_ids (value INT PRIMARY KEY)"
+  ],
+  "generation_sql": [
+    "INSERT INTO category (category_id, parent_category_id, level, version_id) SELECT n, CASE WHEN n % 5 = 0 THEN NULL ELSE n - 1 END, 4, 5 FROM generated_numbers WHERE n <= 10000",
+    "INSERT INTO category_voc (category_id, language_code, category_name) SELECT n, 'en', CONCAT('Category_', n) FROM generated_numbers WHERE n <= 10000",
+    "INSERT INTO category_link (sku_id, category_id, is_primary) SELECT n, n % 10000, CASE WHEN n % 2 = 0 THEN 1 ELSE 0 END FROM generated_numbers WHERE n <= 100000",
+    "INSERT INTO temp_ids (value) SELECT n FROM generated_numbers WHERE n <= 10000"
+  ],
+  "tables": [
+    {
+      "name": "category",
+      "purpose": "Hierarchy of categories with parent-child relationships.",
+      "target_rows": 10000,
+      "distribution_notes": "Uniform distribution with some NULL parent_category_id values."
+    },
+    {
+      "name": "category_voc",
+      "purpose": "Localized category names.",
+      "target_rows": 10000,
+      "distribution_notes": "One-to-one mapping with category table."
+    },
+    {
+      "name": "category_link",
+      "purpose": "Links between SKUs and categories.",
+      "target_rows": 100000,
+      "distribution_notes": "Many-to-one relationship with categories."
+    },
+    {
+      "name": "temp_ids",
+      "purpose": "Temporary table for filtering SKUs.",
+      "target_rows": 10000,
+      "distribution_notes": "Uniform distribution."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "category": 10000,
+      "category_voc": 10000,
+      "category_link": 100000,
+      "temp_ids": 10000
+    },
+    "value_skew": {
+      "category_link.is_primary": "50% true, 50% false"
+    },
+    "predicate_selectivity": {
+      "category.level = 4 AND category.version_id = 5": 0.1
+    },
+    "join_selectivity": {
+      "category_link.category_id = category.category_id": "many-to-one"
+    }
+  },
+  "analyze_tables": [
+    "category",
+    "category_voc",
+    "category_link",
+    "temp_ids"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT l.sku_id, l.is_primary, v1.category_name, v2.category_name, v3.category_name, v4.category_name, v5.category_name FROM category c4 JOIN category_voc v4 ON v4.category_id = c4.category_id AND v4.language_code = 'en' JOIN category c3 ON c3.category_id = c4.parent_category_id JOIN category_voc v3 ON v3.category_id = c3.category_id AND v3.language_code = 'en' JOIN category c2 ON c2.category_id = c3.category_id JOIN category_voc v2 ON v2.category_id = c2.category_id AND v2.language_code = 'en' JOIN category c1 ON c1.category_id = c2.parent_category_id JOIN category_voc v1 ON v1.category_id = c1.category_id AND v1.language_code = 'en' LEFT OUTER JOIN category c5 ON c5.parent_category_id = c4.category_id LEFT OUTER JOIN category_voc v5 ON v5.category_id = c5.category_id AND v5.language_code = 'en' JOIN category_link l ON l.sku_id IN (SELECT value FROM temp_ids) AND (l.category_id = c4.category_id OR l.category_id = c5.category_id) WHERE c4.level = 4 AND c4.version_id = 5",
+      "objective": "Verify that the query plan includes nested loops join and highlights the inefficiency in the join conditions.",
+      "expected_evidence": [
+        "Nested loops join is used for category_link table.",
+        "High cost associated with the join operation.",
+        "OR condition in join predicate is visible in the plan."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

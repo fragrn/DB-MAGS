@@ -1,0 +1,43 @@
+{
+  "status": "waiting_human",
+  "phase": "calibration",
+  "reasons": [
+    "calibration_weak_match"
+  ],
+  "summary": "Calibration found a weak match; DBA judgment is required",
+  "allowed_decisions": [
+    "approve",
+    "reject",
+    "revise",
+    "feedback"
+  ],
+  "editable_roots": [
+    "data_spec.calibration_queries",
+    "data_spec.constraints",
+    "data_spec.scale_strategy",
+    "data_spec.tables",
+    "dependencies",
+    "evaluation_spec",
+    "experiment_request",
+    "incident_spec.assumptions",
+    "incident_spec.unknowns",
+    "risk_assessment",
+    "task_specs",
+    "workload_spec"
+  ],
+  "timestamp": 1784620592.221708,
+  "details": {
+    "calibration": {
+      "status": "weak_match",
+      "decision": "weak_match",
+      "concerns": [
+        "The absence of the Table Spool operator in the TOP 1 query plan suggests that row goal optimization behavior may not be fully reproduced.",
+        "The use of Nested Loops join in the query without TOP 1 deviates from the expected Hash Match join, which may impact the reproduction of the mechanism."
+      ],
+      "recommended_changes": [
+        "Review the synthetic data distribution and indexes to ensure they align with the expected reproduction conditions.",
+        "Consider adjusting the query structure or hints to better align with the expected plan shapes."
+      ]
+    }
+  }
+}

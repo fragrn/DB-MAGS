@@ -1,0 +1,151 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Lock wait timeout exceeded during DELETE query due to long-running transactions and lack of primary keys.",
+  "symptoms": [
+    "DELETE query fails with 'lock wait timeout exceeded; try restarting transaction'.",
+    "Long-running transactions holding locks for extended periods.",
+    "High row lock contention on the table."
+  ],
+  "mechanism": "Long-running transactions block DELETE operations due to row-level locks and lack of efficient indexing.",
+  "facts": [
+    {
+      "key": "dbms",
+      "value": "mysql",
+      "source": "explicit_post",
+      "evidence": "The post specifies RDS Aurora with MySQL 5.6.",
+      "confidence": 1.0
+    },
+    {
+      "key": "table_schema",
+      "value": {
+        "table_name": "EVENT_DETAILS",
+        "columns": [
+          {
+            "name": "ORG_ID",
+            "type": "CHAR(32)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "CONFIG_KEY",
+            "type": "CHAR(32)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "COMPONENT_NAME",
+            "type": "VARCHAR(512)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "REQUEST_ID",
+            "type": "CHAR(32)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "UPDATE_DATE",
+            "type": "INT",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "UPDATE_TIME",
+            "type": "INT",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "CLIENT",
+            "type": "CHAR(16)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "STATUS",
+            "type": "INT",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "EVENT_DATA",
+            "type": "VARCHAR(1024)",
+            "constraints": []
+          },
+          {
+            "name": "MESSAGE",
+            "type": "VARCHAR(512)",
+            "constraints": []
+          },
+          {
+            "name": "INSERTED_TIME",
+            "type": "TIMESTAMP",
+            "constraints": [
+              "DEFAULT CURRENT_TIMESTAMP",
+              "NOT NULL"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "STATE_INDEX",
+            "columns": [
+              "UPDATE_DATE",
+              "UPDATE_TIME",
+              "ORG_ID",
+              "CONFIG_KEY",
+              "COMPONENT_NAME",
+              "STATUS",
+              "CLIENT"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The table schema is provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "symptom",
+      "value": "lock wait timeout exceeded",
+      "source": "explicit_post",
+      "evidence": "The error message 'lock wait timeout exceeded; try restarting transaction' is explicitly mentioned.",
+      "confidence": 1.0
+    },
+    {
+      "key": "transaction_isolation",
+      "value": "REPEATABLE READ",
+      "source": "explicit_post",
+      "evidence": "The post specifies the default isolation level REPEATABLE READ.",
+      "confidence": 1.0
+    },
+    {
+      "key": "long_running_transactions",
+      "value": true,
+      "source": "explicit_post",
+      "evidence": "The post mentions transactions active for up to 17 hours.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The DELETE query targets a significant number of rows, leading to high contention.",
+    "The lack of a primary key and unique indexes exacerbates lock contention.",
+    "The workload involves frequent INSERT and SELECT operations on the table."
+  ],
+  "unknowns": [
+    "Exact workload patterns and query distribution.",
+    "Specific queries causing long-running transactions."
+  ],
+  "confidence": 0.9
+}

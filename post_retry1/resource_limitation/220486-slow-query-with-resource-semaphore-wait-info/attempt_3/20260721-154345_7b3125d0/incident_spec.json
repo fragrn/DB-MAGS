@@ -1,0 +1,52 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Slow query execution with RESOURCE_SEMAPHORE waits due to memory pressure and parallelism.",
+  "symptoms": [
+    "RESOURCE_SEMAPHORE waits observed in sp_whoisactive.",
+    "CXCONSUMER waits indicating parallel query execution.",
+    "Slow query execution when user connections increase.",
+    "Memory grants causing contention."
+  ],
+  "mechanism": "Excessive parallelism and memory grants leading to RESOURCE_SEMAPHORE waits.",
+  "facts": [
+    {
+      "key": "RESOURCE_SEMAPHORE waits observed",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions RESOURCE_SEMAPHORE waits in sp_whoisactive.",
+      "confidence": 0.9
+    },
+    {
+      "key": "CXCONSUMER waits observed",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions CXCONSUMER waits, indicating parallel query execution.",
+      "confidence": 0.9
+    },
+    {
+      "key": "MAXDOP set to 0",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post states that MAXDOP is set to 0, allowing queries to utilize all CPU cores.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Memory pressure affecting queries",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The sp_Blitz output mentions memory pressure affecting queries with forced grants.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "The workload involves queries with high memory grants.",
+    "Parallelism is contributing to contention for memory resources.",
+    "The database server has sufficient hardware resources but is misconfigured."
+  ],
+  "unknowns": [
+    "Exact query patterns causing RESOURCE_SEMAPHORE waits.",
+    "Whether the memory grants are due to specific query patterns or overall workload."
+  ],
+  "confidence": 0.85
+}

@@ -1,0 +1,43 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "Investigating the performance and concurrency implications of large transactions in PostgreSQL.",
+  "symptoms": [
+    "Blocked transactions",
+    "Potential deadlocks",
+    "Serialization errors"
+  ],
+  "mechanism": "PostgreSQL's MVCC (Multiversion Concurrency Control) and transaction isolation levels dictate how transactions interact, leading to blocking or serialization errors under certain conditions.",
+  "facts": [
+    {
+      "key": "MVCC allows reads and writes to not block each other.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "PostgreSQL documentation and DBA post confirm that MVCC ensures reads do not block writes and vice versa.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Transactions can block or fail depending on isolation levels.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post mentions that higher isolation levels can lead to serialization errors, while default levels may block conflicting transactions.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Large transactions can cause blocking or deadlocks.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post discusses the implications of large transactions on concurrency, including blocking and deadlocks.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The target database will be created and initialized for the experiment.",
+    "PostgreSQL's default isolation level is Read Committed unless explicitly changed."
+  ],
+  "unknowns": [
+    "Exact workload characteristics (e.g., number of concurrent transactions, specific row update patterns).",
+    "Whether any custom PostgreSQL configurations are in place that might affect transaction behavior."
+  ],
+  "confidence": 0.9
+}

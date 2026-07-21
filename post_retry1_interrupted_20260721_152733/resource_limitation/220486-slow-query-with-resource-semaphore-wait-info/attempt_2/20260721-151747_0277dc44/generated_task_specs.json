@@ -1,0 +1,75 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r267920_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_220486_slow_r267920_a2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial database setup."
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r267920_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema creation for synthetic data."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "populate_data"
+    ]
+  ]
+}

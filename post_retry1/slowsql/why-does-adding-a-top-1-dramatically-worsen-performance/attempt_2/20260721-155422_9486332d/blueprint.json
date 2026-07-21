@@ -1,0 +1,282 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Performance degradation when adding TOP 1 to a query with ORDER BY.",
+    "symptoms": [
+      "Query with TOP 1 and ORDER BY performs significantly worse than without TOP 1.",
+      "Query plan changes from Hash Match to Nested Loops with Table Spool."
+    ],
+    "mechanism": "Row goal optimization leads to suboptimal plan with Nested Loops and Table Spool.",
+    "facts": [
+      {
+        "key": "query_with_top_1",
+        "value": {
+          "sql": "SELECT TOP 1 dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+        },
+        "source": "explicit_post",
+        "evidence": "Query provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "query_without_top_1",
+        "value": {
+          "sql": "SELECT dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+        },
+        "source": "explicit_post",
+        "evidence": "Query provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "nested_loops_with_table_spool",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Query plan described in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "hash_match_plan",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Query plan described in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "document_queue_cardinality",
+        "value": {
+          "rows": 5000
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions Document_Queue has ~5k rows.",
+        "confidence": 1.0
+      },
+      {
+        "key": "correspondence_journal_cardinality",
+        "value": {
+          "rows": 1400000
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions Correspondence_Journal has ~1.4 mil rows.",
+        "confidence": 1.0
+      },
+      {
+        "key": "indexes",
+        "value": {
+          "Correspondence_Journal": [
+            "Document_Id, File_Number"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions added index on Correspondence_Journal.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "Azure SQL Edge compatibility suffices for SQL Server reproduction.",
+      "Synthetic data can mimic cardinality and distribution of production data."
+    ],
+    "unknowns": [
+      "Exact optimizer behavior in Azure SQL Edge vs full SQL Server.",
+      "Impact of TEMPDB performance on Table Spool."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "Azure SQL Edge compatibility allows reproduction of SQL Server mechanisms, but exact optimizer behavior may differ.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact TEMPDB performance impact."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_slowsql_why_does_adding_a_top_1_r462993_a2",
+    "requirements": [
+      "Azure SQL Edge compatibility"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_why_does_adding_a_top_1_r462993_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS DOCUMENT_QUEUE (D_ID INT PRIMARY KEY, DOCUMENT_ID INT, COPIES INT, REQUESTOR VARCHAR(255), QUEUE_DATE DATETIME, PRINT_LOCATION INT)",
+      "CREATE TABLE IF NOT EXISTS CORRESPONDENCE_JOURNAL (CORRESPONDENCE_ID INT PRIMARY KEY, DOCUMENT_ID INT, FILE_NUMBER INT)"
+    ],
+    "generation_sql": [
+      "INSERT INTO DOCUMENT_QUEUE (D_ID, DOCUMENT_ID, COPIES, REQUESTOR, QUEUE_DATE, PRINT_LOCATION) SELECT n, n*10, MOD(n, 5), CONCAT('Requestor_', n), DATEADD(DAY, -MOD(n, 30), GETDATE()), MOD(n, 3) FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO CORRESPONDENCE_JOURNAL (CORRESPONDENCE_ID, DOCUMENT_ID, FILE_NUMBER) SELECT n, n*10, n FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "DOCUMENT_QUEUE",
+        "purpose": "Primary table for query reproduction with cardinality and distribution constraints.",
+        "target_rows": 5000,
+        "distribution_notes": "Uniform distribution with skew on PRINT_LOCATION and QUEUE_DATE."
+      },
+      {
+        "name": "CORRESPONDENCE_JOURNAL",
+        "purpose": "Secondary table for join reproduction with cardinality constraints.",
+        "target_rows": 1400000,
+        "distribution_notes": "Uniform distribution with sequential FILE_NUMBER."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "DOCUMENT_QUEUE": 5000,
+        "CORRESPONDENCE_JOURNAL": 1400000
+      },
+      "value_skew": {
+        "DOCUMENT_QUEUE.PRINT_LOCATION": "Skewed towards lower values."
+      },
+      "predicate_selectivity": {
+        "DOCUMENT_QUEUE.PRINT_LOCATION = 2": 0.33
+      },
+      "join_selectivity": {
+        "DOCUMENT_QUEUE.DOCUMENT_ID = CORRESPONDENCE_JOURNAL.DOCUMENT_ID": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "DOCUMENT_QUEUE",
+      "CORRESPONDENCE_JOURNAL"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT TOP 1 dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER",
+        "objective": "Verify that the query plan includes Nested Loops and Table Spool.",
+        "expected_evidence": [
+          "Nested Loops join visible in EXPLAIN.",
+          "Table Spool operator visible in EXPLAIN."
+        ]
+      },
+      {
+        "sql": "SELECT dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER",
+        "objective": "Verify that the query plan includes Hash Match join.",
+        "expected_evidence": [
+          "Hash Match join visible in EXPLAIN."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query plan matches expected mechanism.",
+      "Performance degradation observed with TOP 1."
+    ],
+    "symptom_evidence": [
+      "Nested Loops and Table Spool visible in EXPLAIN for TOP 1 query.",
+      "Hash Match visible in EXPLAIN for query without TOP 1."
+    ],
+    "mechanism_evidence": [
+      "Row goal optimization leads to suboptimal plan."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Performance degradation with TOP 1 and ORDER BY.",
+    "target_database": "post_retry_slowsql_why_does_adding_a_top_1_r462993_a2",
+    "dba_description": "Reproduce performance degradation caused by row goal optimization with TOP 1 and ORDER BY.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_why_does_adding_a_top_1_r462993_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_slowsql_why_does_adding_a_top_1_r462993_a2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup"
+      }
+    },
+    {
+      "task_id": "data_preparation",
+      "task_type": "data_load",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_why_does_adding_a_top_1_r462993_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE DOCUMENT_QUEUE (D_ID INT PRIMARY KEY, DOCUMENT_ID INT, COPIES INT, REQUESTOR VARCHAR(255), QUEUE_DATE DATETIME, PRINT_LOCATION INT)"
+                },
+                {
+                  "sql": "CREATE TABLE CORRESPONDENCE_JOURNAL (CORRESPONDENCE_ID INT PRIMARY KEY, DOCUMENT_ID INT, FILE_NUMBER INT)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data preparation"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "data_preparation"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Exact TEMPDB performance impact on Table Spool."
+  ],
+  "rationale": "The reproduction focuses on the mechanism of row goal optimization and its impact on query plans. Synthetic data mimics cardinality and distribution described in the post."
+}

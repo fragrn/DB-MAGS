@@ -1,0 +1,103 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/222262/performance-of-large-transactions-and-concurrency
+Canonical URL: https://dba.stackexchange.com/questions/222262/performance-of-large-transactions-and-concurrency
+Title: Performance of large transactions and concurrency?
+Question ID: 222262
+License: CC BY-SA 4.0; author: Alexander Kleinhans
+
+# Question
+
+If I have a multi-million row table and I run a transaction that updates 50k rows, what are the performance implications of this?
+
+Assuming it's indexed correctly, it shouldn't take long, but what rows are locked and how is the usage of that table affected?
+
+- Are rows being updated during the transaction able to be read
+after the transaction starts and before it finishes?
+
+- Are rows not being updated during
+the transaction able to be read after the transaction starts and before it finishes?
+
+- If another transaction starts trying to change rows that are being changed by
+a previously unfinished transaction, will that transaction fail at
+start or after it tries to commit (assuming conflict)?
+
+My question is for Postgres 9.3; I assume there are variations.
+
+# Answers
+
+## Answer 1
+Author: Jasen
+Accepted: no
+Score: 3
+License: CC BY-SA 4.0
+
+1 Yes
+
+rows being updated can be read and will show the old value until the transaction is committed.
+
+2 yes
+
+rows not being written are unaffected.
+
+3 no or yes depending.
+
+If the other transaction holds a lock that this one needs a deadlock will be clared and one of the transactions cancelled else the other transaction will be halted until this one commits or rolls-back. and at that stage it will exit with an error or be allowed to continue.
+
+For this reason long-lived transdactions are best kept to a minimum.
+
+## Answer 2
+Author: taffer
+Accepted: yes
+Score: 9
+License: CC BY-SA 4.0
+
+Are rows being updated during the transaction able to be read after the transaction starts and before it finishes?
+
+Yes, in Postgres reads do not block writes and writes do not block reads. The Postgres documentation (https://www.postgresql.org/docs/9.3/mvcc-intro.html) states that:
+
+Internally, data consistency is maintained
+by using a multiversion model (Multiversion Concurrency Control,
+MVCC). This means that while querying a database each transaction sees
+a snapshot of data (a database version) as it was some time ago,
+regardless of the current state of the underlying data. […] The main
+advantage of using the MVCC model of concurrency control rather than
+locking is that in MVCC locks acquired for querying (reading) data do not
+conflict with locks acquired for writing data, and so reading never
+blocks writing and writing never blocks reading.
+
+Are rows not being updated during the transaction able to be read after the transaction starts and before it finishes?
+
+Yes.
+
+If another transaction starts trying to change rows that are being changed by a previously unfinished transaction, will that transaction fail at start or after it tries to commit (assuming conflict)?
+
+This depends on the Transaction Isolation Level (https://www.postgresql.org/docs/9.3/transaction-iso.html) and if you are issuing a write that depends on a read or a blind write. Using the default level Read Committed the second transaction has to wait until the first transaction is done writing. In higher transaction levels one of the transactions might get aborted with a serialization error.
+
+You can actually try this yourself by running two `psql` sessions:
+
+Session 1:```
+-- first set up a table
+CREATE TABLE tools (id SERIAL PRIMARY KEY, description STRING);
+INSERT INTO tools(description) VALUES('scredriver');
+INSERT INTO tools(description) VALUES('hammer');
+
+-- now type the following into two psql sessions
+          SESSION 1             |          SESSION 2
+                                |
+BEGIN TRANSACTION;              |
+UPDATE tools                    |
+   SET description = 'anvil'    |
+ WHERE id = 1;                  |
+                                | BEGIN TRANSACTION;
+                                |UPDATE tools
+                                |   SET description = 'wrench'
+                                | WHERE id = 1;
+                                |-- this transaction is blocked
+                                |-- until the other transaction
+COMMIT TRANSACTION;             |-- commits
+
+```As you will see, session 2 will get blocked by session 1. Only if session 1 commits, session 2 will be able to continue.
+
+The postgres documentation also contains performance suggestions (https://www.postgresql.org/docs/9.3/transaction-iso.html#XACT-SERIALIZABLE) on how to avoid blocking and serialization failures when using higher transaction levels.
+
+[Batch planner note: the original full post is saved as source_post.txt. This planning input was compacted to remove linked-page snapshots or excessive length.]

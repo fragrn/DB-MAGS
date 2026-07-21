@@ -1,0 +1,61 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Query performance degradation due to high memory usage and parameter sniffing in SQL Server.",
+  "symptoms": [
+    "Queries timeout for large accounts when SQL Server memory is full.",
+    "Restarting SQL Server resolves the issue temporarily.",
+    "SSMS executes the same query faster than the application.",
+    "High memory consumption and large disk reads during query execution."
+  ],
+  "mechanism": "Parameter sniffing and memory pressure lead to suboptimal query plans and resource contention.",
+  "facts": [
+    {
+      "key": "Memory pressure",
+      "value": {
+        "description": "Memory fills up, causing disk reads at low throughput."
+      },
+      "source": "explicit_post",
+      "evidence": "The post describes memory filling up and disk reads slowing down to 20MB/s.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Parameter sniffing",
+      "value": {
+        "description": "SSMS and application use different execution plans due to ARITHABORT setting."
+      },
+      "source": "explicit_post",
+      "evidence": "The post identifies ARITHABORT as a cause of different execution plans.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Query timeout",
+      "value": {
+        "description": "Large accounts timeout in the application but not in SSMS."
+      },
+      "source": "explicit_post",
+      "evidence": "The post mentions that large accounts timeout in the application but work in SSMS.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Execution plan differences",
+      "value": {
+        "description": "Execution plans differ between SSMS and application."
+      },
+      "source": "explicit_post",
+      "evidence": "The post describes execution plan differences due to ARITHABORT.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The database schema and workload can be approximated using synthetic data.",
+    "The SQL Server instance is configured similarly to the one described in the post.",
+    "The issue can be reproduced in a local Azure SQL Edge environment."
+  ],
+  "unknowns": [
+    "Exact schema and data distribution of the original database.",
+    "Details of the stored procedure and its execution plan.",
+    "Specific indexes and their configurations."
+  ],
+  "confidence": 0.8
+}

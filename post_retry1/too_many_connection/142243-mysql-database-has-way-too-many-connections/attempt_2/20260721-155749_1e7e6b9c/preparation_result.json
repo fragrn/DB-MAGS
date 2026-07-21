@@ -1,0 +1,8 @@
+{
+  "database": "post_retry_too_many_connection_142243_mysq_r669841_a2",
+  "statement_count": 2,
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, job_type VARCHAR(64), status VARCHAR(32), created_at DATETIME, updated_at DATETIME)",
+    "INSERT INTO jobs (job_type, status, created_at, updated_at) SELECT CONCAT('type_', FLOOR(RAND() * 10)), 'pending', NOW(), NOW() FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS tmp"
+  ]
+}

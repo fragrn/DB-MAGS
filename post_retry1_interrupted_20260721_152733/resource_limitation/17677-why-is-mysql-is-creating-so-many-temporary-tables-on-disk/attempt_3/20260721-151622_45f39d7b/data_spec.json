@@ -1,0 +1,68 @@
+{
+  "database": "post_retry_resource_limitation_17677_why_i_r182437_a3",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS large_table (id INT PRIMARY KEY, group_col INT, order_col INT, text_field TEXT, blob_field BLOB)",
+    "CREATE TABLE IF NOT EXISTS small_table (id INT PRIMARY KEY, ref_col INT)"
+  ],
+  "generation_sql": [
+    "INSERT INTO large_table (id, group_col, order_col, text_field, blob_field) SELECT n, MOD(n, 100), MOD(n, 50), REPEAT('text', 10), REPEAT('blob', 10) FROM generated_numbers WHERE n <= {row_count}",
+    "INSERT INTO small_table (id, ref_col) SELECT n, MOD(n, 10) FROM generated_numbers WHERE n <= 100"
+  ],
+  "tables": [
+    {
+      "name": "large_table",
+      "purpose": "Primary table to simulate temp table creation due to TEXT/BLOB fields and query patterns.",
+      "target_rows": 100000,
+      "distribution_notes": "Includes TEXT/BLOB fields and large columns to trigger disk-based temp tables."
+    },
+    {
+      "name": "small_table",
+      "purpose": "Reference table for joins or filters in queries.",
+      "target_rows": 100,
+      "distribution_notes": "Used for join fanout and query complexity."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "large_table": 100000,
+      "small_table": 100
+    },
+    "value_skew": {
+      "large_table.group_col": "Uniform distribution"
+    },
+    "predicate_selectivity": {
+      "large_table.group_col = 1": 0.01
+    },
+    "join_selectivity": {
+      "large_table.group_col = small_table.ref_col": "many-to-one"
+    }
+  },
+  "analyze_tables": [
+    "large_table",
+    "small_table"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM large_table WHERE group_col = 1 ORDER BY order_col DESC LIMIT 10",
+      "objective": "Verify temp table creation due to ORDER BY and memory limits.",
+      "expected_evidence": [
+        "EXPLAIN shows temp table creation.",
+        "Disk-based temp table usage visible in the plan."
+      ]
+    },
+    {
+      "sql": "SELECT group_col, COUNT(*) FROM large_table GROUP BY group_col",
+      "objective": "Verify temp table creation due to GROUP BY and large columns.",
+      "expected_evidence": [
+        "EXPLAIN shows temp table creation.",
+        "Disk-based temp table usage visible in the plan."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

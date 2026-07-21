@@ -1,0 +1,55 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 2,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_resource_limitation_291670_sql_r369282_a2"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_resource_limitation_291670_sql_r369282_a2'\")"
+  },
+  {
+    "step": 3,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"dbms_version\": null,\n    \"summary\": \"SQL Server query performance regresses severely due to high memory use and parameter sniffing issues.\",\n    \"symptoms\": [\n      \"Queries timeout under high memory usage.\",\n      \"Performance differences between SSMS and application queries.\",\n      \"Memory consumption spikes and fails to release efficiently.\"\n    ],\n    \"mechanism\": \"Parameter sniffing combined with memory pressure and inefficient query plans.\",\n    \"facts\": [\n      {\n        \"key\": \"High memory consumption leads to query timeouts.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Post describes memory filling up and queries failing until SQL Server is restarted.\",\n        \"confidence\": 0.9\n      },\n      {\n        \"key\": \"SSMS and application queries behave differently due to ARITHABORT setting.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Post identifies ARITHABORT as a key difference causing plan divergence.\",\n        \"confidence\": 0.9\n      },\n      {\n        \"key\": \"Parameter sniffing affects execution plans.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Post references Erland Sommarskog's article on parameter sniffing and its impact.\",\n        \"confidence\": 0.9\n      },\n      {\n        \"key\": \"Sort operations and tempdb usage contribute to performance issues.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Post describes sort operations going to tempdb multiple times.\",\n        \"confidence\": 0.8\n      }\n    ],\n    \"assumptions\": [\n      \"The described behavior is reproducible in a synthetic environment.\",\n      \"The database schema and workload can be approximated based on the post.\"\n    ],\n    \"unknowns\": [\n      \"Exact schema details for the tables involved.\",\n      \"Precise workload characteristics and query patterns.\"\n    ],\n    \"confidence\": 0.8\n  },\n  \"feasibility\": {\n    \"level\": \"mechanism\",\n    \"rationale\": \"The described mechanism involving parameter sniffing and memory pressure can be reproduced in a synthetic SQL Server environment.\",\n    \"missing_capabilities\": [],\n    \"unmatched_conditions\": [\"Exact schema and workload details are unavailable.\"],\n    \"confidence\": 0.8\n  },\n  \"environment_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"database\": \"post_retry_resource_limitation_291670_sql_r369282_a2\",\n    \"requirements\": [\"Azure SQL Edge compatibility\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_resource_limitation_291670_sql_r369282_a2\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS Notifications (id INT PRIMARY KEY, account_id INT, notified_at_utc DATETIME, payload NVARCHAR(MAX))\",\n      \"CREATE TABLE IF NOT EXISTS Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, report_data NVARCHAR(MAX))\"\n    ],\n    \"generation_sql\": [\n      \"INSERT INTO Notifications (id, account_id, notified_at_utc, payload) SELECT n, MOD(n, 1000), DATEADD(SECOND, n, '2023-01-01T00:00:00'), CONCAT('Payload_', n) FROM generated_numbers WHERE n <= {row_count}\",\n      \"INSERT INTO Reports (id, account_id, received_at_utc, report_data) SELECT n, MOD(n, 1000), DATEADD(SECOND, n, '2023-01-01T00:00:00'), CONCAT('Report_', n) FROM generated_numbers WHERE n <= {row_count}\"\n    ],\n    \"tables\": [\n      {\n        \"name\": \"Notifications\",\n        \"purpose\": \"Primary table for synthetic workload simulating high memory use and sort operations.\",\n        \"target_rows\": 100000,\n        \"distribution_notes\": \"Simulates high cardinality and temporal sorting.\"\n      },\n      {\n        \"name\": \"Reports\",\n        \"purpose\": \"Secondary table for join operations and sorting.\",\n        \"target_rows\": 100000,\n        \"distribution_notes\": \"Simulates temporal sorting and join fanout.\"\n      }\n    ],\n    \"constraints\": {\n      \"cardinality\": {\"Notifications\": 100000, \"Reports\": 100000},\n      \"value_skew\": {\"Not"
+  }
+]

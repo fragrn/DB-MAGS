@@ -1,0 +1,42 @@
+{
+  "database": "post_retry_blocking_129302_unpredicatable_r405841_a2",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS Communication (id INT IDENTITY PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX))",
+    "CREATE INDEX IF NOT EXISTS idx_comm_action ON Communication(comm_action)",
+    "CREATE INDEX IF NOT EXISTS idx_comm_channelid ON Communication(comm_channelid)",
+    "CREATE INDEX IF NOT EXISTS idx_payload ON Communication(payload)"
+  ],
+  "generation_sql": [
+    "INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT CASE WHEN n % 100 = 0 THEN 'Deskwork' ELSE 'Other' END, n % 50, REPLICATE('x', 100) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers"
+  ],
+  "tables": [
+    {
+      "name": "Communication",
+      "purpose": "Reproduce blocking and contention during inserts.",
+      "target_rows": 8000000,
+      "distribution_notes": "Simulate heavy contention with a large number of rows and indexes."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "Communication": 8000000
+    },
+    "value_skew": {
+      "Communication.comm_action": "Deskwork is rare, Other is common."
+    },
+    "predicate_selectivity": {
+      "Communication.comm_action = 'Deskwork'": 0.01
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "Communication"
+  ],
+  "calibration_queries": [],
+  "scale_strategy": {
+    "initial_rows": 100000,
+    "max_rows": 8000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

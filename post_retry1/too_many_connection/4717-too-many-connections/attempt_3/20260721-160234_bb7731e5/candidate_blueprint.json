@@ -1,0 +1,120 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MATLAB feeding the database results in 'too many connections' error due to rapid connection opening and closing.",
+    "symptoms": [
+      "Too many connections error",
+      "Connection threads approaching or exceeding MySQL's max_connections limit"
+    ],
+    "mechanism": "Rapid connection opening and closing in MATLAB leads to exhaustion of MySQL's connection pool.",
+    "facts": [
+      {
+        "key": "MATLAB opens and closes connections rapidly",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "MATLAB output logs showing connection open and close for each row insertion.",
+        "confidence": 0.9
+      },
+      {
+        "key": "MySQL default max_connections limit is 151",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Referenced MySQL documentation and MATLAB logs showing threads approaching this limit.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Threads in MATLAB correspond to MySQL connections",
+        "value": {},
+        "source": "post_hypothesis",
+        "evidence": "MATLAB logs showing thread count increasing with database connections.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "MATLAB does not use connection pooling or persistent connections.",
+      "The database workload is primarily insert operations."
+    ],
+    "unknowns": [
+      "Exact schema of the database being fed by MATLAB",
+      "Whether MATLAB threads are performing other operations besides database connections"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema setup and reproduction of the incident.",
+    "missing_capabilities": [
+      "Target database environment"
+    ],
+    "unmatched_conditions": [
+      "Database 'post_retry_too_many_connection_4717_too_ma_r954943_a3' is unavailable."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_4717_too_ma_r954943_a3",
+    "requirements": [
+      "Database must exist and be accessible."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_4717_too_ma_r954943_a3",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database must exist and be accessible."
+    ],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Too many connections error due to rapid connection opening and closing.",
+    "target_database": "post_retry_too_many_connection_4717_too_ma_r954943_a3",
+    "dba_description": "MATLAB feeding the database results in 'too many connections' error due to rapid connection opening and closing.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to proceed given the missing target database?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database environment. The incident mechanism and symptoms are well understood, but the setup cannot proceed without the database."
+}

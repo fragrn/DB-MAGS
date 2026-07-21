@@ -1,0 +1,220 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MATLAB feeding the database causes 'too many connections' error due to excessive connection creation.",
+    "symptoms": [
+      "Too many connections error",
+      "High number of threads in MySQL"
+    ],
+    "mechanism": "Excessive connection creation by MATLAB threads without proper pooling or batching.",
+    "facts": [
+      {
+        "key": "max_connections default limit",
+        "value": {
+          "default_limit": 151
+        },
+        "source": "explicit_post",
+        "evidence": "MySQL default max_connections is 151, as mentioned in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "MATLAB connection behavior",
+        "value": {
+          "behavior": "Open and close connections for each row insert"
+        },
+        "source": "explicit_post",
+        "evidence": "MATLAB opens and closes connections for each row insert, leading to high connection counts.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Observed threads",
+        "value": {
+          "threads": [
+            149,
+            150
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions 149 and 150 threads during the issue.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The database is configured with default max_connections.",
+      "MATLAB is not using connection pooling or batching."
+    ],
+    "unknowns": [
+      "Exact workload characteristics of MATLAB feeding process.",
+      "Whether connection pooling is feasible in the MATLAB environment."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The database environment does not exist, but the mechanism can be reproduced with synthetic data and workload.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database 'post_retry_too_many_connection_4717_too_ma_r892468_a1' does not exist."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_4717_too_ma_r892468_a1",
+    "requirements": [
+      "Create a synthetic database environment to simulate the issue."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_4717_too_ma_r892468_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS data_feed (id INT AUTO_INCREMENT PRIMARY KEY, payload VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+    ],
+    "generation_sql": [
+      "INSERT INTO data_feed (payload) SELECT CONCAT('data_', n) FROM (SELECT @rownum := @rownum + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) t1, (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3) t2, (SELECT @rownum := 0) t3 LIMIT {row_count}) numbers"
+    ],
+    "tables": [
+      {
+        "name": "data_feed",
+        "purpose": "Simulate the table being fed by MATLAB.",
+        "target_rows": 10000,
+        "distribution_notes": "Uniform distribution of payload data."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "data_feed": 10000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "data_feed"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM data_feed",
+        "objective": "Verify that the data generation process creates the expected number of rows.",
+        "expected_evidence": [
+          "Row count matches the target_rows in the data_spec."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "INSERT INTO data_feed (payload) VALUES ('test_data')"
+    ],
+    "concurrency": 200,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Reproduce 'too many connections' error."
+    ],
+    "symptom_evidence": [
+      "Error message indicating 'too many connections'."
+    ],
+    "mechanism_evidence": [
+      "High number of threads and connections in MySQL."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "too_many_connections",
+    "target_database": "post_retry_too_many_connection_4717_too_ma_r892468_a1",
+    "dba_description": "MATLAB feeding the database causes 'too many connections' error due to excessive connection creation.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_4717_too_ma_r892468_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_4717_too_ma_r892468_a1"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_4717_too_ma_r892468_a1"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS data_feed (id INT AUTO_INCREMENT PRIMARY KEY, payload VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database environment setup"
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO data_feed (payload) VALUES ('test_data')",
+          "concurrency": 200,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "connection_errors": "too_many_connections"
+      },
+      "success_criteria": {
+        "error_detected": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Excessive connection creation"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "simulate_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The issue arises from excessive connection creation by MATLAB. The reproduction plan uses a synthetic workload to simulate this behavior and validate the mechanism."
+}

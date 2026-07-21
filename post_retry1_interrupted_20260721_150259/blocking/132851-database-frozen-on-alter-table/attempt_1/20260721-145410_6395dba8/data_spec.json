@@ -1,0 +1,43 @@
+{
+  "database": "post_retry_blocking_132851_database_frozen_r850712_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS cliente (rut character varying(30) NOT NULL, nombre character varying(150) NOT NULL, razon_social character varying(150) NOT NULL, direccion character varying(200) NOT NULL, comuna character varying(100) NOT NULL, ciudad character varying(100) NOT NULL, codigo_pais character varying(3) NOT NULL, activo boolean DEFAULT true, id serial NOT NULL, stock boolean DEFAULT false, vigente boolean DEFAULT true, clase integer DEFAULT 1, plan integer DEFAULT 1, plantilla character varying(15) DEFAULT 'WAYPOINT'::character varying, facturable integer DEFAULT 1, toolkit integer DEFAULT 0, propietario integer DEFAULT 0, creacion timestamp without time zone DEFAULT now(), codelco boolean NOT NULL DEFAULT false, familia integer DEFAULT 0, enabled_machines boolean DEFAULT false, enabled_canbus boolean DEFAULT false, enabled_horometro boolean DEFAULT false, enabled_comap boolean DEFAULT false, enabled_frio boolean DEFAULT false, enabled_panico boolean DEFAULT false, enabled_puerta boolean DEFAULT false, enabled_rpm boolean DEFAULT false, enabled_supervisor integer DEFAULT 0, demo boolean, interno boolean, mqtt_enable boolean NOT NULL DEFAULT false, CONSTRAINT pk_cliente PRIMARY KEY (rut));"
+  ],
+  "generation_sql": [
+    "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo) SELECT 'rut_' || n, 'nombre_' || n, 'razon_social_' || n, 'direccion_' || n, 'comuna_' || n, 'ciudad_' || n, 'CL', CASE WHEN n % 2 = 0 THEN true ELSE false END FROM generate_series(1, {row_count}) n;"
+  ],
+  "tables": [
+    {
+      "name": "cliente",
+      "purpose": "Primary table for reproducing lock contention during ALTER TABLE.",
+      "target_rows": 100000,
+      "distribution_notes": "Simulated workload with active connections and idle transactions holding weaker locks."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "cliente": 100000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "cliente"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM cliente WHERE rut = 'rut_1';",
+      "objective": "Verify that the table is accessible before the ALTER TABLE operation.",
+      "expected_evidence": [
+        "Query executes successfully without blocking."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

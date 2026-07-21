@@ -1,0 +1,257 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Unpredictable single insert performance due to blocking and excessive indexes.",
+    "symptoms": [
+      "Single record insert takes over 7 minutes.",
+      "Blocking session IDs appear in `sys.dm_exec_requests` but are not active.",
+      "Blocked requests show `LCK_M_S` wait type."
+    ],
+    "mechanism": "Blocking caused by uncommitted transactions holding locks, compounded by excessive indexes.",
+    "facts": [
+      {
+        "key": "table_size",
+        "value": {
+          "rows": 8000000
+        },
+        "source": "explicit_post",
+        "evidence": "The table is described as having 8 million rows.",
+        "confidence": 0.9
+      },
+      {
+        "key": "index_count",
+        "value": {
+          "indexes": 34
+        },
+        "source": "explicit_post",
+        "evidence": "The table has 34 indexes despite being an OLTP system.",
+        "confidence": 0.9
+      },
+      {
+        "key": "blocking_session_behavior",
+        "value": {
+          "sessions_sleeping": true
+        },
+        "source": "explicit_post",
+        "evidence": "Blocking sessions are reported as sleeping in `dm_exec_sessions`.",
+        "confidence": 0.8
+      },
+      {
+        "key": "wait_type",
+        "value": {
+          "type": "LCK_M_S"
+        },
+        "source": "explicit_post",
+        "evidence": "Blocked requests show `LCK_M_S` wait type.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The blocking is caused by uncommitted transactions holding locks.",
+      "Excessive indexes contribute to the poor insert performance."
+    ],
+    "unknowns": [
+      "Exact schema of the table and indexes.",
+      "Specific workload patterns leading to blocking."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction can simulate blocking and index contention, but exact schema and workload patterns are unavailable.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and workload patterns."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_blocking_129302_unpredicatable_r853299_a1",
+    "requirements": [
+      "Dedicated SQL Server-compatible database."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_129302_unpredicatable_r853299_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS Communication (id INT PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX))",
+      "CREATE INDEX IF NOT EXISTS idx_comm_action ON Communication(comm_action)",
+      "CREATE INDEX IF NOT EXISTS idx_comm_channelid ON Communication(comm_channelid)",
+      "CREATE INDEX IF NOT EXISTS idx_payload ON Communication(payload)"
+    ],
+    "generation_sql": [
+      "INSERT INTO Communication (id, comm_action, comm_channelid, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN N'Deskwork' ELSE N'Other' END, MOD(n, 50), CONCAT(N'Payload_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "Communication",
+        "purpose": "Simulate the table with excessive indexes and blocking behavior.",
+        "target_rows": 8000000,
+        "distribution_notes": "Simulate skewed distribution for comm_action and comm_channelid."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "Communication": 8000000
+      },
+      "value_skew": {
+        "Communication.comm_action": "Rare values like 'Deskwork' are sparse."
+      },
+      "predicate_selectivity": {
+        "Communication.comm_action = N'Deskwork'": 0.001
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "Communication"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM Communication WHERE comm_action = N'Deskwork'",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan examines the table or index range relevant to the suspected mechanism.",
+          "The predicate behavior needed by the reproduction is visible in EXPLAIN."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 8000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES (N'Deskwork', 11, N'TestPayload')"
+    ],
+    "concurrency": 10,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Blocking behavior is observed in sys.dm_exec_requests.",
+      "Insert performance degradation is measurable."
+    ],
+    "symptom_evidence": [
+      "Blocked requests show `LCK_M_S` wait type.",
+      "Blocking session IDs appear but are not active."
+    ],
+    "mechanism_evidence": [
+      "Excessive indexes contribute to poor insert performance.",
+      "Uncommitted transactions hold locks causing blocking."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocking and poor insert performance due to excessive indexes and uncommitted transactions.",
+    "target_database": "post_retry_blocking_129302_unpredicatable_r853299_a1",
+    "dba_description": "Simulate blocking and poor insert performance caused by excessive indexes and uncommitted transactions.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r853299_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_129302_unpredicatable_r853299_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup"
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO Communication (id, comm_action, comm_channelid, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN N'Deskwork' ELSE N'Other' END, MOD(n, 50), CONCAT(N'Payload_', n) FROM generated_numbers WHERE n <= 100000",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "rows_inserted": 100000
+      },
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data generation"
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES (N'Deskwork', 11, N'TestPayload')",
+          "concurrency": 10,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "blocking_events": true
+      },
+      "success_criteria": {
+        "blocking_observed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Blocking simulation"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "simulate_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The experiment simulates blocking and poor insert performance caused by excessive indexes and uncommitted transactions. Synthetic data constraints ensure cardinality and skew match the described scenario."
+}

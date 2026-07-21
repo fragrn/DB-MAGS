@@ -1,0 +1,132 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Slow query involving correlated subqueries and aggregation in MySQL.",
+    "symptoms": [
+      "Query execution time exceeds 8 seconds.",
+      "High rows examined (4,742,825) compared to rows sent (3,942)."
+    ],
+    "mechanism": "Correlated subqueries in SELECT clause cause repeated scans of the same table, leading to inefficiency.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "Query_time": 8.79417
+        },
+        "source": "explicit_post",
+        "evidence": "Query_time: 8.794170 in the slow query log.",
+        "confidence": 1.0
+      },
+      {
+        "key": "rows_examined",
+        "value": {
+          "Rows_examined": 4742825
+        },
+        "source": "explicit_post",
+        "evidence": "Rows_examined: 4742825 in the slow query log.",
+        "confidence": 1.0
+      },
+      {
+        "key": "correlated_subqueries",
+        "value": true,
+        "source": "explicit_post",
+        "evidence": "Query contains correlated subqueries in SELECT clause.",
+        "confidence": 1.0
+      },
+      {
+        "key": "indexes",
+        "value": [
+          "company_id",
+          "tran_id",
+          "ce_id",
+          "wallet_id"
+        ],
+        "source": "explicit_post",
+        "evidence": "Indexes listed in the schema and post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The database schema provided in the post is accurate.",
+      "The slow query log configuration matches the described environment."
+    ],
+    "unknowns": [
+      "Exact data distribution and cardinality in the original production database.",
+      "Whether any additional indexes exist beyond those mentioned in the post."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema setup and reproduction.",
+    "missing_capabilities": [
+      "Database creation or inspection of the target database."
+    ],
+    "unmatched_conditions": [
+      "Database 'post_retry_slowsql_improve_mysql_query_per_r484355_a1' is missing."
+    ],
+    "confidence": 1.0
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_improve_mysql_query_per_r484355_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_improve_mysql_query_per_r484355_a1",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Correlated subqueries causing slow query execution.",
+    "target_database": "post_retry_slowsql_improve_mysql_query_per_r484355_a1",
+    "dba_description": "Reproduce and optimize a slow query involving correlated subqueries and aggregation.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to proceed given the missing target database."
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database. Without the database, schema creation, data generation, and query execution cannot proceed."
+}

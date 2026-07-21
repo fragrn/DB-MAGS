@@ -1,0 +1,43 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Slow query execution with RESOURCE_SEMAPHORE waits due to memory pressure and parallelism.",
+  "symptoms": [
+    "RESOURCE_SEMAPHORE waits observed during high user connection counts.",
+    "Slow query execution exacerbated by parallel query execution.",
+    "Memory grants affecting query runtimes."
+  ],
+  "mechanism": "RESOURCE_SEMAPHORE waits occur when queries request memory grants that exceed available resources, often exacerbated by parallelism and high concurrency.",
+  "facts": [
+    {
+      "key": "RESOURCE_SEMAPHORE waits observed",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post mentions RESOURCE_SEMAPHORE waits during sp_whoisactive.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Parallel query execution contributing to waits",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post mentions CXCONSUMER waits and MAXDOP set to 0.",
+      "confidence": 0.8
+    },
+    {
+      "key": "Memory grants affecting query runtimes",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post mentions forced grants in sys.dm_exec_query_resource_semaphores.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "Parallelism is a significant contributor to RESOURCE_SEMAPHORE waits.",
+    "Memory pressure is caused by high concurrency and large memory grants."
+  ],
+  "unknowns": [
+    "Exact workload characteristics causing memory pressure.",
+    "Impact of NUMA configuration on memory grants and waits."
+  ],
+  "confidence": 0.8
+}

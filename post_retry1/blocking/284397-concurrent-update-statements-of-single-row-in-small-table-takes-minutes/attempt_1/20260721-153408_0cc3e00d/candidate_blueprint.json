@@ -1,0 +1,261 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Concurrent UPDATE statements on a single row in a small table cause significant delays due to locking contention.",
+    "symptoms": [
+      "UPDATE statements take several minutes to complete despite the small table size.",
+      "Lock contention observed with ExclusiveLock and RowExclusiveLock modes."
+    ],
+    "mechanism": "Lock contention due to concurrent updates on the same row in a table without indexes.",
+    "facts": [
+      {
+        "key": "table_schema",
+        "value": {
+          "table_name": "host_scan_complete_log_counts",
+          "columns": [
+            "scan_uuid",
+            "num_shards_completed"
+          ],
+          "indexes": []
+        },
+        "source": "explicit_post",
+        "evidence": "Table schema provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "update_pattern",
+        "value": {
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1"
+        },
+        "source": "explicit_post",
+        "evidence": "SQL pattern provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "locking_behavior",
+        "value": {
+          "lock_modes": [
+            "ExclusiveLock",
+            "RowExclusiveLock"
+          ],
+          "lock_age": "minutes"
+        },
+        "source": "explicit_post",
+        "evidence": "Lock analysis provided in the post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The issue is caused by lock contention due to concurrent updates on the same row.",
+      "Adding an index on scan_uuid might reduce contention."
+    ],
+    "unknowns": [
+      "Exact DBMS version.",
+      "Impact of adding a UNIQUE index on scan_uuid."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction requires simulating concurrent updates and lock contention, which is feasible in PostgreSQL.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_284397_concurrent_upda_r248891_a1",
+    "requirements": [
+      "Dedicated test database for reproducing lock contention."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_284397_concurrent_upda_r248891_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+    ],
+    "generation_sql": [
+      "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES (gen_random_uuid(), 0)"
+    ],
+    "tables": [
+      {
+        "name": "host_scan_complete_log_counts",
+        "purpose": "Simulate the small table with concurrent updates causing lock contention.",
+        "target_rows": 1,
+        "distribution_notes": "Single-row table to reproduce contention."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "host_scan_complete_log_counts": 1
+      },
+      "value_skew": {},
+      "predicate_selectivity": {
+        "scan_uuid = $1": 1.0
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "host_scan_complete_log_counts"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = gen_random_uuid()",
+        "objective": "Verify that the table schema and data are correctly set up.",
+        "expected_evidence": [
+          "The table contains the expected single row."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1,
+      "max_rows": 1,
+      "growth_factor": 2.0,
+      "max_rounds": 1
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = gen_random_uuid()"
+    ],
+    "concurrency": 100,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Lock contention is observed during concurrent updates."
+    ],
+    "symptom_evidence": [
+      "UPDATE statements take several minutes to complete.",
+      "Lock contention observed in pg_locks."
+    ],
+    "mechanism_evidence": [
+      "ExclusiveLock and RowExclusiveLock modes are visible in pg_locks."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Lock contention during concurrent updates.",
+    "target_database": "post_retry_blocking_284397_concurrent_upda_r248891_a1",
+    "dba_description": "Concurrent UPDATE statements on a single row in a small table cause significant delays due to locking contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_upda_r248891_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_284397_concurrent_upda_r248891_a1"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "table_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Lock contention due to concurrent updates on the same row."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_upda_r248891_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES (gen_random_uuid(), 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_inserted": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Lock contention due to concurrent updates on the same row."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = gen_random_uuid()",
+          "concurrency": 100,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention_observed": true
+      },
+      "success_criteria": {
+        "lock_contention_observed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Lock contention due to concurrent updates on the same row."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Would adding a UNIQUE index on scan_uuid reduce contention?"
+  ],
+  "rationale": "The incident is caused by lock contention during concurrent updates on the same row. The reproduction plan simulates this scenario using a small table and concurrent workload."
+}

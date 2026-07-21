@@ -1,0 +1,75 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_i_r182437_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_resource_limitation_17677_why_i_r182437_a3"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial environment setup"
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_i_r182437_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS large_table (id INT PRIMARY KEY, group_col INT, order_col INT, text_field TEXT, blob_field BLOB)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS small_table (id INT PRIMARY KEY, ref_col INT)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_exist": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema creation"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "populate_data"
+    ]
+  ]
+}

@@ -1,0 +1,238 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Unpredictable single insert performance in SQL Server table with high index count and potential blocking issues.",
+    "symptoms": [
+      "Single record insert taking over 7 minutes.",
+      "Blocking sessions reported in `sys.dm_exec_requests` but the blocker session does not exist.",
+      "Wait type `LCK_M_S` observed for blocked requests."
+    ],
+    "mechanism": "Blocking caused by uncommitted transactions or excessive index maintenance during inserts.",
+    "facts": [
+      {
+        "key": "table_row_count",
+        "value": {
+          "approximate": 8000000
+        },
+        "source": "explicit_post",
+        "evidence": "The table is described as having 8 million rows.",
+        "confidence": 0.9
+      },
+      {
+        "key": "index_count",
+        "value": 34,
+        "source": "explicit_post",
+        "evidence": "The table has 34 non-clustered indexes.",
+        "confidence": 0.9
+      },
+      {
+        "key": "blocking_wait_type",
+        "value": "LCK_M_S",
+        "source": "explicit_post",
+        "evidence": "Blocked requests were waiting for a `LCK_M_S` lock.",
+        "confidence": 0.9
+      },
+      {
+        "key": "blocking_session_absence",
+        "value": true,
+        "source": "explicit_post",
+        "evidence": "Blocking session IDs were reported but did not exist in `sys.dm_exec_sessions`.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The blocking is caused by uncommitted transactions or lock escalation.",
+      "The high number of indexes contributes to the poor insert performance."
+    ],
+    "unknowns": [
+      "The exact schema of the table and its indexes.",
+      "The workload pattern leading to blocking.",
+      "Whether lock escalation or deadlocks are involved."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction of blocking and index-related performance issues is feasible with synthetic data and a SQL Server-compatible environment.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_blocking_129302_unpredicatable_r642737_a3",
+    "requirements": [
+      "Dedicated SQL Server-compatible test database."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_129302_unpredicatable_r642737_a3",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS Communication (id INT IDENTITY(1,1) PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX))",
+      "CREATE NONCLUSTERED INDEX IF NOT EXISTS idx_comm_action ON Communication(comm_action)",
+      "CREATE NONCLUSTERED INDEX IF NOT EXISTS idx_comm_channelid ON Communication(comm_channelid)",
+      "CREATE NONCLUSTERED INDEX IF NOT EXISTS idx_payload ON Communication(payload)"
+    ],
+    "generation_sql": [
+      "INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT TOP ({row_count}) 'Action_' + CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS NVARCHAR), ABS(CHECKSUM(NEWID()) % 100), REPLICATE('A', 100) FROM sys.all_objects"
+    ],
+    "tables": [
+      {
+        "name": "Communication",
+        "purpose": "Primary table to simulate the high index count and insert performance issues.",
+        "target_rows": 8000000,
+        "distribution_notes": "Uniform distribution for comm_channelid and comm_action, with large payloads to simulate real-world data."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "Communication": 8000000
+      },
+      "value_skew": {
+        "Communication.comm_channelid": "Uniform distribution across 100 distinct values."
+      },
+      "predicate_selectivity": {
+        "Communication.comm_channelid = 11": 0.01
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "Communication"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM Communication WHERE comm_channelid = 11",
+        "objective": "Verify that the index on comm_channelid is used and the query plan reflects the expected behavior.",
+        "expected_evidence": [
+          "The query plan uses the index idx_comm_channelid.",
+          "The query plan shows a range scan or seek operation."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000000,
+      "max_rows": 8000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, REPLICATE('B', 100))"
+    ],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Blocking behavior is observed during inserts.",
+      "Insert performance degrades significantly with the high index count."
+    ],
+    "symptom_evidence": [
+      "Blocking sessions are reported in sys.dm_exec_requests.",
+      "Insert operations experience significant delays."
+    ],
+    "mechanism_evidence": [
+      "The high index count contributes to the poor insert performance.",
+      "Blocking is caused by uncommitted transactions or lock escalation."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocking and poor insert performance due to high index count.",
+    "target_database": "post_retry_blocking_129302_unpredicatable_r642737_a3",
+    "dba_description": "Reproduce blocking and poor insert performance in a SQL Server table with a high index count.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r642737_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_129302_unpredicatable_r642737_a3"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup for reproduction."
+      }
+    },
+    {
+      "task_id": "create_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r642737_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE Communication (id INT IDENTITY(1,1) PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX))"
+                },
+                {
+                  "sql": "CREATE NONCLUSTERED INDEX idx_comm_action ON Communication(comm_action)"
+                },
+                {
+                  "sql": "CREATE NONCLUSTERED INDEX idx_comm_channelid ON Communication(comm_channelid)"
+                },
+                {
+                  "sql": "CREATE NONCLUSTERED INDEX idx_payload ON Communication(payload)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema creation with high index count."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "create_schema"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating the blocking and performance issues caused by high index count and uncommitted transactions. The SQL Server-compatible environment ensures mechanism-level reproduction feasibility."
+}

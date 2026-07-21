@@ -1,0 +1,59 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Stored procedure enters an infinite loop after index updates, potentially due to page locking or trigger behavior.",
+  "symptoms": [
+    "Stored procedure loops indefinitely.",
+    "Deadlocks observed on tables.",
+    "Process fails to insert data.",
+    "Infinite looping occurs when an update statement is executed inside an insert trigger."
+  ],
+  "mechanism": "Page locking on an index combined with nested cursors and triggers causes infinite looping and deadlocks.",
+  "facts": [
+    {
+      "key": "Stored procedure uses nested cursors.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The stored procedure script provided in the post shows nested cursors.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Infinite looping occurs after index updates.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly states that the issue began after index updates.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Reverting index changes did not resolve the issue.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions that reverting the indexes did not stop the infinite loop.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Triggers are present on the target tables.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post states that the database has multiple triggers on almost every table.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Deleting a single index resolved the issue.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The author of the post resolved the issue by deleting a single index.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The infinite loop is caused by a combination of page locking and trigger behavior.",
+    "The stored procedure's nested cursors exacerbate the issue by holding locks for extended periods."
+  ],
+  "unknowns": [
+    "The exact index that caused the issue.",
+    "The specific trigger logic contributing to the problem.",
+    "Whether the issue is reproducible in a synthetic environment."
+  ],
+  "confidence": 0.8
+}

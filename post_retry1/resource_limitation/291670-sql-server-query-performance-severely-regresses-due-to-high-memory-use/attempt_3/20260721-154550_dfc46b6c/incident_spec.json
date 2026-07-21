@@ -1,0 +1,60 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "SQL Server query performance regresses due to high memory use and parameter sniffing issues.",
+  "symptoms": [
+    "Queries timeout when memory usage is high.",
+    "Restarting SQL Server temporarily resolves the issue.",
+    "SSMS executes the same query faster than the application.",
+    "Execution plans differ between SSMS and the application due to ARITHABORT settings."
+  ],
+  "mechanism": "Parameter sniffing leads to suboptimal execution plans, exacerbated by memory pressure and inefficient sorting operations.",
+  "facts": [
+    {
+      "key": "High memory usage causes query timeouts.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The DBA observed that queries timeout when memory is filled and disk reads are slow.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Restarting SQL Server resolves query timeouts temporarily.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Restarting SQL Server clears memory and allows queries to execute quickly.",
+      "confidence": 0.9
+    },
+    {
+      "key": "SSMS executes the same query faster than the application.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "SSMS completes the query in 2 seconds while the application times out.",
+      "confidence": 0.9
+    },
+    {
+      "key": "ARITHABORT setting affects execution plans.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Disabling ARITHABORT in SSMS caused it to match the application's slower execution plan.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Sorting operation causes excessive tempdb usage.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The execution plan showed a Sort operation going to tempdb 8 times.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The database schema includes tables like Notifications and Reports with columns used for sorting and joins.",
+    "The application uses stored procedures with parameters that are subject to sniffing.",
+    "The memory pressure is caused by large accounts with high row counts."
+  ],
+  "unknowns": [
+    "Exact schema details of Notifications and Reports tables.",
+    "Specific indexes present on the tables.",
+    "Whether other settings besides ARITHABORT contribute to the issue."
+  ],
+  "confidence": 0.85
+}

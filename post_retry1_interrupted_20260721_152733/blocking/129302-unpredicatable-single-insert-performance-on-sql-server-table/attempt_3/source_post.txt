@@ -1,0 +1,73 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/129302/unpredicatable-single-insert-performance-on-sql-server-table
+Canonical URL: https://dba.stackexchange.com/questions/129302/unpredicatable-single-insert-performance-on-sql-server-table
+Title: Unpredicatable single insert performance on SQL Server table
+Question ID: 129302
+License: CC BY-SA 4.0; author: user139315
+
+# Question
+
+I have inherited a system that sometimes exhibits extremely poor single record insert performance.
+
+The table is something like 8 million rows, so is relatively large but not exceptionally so. The following simple insert took over 7 minutes and blocked the entire system up in the process:```
+   INSERT INTO dbo.Communication(comm_action,comm_channelid,...)  
+   VALUES (N'Deskwork',11,...)
+
+```The overall database design is fairly poor. For example, although this particular table does have a Clustered Index, it has 34 other indexes as well despite being an OLTP system with heavy insert/update activity.
+
+There are no triggers that I can see and the performance of inserts for the most part is reasonably good. Good being a relative term.
+
+Could the number of indexes really account for such poor performance and is there any approach I could take to prove this before undertaking work.
+
+Are there any other areas I could look into if the consensus is not the indexes being a problem?
+
+The customer is very sensitive to changes, so I will need evidence before being able to make any changes.
+
+I'm using SQL Sentry to highlight the blocking and the insert is the first block that shows up, followed by many others.
+
+It's actually weirder than just there being another process blocking the inserter. I have a process (51) blocked by process 105. However, when I check what process 105 is about, there is no process 105.
+
+I've repeated this several times, each time with a different process saying it's being blocked for a prolonged period of time, but the "blocker" not really existing. Does anyone know why sys.dm_exec_requests can say something is being blocked, but the same DMV say the blocker isn't really there?
+
+What happens is, we get rows in dm_exec_requests with a blocking session id of, say 127. However, although there is a session in dm_exec_sessions, it says it's sleeping and there are no equivalent rows in the requests DMV.
+
+I'm not clear on how a session can block something for 30 minutes despite seemingly not doing any requests?
+
+For the blocked requests, in the case I had this morning it was waiting for a `LCK_M_S`. Any ideas?
+
+# Answers
+
+## Answer 1
+Author: Aaron Bertrand
+Accepted: yes
+Score: 4
+License: CC BY-SA 4.0
+
+I suspect this isn't a case of "the insert took 7 minutes" but rather "the insert was blocked for over 6 minutes." When an insert normally runs fine and then suddenly takes a long time, it is likely there is another cause, and highly unlikely that SQL Server suddenly got overwhelmed by your large table with too many indexes.
+
+I treat this in more detail here (https://www.sentryone.com/blog/aaronbertrand/backtobasics-the-runaway-query) but, essentially, you need to examine the system while this query is running long. Identify the `session_id` (`SPID`) and check `sys.dm_exec_requests` for `blocking_session_id`, which I think is most likely the issue; after that, check `wait_type` and `last_wait_type`. Most of the time, for duration outliers like this, one of those columns is going to help you track down the reason.
+
+Sometimes, they might not have an active query in `sys.dm_exec_requests` - as I explain in the comments below, this is possible if someone started a transaction, made some statements against a table, then walked away without committing. You can see what object(s) that session has locked even if they aren't actively running a query.```
+DECLARE @SPID INT = <blocking_session_id from your "hung" query>;
+
+-- see the command they ran last (might be related, might not)
+DBCC INPUTBUFFER(@SPID);
+
+-- see what that session has locked
+SELECT s.name, o.name
+  FROM sys.dm_tran_session_transactions AS tst
+  INNER JOIN sys.dm_tran_locks AS tl
+  ON tst.transaction_id = tl.request_owner_id
+  INNER JOIN sys.objects AS o
+  ON tl.resource_associated_entity_id = o.[object_id]
+  INNER JOIN sys.schemas AS s
+  ON o.[schema_id] = s.[schema_id]
+  WHERE tst.session_id = @SPID;
+
+```
+
+# Linked Page Snapshots
+
+- URL: https://www.sentryone.com/blog/aaronbertrand/backtobasics-the-runaway-query
+  Title: Groups — THWACK
+  Description/Error:

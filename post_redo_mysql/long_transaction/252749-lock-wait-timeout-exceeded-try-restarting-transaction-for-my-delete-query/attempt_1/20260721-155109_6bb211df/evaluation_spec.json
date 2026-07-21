@@ -1,0 +1,15 @@
+{
+  "validation_criteria": [
+    "Lock contention is observed in the process list or InnoDB status.",
+    "DELETE query fails with 'lock wait timeout exceeded' error."
+  ],
+  "symptom_evidence": [
+    "Lock wait timeout error during DELETE query.",
+    "Long-running transactions visible in InnoDB status."
+  ],
+  "mechanism_evidence": [
+    "Row-level locks held by long-running transactions block DELETE query.",
+    "Lack of primary key or unique index contributes to lock contention."
+  ],
+  "minimum_plan_similarity": 0.6
+}

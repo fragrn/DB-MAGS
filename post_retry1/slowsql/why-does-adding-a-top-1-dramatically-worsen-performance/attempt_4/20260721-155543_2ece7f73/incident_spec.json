@@ -1,0 +1,73 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Adding a TOP 1 clause to a query dramatically worsens performance due to a change in query plan, likely caused by row goal optimization.",
+  "symptoms": [
+    "Query with TOP 1 clause has significantly worse performance.",
+    "Query plan changes from Hash Match to Nested Loops with a Table Spool."
+  ],
+  "mechanism": "Row goal optimization alters the query plan to prioritize fetching a single row quickly, but this leads to inefficient execution paths in this case.",
+  "facts": [
+    {
+      "key": "query_with_top_1",
+      "value": {
+        "sql": "SELECT TOP 1 dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+      },
+      "source": "explicit_post",
+      "evidence": "The DBA post includes the query and describes its poor performance.",
+      "confidence": 0.5
+    },
+    {
+      "key": "query_without_top_1",
+      "value": {
+        "sql": "SELECT dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+      },
+      "source": "explicit_post",
+      "evidence": "The DBA post includes the query and describes its better performance.",
+      "confidence": 0.5
+    },
+    {
+      "key": "row_goal_optimization",
+      "value": {
+        "description": "Row goal optimization changes the query plan to prioritize fetching a single row quickly, often leading to Nested Loops joins and Table Spools."
+      },
+      "source": "post_hypothesis",
+      "evidence": "The DBA post and community responses discuss row goal optimization as the likely cause.",
+      "confidence": 0.5
+    },
+    {
+      "key": "table_sizes",
+      "value": {
+        "DOCUMENT_QUEUE": 5000,
+        "CORRESPONDENCE_JOURNAL": 1400000
+      },
+      "source": "explicit_post",
+      "evidence": "The DBA post specifies the approximate row counts for each table.",
+      "confidence": 0.5
+    },
+    {
+      "key": "indexes",
+      "value": {
+        "DOCUMENT_QUEUE": [
+          "PK on D_ID"
+        ],
+        "CORRESPONDENCE_JOURNAL": [
+          "PK on FILE_NUMBER, CORRESPONDENCE_ID",
+          "Index on DOCUMENT_ID, FILE_NUMBER"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The DBA post describes the indexes on the tables.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The described query plans and performance issues are reproducible in a synthetic environment.",
+    "The row goal optimization mechanism behaves similarly in Azure SQL Edge as in full SQL Server."
+  ],
+  "unknowns": [
+    "Exact query plan differences in the synthetic environment.",
+    "Impact of Azure SQL Edge's compatibility on row goal optimization behavior."
+  ],
+  "confidence": 0.9
+}

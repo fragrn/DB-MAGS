@@ -1,0 +1,70 @@
+{
+  "dbms": "mysql",
+  "dbms_version": "5.6 (Aurora RDS)",
+  "summary": "Lock wait timeout exceeded during DELETE query due to long-running transactions and contention.",
+  "symptoms": [
+    "Lock wait timeout exceeded error",
+    "Long-running transactions blocking DELETE query",
+    "High row lock contention"
+  ],
+  "mechanism": "Row-level locking contention caused by long-running transactions and lack of primary key/index optimization.",
+  "facts": [
+    {
+      "key": "dbms_version",
+      "value": {
+        "version": "5.6",
+        "platform": "Aurora RDS"
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions Aurora RDS MySQL 5.6.",
+      "confidence": 1.0
+    },
+    {
+      "key": "lock_wait_timeout",
+      "value": {
+        "default": 50
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions default timeout of 50 seconds.",
+      "confidence": 1.0
+    },
+    {
+      "key": "table_schema",
+      "value": {
+        "schema": "EVENT_DETAILS without primary key"
+      },
+      "source": "explicit_post",
+      "evidence": "Post provides table schema without primary key.",
+      "confidence": 1.0
+    },
+    {
+      "key": "transaction_isolation",
+      "value": {
+        "level": "REPEATABLE READ"
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions default isolation level REPEATABLE READ.",
+      "confidence": 1.0
+    },
+    {
+      "key": "blocking_transactions",
+      "value": {
+        "duration": "up to 17 hours"
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions transactions active for up to 17 hours.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The DELETE query operates on a significant number of rows, causing undo log growth.",
+    "Long-running transactions are caused by connection pooling or application behavior.",
+    "Row-level locks are exacerbated by the lack of a primary key and optimized indexes."
+  ],
+  "unknowns": [
+    "Exact workload pattern causing contention.",
+    "Specific blocking queries or SELECT patterns.",
+    "Impact of Aurora-specific optimizations or configurations."
+  ],
+  "confidence": 0.85
+}

@@ -1,0 +1,159 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Lock wait timeout exceeded during DELETE query on a table with high concurrent activity and no primary key.",
+  "symptoms": [
+    "DELETE query fails with 'Lock wait timeout exceeded; try restarting transaction'.",
+    "Long-running transactions holding locks on rows.",
+    "High contention on table with frequent INSERT and SELECT operations."
+  ],
+  "mechanism": "Row-level locks held by long-running transactions block DELETE operations, leading to lock wait timeouts.",
+  "facts": [
+    {
+      "key": "dbms",
+      "value": "MySQL 5.6 (RDS Aurora)",
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions using RDS Aurora with MySQL 5.6.",
+      "confidence": 0.5
+    },
+    {
+      "key": "table_schema",
+      "value": {
+        "table_name": "EVENT_DETAILS",
+        "columns": [
+          {
+            "name": "ORG_ID",
+            "type": "CHAR(32)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "CONFIG_KEY",
+            "type": "CHAR(32)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "COMPONENT_NAME",
+            "type": "VARCHAR(512)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "REQUEST_ID",
+            "type": "CHAR(32)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "UPDATE_DATE",
+            "type": "INT",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "UPDATE_TIME",
+            "type": "INT",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "CLIENT",
+            "type": "CHAR(16)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "STATUS",
+            "type": "INT",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "EVENT_DATA",
+            "type": "VARCHAR(1024)",
+            "constraints": []
+          },
+          {
+            "name": "MESSAGE",
+            "type": "VARCHAR(512)",
+            "constraints": []
+          },
+          {
+            "name": "INSERTED_TIME",
+            "type": "TIMESTAMP",
+            "constraints": [
+              "DEFAULT CURRENT_TIMESTAMP",
+              "NOT NULL"
+            ]
+          }
+        ],
+        "indexes": [
+          {
+            "name": "STATE_INDEX",
+            "columns": [
+              "UPDATE_DATE",
+              "UPDATE_TIME",
+              "ORG_ID",
+              "CONFIG_KEY",
+              "COMPONENT_NAME",
+              "STATUS",
+              "CLIENT"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The table schema is provided in the post.",
+      "confidence": 0.5
+    },
+    {
+      "key": "isolation_level",
+      "value": "REPEATABLE READ",
+      "source": "explicit_post",
+      "evidence": "The post explicitly states that the transaction isolation level is REPEATABLE READ.",
+      "confidence": 0.5
+    },
+    {
+      "key": "autocommit",
+      "value": true,
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions that autocommit is enabled.",
+      "confidence": 0.5
+    },
+    {
+      "key": "lock_wait_timeout",
+      "value": 50,
+      "source": "explicit_post",
+      "evidence": "The post mentions that the lock wait timeout is 50 seconds.",
+      "confidence": 0.5
+    },
+    {
+      "key": "long-running_transactions",
+      "value": true,
+      "source": "explicit_post",
+      "evidence": "The post mentions transactions active for hours, holding locks.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The DELETE query is attempting to delete a significant number of rows, leading to contention.",
+    "The table's lack of a primary key contributes to inefficient locking and contention.",
+    "The workload involves frequent concurrent INSERT and SELECT operations on the table."
+  ],
+  "unknowns": [
+    "Exact workload patterns and query frequencies.",
+    "Whether the blocking transactions are caused by specific application behavior or external factors.",
+    "The size of the table and the number of rows affected by the DELETE query."
+  ],
+  "confidence": 0.9
+}

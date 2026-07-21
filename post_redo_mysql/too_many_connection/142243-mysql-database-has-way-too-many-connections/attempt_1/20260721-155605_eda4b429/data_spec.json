@@ -1,0 +1,57 @@
+{
+  "database": "post_retry_too_many_connection_142243_mysq_r565857_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, process_id INT, job_id INT, status VARCHAR(64), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE TABLE IF NOT EXISTS connections_log (id INT AUTO_INCREMENT PRIMARY KEY, connection_id INT, process_id INT, job_id INT, status VARCHAR(64), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+  ],
+  "generation_sql": [
+    "INSERT INTO jobs (process_id, job_id, status) SELECT MOD(n, 4) + 1, n, 'pending' FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "jobs",
+      "purpose": "Simulates background jobs with process and job identifiers.",
+      "target_rows": 10000,
+      "distribution_notes": "Uniform distribution of jobs across processes."
+    },
+    {
+      "name": "connections_log",
+      "purpose": "Tracks connection attempts and statuses during reproduction.",
+      "target_rows": 0,
+      "distribution_notes": "Populated dynamically during workload execution."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "jobs": 10000,
+      "connections_log": "dynamic"
+    },
+    "value_skew": {
+      "jobs.process_id": "Uniform distribution across 4 processes."
+    },
+    "predicate_selectivity": {
+      "jobs.status = 'pending'": 1.0
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "jobs",
+    "connections_log"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT COUNT(*) FROM jobs WHERE status = 'pending'",
+      "objective": "Verify that the jobs table is populated correctly with pending jobs.",
+      "expected_evidence": [
+        "The count matches the expected number of rows.",
+        "The status column has the intended distribution."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

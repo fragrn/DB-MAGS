@@ -1,0 +1,280 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Nested loops join dominates query cost in a multi-table join scenario.",
+    "symptoms": [
+      "High query execution time",
+      "Nested loops join consuming 90% of query cost"
+    ],
+    "mechanism": "Inefficient join conditions involving OR clauses and large intermediate result sets.",
+    "facts": [
+      {
+        "key": "query_structure",
+        "value": {
+          "tables": [
+            "category",
+            "category_voc",
+            "category_link"
+          ],
+          "joins": [
+            "INNER JOIN",
+            "LEFT OUTER JOIN"
+          ],
+          "conditions": [
+            "OR clause in join",
+            "IN subquery"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Query provided in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "performance_issue",
+        "value": {
+          "nested_loops_cost": "89%",
+          "actual_rows": 28863
+        },
+        "source": "explicit_post",
+        "evidence": "Execution plan details shared in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "suggested_optimizations",
+        "value": {
+          "split_joins": "Separate OR conditions into multiple joins.",
+          "use_coalesce": "Replace OR with COALESCE in join conditions.",
+          "cross_apply": "Use CROSS APPLY for filtering."
+        },
+        "source": "explicit_post",
+        "evidence": "Recommendations in the DBA post and answers.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The database schema and indexes are as described in the post.",
+      "The query structure and execution plan are representative of the production environment."
+    ],
+    "unknowns": [
+      "Exact data distribution and cardinality of the involved tables.",
+      "Impact of suggested optimizations on the execution plan."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction requires a SQL Server-compatible environment, which is available. However, exact data distribution and cardinality are unknown, so synthetic data will be used to approximate the mechanism.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_slowsql_optimize_a_query_thats_r400772_a1",
+    "requirements": [
+      "Dedicated test database for synthetic reproduction."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_optimize_a_query_thats_r400772_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS category (category_id INT PRIMARY KEY, parent_category_id INT, level INT, version_id INT)",
+      "CREATE TABLE IF NOT EXISTS category_voc (category_id INT, language_code VARCHAR(10), category_name VARCHAR(255), PRIMARY KEY (category_id, language_code))",
+      "CREATE TABLE IF NOT EXISTS category_link (sku_id INT, category_id INT, is_primary BIT, PRIMARY KEY (sku_id, category_id))",
+      "CREATE TABLE IF NOT EXISTS temp_ids (value INT PRIMARY KEY)"
+    ],
+    "generation_sql": [
+      "INSERT INTO category (category_id, parent_category_id, level, version_id) SELECT n, CASE WHEN n % 5 = 0 THEN NULL ELSE n - 1 END, 4, 5 FROM generated_numbers WHERE n <= 10000",
+      "INSERT INTO category_voc (category_id, language_code, category_name) SELECT n, 'en', CONCAT('Category_', n) FROM generated_numbers WHERE n <= 10000",
+      "INSERT INTO category_link (sku_id, category_id, is_primary) SELECT n, n % 10000, CASE WHEN n % 2 = 0 THEN 1 ELSE 0 END FROM generated_numbers WHERE n <= 100000",
+      "INSERT INTO temp_ids (value) SELECT n FROM generated_numbers WHERE n <= 10000"
+    ],
+    "tables": [
+      {
+        "name": "category",
+        "purpose": "Hierarchy of categories with parent-child relationships.",
+        "target_rows": 10000,
+        "distribution_notes": "Uniform distribution with some NULL parent_category_id values."
+      },
+      {
+        "name": "category_voc",
+        "purpose": "Localized category names.",
+        "target_rows": 10000,
+        "distribution_notes": "One-to-one mapping with category table."
+      },
+      {
+        "name": "category_link",
+        "purpose": "Links between SKUs and categories.",
+        "target_rows": 100000,
+        "distribution_notes": "Many-to-one relationship with categories."
+      },
+      {
+        "name": "temp_ids",
+        "purpose": "Temporary table for filtering SKUs.",
+        "target_rows": 10000,
+        "distribution_notes": "Uniform distribution."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "category": 10000,
+        "category_voc": 10000,
+        "category_link": 100000,
+        "temp_ids": 10000
+      },
+      "value_skew": {
+        "category_link.is_primary": "50% true, 50% false"
+      },
+      "predicate_selectivity": {
+        "category.level = 4 AND category.version_id = 5": 0.1
+      },
+      "join_selectivity": {
+        "category_link.category_id = category.category_id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "category",
+      "category_voc",
+      "category_link",
+      "temp_ids"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT l.sku_id, l.is_primary, v1.category_name, v2.category_name, v3.category_name, v4.category_name, v5.category_name FROM category c4 JOIN category_voc v4 ON v4.category_id = c4.category_id AND v4.language_code = 'en' JOIN category c3 ON c3.category_id = c4.parent_category_id JOIN category_voc v3 ON v3.category_id = c3.category_id AND v3.language_code = 'en' JOIN category c2 ON c2.category_id = c3.category_id JOIN category_voc v2 ON v2.category_id = c2.category_id AND v2.language_code = 'en' JOIN category c1 ON c1.category_id = c2.parent_category_id JOIN category_voc v1 ON v1.category_id = c1.category_id AND v1.language_code = 'en' LEFT OUTER JOIN category c5 ON c5.parent_category_id = c4.category_id LEFT OUTER JOIN category_voc v5 ON v5.category_id = c5.category_id AND v5.language_code = 'en' JOIN category_link l ON l.sku_id IN (SELECT value FROM temp_ids) AND (l.category_id = c4.category_id OR l.category_id = c5.category_id) WHERE c4.level = 4 AND c4.version_id = 5",
+        "objective": "Verify that the query plan includes nested loops join and highlights the inefficiency in the join conditions.",
+        "expected_evidence": [
+          "Nested loops join is used for category_link table.",
+          "High cost associated with the join operation.",
+          "OR condition in join predicate is visible in the plan."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Nested loops join is present in the query plan.",
+      "Join conditions match the described inefficiency."
+    ],
+    "symptom_evidence": [
+      "High cost of nested loops join.",
+      "OR condition in join predicate."
+    ],
+    "mechanism_evidence": [
+      "Nested loops join dominates query cost.",
+      "Join conditions involve OR clause."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Nested loops join inefficiency due to OR condition in join predicate.",
+    "target_database": "post_retry_slowsql_optimize_a_query_thats_r400772_a1",
+    "dba_description": "Reproduce and analyze the inefficiency caused by nested loops join in a multi-table join query with OR conditions.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_optimize_a_query_thats_r400772_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_slowsql_optimize_a_query_thats_r400772_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database environment setup for reproduction."
+      }
+    },
+    {
+      "task_id": "create_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_optimize_a_query_thats_r400772_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS category (category_id INT PRIMARY KEY, parent_category_id INT, level INT, version_id INT)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS category_voc (category_id INT, language_code VARCHAR(10), category_name VARCHAR(255), PRIMARY KEY (category_id, language_code))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS category_link (sku_id INT, category_id INT, is_primary BIT, PRIMARY KEY (sku_id, category_id))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS temp_ids (value INT PRIMARY KEY)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema creation for synthetic reproduction."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "create_schema"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident involves a well-defined query performance issue caused by nested loops join inefficiency. The reproduction focuses on creating a synthetic environment to analyze the mechanism and validate optimization strategies."
+}

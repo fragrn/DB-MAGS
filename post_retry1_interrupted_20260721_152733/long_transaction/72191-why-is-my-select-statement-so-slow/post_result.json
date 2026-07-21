@@ -1,0 +1,81 @@
+{
+  "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/long_transaction/72191-why-is-my-select-statement-so-slow.txt",
+  "category": "long_transaction",
+  "slug": "72191-why-is-my-select-statement-so-slow",
+  "status": "blocked",
+  "reason": "The target database 'post_retry_long_transaction_72191_why_is_m_r991625_a4' does not exist, preventing further inspection or reproduction.",
+  "attempts": [
+    {
+      "attempt": 1,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/72191-why-is-my-select-statement-so-slow/attempt_1/20260721-151204_fab919e7",
+      "status": "failed",
+      "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 2,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/72191-why-is-my-select-statement-so-slow/attempt_2/20260721-151232_5dd8ca5a",
+      "status": "failed",
+      "reason": "Msg 156, Level 15, State 1, Server 883f252a88e4, Line 1\nIncorrect syntax near the keyword 'IF'.\nMsg 102, Level 15, State 1, Server 883f252a88e4, Line 1\nIncorrect syntax near 'sys'.",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "data_spec.analyze_tables",
+          "before": [
+            "sys.databases",
+            "sys.tables"
+          ],
+          "after": [
+            "databases",
+            "tables"
+          ],
+          "reason": "Use unqualified table names."
+        }
+      ],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 3,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/72191-why-is-my-select-statement-so-slow/attempt_3/20260721-151251_3ec422c2",
+      "status": "failed",
+      "reason": "Msg 156, Level 15, State 1, Server 883f252a88e4, Line 1\nIncorrect syntax near the keyword 'IF'.\nMsg 102, Level 15, State 1, Server 883f252a88e4, Line 1\nIncorrect syntax near 'db1'.",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "data_spec.analyze_tables",
+          "before": [
+            "db1.dbo._LOOK_UP_TABLE",
+            "db2.dbo.other_table",
+            "db3.dbo.other_table",
+            "db4.dbo.other_table"
+          ],
+          "after": [
+            "_LOOK_UP_TABLE",
+            "other_table",
+            "other_table",
+            "other_table"
+          ],
+          "reason": "Use unqualified table names."
+        },
+        {
+          "path": "task_specs[0].actions[0].database",
+          "before": "master",
+          "after": "post_retry_long_transaction_72191_why_is_m_r971452_a3",
+          "reason": "Use per-post attempt database."
+        }
+      ],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 4,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/72191-why-is-my-select-statement-so-slow/attempt_4/20260721-151311_cfa873ff",
+      "status": "blocked",
+      "reason": "The target database 'post_retry_long_transaction_72191_why_is_m_r991625_a4' does not exist, preventing further inspection or reproduction.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to blocking and excessive indexes.",
+  "symptoms": [
+    "Single record insert takes an unusually long time (e.g., 7 minutes).",
+    "Blocking sessions are observed in sys.dm_exec_requests.",
+    "Blocking sessions appear to be 'sleeping' and not actively running queries.",
+    "Wait type observed is LCK_M_S (lock mode shared)."
+  ],
+  "mechanism": "Excessive indexes and uncommitted transactions causing blocking and lock contention.",
+  "facts": [
+    {
+      "key": "table_size",
+      "value": {
+        "rows": 8000000
+      },
+      "source": "explicit_post",
+      "evidence": "The table is described as having 8 million rows.",
+      "confidence": 0.5
+    },
+    {
+      "key": "number_of_indexes",
+      "value": {
+        "count": 34
+      },
+      "source": "explicit_post",
+      "evidence": "The table has 34 indexes.",
+      "confidence": 0.5
+    },
+    {
+      "key": "blocking_sessions",
+      "value": {
+        "observed": true
+      },
+      "source": "explicit_post",
+      "evidence": "The post mentions blocking sessions in sys.dm_exec_requests.",
+      "confidence": 0.5
+    },
+    {
+      "key": "wait_type",
+      "value": {
+        "type": "LCK_M_S"
+      },
+      "source": "explicit_post",
+      "evidence": "The wait type observed is LCK_M_S.",
+      "confidence": 0.5
+    },
+    {
+      "key": "blocking_session_sleeping",
+      "value": {
+        "observed": true
+      },
+      "source": "explicit_post",
+      "evidence": "Blocking sessions are described as 'sleeping' in sys.dm_exec_sessions.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The table schema includes a clustered index and 34 additional indexes.",
+    "The blocking is caused by uncommitted transactions holding locks.",
+    "The database environment supports SQL Server-compatible features like sys.dm_exec_requests and sys.dm_tran_locks."
+  ],
+  "unknowns": [
+    "The exact schema of the table and its indexes.",
+    "The workload pattern leading to the blocking.",
+    "The specific transaction causing the uncommitted locks."
+  ],
+  "confidence": 0.85
+}

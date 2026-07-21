@@ -1,0 +1,255 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Unpredictable single insert performance due to blocking and excessive indexes.",
+    "symptoms": [
+      "Single record insert performance is extremely poor.",
+      "Blocking sessions appear in sys.dm_exec_requests but are not active.",
+      "Wait type observed is LCK_M_S."
+    ],
+    "mechanism": "Blocking caused by uncommitted transactions and contention on locks, exacerbated by excessive indexes.",
+    "facts": [
+      {
+        "key": "table_size",
+        "value": {
+          "rows": 8000000
+        },
+        "source": "explicit_post",
+        "evidence": "The table is described as having 8 million rows.",
+        "confidence": 0.9
+      },
+      {
+        "key": "index_count",
+        "value": {
+          "count": 34
+        },
+        "source": "explicit_post",
+        "evidence": "The table has 34 indexes in addition to a clustered index.",
+        "confidence": 0.9
+      },
+      {
+        "key": "blocking_symptom",
+        "value": {
+          "type": "LCK_M_S",
+          "duration": "prolonged"
+        },
+        "source": "explicit_post",
+        "evidence": "Blocked requests are waiting for LCK_M_S.",
+        "confidence": 0.8
+      },
+      {
+        "key": "blocking_session_behavior",
+        "value": {
+          "state": "sleeping",
+          "no_active_requests": true
+        },
+        "source": "explicit_post",
+        "evidence": "Blocking sessions are sleeping and have no active requests.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The blocking behavior is reproducible under synthetic conditions.",
+      "Excessive indexes contribute to contention during inserts.",
+      "Uncommitted transactions are a primary cause of blocking."
+    ],
+    "unknowns": [
+      "Exact schema of the Communication table.",
+      "Specific workload patterns leading to contention.",
+      "Whether other factors like disk I/O or memory pressure contribute."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The blocking mechanism and excessive index contention can be reproduced with synthetic data and schema constraints.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema of the Communication table is unknown."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_blocking_129302_unpredicatable_r405841_a2",
+    "requirements": [
+      "Dedicated test database for synthetic reproduction."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_129302_unpredicatable_r405841_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS Communication (id INT IDENTITY PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX))",
+      "CREATE INDEX IF NOT EXISTS idx_comm_action ON Communication(comm_action)",
+      "CREATE INDEX IF NOT EXISTS idx_comm_channelid ON Communication(comm_channelid)",
+      "CREATE INDEX IF NOT EXISTS idx_payload ON Communication(payload)"
+    ],
+    "generation_sql": [
+      "INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT CASE WHEN n % 100 = 0 THEN 'Deskwork' ELSE 'Other' END, n % 50, REPLICATE('x', 100) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers"
+    ],
+    "tables": [
+      {
+        "name": "Communication",
+        "purpose": "Reproduce blocking and contention during inserts.",
+        "target_rows": 8000000,
+        "distribution_notes": "Simulate heavy contention with a large number of rows and indexes."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "Communication": 8000000
+      },
+      "value_skew": {
+        "Communication.comm_action": "Deskwork is rare, Other is common."
+      },
+      "predicate_selectivity": {
+        "Communication.comm_action = 'Deskwork'": 0.01
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "Communication"
+    ],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 8000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, REPLICATE('x', 100))"
+    ],
+    "concurrency": 10,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Blocking sessions are observed during inserts.",
+      "Wait type LCK_M_S is visible in sys.dm_exec_requests.",
+      "Insert performance degradation matches the described symptoms."
+    ],
+    "symptom_evidence": [
+      "Blocked sessions with LCK_M_S wait type.",
+      "Sleeping sessions with uncommitted transactions."
+    ],
+    "mechanism_evidence": [
+      "Excessive indexes contribute to contention.",
+      "Blocking caused by uncommitted transactions."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocking and contention during inserts.",
+    "target_database": "post_retry_blocking_129302_unpredicatable_r405841_a2",
+    "dba_description": "Reproduce blocking and contention during single record inserts in a table with excessive indexes.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r405841_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_129302_unpredicatable_r405841_a2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup for reproduction."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT CASE WHEN n % 100 = 0 THEN 'Deskwork' ELSE 'Other' END, n % 50, REPLICATE('x', 100) FROM (SELECT TOP 8000000 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers",
+          "concurrency": 1,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "rows_inserted": 8000000
+      },
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data generation for reproduction."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, REPLICATE('x', 100))",
+          "concurrency": 10,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "blocking_sessions_observed": true
+      },
+      "success_criteria": {
+        "blocking_reproduced": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Blocking and contention during inserts."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "Exact schema of the Communication table is unknown."
+  ],
+  "rationale": "The reproduction focuses on blocking and contention during inserts in a table with excessive indexes. Synthetic data and schema constraints are designed to simulate the described symptoms and mechanism."
+}

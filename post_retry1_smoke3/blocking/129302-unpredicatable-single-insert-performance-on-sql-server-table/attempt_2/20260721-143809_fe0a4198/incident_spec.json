@@ -1,0 +1,60 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to potential blocking and excessive indexing.",
+  "symptoms": [
+    "Single record insert takes an unusually long time (e.g., 7 minutes).",
+    "Blocking sessions reported in sys.dm_exec_requests but the blocker session is not active.",
+    "Wait type observed as LCK_M_S during blocking."
+  ],
+  "mechanism": "Blocking caused by uncommitted transactions or excessive index maintenance during inserts.",
+  "facts": [
+    {
+      "key": "Table size",
+      "value": {
+        "rows": 8000000
+      },
+      "source": "explicit_post",
+      "evidence": "The table is described as having 8 million rows.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Number of indexes",
+      "value": {
+        "indexes": 34
+      },
+      "source": "explicit_post",
+      "evidence": "The table has 34 indexes in addition to a clustered index.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Blocking wait type",
+      "value": {
+        "wait_type": "LCK_M_S"
+      },
+      "source": "explicit_post",
+      "evidence": "The wait type observed during blocking is LCK_M_S.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Blocking session behavior",
+      "value": {
+        "blocking_session_id": "exists but not active"
+      },
+      "source": "explicit_post",
+      "evidence": "The blocking session is reported in sys.dm_exec_requests but is not active in sys.dm_exec_sessions.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The blocking is caused by uncommitted transactions holding locks.",
+    "The high number of indexes contributes to the poor insert performance.",
+    "The database environment supports SQL Server-compatible locking and indexing mechanisms."
+  ],
+  "unknowns": [
+    "The exact workload pattern causing the blocking.",
+    "Whether the blocking session is due to a specific application behavior or a system issue.",
+    "The impact of the 34 indexes on insert performance in this specific scenario."
+  ],
+  "confidence": 0.85
+}

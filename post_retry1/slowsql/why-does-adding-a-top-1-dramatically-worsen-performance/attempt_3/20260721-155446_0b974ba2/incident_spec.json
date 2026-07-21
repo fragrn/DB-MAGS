@@ -1,0 +1,67 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Performance degradation when using TOP 1 in a query with ORDER BY.",
+  "symptoms": [
+    "Query with TOP 1 and ORDER BY performs significantly worse than the same query without TOP 1."
+  ],
+  "mechanism": "The SQL Server query optimizer applies a row goal optimization when TOP 1 is used, which can lead to suboptimal plans such as nested loops with spooling instead of hash joins.",
+  "facts": [
+    {
+      "key": "query_with_top_1",
+      "value": {
+        "sql": "SELECT TOP 1 ... ORDER BY ..."
+      },
+      "source": "explicit_post",
+      "evidence": "The DBA post explicitly describes the query with TOP 1 and its performance issues.",
+      "confidence": 1.0
+    },
+    {
+      "key": "query_without_top_1",
+      "value": {
+        "sql": "SELECT ... ORDER BY ..."
+      },
+      "source": "explicit_post",
+      "evidence": "The DBA post describes the improved performance of the query without TOP 1.",
+      "confidence": 1.0
+    },
+    {
+      "key": "row_goal_optimization",
+      "value": {
+        "effect": "suboptimal plan with nested loops and spooling"
+      },
+      "source": "post_hypothesis",
+      "evidence": "The post discusses the concept of row goal optimization and its impact on the query plan.",
+      "confidence": 0.9
+    },
+    {
+      "key": "table_sizes",
+      "value": {
+        "DOCUMENT_QUEUE": 5000,
+        "CORRESPONDENCE_JOURNAL": 1400000
+      },
+      "source": "explicit_post",
+      "evidence": "The post provides approximate row counts for the tables involved.",
+      "confidence": 1.0
+    },
+    {
+      "key": "indexes",
+      "value": {
+        "DOCUMENT_QUEUE": "PK on D_ID",
+        "CORRESPONDENCE_JOURNAL": "PK on FILE_NUMBER, CORRESPONDENCE_ID and additional index on DOCUMENT_ID, FILE_NUMBER"
+      },
+      "source": "explicit_post",
+      "evidence": "The post describes the indexing setup.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The described behavior is reproducible in the Azure SQL Edge environment.",
+    "The optimizer behavior for row goal optimization is consistent across SQL Server versions."
+  ],
+  "unknowns": [
+    "Exact SQL Server version used in the original environment.",
+    "Whether TEMPDB performance issues contributed to the observed behavior."
+  ],
+  "confidence": 0.9
+}

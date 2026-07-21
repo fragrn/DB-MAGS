@@ -1,0 +1,389 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": "5.7.12",
+    "summary": "Excessive connection errors and job failures due to reaching MySQL's max_connections limit.",
+    "symptoms": [
+      "High number of connection errors (Connection_errors_max_connections: 19102).",
+      "Job failures in background processes due to inability to establish database connections.",
+      "Max_used_connections reaching the configured max_connections limit (500).",
+      "High number of total connection attempts (Connections: 3068)."
+    ],
+    "mechanism": "Excessive concurrent connections from background jobs and web applications exceed the configured max_connections limit, causing connection errors and job failures.",
+    "facts": [
+      {
+        "key": "max_connections",
+        "value": 500,
+        "source": "explicit_post",
+        "evidence": "The DBA explicitly stated that max_connections is set to 500."
+      },
+      {
+        "key": "Connection_errors_max_connections",
+        "value": 19102,
+        "source": "explicit_post",
+        "evidence": "The DBA provided the output of 'show status like '%onn%'' showing Connection_errors_max_connections as 19102."
+      },
+      {
+        "key": "Sidekiq job concurrency",
+        "value": 800,
+        "source": "explicit_post",
+        "evidence": "The DBA stated that one application runs 4 processes, each with a pool of 200 jobs."
+      },
+      {
+        "key": "Max_used_connections",
+        "value": 501,
+        "source": "explicit_post",
+        "evidence": "The DBA provided the output of 'show status like '%onn%'' showing Max_used_connections as 501."
+      },
+      {
+        "key": "Threads_connected",
+        "value": 501,
+        "source": "explicit_post",
+        "evidence": "The DBA provided the output of 'show status like '%onn%'' showing Threads_connected as 501."
+      },
+      {
+        "key": "Connection count increase during job execution",
+        "value": 3068,
+        "source": "explicit_post",
+        "evidence": "The DBA stated that running background jobs caused the Connections value to increase to 3068."
+      }
+    ],
+    "assumptions": [
+      "The database is configured with default connection timeout settings.",
+      "The issue is caused by a combination of high concurrency and long-lived idle connections.",
+      "The application does not implement connection pooling or has misconfigured connection pooling settings."
+    ],
+    "unknowns": [
+      "The exact workload of the background jobs and their database interaction patterns.",
+      "Whether the application uses connection pooling and its configuration.",
+      "The database's current wait_timeout and interactive_timeout settings."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The issue can be reproduced by simulating high-concurrency connections and long-lived idle connections. However, the exact application behavior and workload are not known, so the reproduction will focus on the mechanism rather than the exact scenario.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "The target database does not exist, so it must be created."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+    "requirements": [
+      "MySQL 5.7 or compatible"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, job_type VARCHAR(64), status VARCHAR(32), created_at DATETIME, updated_at DATETIME)",
+      "CREATE TABLE IF NOT EXISTS connections (id INT AUTO_INCREMENT PRIMARY KEY, connection_time DATETIME, status VARCHAR(32))"
+    ],
+    "generation_sql": [
+      "INSERT INTO jobs (job_type, status, created_at, updated_at) SELECT CONCAT('job_type_', FLOOR(RAND() * 10)), 'pending', NOW(), NOW() FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS tmp",
+      "INSERT INTO connections (connection_time, status) SELECT NOW(), 'active' FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS tmp"
+    ],
+    "tables": [
+      {
+        "name": "jobs",
+        "purpose": "Simulate background jobs that create database connections.",
+        "target_rows": 1000,
+        "distribution_notes": "Jobs are distributed across multiple types and statuses."
+      },
+      {
+        "name": "connections",
+        "purpose": "Track simulated database connections.",
+        "target_rows": 1000,
+        "distribution_notes": "Connections are created with timestamps and statuses."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "jobs": 1000,
+        "connections": 1000
+      },
+      "value_skew": {
+        "jobs.job_type": "Uniform distribution across 10 types."
+      },
+      "predicate_selectivity": {
+        "jobs.status = 'pending'": 0.5
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "jobs",
+      "connections"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM jobs WHERE status = 'pending'",
+        "objective": "Verify that the jobs table contains the expected number of pending jobs.",
+        "expected_evidence": [
+          "The count matches the expected distribution of pending jobs."
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*) FROM connections WHERE status = 'active'",
+        "objective": "Verify that the connections table contains the expected number of active connections.",
+        "expected_evidence": [
+          "The count matches the expected distribution of active connections."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "INSERT INTO connections (connection_time, status) VALUES (NOW(), 'active')",
+      "UPDATE jobs SET status = 'completed' WHERE status = 'pending' LIMIT 10",
+      "DELETE FROM connections WHERE status = 'active' LIMIT 10"
+    ],
+    "concurrency": 800,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Connection_errors_max_connections should increase during the workload.",
+      "Max_used_connections should reach the configured max_connections limit.",
+      "Threads_connected should approach the max_connections limit."
+    ],
+    "symptom_evidence": [
+      "High Connection_errors_max_connections value.",
+      "Job failures due to connection errors.",
+      "Max_used_connections reaching the configured limit."
+    ],
+    "mechanism_evidence": [
+      "High concurrency and long-lived connections lead to max_connections being exceeded."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Excessive connection errors due to max_connections limit.",
+    "target_database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+    "dba_description": "Simulate high-concurrency connections and long-lived idle connections to reproduce the issue of exceeding max_connections.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "create_database",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_142243_mysq_r634836_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database creation is a prerequisite for the experiment."
+      }
+    },
+    {
+      "task_id": "setup_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, job_type VARCHAR(64), status VARCHAR(32), created_at DATETIME, updated_at DATETIME)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS connections (id INT AUTO_INCREMENT PRIMARY KEY, connection_time DATETIME, status VARCHAR(32))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema setup is required for data generation and workload execution."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO jobs (job_type, status, created_at, updated_at) SELECT CONCAT('job_type_', FLOOR(RAND() * 10)), 'pending', NOW(), NOW() FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS tmp"
+                },
+                {
+                  "sql": "INSERT INTO connections (connection_time, status) SELECT NOW(), 'active' FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS tmp"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data generation is necessary to simulate the workload."
+      }
+    },
+    {
+      "task_id": "execute_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+          "sql": "INSERT INTO connections (connection_time, status) VALUES (NOW(), 'active')",
+          "concurrency": 800,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+          "sql": "UPDATE jobs SET status = 'completed' WHERE status = 'pending' LIMIT 10",
+          "concurrency": 800,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+          "sql": "DELETE FROM connections WHERE status = 'active' LIMIT 10",
+          "concurrency": 800,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "workload_executed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Workload execution is necessary to simulate the high-concurrency scenario."
+      }
+    },
+    {
+      "task_id": "restore_mysql_globals",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL log_output = 'FILE'"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 10.000000"
+                },
+                {
+                  "sql": "SET GLOBAL min_examined_row_limit = 0"
+                },
+                {
+                  "sql": "SET GLOBAL slow_query_log = OFF"
+                },
+                {
+                  "sql": "SET GLOBAL slow_query_log_file = '/opt/homebrew/var/mysql/neodeMacBook-Air-2-slow.log'"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "globals_restored": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Restoring MySQL global variables ensures no persistent changes to the environment."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "create_database",
+      "setup_schema"
+    ],
+    [
+      "setup_schema",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "execute_workload"
+    ],
+    [
+      "execute_workload",
+      "restore_mysql_globals"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating high-concurrency connections and long-lived idle connections to trigger the max_connections limit. The tasks are designed to create the necessary schema, generate data, and execute a workload that mimics the described behavior. The feasibility is limited to reproducing the mechanism rather than the exact scenario due to the lack of detailed application behavior information."
+}

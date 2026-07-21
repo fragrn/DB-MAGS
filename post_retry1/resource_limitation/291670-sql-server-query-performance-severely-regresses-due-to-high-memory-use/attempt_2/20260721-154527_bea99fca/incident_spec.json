@@ -1,0 +1,51 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "SQL Server query performance regresses due to high memory use and parameter sniffing issues.",
+  "symptoms": [
+    "Queries for large accounts time out when memory is filled.",
+    "Restarting SQL Server temporarily resolves the issue.",
+    "SSMS executes the same stored procedure faster than the application.",
+    "Execution plans differ between SSMS and the application due to ARITHABORT settings."
+  ],
+  "mechanism": "Parameter sniffing and memory pressure lead to inefficient execution plans and resource contention.",
+  "facts": [
+    {
+      "key": "High memory use causes query timeouts.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The DBA observed that restarting SQL Server clears memory and resolves query timeouts temporarily.",
+      "confidence": 0.9
+    },
+    {
+      "key": "SSMS uses ARITHABORT, leading to different execution plans.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The DBA identified ARITHABORT as a key difference between SSMS and application settings.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Parameter sniffing affects execution plans.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The DBA confirmed parameter sniffing as the root cause after analyzing execution plans.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Large accounts generate high disk reads and memory usage.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The DBA observed large read spikes and memory consumption for large accounts.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The synthetic data will replicate the skew and cardinality of large accounts.",
+    "The execution plan differences can be reproduced by varying ARITHABORT settings."
+  ],
+  "unknowns": [
+    "Exact schema details of the Notifications and Reports tables.",
+    "Specific query patterns causing Sort operations and tempdb usage."
+  ],
+  "confidence": 0.85
+}

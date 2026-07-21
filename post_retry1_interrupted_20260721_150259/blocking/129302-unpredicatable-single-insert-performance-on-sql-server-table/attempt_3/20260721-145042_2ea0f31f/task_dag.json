@@ -1,0 +1,82 @@
+{
+  "tasks": {
+    "setup_environment": {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r642737_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_129302_unpredicatable_r642737_a3"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup for reproduction."
+      }
+    },
+    "create_schema": {
+      "task_id": "create_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r642737_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE Communication (id INT IDENTITY(1,1) PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX))"
+                },
+                {
+                  "sql": "CREATE NONCLUSTERED INDEX idx_comm_action ON Communication(comm_action)"
+                },
+                {
+                  "sql": "CREATE NONCLUSTERED INDEX idx_comm_channelid ON Communication(comm_channelid)"
+                },
+                {
+                  "sql": "CREATE NONCLUSTERED INDEX idx_payload ON Communication(payload)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema creation with high index count."
+      }
+    }
+  },
+  "edges": [
+    {
+      "source": "setup_environment",
+      "target": "create_schema",
+      "condition": ""
+    }
+  ],
+  "schedule": {
+    "setup_environment": 0.0,
+    "create_schema": 0.0
+  }
+}

@@ -1,0 +1,311 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Slow query execution with RESOURCE_SEMAPHORE and CXCONSUMER waits due to memory grants and parallelism.",
+    "symptoms": [
+      "RESOURCE_SEMAPHORE waits observed during query execution.",
+      "CXCONSUMER waits indicating parallel query execution.",
+      "Slow query performance under high user connections.",
+      "Memory pressure affecting query runtimes."
+    ],
+    "mechanism": "Excessive parallelism and memory grants leading to RESOURCE_SEMAPHORE waits and memory contention.",
+    "facts": [
+      {
+        "key": "RESOURCE_SEMAPHORE waits",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The user observed RESOURCE_SEMAPHORE waits in sp_whoisactive and sp_Blitz output.",
+        "confidence": 0.9
+      },
+      {
+        "key": "CXCONSUMER waits",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "CXCONSUMER waits were reported, indicating parallel query execution.",
+        "confidence": 0.9
+      },
+      {
+        "key": "MAXDOP set to 0",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The user mentioned MAXDOP is set to 0, allowing queries to use all CPU cores.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Memory pressure",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Memory pressure was noted in the sp_Blitz output with 11 forced grants reported.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The database environment is configured with default settings unless otherwise specified.",
+      "The observed waits are primarily caused by excessive parallelism and memory grants."
+    ],
+    "unknowns": [
+      "The exact workload causing the RESOURCE_SEMAPHORE waits.",
+      "The specific queries or patterns leading to high memory grants."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction of RESOURCE_SEMAPHORE waits and memory contention due to parallelism is feasible in a synthetic environment using SQL Server. However, the exact workload causing the issue is not provided, so we will simulate a representative workload based on the described symptoms.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS workload_table (id INT PRIMARY KEY, category VARCHAR(64), value INT, payload NVARCHAR(MAX))",
+      "CREATE TABLE IF NOT EXISTS reference_table (id INT PRIMARY KEY, status INT, description NVARCHAR(255))"
+    ],
+    "generation_sql": [
+      "INSERT INTO reference_table (id, status, description) SELECT n, MOD(n, 5), CONCAT('Description_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers",
+      "INSERT INTO workload_table (id, category, value, payload) SELECT n, CASE WHEN MOD(n, 1000) = 0 THEN 'high' ELSE 'low' END, n % 100, REPLICATE(CAST('A' AS NVARCHAR(MAX)), 100) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers"
+    ],
+    "tables": [
+      {
+        "name": "workload_table",
+        "purpose": "Simulates the primary workload with high cardinality and memory-intensive queries.",
+        "target_rows": 100000,
+        "distribution_notes": "The 'category' column has a skewed distribution with rare 'high' values."
+      },
+      {
+        "name": "reference_table",
+        "purpose": "Reference table for joins to simulate memory grant behavior.",
+        "target_rows": 100,
+        "distribution_notes": "Small table used for join operations."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "workload_table": 100000,
+        "reference_table": 100
+      },
+      "value_skew": {
+        "workload_table.category": "Rare 'high' values are sparse and intentionally positioned."
+      },
+      "predicate_selectivity": {
+        "workload_table.category = 'high'": 0.001
+      },
+      "join_selectivity": {
+        "workload_table.value = reference_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "workload_table",
+      "reference_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT w.* FROM workload_table w JOIN reference_table r ON w.value = r.id WHERE w.category = 'high' ORDER BY w.id DESC",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan shows memory grants and parallelism.",
+          "The join and predicate behavior align with the described mechanism.",
+          "The plan evidence distinguishes this mechanism from trivial point lookups."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT w.* FROM workload_table w JOIN reference_table r ON w.value = r.id WHERE w.category = 'high' ORDER BY w.id DESC"
+    ],
+    "concurrency": 10,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "RESOURCE_SEMAPHORE waits are observed during workload execution.",
+      "Memory grants are visible in query execution plans.",
+      "Parallelism is evident in query execution plans."
+    ],
+    "symptom_evidence": [
+      "RESOURCE_SEMAPHORE waits in sys.dm_os_wait_stats.",
+      "High memory grants in sys.dm_exec_query_memory_grants."
+    ],
+    "mechanism_evidence": [
+      "Parallelism and memory grants visible in query execution plans.",
+      "Skewed data distribution leading to memory contention."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "RESOURCE_SEMAPHORE waits and memory contention due to parallelism.",
+    "target_database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+    "dba_description": "Reproduce RESOURCE_SEMAPHORE waits and memory contention caused by excessive parallelism and memory grants.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_220486_slow_r240206_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial setup for synthetic database."
+      }
+    },
+    {
+      "task_id": "prepare_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE workload_table (id INT PRIMARY KEY, category VARCHAR(64), value INT, payload NVARCHAR(MAX))"
+                },
+                {
+                  "sql": "CREATE TABLE reference_table (id INT PRIMARY KEY, status INT, description NVARCHAR(255))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema preparation for workload simulation."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO reference_table (id, status, description) SELECT n, MOD(n, 5), CONCAT('Description_', n) FROM (SELECT TOP 100 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers"
+                },
+                {
+                  "sql": "INSERT INTO workload_table (id, category, value, payload) SELECT n, CASE WHEN MOD(n, 1000) = 0 THEN 'high' ELSE 'low' END, n % 100, REPLICATE(CAST('A' AS NVARCHAR(MAX)), 100) FROM (SELECT TOP 10000 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data generation for workload simulation."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT w.* FROM workload_table w JOIN reference_table r ON w.value = r.id WHERE w.category = 'high' ORDER BY w.id DESC",
+          "concurrency": 10,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "RESOURCE_SEMAPHORE_waits": "high",
+        "memory_grants": "high",
+        "parallelism": "visible"
+      },
+      "success_criteria": {
+        "symptoms_observed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Workload execution to reproduce RESOURCE_SEMAPHORE waits."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "prepare_data"
+    ],
+    [
+      "prepare_data",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "What specific queries or patterns are causing the RESOURCE_SEMAPHORE waits?"
+  ],
+  "rationale": "The incident is caused by excessive parallelism and memory grants, which can be simulated in a synthetic environment. The schema and workload are designed to reproduce the symptoms and mechanism described in the post."
+}

@@ -1,0 +1,46 @@
+{
+  "gate": {
+    "status": "waiting_human",
+    "phase": "approval",
+    "reasons": [
+      "unresolved_critical_questions"
+    ],
+    "summary": "Human review required before environment mutation",
+    "allowed_decisions": [
+      "approve",
+      "reject",
+      "revise",
+      "feedback"
+    ],
+    "editable_roots": [
+      "data_spec.calibration_queries",
+      "data_spec.constraints",
+      "data_spec.scale_strategy",
+      "data_spec.tables",
+      "dependencies",
+      "evaluation_spec",
+      "experiment_request",
+      "incident_spec.assumptions",
+      "incident_spec.unknowns",
+      "risk_assessment",
+      "task_specs",
+      "workload_spec"
+    ],
+    "timestamp": 1784620617.477121
+  },
+  "decision": {
+    "decision": "approve",
+    "patch": null,
+    "feedback": "",
+    "actor": "batch",
+    "timestamp": 1784620617.479528
+  },
+  "repairs": [
+    {
+      "path": "task_specs[0].actions[0].sql",
+      "before": "EXEC sys.sp_recompile @objname = N'main_table';",
+      "after": "EXEC sys.sp_recompile 'repro_value' = N'main_table';",
+      "reason": "Replace unresolved SQL placeholders with synthetic literals."
+    }
+  ]
+}

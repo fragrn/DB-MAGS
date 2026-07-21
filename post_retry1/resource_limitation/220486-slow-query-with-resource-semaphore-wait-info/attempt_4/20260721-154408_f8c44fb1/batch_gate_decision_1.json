@@ -1,0 +1,59 @@
+{
+  "gate": {
+    "status": "waiting_human",
+    "phase": "calibration",
+    "reasons": [
+      "calibration_weak_match"
+    ],
+    "summary": "Calibration found a weak match; DBA judgment is required",
+    "allowed_decisions": [
+      "approve",
+      "reject",
+      "revise",
+      "feedback"
+    ],
+    "editable_roots": [
+      "data_spec.calibration_queries",
+      "data_spec.constraints",
+      "data_spec.scale_strategy",
+      "data_spec.tables",
+      "dependencies",
+      "evaluation_spec",
+      "experiment_request",
+      "incident_spec.assumptions",
+      "incident_spec.unknowns",
+      "risk_assessment",
+      "task_specs",
+      "workload_spec"
+    ],
+    "timestamp": 1784619891.1268322,
+    "details": {
+      "calibration": {
+        "status": "weak_match",
+        "decision": "weak_match",
+        "concerns": [
+          "The calibration query does not directly demonstrate RESOURCE_SEMAPHORE waits or high parallelism in the execution plan."
+        ],
+        "recommended_changes": [
+          "Consider adding workload execution logs or monitoring tools to capture RESOURCE_SEMAPHORE waits and parallelism during query execution.",
+          "Refine the calibration query to explicitly trigger high memory grants and parallel execution."
+        ]
+      }
+    }
+  },
+  "decision": {
+    "decision": "approve",
+    "patch": null,
+    "feedback": "",
+    "actor": "batch",
+    "timestamp": 1784619891.132749
+  },
+  "repairs": [
+    {
+      "path": "task_specs[1].actions[0].scripts[0].steps[2].sql",
+      "before": "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = ?', 100, 8)",
+      "after": "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = 'repro_value'', 100, 8)",
+      "reason": "Replace unresolved SQL placeholders with synthetic literals."
+    }
+  ]
+}

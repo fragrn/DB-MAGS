@@ -1,0 +1,61 @@
+{
+  "database": "post_retry_resource_limitation_220486_slow_r780692_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS workload_table (id INT PRIMARY KEY, category VARCHAR(64), payload NVARCHAR(MAX), created_at DATETIME);",
+    "CREATE TABLE IF NOT EXISTS resource_intensive_table (id INT PRIMARY KEY, data NVARCHAR(MAX), ref_id INT, FOREIGN KEY (ref_id) REFERENCES workload_table(id));"
+  ],
+  "generation_sql": [
+    "INSERT INTO workload_table (id, category, payload, created_at) SELECT n, CASE WHEN n % 10 = 0 THEN 'high' ELSE 'low' END, REPLICATE('A', 1000), GETDATE() FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+    "INSERT INTO resource_intensive_table (id, data, ref_id) SELECT n, REPLICATE('B', 2000), n FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;"
+  ],
+  "tables": [
+    {
+      "name": "workload_table",
+      "purpose": "Simulates the main workload driving memory grants and parallelism.",
+      "target_rows": 100000,
+      "distribution_notes": "Skewed distribution with 'high' category being less frequent."
+    },
+    {
+      "name": "resource_intensive_table",
+      "purpose": "Simulates resource-intensive operations with large payloads.",
+      "target_rows": 100000,
+      "distribution_notes": "One-to-one relationship with workload_table."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "workload_table": 100000,
+      "resource_intensive_table": 100000
+    },
+    "value_skew": {
+      "workload_table.category": "Skewed towards 'low' category."
+    },
+    "predicate_selectivity": {
+      "workload_table.category = 'high'": 0.1
+    },
+    "join_selectivity": {
+      "resource_intensive_table.ref_id = workload_table.id": "one-to-one"
+    }
+  },
+  "analyze_tables": [
+    "workload_table",
+    "resource_intensive_table"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT w.id, r.data FROM workload_table w JOIN resource_intensive_table r ON w.id = r.ref_id WHERE w.category = 'high' ORDER BY w.created_at DESC;",
+      "objective": "Verify that the query generates high memory grants and parallel execution plans.",
+      "expected_evidence": [
+        "The plan shows parallelism operators (e.g., Parallelism, Gather Streams).",
+        "The query requests significant memory grants.",
+        "RESOURCE_SEMAPHORE waits are observed during execution."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

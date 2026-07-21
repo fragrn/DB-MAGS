@@ -1,0 +1,43 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "SQL Server query performance regresses severely due to high memory usage and parameter sniffing differences between SSMS and application environments.",
+  "symptoms": [
+    "Queries timeout when memory is filled.",
+    "SSMS executes the same stored procedure quickly while the application times out.",
+    "Memory consumption spikes and disk reads are slow during query execution."
+  ],
+  "mechanism": "Parameter sniffing differences between SSMS and application environments lead to suboptimal execution plans. High memory usage exacerbates performance degradation.",
+  "facts": [
+    {
+      "key": "High memory usage leads to query timeouts.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "DBA observed that restarting SQL Server clears memory and resolves query timeouts temporarily.",
+      "confidence": 0.9
+    },
+    {
+      "key": "SSMS uses ARITHABORT, leading to different execution plans.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "DBA identified ARITHABORT as the parameter causing execution plan differences.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Parameter sniffing affects execution plans.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "DBA confirmed parameter sniffing as the root cause after testing and reading Erland Sommarskog's article.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "The synthetic database will reproduce memory pressure and execution plan differences.",
+    "The application environment mimics the parameter sniffing behavior described."
+  ],
+  "unknowns": [
+    "Exact schema and data distribution of the production database.",
+    "Impact of other SQL Server settings on memory usage and execution plans."
+  ],
+  "confidence": 0.8
+}

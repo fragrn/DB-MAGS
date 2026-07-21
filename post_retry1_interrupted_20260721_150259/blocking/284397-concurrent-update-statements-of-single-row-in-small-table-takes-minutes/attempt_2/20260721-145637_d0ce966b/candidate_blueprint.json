@@ -1,0 +1,173 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Concurrent UPDATE statements on a single row in a small table experience significant delays due to locking contention.",
+    "symptoms": [
+      "UPDATE statements take minutes to complete despite the small table size.",
+      "Locks are held for extended durations."
+    ],
+    "mechanism": "Lock contention caused by concurrent updates to the same row in a table without indexes.",
+    "facts": [
+      {
+        "key": "table_structure",
+        "value": {
+          "columns": [
+            "scan_uuid",
+            "num_shards_completed"
+          ],
+          "indexes": "none"
+        },
+        "source": "explicit_post",
+        "evidence": "Table schema provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "update_pattern",
+        "value": {
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1"
+        },
+        "source": "explicit_post",
+        "evidence": "SQL query provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "locking_behavior",
+        "value": {
+          "locks": [
+            "ExclusiveLock",
+            "RowExclusiveLock"
+          ],
+          "duration": "minutes"
+        },
+        "source": "explicit_post",
+        "evidence": "Lock information provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "concurrency",
+        "value": {
+          "nodes": "hundreds",
+          "connections": "direct"
+        },
+        "source": "explicit_post",
+        "evidence": "Concurrency details provided in the post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The DBMS is PostgreSQL as indicated by the table schema and locking behavior.",
+      "The issue is caused by row-level locking due to concurrent updates."
+    ],
+    "unknowns": [
+      "Exact PostgreSQL version.",
+      "Whether adding an index or changing the update pattern would resolve the issue."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The specified target database does not exist, preventing setup and reproduction.",
+    "missing_capabilities": [
+      "Target database environment"
+    ],
+    "unmatched_conditions": [
+      "Database 'post_retry_blocking_284397_concurrent_upda_r997400_a2' must exist."
+    ],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_284397_concurrent_upda_r997400_a2",
+    "requirements": [
+      "Dedicated test database must exist."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_284397_concurrent_upda_r997400_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+    ],
+    "generation_sql": [
+      "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) SELECT gen_random_uuid(), 0 FROM generate_series(1, {row_count})"
+    ],
+    "tables": [
+      {
+        "name": "host_scan_complete_log_counts",
+        "purpose": "Reproduce locking contention during concurrent updates.",
+        "target_rows": 1,
+        "distribution_notes": "Single-row table to simulate contention."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "host_scan_complete_log_counts": 1
+      },
+      "value_skew": {},
+      "predicate_selectivity": {
+        "scan_uuid = $1": 1.0
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "host_scan_complete_log_counts"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = gen_random_uuid()",
+        "objective": "Verify table structure and data generation.",
+        "expected_evidence": [
+          "Table contains the expected single row."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1,
+      "max_rows": 1,
+      "growth_factor": 2.0,
+      "max_rounds": 1
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Lock contention is observable during concurrent updates."
+    ],
+    "symptom_evidence": [
+      "Extended lock durations during concurrent updates."
+    ],
+    "mechanism_evidence": [
+      "Row-level locking due to concurrent updates."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Lock contention during concurrent updates.",
+    "target_database": "post_retry_blocking_284397_concurrent_upda_r997400_a2",
+    "dba_description": "Concurrent UPDATE statements on a single row in a small table experience significant delays due to locking contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How can the missing database be created or restored?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the specified target database. Further actions require resolving this issue."
+}

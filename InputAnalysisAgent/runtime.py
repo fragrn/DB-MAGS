@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 import threading
 import time
 import traceback
@@ -558,12 +560,7 @@ class ReproductionRuntime:
             return self._execute_external_dbms(blueprint, run_dir)
         dag = agent_tools.build_task_dag(blueprint.task_specs, blueprint.dependencies)
         request = blueprint.experiment_request
-        safety = agent_tools.check_safety(
-            dag,
-            self.config,
-            max_duration_sec=float(request.get("max_duration_sec", self.config.max_duration_sec)),
-            expected_workload=request.get("workload") or {},
-        )
+        safety = self._check_external_safety(blueprint, dag)
         write_json(run_dir / "task_dag.json", dag)
         write_json(run_dir / "safety.json", safety)
         if not safety.get("approved"):
@@ -601,12 +598,7 @@ class ReproductionRuntime:
         adapter = SqlServerAdapter() if dbms == "sqlserver" else PostgresAdapter()
         dag = agent_tools.build_task_dag(blueprint.task_specs, blueprint.dependencies)
         request = blueprint.experiment_request
-        safety = agent_tools.check_safety(
-            dag,
-            self.config,
-            max_duration_sec=float(request.get("max_duration_sec", self.config.max_duration_sec)),
-            expected_workload=request.get("workload") or {},
-        )
+        safety = self._check_external_safety(blueprint, dag)
         write_json(run_dir / "task_dag.json", dag)
         write_json(run_dir / "safety.json", safety)
         if not safety.get("approved"):
@@ -628,6 +620,8 @@ class ReproductionRuntime:
                             action_result = adapter.run_sql_workload(action, task_id=task_id, round_dir=run_dir)
                         elif kind == "raw_transaction_script":
                             action_result = adapter.run_transaction_script(action)
+                        elif kind == "raw_command":
+                            action_result = self._run_external_raw_command(action, task_id=task_id, round_dir=run_dir)
                         else:
                             raise RuntimeError(f"{dbms} executor does not support action kind: {kind}")
                         result["actions"].append(action_result)
@@ -648,6 +642,85 @@ class ReproductionRuntime:
             "db_metrics": adapter.db_metrics(blueprint.data_spec.database),
         }
         return {"baseline": before, "execution_trace": trace, "after": after, "task_dag": dag, "safety": safety}
+
+    def _check_external_safety(self, blueprint: ReproductionBlueprint, dag: dict[str, Any]) -> dict[str, Any]:
+        reasons: list[str] = []
+        max_duration = float((blueprint.experiment_request or {}).get("max_duration_sec", self.config.max_duration_sec))
+        for task in blueprint.task_specs:
+            for action in task.get("actions") or []:
+                duration = float(action.get("duration_sec") or 0)
+                if duration <= 0 or duration > max_duration:
+                    reasons.append(f"action duration {duration} exceeds allowed window {max_duration}")
+                text = json.dumps(action, ensure_ascii=False).lower()
+                if re.search(r"\bdrop\s+database\b|\btruncate\b|\bshutdown\b|rm\s+-rf|mkfs|reboot", text, re.I):
+                    reasons.append("dangerous operation in external DBMS TaskSpec")
+                if action.get("kind") not in {"raw_sql_workload", "raw_transaction_script", "raw_command"}:
+                    reasons.append(f"unsupported external DBMS action kind: {action.get('kind')}")
+        return {
+            "approved": not reasons,
+            "reasons": reasons,
+            "scope": "InputAnalysisAgent external DBMS dedicated database safety",
+            "dag_task_count": len((dag or {}).get("tasks") or []),
+        }
+
+    def _run_external_raw_command(self, action: dict[str, Any], *, task_id: str, round_dir: Path) -> dict[str, Any]:
+        command = action.get("command")
+        if not isinstance(command, list) or not command or not all(isinstance(item, str) and item for item in command):
+            raise ValueError("raw_command.command must be a non-empty string array")
+        duration_sec = float(action.get("duration_sec") or 1)
+        started = time.time()
+        proc = subprocess.Popen(
+            command,
+            cwd=str(action.get("cwd") or round_dir),
+            env={**os.environ, **{k: str(v) for k, v in (action.get("env") or {}).items()}},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        timed_out = False
+        try:
+            stdout, stderr = proc.communicate(timeout=duration_sec)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            proc.terminate()
+            try:
+                stdout, stderr = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                stdout, stderr = proc.communicate(timeout=5)
+        cleanup_result = None
+        cleanup = action.get("cleanup_command")
+        if isinstance(cleanup, list) and cleanup and all(isinstance(item, str) and item for item in cleanup):
+            cleanup_proc = subprocess.run(
+                cleanup,
+                cwd=str(action.get("cwd") or round_dir),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=30,
+            )
+            cleanup_result = {
+                "command": cleanup,
+                "exit_code": cleanup_proc.returncode,
+                "stdout_tail": cleanup_proc.stdout[-2000:],
+                "stderr_tail": cleanup_proc.stderr[-2000:],
+            }
+        artifact = round_dir / f"{task_id}_raw_command.json"
+        result = {
+            "kind": "raw_command",
+            "command": command,
+            "duration_sec": duration_sec,
+            "timed_out": timed_out,
+            "exit_code": proc.returncode,
+            "elapsed_sec": time.time() - started,
+            "stdout_tail": (stdout or "")[-2000:],
+            "stderr_tail": (stderr or "")[-2000:],
+            "cleanup": cleanup_result,
+        }
+        write_json(artifact, result)
+        if proc.returncode not in (0, None) and not timed_out:
+            raise RuntimeError(f"raw_command exited with code {proc.returncode}: {(stderr or stdout or '')[-500:]}")
+        return {**result, "artifact": str(artifact)}
 
     def _evaluate(self, blueprint: ReproductionBlueprint, execution: dict[str, Any]) -> ReproductionEvaluation:
         objective = None
@@ -763,6 +836,11 @@ class ReproductionRuntime:
         for statement in blueprint.data_spec.schema_sql + blueprint.data_spec.generation_sql:
             self._validate_setup_sql(statement)
         dag = agent_tools.build_task_dag(blueprint.task_specs, blueprint.dependencies)
+        if normalize_dbms(blueprint.incident_spec.dbms) in {"postgresql", "sqlserver"}:
+            result = self._check_external_safety(blueprint, dag)
+            if not result.get("approved"):
+                raise ValueError("unsafe blueprint TaskSpecs: " + "; ".join(result.get("reasons", [])))
+            return
         request = blueprint.experiment_request
         result = agent_tools.check_safety(
             dag,

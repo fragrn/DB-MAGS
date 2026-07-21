@@ -1,0 +1,36 @@
+{
+  "symptom_hit": false,
+  "mechanism_hit": false,
+  "plan_similarity": 0.0,
+  "success": false,
+  "reason": "The reproduction did not successfully demonstrate the reported symptoms or mechanism. The workload execution encountered errors, preventing validation of lock contention and update delays.",
+  "unmatched_conditions": [
+    "Lock contention is observed during concurrent updates.",
+    "Update duration increases significantly with concurrency.",
+    "Exclusive locks and row-level contention visible in pg_locks."
+  ],
+  "evidence": {
+    "execution_errors": [
+      "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist"
+    ],
+    "workload_status": "failure",
+    "observed_table_stats": {
+      "before": {
+        "estimated_rows": 1,
+        "total_bytes": 16384
+      },
+      "after": {
+        "estimated_rows": 2,
+        "total_bytes": 57344
+      }
+    },
+    "db_metrics": {
+      "version": "PostgreSQL 18.4 (Homebrew) on aarch64-apple-darwin24.6.0, compiled by Apple clang version 17.0.0 (clang-1700.6.4.2), 64-bit",
+      "activity": [
+        "|Activity|7",
+        "active||1",
+        "|Timeout|1"
+      ]
+    }
+  }
+}

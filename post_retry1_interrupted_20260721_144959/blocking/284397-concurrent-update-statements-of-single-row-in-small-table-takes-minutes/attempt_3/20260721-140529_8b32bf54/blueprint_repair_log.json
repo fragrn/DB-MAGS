@@ -1,0 +1,43 @@
+{
+  "changes": [
+    {
+      "path": "data_spec.scale_strategy",
+      "before": {
+        "initial_rows": 1,
+        "max_rows": 1,
+        "growth_factor": 1.0,
+        "max_rounds": 1
+      },
+      "after": {
+        "initial_rows": 1,
+        "max_rows": 1,
+        "growth_factor": 2.0,
+        "max_rounds": 1
+      },
+      "reason": "Normalize scale strategy."
+    },
+    {
+      "path": "workload_spec.queries",
+      "before": [
+        {
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1",
+          "parameters": [
+            {
+              "type": "uuid",
+              "value": "gen_random_uuid()"
+            },
+            {
+              "type": "numeric",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "after": [
+        "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1"
+      ],
+      "reason": "Runtime SQL background workload expects query strings."
+    }
+  ],
+  "timestamp": 1784613953.454879
+}

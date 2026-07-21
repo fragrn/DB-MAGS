@@ -1,0 +1,78 @@
+{
+  "database": "post_retry_resource_limitation_291670_sql_r344223_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS Accounts (id INT PRIMARY KEY, name NVARCHAR(255), data_size INT, last_accessed DATETIME);",
+    "CREATE TABLE IF NOT EXISTS Notifications (id INT PRIMARY KEY, account_id INT, message NVARCHAR(MAX), created_at DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));",
+    "CREATE TABLE IF NOT EXISTS Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));"
+  ],
+  "generation_sql": [
+    "INSERT INTO Accounts (id, name, data_size, last_accessed) SELECT n, CONCAT('Account_', n), FLOOR(RAND() * 10000), DATEADD(DAY, -n % 365, GETDATE()) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+    "INSERT INTO Notifications (id, account_id, message, created_at) SELECT n, FLOOR(RAND() * {row_count}), CONCAT('Notification_', n), DATEADD(MINUTE, -n % 10000, GETDATE()) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+    "INSERT INTO Reports (id, account_id, received_at_utc) SELECT n, FLOOR(RAND() * {row_count}), DATEADD(MINUTE, -n % 10000, GETDATE()) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;"
+  ],
+  "tables": [
+    {
+      "name": "Accounts",
+      "purpose": "Represents customer accounts with varying data sizes.",
+      "target_rows": 1000,
+      "distribution_notes": "Simulates skewed access patterns and large accounts."
+    },
+    {
+      "name": "Notifications",
+      "purpose": "Stores notifications for accounts, with high cardinality.",
+      "target_rows": 100000,
+      "distribution_notes": "High cardinality with some accounts having many notifications."
+    },
+    {
+      "name": "Reports",
+      "purpose": "Stores reports associated with accounts, used in joins.",
+      "target_rows": 50000,
+      "distribution_notes": "Moderate cardinality with temporal sorting."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "Accounts": 1000,
+      "Notifications": 100000,
+      "Reports": 50000
+    },
+    "value_skew": {
+      "Accounts.data_size": "Some accounts have significantly larger data sizes."
+    },
+    "predicate_selectivity": {
+      "Accounts.id = ?": "Highly selective for specific accounts."
+    },
+    "join_selectivity": {
+      "Notifications.account_id = Accounts.id": "Many-to-one relationship."
+    }
+  },
+  "analyze_tables": [
+    "Accounts",
+    "Notifications",
+    "Reports"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT TOP 10 * FROM Notifications WHERE account_id = 1 ORDER BY created_at DESC;",
+      "objective": "Verify that the query plan uses the appropriate index and avoids full table scans.",
+      "expected_evidence": [
+        "The plan uses an index seek on Notifications.account_id.",
+        "The ORDER BY clause is supported by an index to avoid sorting in tempdb."
+      ]
+    },
+    {
+      "sql": "SELECT TOP 10 * FROM Reports WHERE account_id = 1 ORDER BY received_at_utc DESC;",
+      "objective": "Ensure the query plan uses an index for sorting and filtering.",
+      "expected_evidence": [
+        "The plan uses an index seek on Reports.account_id.",
+        "The ORDER BY clause is supported by an index to avoid sorting in tempdb."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "ALTER TABLE operation caused blocking due to lock contention.",
+  "symptoms": [
+    "Database froze during ALTER TABLE operation",
+    "Login queries blocked due to table lock",
+    "Required killing the ALTER TABLE process to resume operations"
+  ],
+  "mechanism": "ALTER TABLE operation acquires ACCESS EXCLUSIVE lock, blocking all other operations on the table. Long-lived weak locks (e.g., idle transactions) exacerbate the issue by preventing the lock acquisition.",
+  "facts": [
+    {
+      "key": "ALTER TABLE statement",
+      "value": {
+        "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+      },
+      "source": "explicit_post",
+      "evidence": "Post includes the exact SQL statement causing the issue.",
+      "confidence": 1.0
+    },
+    {
+      "key": "ACCESS EXCLUSIVE lock behavior",
+      "value": {
+        "lock_type": "ACCESS EXCLUSIVE",
+        "blocking_behavior": "Prevents all other access to the table"
+      },
+      "source": "post_hypothesis",
+      "evidence": "Post and answers describe lock contention during ALTER TABLE.",
+      "confidence": 0.9
+    },
+    {
+      "key": "PostgreSQL version",
+      "value": {
+        "version": "9.4.5"
+      },
+      "source": "explicit_post",
+      "evidence": "Post specifies PostgreSQL version.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Idle transaction hypothesis",
+      "value": {
+        "idle_transaction": true
+      },
+      "source": "post_hypothesis",
+      "evidence": "Answer suggests idle transactions holding weak locks as a likely cause.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The synthetic database will replicate lock contention behavior under similar conditions.",
+    "Idle transactions or weak locks will be simulated to reproduce blocking."
+  ],
+  "unknowns": [
+    "Exact workload or query patterns during the incident",
+    "Whether other operations (e.g., index creation) were performed after ALTER TABLE"
+  ],
+  "confidence": 0.85
+}

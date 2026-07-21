@@ -1,0 +1,53 @@
+{
+  "gate": {
+    "status": "waiting_human",
+    "phase": "calibration",
+    "reasons": [
+      "calibration_rejected_by_llm"
+    ],
+    "summary": "Calibration was rejected by the LLM; DBA judgment is required",
+    "allowed_decisions": [
+      "approve",
+      "reject",
+      "revise",
+      "feedback"
+    ],
+    "editable_roots": [
+      "data_spec.calibration_queries",
+      "data_spec.constraints",
+      "data_spec.scale_strategy",
+      "data_spec.tables",
+      "dependencies",
+      "evaluation_spec",
+      "experiment_request",
+      "incident_spec.assumptions",
+      "incident_spec.unknowns",
+      "risk_assessment",
+      "task_specs",
+      "workload_spec"
+    ],
+    "timestamp": 1784616698.439598,
+    "details": {
+      "calibration": {
+        "status": "rejected_by_llm",
+        "decision": "reject",
+        "concerns": [
+          "The index `idx_comm_channelid` may not be properly optimized or utilized by the query plan.",
+          "The calibration query does not demonstrate the expected mechanism for efficient filtering using the non-clustered index."
+        ],
+        "recommended_changes": [
+          "Investigate the index `idx_comm_channelid` for potential issues such as missing statistics or improper design.",
+          "Consider revising the calibration query or schema to ensure the index is used effectively."
+        ]
+      }
+    }
+  },
+  "decision": {
+    "decision": "approve",
+    "patch": null,
+    "feedback": "",
+    "actor": "batch",
+    "timestamp": 1784616698.441422
+  },
+  "repairs": []
+}

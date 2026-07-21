@@ -1,0 +1,124 @@
+{
+  "task_specs": [
+    {
+      "task_id": "create_database",
+      "task_type": "raw_command",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "createdb",
+            "post_retry_blocking_284397_concurrent_update_sta_a1"
+          ],
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database does not exist."
+      }
+    },
+    {
+      "task_id": "setup_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_update_sta_a1",
+          "duration_sec": 10,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema setup required."
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_update_sta_a1",
+          "duration_sec": 10,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES ('some_uuid', 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_populated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data population required."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = 'some_uuid'",
+          "concurrency": 100,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention": true
+      },
+      "success_criteria": {
+        "symptoms_reproduced": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Concurrent workload causing contention."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "create_database",
+      "setup_schema"
+    ],
+    [
+      "setup_schema",
+      "populate_data"
+    ],
+    [
+      "populate_data",
+      "run_workload"
+    ]
+  ]
+}

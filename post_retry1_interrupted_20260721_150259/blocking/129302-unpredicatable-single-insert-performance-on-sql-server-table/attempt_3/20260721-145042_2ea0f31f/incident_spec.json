@@ -1,0 +1,53 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance in SQL Server table with high index count and potential blocking issues.",
+  "symptoms": [
+    "Single record insert taking over 7 minutes.",
+    "Blocking sessions reported in `sys.dm_exec_requests` but the blocker session does not exist.",
+    "Wait type `LCK_M_S` observed for blocked requests."
+  ],
+  "mechanism": "Blocking caused by uncommitted transactions or excessive index maintenance during inserts.",
+  "facts": [
+    {
+      "key": "table_row_count",
+      "value": {
+        "approximate": 8000000
+      },
+      "source": "explicit_post",
+      "evidence": "The table is described as having 8 million rows.",
+      "confidence": 0.9
+    },
+    {
+      "key": "index_count",
+      "value": 34,
+      "source": "explicit_post",
+      "evidence": "The table has 34 non-clustered indexes.",
+      "confidence": 0.9
+    },
+    {
+      "key": "blocking_wait_type",
+      "value": "LCK_M_S",
+      "source": "explicit_post",
+      "evidence": "Blocked requests were waiting for a `LCK_M_S` lock.",
+      "confidence": 0.9
+    },
+    {
+      "key": "blocking_session_absence",
+      "value": true,
+      "source": "explicit_post",
+      "evidence": "Blocking session IDs were reported but did not exist in `sys.dm_exec_sessions`.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The blocking is caused by uncommitted transactions or lock escalation.",
+    "The high number of indexes contributes to the poor insert performance."
+  ],
+  "unknowns": [
+    "The exact schema of the table and its indexes.",
+    "The workload pattern leading to blocking.",
+    "Whether lock escalation or deadlocks are involved."
+  ],
+  "confidence": 0.8
+}

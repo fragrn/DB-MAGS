@@ -1,0 +1,113 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_130884_mysq_r686919_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_resource_limitation_130884_mysq_r686919_a4"
+                },
+                {
+                  "sql": "USE post_retry_resource_limitation_130884_mysq_r686919_a4"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true,
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Setup synthetic environment for reproduction."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_130884_mysq_r686919_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1) t1, (SELECT 0 UNION ALL SELECT 1) t2, (SELECT 0 UNION ALL SELECT 1) t3, (SELECT 0 UNION ALL SELECT 1) t4, (SELECT 0 UNION ALL SELECT 1) t5, (SELECT 0 UNION ALL SELECT 1) t6, (SELECT 0 UNION ALL SELECT 1) t7, (SELECT 0 UNION ALL SELECT 1) t8, (SELECT 0 UNION ALL SELECT 1) t9, (SELECT 0 UNION ALL SELECT 1) t10, (SELECT 'repro_value' := 0) r) generated_numbers WHERE n <= 100"
+                },
+                {
+                  "sql": "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1) t1, (SELECT 0 UNION ALL SELECT 1) t2, (SELECT 0 UNION ALL SELECT 1) t3, (SELECT 0 UNION ALL SELECT 1) t4, (SELECT 0 UNION ALL SELECT 1) t5, (SELECT 0 UNION ALL SELECT 1) t6, (SELECT 0 UNION ALL SELECT 1) t7, (SELECT 0 UNION ALL SELECT 1) t8, (SELECT 0 UNION ALL SELECT 1) t9, (SELECT 0 UNION ALL SELECT 1) t10, (SELECT 'repro_value' := 0) r) generated_numbers WHERE n <= 100000"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Generate synthetic data for workload simulation."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+          "concurrency": 50,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "cpu_usage": {
+          "threshold": 80
+        }
+      },
+      "success_criteria": {
+        "high_cpu_usage": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Simulate high CPU usage due to inefficient queries and contention."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ]
+}

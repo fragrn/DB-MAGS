@@ -1,0 +1,227 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Slow query execution with RESOURCE_SEMAPHORE waits due to memory pressure and parallelism.",
+    "symptoms": [
+      "RESOURCE_SEMAPHORE waits observed in sp_whoisactive.",
+      "CXCONSUMER waits indicating parallel query execution.",
+      "Slow query execution when user connections increase.",
+      "Memory grants causing contention."
+    ],
+    "mechanism": "Excessive parallelism and memory grants leading to RESOURCE_SEMAPHORE waits.",
+    "facts": [
+      {
+        "key": "RESOURCE_SEMAPHORE waits observed",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post explicitly mentions RESOURCE_SEMAPHORE waits in sp_whoisactive.",
+        "confidence": 0.9
+      },
+      {
+        "key": "CXCONSUMER waits observed",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post mentions CXCONSUMER waits, indicating parallel query execution.",
+        "confidence": 0.9
+      },
+      {
+        "key": "MAXDOP set to 0",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post states that MAXDOP is set to 0, allowing queries to utilize all CPU cores.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Memory pressure affecting queries",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The sp_Blitz output mentions memory pressure affecting queries with forced grants.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The workload involves queries with high memory grants.",
+      "Parallelism is contributing to contention for memory resources.",
+      "The database server has sufficient hardware resources but is misconfigured."
+    ],
+    "unknowns": [
+      "Exact query patterns causing RESOURCE_SEMAPHORE waits.",
+      "Whether the memory grants are due to specific query patterns or overall workload."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction of RESOURCE_SEMAPHORE waits due to memory pressure and parallelism is feasible in a controlled environment, but exact reproduction of the production issue is not possible without the original workload.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_220486_slow_r825485_a3",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_220486_slow_r825485_a3",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS workload_table (id INT PRIMARY KEY, category VARCHAR(64), payload NVARCHAR(MAX), memory_grant INT, execution_time INT)",
+      "CREATE TABLE IF NOT EXISTS metadata_table (id INT PRIMARY KEY, description NVARCHAR(255))"
+    ],
+    "generation_sql": [
+      "INSERT INTO workload_table (id, category, payload, memory_grant, execution_time) SELECT n, CASE WHEN n % 10 = 0 THEN 'high' ELSE 'low' END, REPLICATE('A', 1000), CASE WHEN n % 10 = 0 THEN 100 ELSE 10 END, CASE WHEN n % 10 = 0 THEN 500 ELSE 50 END FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers",
+      "INSERT INTO metadata_table (id, description) SELECT n, CONCAT('Metadata ', n) FROM (SELECT TOP 100 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers"
+    ],
+    "tables": [
+      {
+        "name": "workload_table",
+        "purpose": "Simulates queries with varying memory grants and execution times.",
+        "target_rows": 10000,
+        "distribution_notes": "High memory grant rows are sparse and simulate contention."
+      },
+      {
+        "name": "metadata_table",
+        "purpose": "Reference table for joins or metadata queries.",
+        "target_rows": 100,
+        "distribution_notes": "Uniform distribution for metadata."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "workload_table": 10000,
+        "metadata_table": 100
+      },
+      "value_skew": {
+        "workload_table.category": "High memory grant rows are sparse."
+      },
+      "predicate_selectivity": {
+        "workload_table.category = 'high'": 0.1
+      },
+      "join_selectivity": {
+        "workload_table.id = metadata_table.id": "one-to-one for the first 100 rows."
+      }
+    },
+    "analyze_tables": [
+      "workload_table",
+      "metadata_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT w.* FROM workload_table w JOIN metadata_table m ON w.id = m.id WHERE w.category = 'high' ORDER BY w.execution_time DESC",
+        "objective": "Verify that high memory grant rows are prioritized and cause contention.",
+        "expected_evidence": [
+          "The plan shows memory grants for high memory rows.",
+          "The query execution involves parallelism.",
+          "RESOURCE_SEMAPHORE waits are visible in the plan."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT * FROM workload_table WHERE category = 'high' OPTION (MAXDOP 0)",
+      "SELECT * FROM workload_table WHERE category = 'low' OPTION (MAXDOP 0)"
+    ],
+    "concurrency": 10,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "RESOURCE_SEMAPHORE waits are observed during workload execution.",
+      "Query execution times increase with concurrency.",
+      "Parallelism is visible in the execution plans."
+    ],
+    "symptom_evidence": [
+      "RESOURCE_SEMAPHORE waits in sp_whoisactive.",
+      "Increased query execution times with higher concurrency."
+    ],
+    "mechanism_evidence": [
+      "Memory grants causing contention.",
+      "Parallelism contributing to RESOURCE_SEMAPHORE waits."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "RESOURCE_SEMAPHORE waits due to memory pressure and parallelism.",
+    "target_database": "post_retry_resource_limitation_220486_slow_r825485_a3",
+    "dba_description": "Reproduce RESOURCE_SEMAPHORE waits caused by excessive parallelism and memory grants.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r825485_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET MAXDOP 0"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Parallelism and memory grants causing RESOURCE_SEMAPHORE waits."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM workload_table WHERE category = 'high' OPTION (MAXDOP 0)",
+          "concurrency": 10,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Parallelism and memory grants causing RESOURCE_SEMAPHORE waits."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating the mechanism of RESOURCE_SEMAPHORE waits due to memory pressure and parallelism. The synthetic data and workload are designed to mimic the conditions described in the post, such as high memory grants and parallel query execution."
+}

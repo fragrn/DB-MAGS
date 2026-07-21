@@ -1,0 +1,41 @@
+{
+  "database": "post_retry_long_transaction_252749_lock_wa_r525975_a2",
+  "schema_sql": [
+    "CREATE DATABASE IF NOT EXISTS post_retry_long_transaction_252749_lock_wa_r525975_a2",
+    "USE post_retry_long_transaction_252749_lock_wa_r525975_a2",
+    "CREATE TABLE IF NOT EXISTS EVENT_DETAILS (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT))"
+  ],
+  "generation_sql": [
+    "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT UUID(), UUID(), CASE WHEN MOD(n, 100)=0 THEN 'health' ELSE 'other' END, UUID(), 20231001 + MOD(n, 30), MOD(n, 86400), UUID(), MOD(n, 5), CONCAT('event_', n), CONCAT('message_', n) FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "EVENT_DETAILS",
+      "purpose": "Primary table to simulate contention and locking behavior.",
+      "target_rows": 100000,
+      "distribution_notes": "Simulate skewed distribution with frequent 'health' component and varying update times."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "EVENT_DETAILS": 100000
+    },
+    "value_skew": {
+      "EVENT_DETAILS.COMPONENT_NAME": "Skewed towards 'health' for contention simulation."
+    },
+    "predicate_selectivity": {
+      "EVENT_DETAILS.COMPONENT_NAME = 'health'": 0.01
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "EVENT_DETAILS"
+  ],
+  "calibration_queries": [],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info.txt",
+  "category": "resource_limitation",
+  "slug": "220486-slow-query-with-resource-semaphore-wait-info",
+  "status": "abandoned",
+  "reason": "Stopped after 4 attempt(s): sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_resource_limitation_220486_slow_r848989_a4' already exists. Choose a different database name.\\\"]}\"]}]",
+  "attempts": [
+    {
+      "attempt": 1,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info/attempt_1/20260721-154300_e8ddbdbd",
+      "status": "failed",
+      "reason": "Msg 2628, Level 16, State 1, Server 883f252a88e4, Line 1\nString or binary data would be truncated in table 'post_retry_resource_limitation_220486_slow_r780692_a1.dbo.workload_table', column 'payload'. Truncated value: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'.\nThe statement has been terminated.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 2,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info/attempt_2/20260721-154323_d03c3dd5",
+      "status": "failed",
+      "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 3,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info/attempt_3/20260721-154345_7b3125d0",
+      "status": "failed",
+      "reason": "Msg 2628, Level 16, State 1, Server 883f252a88e4, Line 1\nString or binary data would be truncated in table 'post_retry_resource_limitation_220486_slow_r825485_a3.dbo.workload_table', column 'payload'. Truncated value: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'.\nThe statement has been terminated.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 4,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info/attempt_4/20260721-154408_f8c44fb1",
+      "status": "failed",
+      "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_resource_limitation_220486_slow_r848989_a4' already exists. Choose a different database name.\\\"]}\"]}]",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "task_specs[1].actions[0].scripts[0].steps[2].sql",
+          "before": "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = ?', 100, 8)",
+          "after": "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = 'repro_value'', 100, 8)",
+          "reason": "Replace unresolved SQL placeholders with synthetic literals."
+        }
+      ],
+      "missing_capabilities": []
+    }
+  ]
+}

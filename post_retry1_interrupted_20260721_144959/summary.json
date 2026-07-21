@@ -1,0 +1,128 @@
+{
+  "output_root": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1",
+  "generated_at": 1784613878.444749,
+  "counts": {
+    "success": 0,
+    "partial": 0,
+    "blocked": 0,
+    "abandoned": 2,
+    "failed": 0
+  },
+  "posts": [
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table.txt",
+      "category": "blocking",
+      "slug": "129302-unpredicatable-single-insert-performance-on-sql-server-table",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): float() argument must be a string or a number, not 'NoneType'",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_1/20260721-140132_880a2314",
+          "status": "failed",
+          "reason": "float() argument must be a string or a number, not 'NoneType'",
+          "evaluation": null,
+          "repairs": [
+            {
+              "path": "data_spec.analyze_tables",
+              "before": [
+                "dbo.Communication"
+              ],
+              "after": [
+                "Communication"
+              ],
+              "reason": "Use unqualified table names."
+            },
+            {
+              "path": "workload_spec.queries",
+              "before": [
+                {
+                  "sql": "BEGIN TRANSACTION; INSERT INTO dbo.Communication (comm_action, comm_channelid, payload) VALUES (N'Deskwork', 11, N'TestPayload'); WAITFOR DELAY '00:30:00'; COMMIT;",
+                  "description": "Simulates an uncommitted transaction holding locks."
+                }
+              ],
+              "after": [
+                "BEGIN TRANSACTION; INSERT INTO dbo.Communication (comm_action, comm_channelid, payload) VALUES (N'Deskwork', 11, N'TestPayload'); WAITFOR DELAY '00:30:00'; COMMIT;"
+              ],
+              "reason": "Runtime SQL background workload expects query strings."
+            }
+          ],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_2/20260721-140211_7a0a388e",
+          "status": "failed",
+          "reason": "invalid reproduction blueprint: data_spec.calibration_queries[1].sql must be read-only SELECT/WITH",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_3/20260721-140229_b9f74263",
+          "status": "failed",
+          "reason": "invalid reproduction blueprint: data_spec.calibration_queries[0].sql must be read-only SELECT/WITH",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_4/20260721-140252_bcc4ce5c",
+          "status": "failed",
+          "reason": "float() argument must be a string or a number, not 'NoneType'",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/blocking/132851-database-frozen-on-alter-table.txt",
+      "category": "blocking",
+      "slug": "132851-database-frozen-on-alter-table",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): unsafe blueprint TaskSpecs: Task 'run_workload' contains dangerous SQL pattern: \\bALTER\\s+TABLE\\b",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/132851-database-frozen-on-alter-table/attempt_1/20260721-140313_71a84445",
+          "status": "failed",
+          "reason": "float() argument must be a string or a number, not 'NoneType'",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/132851-database-frozen-on-alter-table/attempt_2/20260721-140332_607cde78",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/132851-database-frozen-on-alter-table/attempt_3/20260721-140347_a8a5084b",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: Task 'simulate_lock_contention' contains dangerous SQL pattern: \\bALTER\\s+TABLE\\b",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/132851-database-frozen-on-alter-table/attempt_4/20260721-140411_85cb39d6",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: Task 'run_workload' contains dangerous SQL pattern: \\bALTER\\s+TABLE\\b",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    }
+  ],
+  "unsupported": []
+}

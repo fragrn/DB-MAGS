@@ -1,0 +1,67 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_database",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_4717_too_ma_r744225_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_4717_too_ma_r744225_a2"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_4717_too_ma_r744225_a2"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS test_table (id INT AUTO_INCREMENT PRIMARY KEY, data VARCHAR(255))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database setup for reproduction"
+      }
+    },
+    {
+      "task_id": "simulate_connections",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CONNECT TO DATABASE; INSERT INTO test_table (data) VALUES ('test'); DISCONNECT;",
+          "concurrency": 10,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "error_occurs": "too many connections"
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Simulating rapid connection cycles"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_database",
+      "simulate_connections"
+    ]
+  ]
+}

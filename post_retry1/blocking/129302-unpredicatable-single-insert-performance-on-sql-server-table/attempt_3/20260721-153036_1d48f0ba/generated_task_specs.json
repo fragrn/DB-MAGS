@@ -1,0 +1,63 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r36384_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET TRANSACTION ISOLATION LEVEL READ COMMITTED"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "isolation_level": "READ COMMITTED"
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Blocking due to lock contention"
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, 'TestPayload')",
+          "concurrency": 10,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "blocking_sessions": "high"
+      },
+      "success_criteria": {
+        "blocking_sessions": "observed"
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Excessive indexes and lock contention"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "simulate_workload"
+    ]
+  ]
+}

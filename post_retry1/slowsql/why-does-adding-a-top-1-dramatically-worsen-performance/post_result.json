@@ -1,0 +1,61 @@
+{
+  "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance.txt",
+  "category": "slowsql",
+  "slug": "why-does-adding-a-top-1-dramatically-worsen-performance",
+  "status": "success",
+  "reason": "The reproduction successfully demonstrated the reported symptom and mechanism. The query with TOP 1 exhibited a Nested Loops join with a Table Spool operator, while the query without TOP 1 used a Hash Match join. This aligns with the expected behavior of row goal optimization altering the query plan.",
+  "attempts": [
+    {
+      "attempt": 1,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance/attempt_1/20260721-155401_9046b283",
+      "status": "failed",
+      "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 2,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance/attempt_2/20260721-155422_9486332d",
+      "status": "failed",
+      "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 3,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance/attempt_3/20260721-155446_0b974ba2",
+      "status": "failed",
+      "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_slowsql_why_does_adding_a_top_1_r486967_a3' already exists. Choose a different database name.\\\"]}\"]}]",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": [
+        "Full SQL Server 2008 R2 optimizer behavior"
+      ]
+    },
+    {
+      "attempt": 4,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance/attempt_4/20260721-155543_2ece7f73",
+      "status": "success",
+      "reason": "The reproduction successfully demonstrated the reported symptom and mechanism. The query with TOP 1 exhibited a Nested Loops join with a Table Spool operator, while the query without TOP 1 used a Hash Match join. This aligns with the expected behavior of row goal optimization altering the query plan.",
+      "evaluation": {
+        "symptom_hit": true,
+        "mechanism_hit": true,
+        "plan_similarity": 0.6,
+        "success": true,
+        "reason": "The reproduction successfully demonstrated the reported symptom and mechanism. The query with TOP 1 exhibited a Nested Loops join with a Table Spool operator, while the query without TOP 1 used a Hash Match join. This aligns with the expected behavior of row goal optimization altering the query plan.",
+        "unmatched_conditions": [],
+        "evidence": {
+          "descriptive_evidence_name": "query_plan_behavior",
+          "value": {
+            "top_1_query_plan": "Nested Loops join with Table Spool operator",
+            "no_top_1_query_plan": "Hash Match join operator"
+          }
+        }
+      },
+      "repairs": [],
+      "missing_capabilities": []
+    }
+  ]
+}

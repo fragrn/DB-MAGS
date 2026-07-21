@@ -1,0 +1,72 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Slow query performance issue with correlated subqueries in MySQL.",
+  "symptoms": [
+    "Slow query execution time",
+    "High rows examined compared to rows sent"
+  ],
+  "mechanism": "Correlated subqueries with dependent joins and inefficient index utilization.",
+  "facts": [
+    {
+      "key": "query_time",
+      "value": {
+        "time": 8.79417
+      },
+      "source": "explicit_post",
+      "evidence": "Query_time: 8.794170",
+      "confidence": 1.0
+    },
+    {
+      "key": "rows_examined",
+      "value": {
+        "count": 4742825
+      },
+      "source": "explicit_post",
+      "evidence": "Rows_examined: 4742825",
+      "confidence": 1.0
+    },
+    {
+      "key": "rows_sent",
+      "value": {
+        "count": 3942
+      },
+      "source": "explicit_post",
+      "evidence": "Rows_sent: 3942",
+      "confidence": 1.0
+    },
+    {
+      "key": "indexes",
+      "value": {
+        "customer_payment_options": [
+          "company_id",
+          "tran_id",
+          "ce_id",
+          "wallet_id"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Indexes on `customer_payment_options`",
+      "confidence": 1.0
+    },
+    {
+      "key": "schema",
+      "value": {
+        "customer_payment_options": "provided",
+        "customer_wallet": "provided"
+      },
+      "source": "explicit_post",
+      "evidence": "SCHEMA section",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The slow query log configuration is not active during reproduction.",
+    "The schema provided matches the intended production schema."
+  ],
+  "unknowns": [
+    "Exact data distribution in production",
+    "Impact of multi-column indexes on query performance"
+  ],
+  "confidence": 0.9
+}

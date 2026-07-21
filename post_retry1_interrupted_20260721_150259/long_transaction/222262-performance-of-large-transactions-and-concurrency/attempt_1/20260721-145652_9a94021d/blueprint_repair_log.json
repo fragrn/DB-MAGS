@@ -1,0 +1,25 @@
+{
+  "changes": [
+    {
+      "path": "workload_spec.queries",
+      "before": [
+        {
+          "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+          "concurrency": 1,
+          "duration_sec": 30
+        },
+        {
+          "sql": "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "after": [
+        "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+        "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id BETWEEN 1 AND 50000; COMMIT;"
+      ],
+      "reason": "Runtime SQL background workload expects query strings."
+    }
+  ],
+  "timestamp": 1784617028.0931242
+}

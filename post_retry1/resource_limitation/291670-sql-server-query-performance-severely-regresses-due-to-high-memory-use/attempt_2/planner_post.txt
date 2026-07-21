@@ -1,0 +1,114 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/291670/sql-server-query-performance-severely-regresses-due-to-high-memory-use
+Canonical URL: https://dba.stackexchange.com/questions/291670/sql-server-query-performance-severely-regresses-due-to-high-memory-use
+Title: SQL Server Query Performance Severely Regresses due to High Memory Use
+Question ID: 291670
+License: CC BY-SA 4.0; author: Gup3rSuR4c
+
+# Question
+
+Moved from StackOverflow (https://stackoverflow.com/questions/67560806/sql-server-query-performance-severely-regresses-due-to-high-memory-use).
+
+Scenario
+
+I have a ASP.NET Core 5 (.NET 5) project that deals with GPS devices and generates roughly 6-8GB of data per day. For the past several months I've been working on improving the reading and writing of this data. For reading I've completely, I think, removed EF Core and replaced it with Dapper and stored procedures. For writing I'm still using EF Core and I've been optimizing the data types for the columns, recreating the indexes, and overall rebuilding the database (14K line upgrade script so far). I've managed to reduce the size by 71% from all of that and the growth should be substantially slower, maybe 0.5-1GB per day.
+
+All of this is great, but there are some large accounts that have thousands of devices in them that generate thousands more notifications per day. I know that the indexes are as good as they're gonna get at this point and most of the hot queries are doing seeking about 95% of the time, but we're running into an issue that if we open say six of the largest accounts at once, about four of them will load almost immediately, and the other two will time out. Refreshing the two that failed always time out.
+
+If I restart SQL Server, and reload the two that failed, they'll instantly load, but now two of the previous four will fail. It basically seems to be that whichever ones load first will always load, the remaining will fail. Obviously when restarting SQL Server the memory is flushed until it starts building up again. So it's some sort of a memory/caching issue. I've noticed that once the memory is filled up and it tries to read from disk, it's reading at about 20MB/s when the drive can do 2.5-3GB/s. I left one of the failing queries to run then stopped it after 10 min of waiting, restarted SQL Server, and retried it and it completed in one second.
+
+The database is running on my dev computer which has a Core i7 4790K (4C8T) @4.4GHz, 32GB of RAM, and a 1TB 970 Pro, Windows 10 20H2 Pro. The live server is on AWS and has an EPYC 7571 4vC @2.2GHz, 16GB of RAM, and a 2TB, 6000 IOPs, 1000 MB/s gp3 volume (the size will be reduced to 512GB or 768GB once the database is rebuilt and shrunk), Windows Server 2019 1809. The database is SQL Server 2019 on both.
+
+Question
+
+What can I/should I do to resolve the time outs/regressions when the memory ends up filling up?
+
+Replying to Comments (1)
+
+A little bit more information about the live server. It is a `t3a.xlarge` (https://aws.amazon.com/ec2/instance-types/) on AWS and I'm entertaining the idea of bumping it to `t3a.2xlarge` depending on the costs. It reboots nightly. It's not a perfect configuration because I also have MySQL (disabled) on it so that we could import the original database from the previous developer into SQL Server. It needs to be rebuilt, that I know, but I don't have the time to do that right now or any time soon.
+
+@AMtwo, I did have max memory at the default and I changed it to 28GB out of the 32GB on my system. LPIM was off so I turned it on.
+
+@J.D., For the four largest accounts the row counts are: A 5,507, B 1401, C 318, D 220. Curiously, after the latest rebuild overnight I went through and opened all accounts in the ASP.NET application of the type those are (about 211), and all of them opened except for A. A is the biggest account and is the one that is most accessed unfortunately. As of right now when accessing it from ASP.NET Core, it times out and does a large read spike, but when I run the exact same SP using SSMS it loads fine in about 2 seconds with a much smaller read spike.
+
+See the attached screenshots from task manager. After all other accounts were opened once and I try this large account in ASP.NET Core it just times out and does large 100MB+ reads for a long time, while in SSMS it does much smaller 100MB+ reads for a much shorter time and completes in 2 seconds. After restarting SQL Server, memory is dumped, and opening this account in ASP.NET Core results in a 2-3 second processing with barely 1MB in disk reads. Memory consumption also barely registers.
+
+I'm shrinking the database because the live database is spiraling out of control and so are the associated costs. Currently between the main data database and the Serilog database we're using 929GB with a growth of 6-8GB per day. The rebuilt databases are now at 268GB with an expected growth of 0.5-1GB per day or less. So, to be blunt, I don't particularly care about the red flags you speak of about shrinking the database. I need to be able to manage and control the growth of the database, and the costs associated with it. I can't just keep bumping up the volume size or eventually changing the instance size and adding more expensive resources just to be able to run when a rebuild and shrink will do a much better job. For what it's worth, when I run the database rebuild script, the apps will also be getting updated and will be completely shut down and incoming data will be redirected to S3 and imported back when they come back online, there will be no reading or writing to the database from the apps at that time, so I can do the rebuild and shrink.
+
+Eventually we'll have to implement archiving to start dumping old data out of the database to keep its size manageable, but that's work for far into the future.
+
+The execution plan is attached. The only difference between all accounts is the `id` being passed into the SP.
+
+@David Browne, I will look into that.
+
+@RBarryYoung, Open or load I'm using interchangeably for when I browse the ASP.NET Core app and go to an account's page. I think the execution plan screenshot covers what you're looking for?
+
+Before restarting SQL Server.
+
+[image: Before Restart https://i.sstatic.net/kPdZT.png]
+(https://i.sstatic.net/kPdZT.png)
+
+After restarting SQL Server.
+
+[image: After Restart https://i.sstatic.net/LCSNW.png]
+(https://i.sstatic.net/LCSNW.png)
+
+Execution plan for the SP.
+
+[image: Execution Plan https://i.sstatic.net/frcIC.png]
+(https://i.sstatic.net/frcIC.png)
+
+# Answers
+
+## Answer 1
+Author: Francesco Mantovani
+Accepted: no
+Score: -2
+License: CC BY-SA 4.0
+
+I would do:
+
+-
+Setup (https://dba.stackexchange.com/questions/69639/when-should-i-not-set-the-maximum-server-memory-option-in-sql-server) Max Server Memory to 2/3 or 3/4 of your total memory: this is what you should normally setup on a SQL Server machine. You need to keep a bit of space for the OS or whatever you are running on it. I strongly suggest you to find a good machine that is not your laptop or PC because once you have given 2/3 of the RAM to SQL Server and 1/3 to the OS... well, you don't have a Dev computer any more you just have a SQL Server and don't expect Visual Studio to run smoothly. So find another machine, is much better
+
+-
+Setup Ola Hallengren (https://ola.hallengren.com/) script to run weekly and set a 10% of free space when you rebuild with the command `REBUILD WITH (FILLFACTOR = ''90'')`: Now that you have setup fillfactor this way your database is overall bigger of a good 10%. Hopefully your index will not disintegrate daily but keep in mind that this is far away from being best practice (https://www.brentozar.com/archive/2013/04/five-things-about-fillfactor/#:%7E:text=%E2%80%9CFillfactor%E2%80%9D%20is%20a%20setting%20for,index%20it%20should%20fill%20up.). But I don't know what else to suggest. Maybe your dev database is always broken because it imports fresh data from your production database daily? Keep in mind that if you have an SSD (and you have it) is also useless rebuilding your indexes (https://www.brentozar.com/archive/2012/08/sql-server-index-fragmentation/) . This is what I call a home dust problem like the dust you have at home: you can vacuum clean your home as much as you want, you always see dust everywhere. Stop thinking about the dust at home and the dust will magically go away.
+
+-
+Build an Agent Job that will shrink the database after the Ola Hallengren script has finished: This will hopefully resize the Tempdb that was oversized during the previous process. But maybe the RAM is filled up by huge queries and you need to use pagination (https://stackoverflow.com/questions/109232/what-is-the-best-way-to-paginate-results-in-sql-server) to fix that.
+
+-
+Run sp-Blitz (https://www.brentozar.com/blitz/): This will hopefully help more than any other of my suggestion.
+
+-
+Install Database Health Monitor (http://databasehealth.com/) and IDERA SQL Check (https://www.idera.com/productssolutions/freetools/sqlcheck/freetrialsubscription): these two easy free tools always help me find out where t
+
+[... middle of long forum export omitted by batch planner compaction ...]
+
+omputed column. Supposedly SQL Server 2019 was supposed implement performance improvements for this, but I never saw it and it probably means UDFs have to be crafted or used in a very specific way.
+
+So, I removed almost all of the UDFs and in-lined them into the computed column's definition. There was three UDFs that did query into other tables, so it wasn't as easy for them. I ended up adding the columns they were looking up into two tables the computed column were on and then in-lined those UDFs as well.
+
+For example, my `Addresses` table had a computed column `FullText` that queried into `Zones` and `Countries` to get each of their abbreviations to compose the full address. The abbreviation columns are now duplicated onto the `Addresses` table. While I'm not happy to have duplications from a philosophical standpoint, this is the compromise that works so I'm good with it. The last UDF I merged into an update trigger I had to compute and store the column's value.
+
+Next I had to deal with lots of implicit conversions. Those were split into three different categories, I guess I would say:
+
+- Passing a `DATETIME2` to `SWITCHOFFSET` which requires a `DATETIMEOFFSET`. Also the offset value must be `NCHAR` or `NVARCHAR` or those will be implicitly converted as well. I solved this by simply converting all `DATETIME2` columns to `DATETIMEOFFSET` in my upgrade script. It's a waste of two bytes per column across the board, but it is what it is. It would be nice if there was a `SWITCHOFFSET`-like function for `DATETIME2` data types. I store everything as UTC anyway, so I just need to change it when presenting it into the user's time zone, whatever it is.
+
+- `FORMAT` also requires an `NCHAR` or `NVARCHAR` value for the format string, so I just went through and updated all of those. In cases of me passing in the value from a query look up, I changed the column to be `N` as well.
+
+- Lastly, I do a lot of `CONCAT`, and it would be a mix of non-`N` and `N` columns, which would also cause an implicit conversion. I settled on just having almost all columns in the database be `NCHAR` or `NVARCHAR` columns, except for a few that I know were never going to be used in a `CONCAT` expression.
+
+Now that implicit conversions were no longer a thing, it helped, but it wasn't enough. The query in the original post was still giving me the same trouble. I was baffled. I would do my test run in the app, hit the time out, but in SSMS it would continue to work perfectly fine.
+
+After lots of digging, I somehow stumbled on to Slow in the Application, Fast in SSMS? Understanding Performance Mysteries (https://www.sommarskog.se/query-plan-mysteries.html) by Erland Sommarskog. Reading through it, it became apparent that parameter sniffing was indeed the root problem. So, @alroc, you're right that it was that. I was under the impression that it was only parameters that I explicitly pass, such as the SP's parameters and I went to great lengths to change the local variables I had to in-line constants. I thought that would take care of it but it didn't.
+
+After reading Erland's article, I understood that parameter sniffing also involves connection parameters, database settings, user settings, and even SSMS settings. Turned out that SSMS enables `ARITHABORT` and that was the parameter difference between it and the apps, which is why it was getting different execution plans that were magnitudes faster. After disabling it in SSMS and re-runing my tests, SSMS finally matched the app and was slow. Analyzing the execution plan I saw that it recommended an index on a different query than I thought was the problem.
+
+I then spent a long time figuring out the right index, and while it helped on one part of the query, the new index did not make it faster. It turned out that there was a Sort operation that was taking the bulk of the query's time and was going to tempdb 8 times. It was caused by a join between my `Notifications` and `Reports` tables, where the `Report`'s `ReceivedAtUtc` column was used to sort the result. I tried adding an index for that, but it never helped. In the end I decided to add a `NotifiedAtUtc` column on `Notifications` and use that as the sorting column. After I did this change, the query finally worked perfectly and loaded in the app and SSMS in ~2 seconds. Memory consumption was also reduced finally. After I opened all 211 of the accounts in question, the memory use was only 2.1GB, vs the "as much memory as I can use and fail" before.
+
+My final upgrade script also went from 4 hours to 2 hours to run from one of these changes, so that was a welcome bonus. The final rebuilt databases total 264GB, so I'm happy that I have accomplished my goals to both optimize and reduce the storage consumption and have actually good performance for once.
+
+I've read more about SQL Server internals in the last few days than I ever thought I would or need.
+
+[Batch planner note: the original full post is saved as source_post.txt. This planning input was compacted to remove linked-page snapshots or excessive length.]

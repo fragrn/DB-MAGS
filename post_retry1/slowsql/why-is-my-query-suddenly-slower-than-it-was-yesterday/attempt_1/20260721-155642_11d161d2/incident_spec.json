@@ -1,0 +1,44 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Query performance degradation due to parameter sniffing or related factors.",
+  "symptoms": [
+    "Query suddenly slower than before",
+    "Execution plan changes",
+    "Potential skew in data distribution or statistics"
+  ],
+  "mechanism": "Parameter sniffing causing suboptimal execution plan caching.",
+  "facts": [
+    {
+      "key": "parameter_sniffing",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post mentions parameter sniffing as a primary cause.",
+      "confidence": 0.9
+    },
+    {
+      "key": "execution_plan_cache",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Cached execution plans are influenced by initial parameter values.",
+      "confidence": 0.8
+    },
+    {
+      "key": "data_distribution_skew",
+      "value": {},
+      "source": "post_hypothesis",
+      "evidence": "Post hypothesizes skewed data distribution as a contributing factor.",
+      "confidence": 0.7
+    }
+  ],
+  "assumptions": [
+    "The query involves parameters that influence execution plan generation.",
+    "The database statistics may be outdated or misleading."
+  ],
+  "unknowns": [
+    "Exact query and table schema",
+    "Specific parameters causing the issue",
+    "Whether statistics updates or schema changes occurred recently"
+  ],
+  "confidence": 0.8
+}

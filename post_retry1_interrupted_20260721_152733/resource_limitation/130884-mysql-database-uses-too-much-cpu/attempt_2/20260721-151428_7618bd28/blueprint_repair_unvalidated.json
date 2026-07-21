@@ -1,0 +1,328 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": "5.5.47",
+    "summary": "High CPU usage in MySQL database during benchmarking with suspected inefficient queries and contention issues.",
+    "symptoms": [
+      "High CPU usage (500% CPU utilization)",
+      "High number of joins performed without indexes (6782)",
+      "Low query cache efficiency (7.8%)",
+      "High query cache prunes per day (39,159,937)",
+      "High connection usage (100%)"
+    ],
+    "mechanism": "Inefficient query execution due to missing indexes, contention on query cache, and high concurrency during benchmarking.",
+    "facts": [
+      {
+        "key": "CPU utilization",
+        "value": {
+          "user_space": "high"
+        },
+        "source": "explicit_post",
+        "evidence": "500% CPU usage reported in vmstat output.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Joins without indexes",
+        "value": {
+          "count": 6782
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output showing [!!] Joins performed without indexes: 6782.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Query cache efficiency",
+        "value": {
+          "efficiency": "7.8%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output showing low query cache efficiency.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Query cache contention",
+        "value": {
+          "prunes_per_day": 39159937
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output showing high query cache prunes per day.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Connection usage",
+        "value": {
+          "usage": "100%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output showing highest connection usage at 100%.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The benchmarking workload is read-heavy with high concurrency.",
+      "The database schema includes tables with join operations that lack proper indexing.",
+      "Query cache is enabled and contributing to contention under high concurrency."
+    ],
+    "unknowns": [
+      "Exact schema and workload details for the benchmark.",
+      "Whether the database has composite indexes for common join conditions.",
+      "Specific queries causing contention or inefficiency."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction requires synthetic data and workload to simulate high CPU usage due to inefficient queries and contention. Exact reproduction is not feasible without production data.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Unknown schema and workload details."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_130884_mysq_r68160_a2",
+    "requirements": [
+      "Enable slow query log",
+      "Simulate high concurrency workload"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_130884_mysq_r68160_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "main_table",
+        "purpose": "Primary table to simulate high concurrency and inefficient queries.",
+        "target_rows": 100000,
+        "distribution_notes": "Skewed distribution with rare and common categories."
+      },
+      {
+        "name": "ref_table",
+        "purpose": "Reference table for join operations.",
+        "target_rows": 100,
+        "distribution_notes": "Small table to simulate many-to-one joins."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "main_table": 100000,
+        "ref_table": 100
+      },
+      "value_skew": {
+        "main_table.category": "rare values are sparse and intentionally positioned by the agent"
+      },
+      "predicate_selectivity": {
+        "main_table.category = 'rare'": 0.001
+      },
+      "join_selectivity": {
+        "main_table.ref_id = ref_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "main_table",
+      "ref_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan examines the table or index range relevant to the suspected mechanism.",
+          "The predicate or join behavior needed by the reproduction is visible in EXPLAIN.",
+          "The plan evidence distinguishes this mechanism from a trivial point lookup."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+      "SELECT COUNT(*) FROM main_table WHERE category = 'common'",
+      "SELECT r.name, COUNT(*) FROM main_table m JOIN ref_table r ON r.id = m.ref_id GROUP BY r.name"
+    ],
+    "concurrency": 50,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "High CPU utilization observed during workload execution.",
+      "Query execution plans show inefficient joins or lack of indexes.",
+      "Query cache contention visible in performance metrics."
+    ],
+    "symptom_evidence": [
+      "CPU utilization spikes during workload.",
+      "Query cache contention metrics increase.",
+      "High number of joins without indexes observed."
+    ],
+    "mechanism_evidence": [
+      "EXPLAIN plans confirm inefficient joins.",
+      "Query cache contention metrics align with workload concurrency."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High CPU usage due to inefficient queries and contention.",
+    "target_database": "post_retry_resource_limitation_130884_mysq_r68160_a2",
+    "dba_description": "Reproduce high CPU usage in MySQL database under benchmarking workload with suspected inefficient queries and contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_130884_mysq_r68160_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_resource_limitation_130884_mysq_r68160_a2"
+                },
+                {
+                  "sql": "USE post_retry_resource_limitation_130884_mysq_r68160_a2"
+                },
+                {
+                  "sql": "SET GLOBAL slow_query_log = 'ON'"
+                },
+                {
+                  "sql": "SET GLOBAL log_queries_not_using_indexes = 'ON'"
+                },
+                {
+                  "sql": "SET GLOBAL long_query_time = 1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "slow_query_log_enabled": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup for reproduction"
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_130884_mysq_r68160_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "data_generation",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+                },
+                {
+                  "sql": "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t1, (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t2, (SELECT 'repro_value' := 0) t3) numbers WHERE n <= 100"
+                },
+                {
+                  "sql": "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t1, (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t2, (SELECT 'repro_value' := 0) t3) numbers WHERE n <= 100000"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data generation for reproduction"
+      }
+    },
+    {
+      "task_id": "execute_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+          "concurrency": 50,
+          "duration_sec": 60
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT COUNT(*) FROM main_table WHERE category = 'common'",
+          "concurrency": 50,
+          "duration_sec": 60
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT r.name, COUNT(*) FROM main_table m JOIN ref_table r ON r.id = m.ref_id GROUP BY r.name",
+          "concurrency": 50,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "cpu_usage": "high"
+      },
+      "success_criteria": {
+        "high_cpu_usage": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Workload execution to simulate high CPU usage"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "execute_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction plan focuses on simulating high CPU usage caused by inefficient queries and contention. Synthetic data and workload are designed to mimic the reported symptoms and suspected mechanisms. The plan includes enabling slow query logs and generating data with specific characteristics to reproduce the issue."
+}

@@ -1,0 +1,98 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r565857_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, process_id INT, job_id INT, status VARCHAR(64), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS connections_log (id INT AUTO_INCREMENT PRIMARY KEY, connection_id INT, process_id INT, job_id INT, status VARCHAR(64), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema preparation for reproduction."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO jobs (process_id, job_id, status) SELECT MOD(n, 4) + 1, n, 'pending' FROM generated_numbers WHERE n <= 10000",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {
+        "rows_inserted": 10000
+      },
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data generation for workload simulation."
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "UPDATE jobs SET status = 'running' WHERE id = (SELECT MIN(id) FROM jobs WHERE status = 'pending')",
+          "concurrency": 200,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO connections_log (connection_id, process_id, job_id, status) VALUES (CONNECTION_ID(), MOD(RAND()*4, 4)+1, MOD(RAND()*10000, 10000)+1, 'attempted')",
+          "concurrency": 200,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "connections_attempted": "dynamic"
+      },
+      "success_criteria": {
+        "workload_simulated": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Simulating excessive concurrent connections."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_schema",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "simulate_workload"
+    ]
+  ]
+}

@@ -1,0 +1,256 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MySQL creates a high percentage of temporary tables on disk during query execution, influenced by configuration settings and query patterns.",
+    "symptoms": [
+      "High percentage of temporary tables created on disk.",
+      "Performance degradation due to disk-based temporary tables."
+    ],
+    "mechanism": "MySQL uses MEMORY storage for implicit temporary tables but switches to MyISAM for disk-based tables when certain conditions are met, such as exceeding memory limits or using unsupported data types.",
+    "facts": [
+      {
+        "key": "tmp_table_size and max_heap_table_size influence temporary table creation.",
+        "value": {
+          "tmp_table_size": "200M",
+          "max_heap_table_size": "200M"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions changing these values reduced disk-based temporary tables from 38% to 30%.",
+        "confidence": 0.9
+      },
+      {
+        "key": "TEXT/BLOB fields force disk-based temporary tables.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post and answer highlight TEXT/BLOB fields as a cause for disk-based temporary tables.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Queries with GROUP BY or ORDER BY can create large temporary tables.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post and answers discuss GROUP BY and ORDER BY as triggers for temporary table creation.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The database schema includes tables with TEXT/BLOB fields and queries using GROUP BY or ORDER BY.",
+      "The workload involves queries that exceed memory limits for temporary tables."
+    ],
+    "unknowns": [
+      "Exact schema and query patterns causing the issue.",
+      "Impact of other configuration settings like join_buffer_size."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of temporary table creation on disk due to memory limits and unsupported data types can be reproduced with synthetic data and queries.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and workload details from the production environment."
+    ],
+    "confidence": 0.85
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_i_r134633_a1",
+    "requirements": [
+      "Dedicated MySQL instance for testing.",
+      "Ability to modify global variables like tmp_table_size."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_i_r134633_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS large_table (id INT PRIMARY KEY, group_col INT, order_col INT, text_field TEXT, blob_field BLOB)",
+      "CREATE TABLE IF NOT EXISTS small_table (id INT PRIMARY KEY, ref_col INT)"
+    ],
+    "generation_sql": [
+      "INSERT INTO large_table (id, group_col, order_col, text_field, blob_field) SELECT n, MOD(n, 100), MOD(n, 50), REPEAT('text', 10), REPEAT('blob', 10) FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO small_table (id, ref_col) SELECT n, MOD(n, 10) FROM generated_numbers WHERE n <= 100"
+    ],
+    "tables": [
+      {
+        "name": "large_table",
+        "purpose": "Primary table to trigger temporary table creation due to TEXT/BLOB fields and large result sets.",
+        "target_rows": 100000,
+        "distribution_notes": "Uniform distribution with TEXT/BLOB fields to simulate memory constraints."
+      },
+      {
+        "name": "small_table",
+        "purpose": "Reference table for joins and additional query complexity.",
+        "target_rows": 100,
+        "distribution_notes": "Small table with uniform distribution."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "large_table": 100000,
+        "small_table": 100
+      },
+      "value_skew": {
+        "large_table.text_field": "Uniform distribution of large text values."
+      },
+      "predicate_selectivity": {
+        "large_table.group_col = 1": 0.01
+      },
+      "join_selectivity": {
+        "large_table.group_col = small_table.ref_col": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "large_table",
+      "small_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT group_col, COUNT(*) FROM large_table GROUP BY group_col ORDER BY group_col DESC",
+        "objective": "Verify that GROUP BY and ORDER BY trigger temporary table creation.",
+        "expected_evidence": [
+          "EXPLAIN shows temporary table creation.",
+          "Disk-based temporary table usage is visible in the plan."
+        ]
+      },
+      {
+        "sql": "SELECT l.* FROM large_table l JOIN small_table s ON l.group_col = s.ref_col WHERE l.group_col = 1",
+        "objective": "Verify join behavior and temporary table creation for selective queries.",
+        "expected_evidence": [
+          "EXPLAIN shows join behavior and temporary table creation.",
+          "Query plan reflects selective filtering."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Temporary tables are created as expected under specific query conditions.",
+      "Disk-based temporary table usage aligns with memory limits and data types."
+    ],
+    "symptom_evidence": [
+      "Percentage of disk-based temporary tables matches expected values.",
+      "Query execution times reflect temporary table usage."
+    ],
+    "mechanism_evidence": [
+      "EXPLAIN shows temporary table creation due to memory limits and data types.",
+      "Query plans align with expected behavior for GROUP BY and ORDER BY."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High percentage of disk-based temporary tables.",
+    "target_database": "post_retry_resource_limitation_17677_why_i_r134633_a1",
+    "dba_description": "Investigate and reproduce the conditions leading to high disk-based temporary table creation in MySQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "configure_tmp_table_size",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_i_r134633_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL tmp_table_size = 200000000"
+                },
+                {
+                  "sql": "SET GLOBAL max_heap_table_size = 200000000"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tmp_table_size": "200M",
+        "max_heap_table_size": "200M"
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Memory limits for temporary tables."
+      }
+    },
+    {
+      "task_id": "create_schema_and_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_i_r134633_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "setup",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_resource_limitation_17677_why_i_r134633_a1"
+                },
+                {
+                  "sql": "USE post_retry_resource_limitation_17677_why_i_r134633_a1"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS large_table (id INT PRIMARY KEY, group_col INT, order_col INT, text_field TEXT, blob_field BLOB)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS small_table (id INT PRIMARY KEY, ref_col INT)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema setup for reproduction."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "configure_tmp_table_size",
+      "create_schema_and_data"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on the mechanism of temporary table creation due to memory limits and data types. Synthetic data and queries simulate the conditions described in the post."
+}

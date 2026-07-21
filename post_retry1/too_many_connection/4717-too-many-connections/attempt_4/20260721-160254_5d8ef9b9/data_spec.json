@@ -1,0 +1,43 @@
+{
+  "database": "post_retry_too_many_connection_4717_too_ma_r974031_a4",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS test_table (id INT AUTO_INCREMENT PRIMARY KEY, data VARCHAR(255))"
+  ],
+  "generation_sql": [
+    "INSERT INTO test_table (data) SELECT CONCAT('row_', n) FROM (SELECT n FROM generated_numbers WHERE n <= {row_count}) AS numbers"
+  ],
+  "tables": [
+    {
+      "name": "test_table",
+      "purpose": "Simulate a table being fed data by MATLAB.",
+      "target_rows": 1000,
+      "distribution_notes": "Uniform distribution of rows to simulate MATLAB feeding."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "test_table": 1000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "test_table"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT COUNT(*) FROM test_table",
+      "objective": "Verify that the table is populated correctly.",
+      "expected_evidence": [
+        "The count matches the expected number of rows."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 10000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

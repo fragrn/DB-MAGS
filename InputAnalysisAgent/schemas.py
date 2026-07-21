@@ -31,6 +31,8 @@ def _strings(value: Any, name: str) -> list[str]:
 
 
 def _confidence(value: Any, name: str) -> float:
+    if value is None:
+        return 0.5
     number = float(value)
     if not 0.0 <= number <= 1.0:
         raise ValueError(f"{name} must be between 0 and 1")

@@ -1,0 +1,43 @@
+{
+  "database": "post_retry_blocking_132851_database_frozen_on_al_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL UNIQUE, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false);"
+  ],
+  "generation_sql": [
+    "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo) SELECT 'rut_' || n, 'nombre_' || n, 'razon_' || n, 'direccion_' || n, 'comuna_' || n, 'ciudad_' || n, 'CL', true FROM generate_series(1, {row_count}) n;"
+  ],
+  "tables": [
+    {
+      "name": "cliente",
+      "purpose": "Primary table to simulate the ALTER TABLE operation and lock contention.",
+      "target_rows": 100000,
+      "distribution_notes": "Uniform distribution of rows with no specific skew."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "cliente": 100000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "cliente"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM cliente WHERE rut = 'rut_1';",
+      "objective": "Verify that the table is populated and accessible before the ALTER TABLE operation.",
+      "expected_evidence": [
+        "The query returns a single row with the expected data."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

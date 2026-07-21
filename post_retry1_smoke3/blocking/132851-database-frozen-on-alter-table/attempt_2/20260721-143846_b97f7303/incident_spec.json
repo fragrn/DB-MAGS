@@ -1,0 +1,290 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": "9.4.5",
+  "summary": "ALTER TABLE operation caused database freeze due to lock contention.",
+  "symptoms": [
+    "Database freeze during ALTER TABLE operation",
+    "Inability to log in due to blocked SELECT queries"
+  ],
+  "mechanism": "The ALTER TABLE operation required an ACCESS EXCLUSIVE lock, which was blocked by a long-lived weak lock (e.g., ACCESS SHARE lock). This caused all subsequent lock requests to queue behind the pending ACCESS EXCLUSIVE lock, leading to a system-wide freeze.",
+  "facts": [
+    {
+      "key": "ALTER TABLE operation",
+      "value": {
+        "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+      },
+      "source": "explicit_post",
+      "evidence": "The DBA explicitly mentioned the offending SQL statement.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Table structure",
+      "value": {
+        "table_name": "cliente",
+        "columns": [
+          {
+            "name": "rut",
+            "type": "character varying(30)",
+            "constraints": [
+              "NOT NULL",
+              "PRIMARY KEY"
+            ]
+          },
+          {
+            "name": "nombre",
+            "type": "character varying(150)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "razon_social",
+            "type": "character varying(150)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "direccion",
+            "type": "character varying(200)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "comuna",
+            "type": "character varying(100)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "ciudad",
+            "type": "character varying(100)",
+            "constraints": [
+              "NOT NULL"
+            ]
+          },
+          {
+            "name": "codigo_pais",
+            "type": "character varying(3)",
+            "constraints": [
+              "NOT NULL",
+              "FOREIGN KEY"
+            ]
+          },
+          {
+            "name": "activo",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT true"
+            ]
+          },
+          {
+            "name": "id",
+            "type": "serial",
+            "constraints": [
+              "NOT NULL",
+              "UNIQUE"
+            ]
+          },
+          {
+            "name": "stock",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "vigente",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT true"
+            ]
+          },
+          {
+            "name": "clase",
+            "type": "integer",
+            "constraints": [
+              "DEFAULT 1"
+            ]
+          },
+          {
+            "name": "plan",
+            "type": "integer",
+            "constraints": [
+              "DEFAULT 1"
+            ]
+          },
+          {
+            "name": "plantilla",
+            "type": "character varying(15)",
+            "constraints": [
+              "DEFAULT 'WAYPOINT'"
+            ]
+          },
+          {
+            "name": "facturable",
+            "type": "integer",
+            "constraints": [
+              "DEFAULT 1"
+            ]
+          },
+          {
+            "name": "toolkit",
+            "type": "integer",
+            "constraints": [
+              "DEFAULT 0"
+            ]
+          },
+          {
+            "name": "propietario",
+            "type": "integer",
+            "constraints": [
+              "DEFAULT 0"
+            ]
+          },
+          {
+            "name": "creacion",
+            "type": "timestamp without time zone",
+            "constraints": [
+              "DEFAULT now()"
+            ]
+          },
+          {
+            "name": "codelco",
+            "type": "boolean",
+            "constraints": [
+              "NOT NULL",
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "familia",
+            "type": "integer",
+            "constraints": [
+              "DEFAULT 0",
+              "FOREIGN KEY"
+            ]
+          },
+          {
+            "name": "enabled_machines",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "enabled_canbus",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "enabled_horometro",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "enabled_comap",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "enabled_frio",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "enabled_panico",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "enabled_puerta",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "enabled_rpm",
+            "type": "boolean",
+            "constraints": [
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "enabled_supervisor",
+            "type": "integer",
+            "constraints": [
+              "DEFAULT 0"
+            ]
+          },
+          {
+            "name": "demo",
+            "type": "boolean",
+            "constraints": []
+          },
+          {
+            "name": "interno",
+            "type": "boolean",
+            "constraints": []
+          },
+          {
+            "name": "mqtt_enable",
+            "type": "boolean",
+            "constraints": [
+              "NOT NULL",
+              "DEFAULT false"
+            ]
+          },
+          {
+            "name": "topicos",
+            "type": "character varying(20)[]",
+            "constraints": []
+          }
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The full table structure was provided in the post.",
+      "confidence": 0.5
+    },
+    {
+      "key": "PostgreSQL version",
+      "value": "9.4.5",
+      "source": "explicit_post",
+      "evidence": "The DBA explicitly mentioned the PostgreSQL version.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Lock contention mechanism",
+      "value": {
+        "lock_type": "ACCESS EXCLUSIVE",
+        "blocking_lock_type": "ACCESS SHARE",
+        "queue_behavior": "FIFO"
+      },
+      "source": "post_hypothesis",
+      "evidence": "The answer by jjanes describes the lock contention mechanism in detail.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The database environment is similar to the one described in the post.",
+    "The table structure and workload are representative of the production system."
+  ],
+  "unknowns": [
+    "The exact workload on the 'cliente' table during the ALTER TABLE operation.",
+    "Whether there were any long-running transactions or idle connections holding locks."
+  ],
+  "confidence": 0.9
+}

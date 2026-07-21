@@ -1,0 +1,232 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Slow SELECT query with multiple LEFT JOINs over large tables.",
+    "symptoms": [
+      "Query execution time exceeds 3 minutes.",
+      "High row examination count in EXPLAIN plan.",
+      "Query cache lock delays."
+    ],
+    "mechanism": "Inefficient query plan due to suboptimal indexing and large table sizes.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "duration_sec": 222
+        },
+        "source": "explicit_post",
+        "evidence": "Query took 3 min 42.77 sec.",
+        "confidence": 0.5
+      },
+      {
+        "key": "row_examination_count",
+        "value": 80974656,
+        "source": "explicit_post",
+        "evidence": "EXPLAIN shows 1,265,229 * 4 * 4 * 4 rows examined.",
+        "confidence": 0.5
+      },
+      {
+        "key": "query_cache_lock",
+        "value": true,
+        "source": "explicit_post",
+        "evidence": "Profiling shows repeated 'Waiting for query cache lock'.",
+        "confidence": 0.5
+      },
+      {
+        "key": "table_sizes",
+        "value": {
+          "persons": 10000000.0,
+          "attributes": 40000000.0
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions ~10M rows in persons and ~40M rows in attributes.",
+        "confidence": 0.5
+      },
+      {
+        "key": "indexes",
+        "value": [
+          "attribute_type_id",
+          "attribute_value",
+          "person_id"
+        ],
+        "source": "explicit_post",
+        "evidence": "Post lists existing indexes on attribute table.",
+        "confidence": 0.5
+      },
+      {
+        "key": "query_structure",
+        "value": "LEFT JOINs with filters on multiple attributes.",
+        "source": "explicit_post",
+        "evidence": "Query provided in the post.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database schema and query structure are as described in the post.",
+      "The target database will be created from scratch for this reproduction.",
+      "The query cache lock delays are due to contention in the query cache."
+    ],
+    "unknowns": [
+      "Exact MySQL version used in the original environment.",
+      "Whether the query cache was enabled during the original execution.",
+      "The hardware specifications of the original environment."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The target database does not exist, but the schema and data characteristics can be recreated synthetically. The mechanism of the slow query can be reproduced by simulating the table sizes, indexes, and query structure.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact MySQL version and environment configuration."
+    ],
+    "confidence": 0.85
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_how_to_optimize_very_sl_r172028_a3",
+    "requirements": [
+      "Dedicated test database for synthetic data generation."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_how_to_optimize_very_sl_r172028_a3",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS person (person_id INT UNSIGNED NOT NULL AUTO_INCREMENT, person_name TEXT CHARACTER SET latin1, PRIMARY KEY (person_id)) ENGINE=MyISAM DEFAULT CHARSET=utf8;",
+      "CREATE TABLE IF NOT EXISTS attribute (attribute_id INT UNSIGNED NOT NULL AUTO_INCREMENT, attribute_type_id INT UNSIGNED, attribute_value INT, person_id INT UNSIGNED, PRIMARY KEY (attribute_id), KEY attribute_type_id (attribute_type_id), KEY attribute_value (attribute_value), KEY person_id (person_id)) ENGINE=MyISAM DEFAULT CHARSET=utf8;"
+    ],
+    "generation_sql": [
+      "INSERT INTO person (person_id, person_name) SELECT n, CONCAT('Person_', n) FROM generated_numbers WHERE n <= {row_count};",
+      "INSERT INTO attribute (attribute_id, attribute_type_id, attribute_value, person_id) SELECT n, MOD(n, 4) + 1, MOD(n, 10000), MOD(n, 10000000) + 1 FROM generated_numbers WHERE n <= {row_count};"
+    ],
+    "tables": [
+      {
+        "name": "person",
+        "purpose": "Primary table representing individuals.",
+        "target_rows": 10000000,
+        "distribution_notes": "Uniform distribution of person IDs."
+      },
+      {
+        "name": "attribute",
+        "purpose": "EAV table storing attributes for persons.",
+        "target_rows": 40000000,
+        "distribution_notes": "Uniform distribution of attribute types and values."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "person": 10000000,
+        "attribute": 40000000
+      },
+      "value_skew": {
+        "attribute.attribute_value": "Uniform distribution across 10,000 values."
+      },
+      "predicate_selectivity": {
+        "location.attribute_value BETWEEN 3000 AND 7000": 0.4,
+        "gender.attribute_value = 1": 0.25,
+        "bornyear.attribute_value BETWEEN 1980 AND 2000": 0.2,
+        "eyecolor.attribute_value IN (2,3)": 0.02
+      },
+      "join_selectivity": {
+        "attribute.person_id = person.person_id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "person",
+      "attribute"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT person.person_id FROM person LEFT JOIN attribute location ON location.attribute_type_id = 1 AND location.person_id = person.person_id LEFT JOIN attribute gender ON gender.attribute_type_id = 2 AND gender.person_id = person.person_id LEFT JOIN attribute bornyear ON bornyear.attribute_type_id = 3 AND bornyear.person_id = person.person_id LEFT JOIN attribute eyecolor ON eyecolor.attribute_type_id = 4 AND eyecolor.person_id = person.person_id WHERE location.attribute_value BETWEEN 3000 AND 7000 AND gender.attribute_value = 1 AND bornyear.attribute_value BETWEEN 1980 AND 2000 AND eyecolor.attribute_value IN (2,3) LIMIT 100000;",
+        "objective": "Verify that the query plan matches the structure and inefficiencies described in the post.",
+        "expected_evidence": [
+          "EXPLAIN shows high row examination counts.",
+          "EXPLAIN shows range scans and ref lookups on the attribute table.",
+          "Query execution time is significantly high (e.g., > 3 minutes)."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000000,
+      "max_rows": 40000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query execution time matches or exceeds the reported duration.",
+      "EXPLAIN plan matches the described structure."
+    ],
+    "symptom_evidence": [
+      "High row examination count.",
+      "Query cache lock delays."
+    ],
+    "mechanism_evidence": [
+      "Inefficient query plan due to suboptimal indexing."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Slow SELECT query with multiple LEFT JOINs.",
+    "target_database": "post_retry_slowsql_how_to_optimize_very_sl_r172028_a3",
+    "dba_description": "Reproduce and analyze the slow SELECT query with multiple LEFT JOINs over large tables.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_how_to_optimize_very_sl_r172028_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_slowsql_how_to_optimize_very_sl_r172028_a3;"
+                },
+                {
+                  "sql": "USE post_retry_slowsql_how_to_optimize_very_sl_r172028_a3;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup for synthetic data generation."
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident involves a slow query with multiple LEFT JOINs over large tables. The schema and data characteristics can be recreated synthetically to reproduce the mechanism of the slow query. The target database does not exist, so the first step is to set up the environment."
+}

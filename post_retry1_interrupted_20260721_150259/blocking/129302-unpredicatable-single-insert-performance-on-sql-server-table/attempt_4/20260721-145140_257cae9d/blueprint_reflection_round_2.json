@@ -1,0 +1,212 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Unpredictable single insert performance due to blocking and excessive indexes.",
+    "symptoms": [
+      "Single record insert taking over 7 minutes.",
+      "Blocking session IDs reported by sys.dm_exec_requests but no active blocker found.",
+      "Blocked requests waiting for LCK_M_S lock type."
+    ],
+    "mechanism": "Blocking caused by uncommitted transactions holding locks, exacerbated by contention from excessive indexes.",
+    "facts": [
+      {
+        "key": "Table has 34 indexes despite being an OLTP system.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions the table has 34 indexes.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Blocked requests waiting for LCK_M_S.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post explicitly states blocked requests are waiting for LCK_M_S lock type.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Blocking session ID reported but no active blocker found.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post describes sys.dm_exec_requests showing a blocking session ID but no active query in sys.dm_exec_requests.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Insert performance is generally good except for occasional outliers.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions that insert performance is usually good.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The blocking is caused by uncommitted transactions holding locks.",
+      "Excessive indexes contribute to contention during inserts."
+    ],
+    "unknowns": [
+      "Exact transaction causing the blocking.",
+      "Impact of other concurrent processes on the blocking behavior."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of blocking due to uncommitted transactions and contention from excessive indexes can be reproduced using synthetic data and controlled transactions.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_blocking_129302_unpredicatable_r700738_a4",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_129302_unpredicatable_r700738_a4",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS Communication (id INT IDENTITY PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX))",
+      "CREATE INDEX IF NOT EXISTS idx_comm_action ON Communication(comm_action)",
+      "CREATE INDEX IF NOT EXISTS idx_comm_channelid ON Communication(comm_channelid)",
+      "CREATE INDEX IF NOT EXISTS idx_payload ON Communication(payload)"
+    ],
+    "generation_sql": [
+      "INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT CASE WHEN n % 10 = 0 THEN 'Deskwork' ELSE 'Other' END, n % 100, CONCAT('Payload_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers"
+    ],
+    "tables": [
+      {
+        "name": "Communication",
+        "purpose": "Primary table for reproducing insert blocking and contention.",
+        "target_rows": 8000000,
+        "distribution_notes": "Simulates a large OLTP table with skewed data distribution in comm_action."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "Communication": 8000000
+      },
+      "value_skew": {
+        "Communication.comm_action": "Skewed towards 'Deskwork' for 10% of rows."
+      },
+      "predicate_selectivity": {
+        "comm_action = 'Deskwork'": 0.1
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "Communication"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT comm_action, COUNT(*) FROM Communication GROUP BY comm_action",
+        "objective": "Verify skewed distribution of comm_action values.",
+        "expected_evidence": [
+          "Skewed distribution with 'Deskwork' accounting for approximately 10% of rows."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 8000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, 'Test Payload')"
+    ],
+    "concurrency": 10,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Blocking behavior observed during inserts.",
+      "Insert performance degradation correlates with blocking."
+    ],
+    "symptom_evidence": [
+      "Blocked requests waiting for LCK_M_S lock type.",
+      "Blocking session ID reported but no active blocker found."
+    ],
+    "mechanism_evidence": [
+      "Uncommitted transactions holding locks cause blocking.",
+      "Excessive indexes contribute to contention during inserts."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocking during single record inserts.",
+    "target_database": "post_retry_blocking_129302_unpredicatable_r700738_a4",
+    "dba_description": "Reproduce blocking behavior during single record inserts caused by uncommitted transactions and contention from excessive indexes.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r700738_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET TRANSACTION ISOLATION LEVEL READ COMMITTED"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Blocking due to uncommitted transactions and excessive indexes."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, 'Test Payload')",
+          "concurrency": 10,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Blocking during inserts due to contention and uncommitted transactions."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating blocking behavior during inserts caused by uncommitted transactions and contention from excessive indexes. Synthetic data and controlled workload allow for isolating the mechanism."
+}

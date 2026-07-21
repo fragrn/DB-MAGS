@@ -1,0 +1,15 @@
+{
+  "validation_criteria": [
+    "Blocking behavior is observed during the insert operation.",
+    "The insert operation experiences delays due to the blocking transaction."
+  ],
+  "symptom_evidence": [
+    "Blocked session IDs appear in `sys.dm_exec_requests`.",
+    "Blocked requests show a `LCK_M_S` wait type."
+  ],
+  "mechanism_evidence": [
+    "Uncommitted transactions hold locks on resources, causing blocking.",
+    "The presence of multiple indexes increases the time required for the insert operation."
+  ],
+  "minimum_plan_similarity": 0.7
+}

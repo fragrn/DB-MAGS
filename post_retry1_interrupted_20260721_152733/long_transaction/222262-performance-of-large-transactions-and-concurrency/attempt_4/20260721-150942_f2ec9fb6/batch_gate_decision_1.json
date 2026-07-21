@@ -1,0 +1,61 @@
+{
+  "gate": {
+    "status": "waiting_human",
+    "phase": "evaluation",
+    "reasons": [
+      "feasibility_blocked",
+      "unresolved_critical_questions"
+    ],
+    "summary": "Review the reproduction plan revised after a failed execution",
+    "allowed_decisions": [
+      "approve",
+      "reject",
+      "revise",
+      "feedback"
+    ],
+    "editable_roots": [
+      "data_spec.calibration_queries",
+      "data_spec.constraints",
+      "data_spec.scale_strategy",
+      "data_spec.tables",
+      "dependencies",
+      "evaluation_spec",
+      "experiment_request",
+      "incident_spec.assumptions",
+      "incident_spec.unknowns",
+      "risk_assessment",
+      "task_specs",
+      "workload_spec"
+    ],
+    "timestamp": 1784617840.637148
+  },
+  "decision": {
+    "decision": "reject",
+    "patch": null,
+    "feedback": "",
+    "actor": "batch",
+    "timestamp": 1784617840.638953
+  },
+  "repairs": [
+    {
+      "path": "workload_spec.queries",
+      "before": [
+        {
+          "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id = 1; -- Transaction 1",
+          "concurrency": 1,
+          "duration_sec": 10
+        },
+        {
+          "sql": "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id = 1; -- Transaction 2",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "after": [
+        "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id = 1; -- Transaction 1",
+        "BEGIN; UPDATE tools SET description = 'conflicting_update' WHERE id = 1; -- Transaction 2"
+      ],
+      "reason": "Runtime SQL background workload expects query strings."
+    }
+  ]
+}

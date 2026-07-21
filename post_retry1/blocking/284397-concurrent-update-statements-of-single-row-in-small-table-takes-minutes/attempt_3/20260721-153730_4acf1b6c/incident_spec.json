@@ -1,0 +1,69 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "Concurrent UPDATE statements on a single row in a small table take minutes to complete.",
+  "symptoms": [
+    "Long execution times for concurrent UPDATE statements.",
+    "Exclusive locks observed on the table.",
+    "No deadlocks, but significant contention."
+  ],
+  "mechanism": "Row-level locking contention due to multiple concurrent updates on the same row.",
+  "facts": [
+    {
+      "key": "table_schema",
+      "value": {
+        "table_name": "host_scan_complete_log_counts",
+        "columns": [
+          {
+            "name": "scan_uuid",
+            "type": "uuid",
+            "constraints": [
+              "not null"
+            ]
+          },
+          {
+            "name": "num_shards_completed",
+            "type": "numeric",
+            "constraints": [
+              "not null",
+              "default 0"
+            ]
+          }
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Schema provided in the DBA post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "update_pattern",
+      "value": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1",
+      "source": "explicit_post",
+      "evidence": "SQL provided in the DBA post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "lock_analysis",
+      "value": "Exclusive locks observed on the table during concurrent updates.",
+      "source": "explicit_post",
+      "evidence": "Lock analysis query output provided in the DBA post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "concurrent_nodes",
+      "value": "A few hundred nodes perform updates concurrently.",
+      "source": "explicit_post",
+      "evidence": "Description of workload in the DBA post.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The database uses default isolation levels (likely READ COMMITTED or REPEATABLE READ).",
+    "The workload involves frequent updates to the same row identified by scan_uuid."
+  ],
+  "unknowns": [
+    "Exact PostgreSQL version and configuration.",
+    "Whether any connection pooling or retry logic is in place."
+  ],
+  "confidence": 0.9
+}

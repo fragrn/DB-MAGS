@@ -1,0 +1,75 @@
+{
+  "tasks": {
+    "setup_environment": {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_4717_too_ma_r892468_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_4717_too_ma_r892468_a1"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_4717_too_ma_r892468_a1"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS data_feed (id INT AUTO_INCREMENT PRIMARY KEY, payload VARCHAR(255), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database environment setup"
+      }
+    },
+    "simulate_workload": {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO data_feed (payload) VALUES ('test_data')",
+          "concurrency": 200,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "connection_errors": "too_many_connections"
+      },
+      "success_criteria": {
+        "error_detected": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Excessive connection creation"
+      }
+    }
+  },
+  "edges": [
+    {
+      "source": "setup_environment",
+      "target": "simulate_workload",
+      "condition": ""
+    }
+  ],
+  "schedule": {
+    "setup_environment": 0.0,
+    "simulate_workload": 0.0
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "status": "overridden",
+  "matched": true,
+  "decision": "weak_match",
+  "weak_match": true,
+  "concerns": [
+    "The calibration query does not directly demonstrate RESOURCE_SEMAPHORE waits or high parallelism in the execution plan."
+  ],
+  "recommended_changes": [
+    "Consider adding workload execution logs or monitoring tools to capture RESOURCE_SEMAPHORE waits and parallelism during query execution.",
+    "Refine the calibration query to explicitly trigger high memory grants and parallel execution."
+  ],
+  "rounds": [
+    {
+      "decision": "weak_match",
+      "reasoning": "The observed execution plan shows a Clustered Index Scan on the synthetic_queries table with filters applied for memory_grant and parallelism. While this indicates that the query is scanning the relevant rows based on the predicates, it does not explicitly show evidence of high memory grants or parallelism contributing to RESOURCE_SEMAPHORE waits. The plan does not provide direct visibility into memory pressure or parallel execution behavior, which are critical to reproducing the target anomaly.",
+      "query_assessments": [
+        {
+          "query_id": "calibration_query_1",
+          "sql": "SELECT * FROM synthetic_queries WHERE memory_grant > 50 AND parallelism > 8",
+          "matched": true,
+          "observed_plan_summary": "Clustered Index Scan on synthetic_queries table with filters on memory_grant and parallelism.",
+          "supporting_evidence": [
+            "Clustered Index Scan indicates the query is accessing rows based on the predicates."
+          ],
+          "discrepancies": [
+            "No explicit evidence of high memory grants or parallelism contributing to RESOURCE_SEMAPHORE waits.",
+            "Execution plan does not show parallel execution behavior or memory grant details."
+          ]
+        }
+      ],
+      "concerns": [
+        "The calibration query does not directly demonstrate RESOURCE_SEMAPHORE waits or high parallelism in the execution plan."
+      ],
+      "recommended_changes": [
+        "Consider adding workload execution logs or monitoring tools to capture RESOURCE_SEMAPHORE waits and parallelism during query execution.",
+        "Refine the calibration query to explicitly trigger high memory grants and parallel execution."
+      ],
+      "missing_information": [
+        "Details on whether RESOURCE_SEMAPHORE waits were observed during query execution.",
+        "Execution metrics showing memory grants and parallelism levels."
+      ],
+      "round": 1,
+      "matched": false
+    }
+  ],
+  "observed_matched": false,
+  "overridden": true
+}

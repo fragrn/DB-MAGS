@@ -1,0 +1,251 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "SQL Server query performance regresses due to high memory use and parameter sniffing issues.",
+    "symptoms": [
+      "Queries for large accounts time out when memory is filled.",
+      "Restarting SQL Server temporarily resolves the issue.",
+      "SSMS executes the same stored procedure faster than the application.",
+      "Execution plans differ between SSMS and the application due to ARITHABORT settings."
+    ],
+    "mechanism": "Parameter sniffing and memory pressure lead to inefficient execution plans and resource contention.",
+    "facts": [
+      {
+        "key": "High memory use causes query timeouts.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The DBA observed that restarting SQL Server clears memory and resolves query timeouts temporarily.",
+        "confidence": 0.9
+      },
+      {
+        "key": "SSMS uses ARITHABORT, leading to different execution plans.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The DBA identified ARITHABORT as a key difference between SSMS and application settings.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Parameter sniffing affects execution plans.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The DBA confirmed parameter sniffing as the root cause after analyzing execution plans.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Large accounts generate high disk reads and memory usage.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The DBA observed large read spikes and memory consumption for large accounts.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The synthetic data will replicate the skew and cardinality of large accounts.",
+      "The execution plan differences can be reproduced by varying ARITHABORT settings."
+    ],
+    "unknowns": [
+      "Exact schema details of the Notifications and Reports tables.",
+      "Specific query patterns causing Sort operations and tempdb usage."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction can simulate parameter sniffing and memory pressure mechanisms, but exact query behavior may vary due to schema and workload differences.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema details of the Notifications and Reports tables."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_291670_sql_r927761_a2",
+    "requirements": [
+      "SQL Server 2019 or compatible environment"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_291670_sql_r927761_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS Notifications (id INT PRIMARY KEY, account_id INT, notified_at_utc DATETIME, payload NVARCHAR(MAX))",
+      "CREATE TABLE IF NOT EXISTS Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, report_data NVARCHAR(MAX))"
+    ],
+    "generation_sql": [
+      "INSERT INTO Notifications (id, account_id, notified_at_utc, payload) SELECT n, MOD(n, 4) + 1, DATEADD(MINUTE, n, '2023-01-01T00:00:00'), CONCAT('Payload_', n) FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO Reports (id, account_id, received_at_utc, report_data) SELECT n, MOD(n, 4) + 1, DATEADD(MINUTE, n, '2023-01-01T00:00:00'), CONCAT('Report_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "Notifications",
+        "purpose": "Simulates the high cardinality and memory-intensive table for large accounts.",
+        "target_rows": 100000,
+        "distribution_notes": "Skewed distribution with large accounts having significantly more rows."
+      },
+      {
+        "name": "Reports",
+        "purpose": "Simulates the table involved in Sort operations and joins.",
+        "target_rows": 100000,
+        "distribution_notes": "Similar skew as Notifications to reproduce join behavior."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "Notifications": 100000,
+        "Reports": 100000
+      },
+      "value_skew": {
+        "Notifications.account_id": "Large accounts have disproportionately high row counts."
+      },
+      "predicate_selectivity": {
+        "Notifications.account_id = 1": 0.25
+      },
+      "join_selectivity": {
+        "Notifications.account_id = Reports.account_id": "Many-to-one relationship."
+      }
+    },
+    "analyze_tables": [
+      "Notifications",
+      "Reports"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT n.* FROM Notifications n JOIN Reports r ON r.account_id = n.account_id WHERE n.account_id = 1 ORDER BY n.notified_at_utc DESC",
+        "objective": "Verify Sort operation and tempdb usage under memory pressure.",
+        "expected_evidence": [
+          "Execution plan shows Sort operation and tempdb usage.",
+          "Join behavior matches the expected many-to-one relationship."
+        ]
+      },
+      {
+        "sql": "SELECT n.* FROM Notifications n WHERE n.account_id = 1",
+        "objective": "Verify parameter sniffing impact on execution plans.",
+        "expected_evidence": [
+          "Execution plan changes based on ARITHABORT setting.",
+          "Query performance varies between SSMS and application settings."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Execution plan matches expected Sort and tempdb usage.",
+      "Parameter sniffing behavior is visible in plan differences."
+    ],
+    "symptom_evidence": [
+      "Query timeouts under memory pressure.",
+      "Execution plan differences between SSMS and application."
+    ],
+    "mechanism_evidence": [
+      "Sort operation and tempdb usage under memory pressure.",
+      "Parameter sniffing behavior affecting execution plans."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance regression due to memory pressure and parameter sniffing.",
+    "target_database": "post_retry_resource_limitation_291670_sql_r927761_a2",
+    "dba_description": "Reproduce query timeouts and execution plan differences caused by memory pressure and parameter sniffing.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "configure_memory_settings",
+      "task_type": "configuration",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r927761_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "EXEC sp_configure 'max server memory', 8192; RECONFIGURE;"
+                },
+                {
+                  "sql": "EXEC sp_configure 'min server memory', 1024; RECONFIGURE;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "configuration_applied": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Memory pressure causing query timeouts."
+      }
+    },
+    {
+      "task_id": "test_arithabort_impact",
+      "task_type": "query_execution",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SET ARITHABORT ON; SELECT n.* FROM Notifications n WHERE n.account_id = 1;",
+          "concurrency": 1,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SET ARITHABORT OFF; SELECT n.* FROM Notifications n WHERE n.account_id = 1;",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "execution_plan_differences": true
+      },
+      "success_criteria": {
+        "execution_plan_differences": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Parameter sniffing affecting execution plans."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "configure_memory_settings",
+      "test_arithabort_impact"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Exact schema details of the Notifications and Reports tables.",
+    "Specific query patterns causing Sort operations and tempdb usage."
+  ],
+  "rationale": "The incident involves memory pressure and execution plan differences caused by parameter sniffing. Synthetic data and schema are designed to replicate the skew and cardinality of large accounts. Calibration queries and tasks focus on reproducing Sort operations and execution plan differences under varying ARITHABORT settings."
+}

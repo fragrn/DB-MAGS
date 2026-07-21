@@ -1,0 +1,142 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Performance issues with queries on a large table containing call data, specifically involving slow execution of queries with range conditions and IN predicates.",
+    "symptoms": [
+      "Query execution time exceeds acceptable limits",
+      "EXPLAIN shows scanning of large number of rows",
+      "Indexes not being utilized effectively"
+    ],
+    "mechanism": "Inefficient index utilization due to range conditions and IN predicates, compounded by high cardinality and large dataset size.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "time": "4.5s for simplified query, >7 minutes for full query"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions query execution times.",
+        "confidence": 0.9
+      },
+      {
+        "key": "table_size",
+        "value": {
+          "rows": "approximately 30 million"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions table size.",
+        "confidence": 0.9
+      },
+      {
+        "key": "indexes",
+        "value": {
+          "details": "Multiple indexes including composite indexes"
+        },
+        "source": "explicit_post",
+        "evidence": "Post provides index details.",
+        "confidence": 0.9
+      },
+      {
+        "key": "query_conditions",
+        "value": {
+          "conditions": [
+            "DateStart range",
+            "CallLength range",
+            "Direction equality",
+            "CustID IN list"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Post provides query details.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The IN predicate is causing inefficient index usage.",
+      "The range conditions on DateStart and CallLength are limiting index effectiveness.",
+      "The table schema and indexes provided in the post are accurate."
+    ],
+    "unknowns": [
+      "Exact distribution of data in the table",
+      "Effectiveness of alternative indexes or query rewrites"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing setup and reproduction of the incident.",
+    "missing_capabilities": [
+      "Existing database environment for reproduction"
+    ],
+    "unmatched_conditions": [
+      "Database creation and schema setup cannot proceed without a valid target database."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_mysql_query_performance_r368051_a3",
+    "requirements": [
+      "Database must exist and be accessible."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_mysql_query_performance_r368051_a3",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database environment must exist and be accessible."
+    ],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Slow query performance due to inefficient index utilization",
+    "target_database": "post_retry_slowsql_mysql_query_performance_r368051_a3",
+    "dba_description": "Performance issues with queries on a large table containing call data.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How can the target database be created or restored for reproduction?"
+  ],
+  "rationale": "The reproduction cannot proceed without a valid target database environment. The incident analysis and feasibility assessment are based on the provided forum post and the current inspection results."
+}

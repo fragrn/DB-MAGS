@@ -1,0 +1,257 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Slow SELECT query on sys.databases with OBJECT_ID checks and filtering.",
+    "symptoms": [
+      "Query execution takes 9 seconds on a local dev machine with 4 databases.",
+      "Execution plan shows clustered index seeks consuming significant resources."
+    ],
+    "mechanism": "Potential blocking due to long-running DDL transactions or inefficiencies in querying OBJECT_ID across databases.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "before_filter": "21 seconds",
+          "after_filter": "9 seconds"
+        },
+        "source": "explicit_post",
+        "evidence": "Query execution time reported in the post.",
+        "confidence": 0.5
+      },
+      {
+        "key": "execution_plan",
+        "value": {
+          "clustered_index_seek_percentages": [
+            22,
+            24,
+            48
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Execution plan details provided in the post.",
+        "confidence": 0.5
+      },
+      {
+        "key": "query_structure",
+        "value": {
+          "uses_OBJECT_ID": true,
+          "filters_on_state_desc": true,
+          "filters_on_name": true
+        },
+        "source": "explicit_post",
+        "evidence": "Query structure described in the post.",
+        "confidence": 0.5
+      },
+      {
+        "key": "environment",
+        "value": {
+          "local_dev_machine": true,
+          "4_databases": true
+        },
+        "source": "explicit_post",
+        "evidence": "Environment details provided in the post.",
+        "confidence": 0.5
+      },
+      {
+        "key": "index_control",
+        "value": {
+          "no_control_over_indexes": true
+        },
+        "source": "explicit_post",
+        "evidence": "DBA explicitly states no control over indexes.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The issue is reproducible in a synthetic environment.",
+      "The database contains at least one table named '_LOOK_UP_TABLE' in one of the user databases."
+    ],
+    "unknowns": [
+      "Exact schema of the databases.",
+      "Whether there are long-running DDL transactions in the environment."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The issue can be reproduced at the mechanism level by simulating the query and potential blocking conditions in a synthetic environment.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "The target database does not exist and needs to be created."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_long_transaction_72191_why_is_m_r971452_a3",
+    "requirements": [
+      "Create a synthetic database environment with multiple databases, one of which contains the '_LOOK_UP_TABLE'."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_72191_why_is_m_r971452_a3",
+    "schema_sql": [
+      "CREATE DATABASE IF NOT EXISTS db1;",
+      "CREATE DATABASE IF NOT EXISTS db2;",
+      "CREATE DATABASE IF NOT EXISTS db3;",
+      "CREATE DATABASE IF NOT EXISTS db4;",
+      "USE db1; CREATE SCHEMA IF NOT EXISTS dbo; CREATE TABLE dbo._LOOK_UP_TABLE (id INT PRIMARY KEY, value NVARCHAR(255));",
+      "USE db2; CREATE SCHEMA IF NOT EXISTS dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));",
+      "USE db3; CREATE SCHEMA IF NOT EXISTS dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));",
+      "USE db4; CREATE SCHEMA IF NOT EXISTS dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));"
+    ],
+    "generation_sql": [
+      "USE db1; INSERT INTO dbo._LOOK_UP_TABLE (id, value) SELECT n, CONCAT('Value_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+      "USE db2; INSERT INTO dbo.other_table (id, value) SELECT n, CONCAT('Value_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+      "USE db3; INSERT INTO dbo.other_table (id, value) SELECT n, CONCAT('Value_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+      "USE db4; INSERT INTO dbo.other_table (id, value) SELECT n, CONCAT('Value_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;"
+    ],
+    "tables": [
+      {
+        "name": "dbo._LOOK_UP_TABLE",
+        "purpose": "Target table for OBJECT_ID checks in db1.",
+        "target_rows": 1000,
+        "distribution_notes": "Uniform distribution of values."
+      },
+      {
+        "name": "dbo.other_table",
+        "purpose": "Placeholder tables in other databases.",
+        "target_rows": 1000,
+        "distribution_notes": "Uniform distribution of values."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "db1.dbo._LOOK_UP_TABLE": 1000,
+        "db2.dbo.other_table": 1000,
+        "db3.dbo.other_table": 1000,
+        "db4.dbo.other_table": 1000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {
+        "OBJECT_ID check": 0.25
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "db1.dbo._LOOK_UP_TABLE",
+      "db2.dbo.other_table",
+      "db3.dbo.other_table",
+      "db4.dbo.other_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT name FROM sys.databases WHERE name NOT IN ('master','model','msdb','tempdb','ReportServer','ReportServerTempDB','1303VISBOC') AND state_desc = 'ONLINE' AND OBJECT_ID(QUOTENAME(name) + '.[dbo].[_LOOK_UP_TABLE]', 'U') IS NOT NULL;",
+        "objective": "Verify that the query identifies only databases containing the '_LOOK_UP_TABLE'.",
+        "expected_evidence": [
+          "Execution plan shows OBJECT_ID checks.",
+          "Query filters out system databases and non-online databases."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 10000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query execution time is within acceptable limits.",
+      "Execution plan matches expected behavior."
+    ],
+    "symptom_evidence": [
+      "Query execution time is slow.",
+      "Execution plan shows clustered index seeks consuming significant resources."
+    ],
+    "mechanism_evidence": [
+      "Query involves OBJECT_ID checks across multiple databases.",
+      "Potential blocking due to long-running DDL transactions."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Slow SELECT query on sys.databases with OBJECT_ID checks.",
+    "target_database": "post_retry_long_transaction_72191_why_is_m_r971452_a3",
+    "dba_description": "Reproduce the slow query execution involving OBJECT_ID checks across multiple databases.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "create_databases_and_tables",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "master",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE db1;"
+                },
+                {
+                  "sql": "CREATE DATABASE db2;"
+                },
+                {
+                  "sql": "CREATE DATABASE db3;"
+                },
+                {
+                  "sql": "CREATE DATABASE db4;"
+                },
+                {
+                  "sql": "USE db1; CREATE SCHEMA dbo; CREATE TABLE dbo._LOOK_UP_TABLE (id INT PRIMARY KEY, value NVARCHAR(255));"
+                },
+                {
+                  "sql": "USE db2; CREATE SCHEMA dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));"
+                },
+                {
+                  "sql": "USE db3; CREATE SCHEMA dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));"
+                },
+                {
+                  "sql": "USE db4; CREATE SCHEMA dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "databases_created": true,
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Slow OBJECT_ID checks across multiple databases."
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident involves slow query execution due to OBJECT_ID checks across multiple databases. A synthetic environment with multiple databases and tables is required to reproduce the issue. The feasibility is at the mechanism level as the exact production environment is not available."
+}

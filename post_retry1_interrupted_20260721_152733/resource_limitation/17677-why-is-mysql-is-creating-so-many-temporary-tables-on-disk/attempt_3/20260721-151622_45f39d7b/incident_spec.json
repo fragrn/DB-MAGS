@@ -1,0 +1,42 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Excessive creation of temporary tables on disk in MySQL, despite configuration adjustments.",
+  "symptoms": [
+    "High percentage of temporary tables created on disk.",
+    "Performance concerns related to disk-based temporary tables."
+  ],
+  "mechanism": "Implicit temporary tables exceeding memory limits or involving unsupported data types (e.g., TEXT/BLOB).",
+  "facts": [
+    {
+      "key": "tmp_table_size and max_heap_table_size increased to 200M",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post mentions configuration changes to reduce disk-based temp tables.",
+      "confidence": 0.9
+    },
+    {
+      "key": "TEXT/BLOB fields force disk-based temp tables",
+      "value": {},
+      "source": "post_hypothesis",
+      "evidence": "Answer 1 explains MEMORY engine limitations with TEXT/BLOB fields.",
+      "confidence": 0.8
+    },
+    {
+      "key": "Queries with GROUP BY or ORDER BY may create temp tables",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post and answers discuss query patterns causing temp tables.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The database schema includes TEXT/BLOB fields or large columns.",
+    "Queries involve GROUP BY, ORDER BY, or UNION operations."
+  ],
+  "unknowns": [
+    "Exact schema and query workload causing temp table creation.",
+    "Whether other configuration settings contribute to the issue."
+  ],
+  "confidence": 0.7
+}

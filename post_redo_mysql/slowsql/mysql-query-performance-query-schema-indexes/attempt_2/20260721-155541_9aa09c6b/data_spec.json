@@ -1,0 +1,49 @@
+{
+  "database": "post_retry_slowsql_mysql_query_performance_r541792_a2",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS calls (ID INT AUTO_INCREMENT PRIMARY KEY, CustID INT NOT NULL, DateStart DATE NOT NULL, CallLength TIME NOT NULL, Direction INT NOT NULL, OrigNumber VARCHAR(16), EffectiveFlag SMALLINT, INDEX idx_CustID_DateStart (CustID, DateStart))"
+  ],
+  "generation_sql": [
+    "INSERT INTO calls (CustID, DateStart, CallLength, Direction, OrigNumber, EffectiveFlag) SELECT MOD(n, 1000), DATE_ADD('2013-01-01', INTERVAL MOD(n, 365) DAY), SEC_TO_TIME(MOD(n, 86400)), MOD(n, 2), CONCAT('Orig_', n), MOD(n, 2) FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "calls",
+      "purpose": "Primary table to reproduce query performance issues.",
+      "target_rows": 30000000,
+      "distribution_notes": "Synthetic data will simulate range conditions and IN clause selectivity."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "calls": 30000000
+    },
+    "value_skew": {
+      "calls.Direction": "low cardinality (2 distinct values)"
+    },
+    "predicate_selectivity": {
+      "DateStart range": 0.1,
+      "CustID IN clause": 0.01
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "calls"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT DateStart, ID, NumbID, EffectiveFlag, OrigNumber FROM calls WHERE DateStart <= '2013-12-31' AND DateStart >= '2013-01-01' AND CallLength >= '00:00:00' AND Direction = '1' AND CustID IN (474,482,250,268,197,604,132,359,279,441,118,448,152,133,380,162,249,679,226,259,2450,2408,2451,2453,2439,2454,2444,2445,2452)",
+      "objective": "Verify that the query uses the idx_CustID_DateStart index and reproduces the range scan behavior.",
+      "expected_evidence": [
+        "EXPLAIN shows idx_CustID_DateStart being used.",
+        "Query execution time aligns with synthetic data size and selectivity."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000000,
+    "max_rows": 30000000,
+    "growth_factor": 3.0,
+    "max_rounds": 3
+  }
+}

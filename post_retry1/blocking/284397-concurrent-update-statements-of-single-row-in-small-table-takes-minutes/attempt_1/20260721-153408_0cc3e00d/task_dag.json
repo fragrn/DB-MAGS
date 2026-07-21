@@ -1,0 +1,109 @@
+{
+  "tasks": {
+    "setup_environment": {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_upda_r248891_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_284397_concurrent_upda_r248891_a1"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "table_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Lock contention due to concurrent updates on the same row."
+      }
+    },
+    "generate_data": {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_upda_r248891_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES (gen_random_uuid(), 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_inserted": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Lock contention due to concurrent updates on the same row."
+      }
+    },
+    "run_workload": {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = gen_random_uuid()",
+          "concurrency": 100,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention_observed": true
+      },
+      "success_criteria": {
+        "lock_contention_observed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Lock contention due to concurrent updates on the same row."
+      }
+    }
+  },
+  "edges": [
+    {
+      "source": "setup_environment",
+      "target": "generate_data",
+      "condition": ""
+    },
+    {
+      "source": "generate_data",
+      "target": "run_workload",
+      "condition": ""
+    }
+  ],
+  "schedule": {
+    "setup_environment": 0.0,
+    "generate_data": 0.0,
+    "run_workload": 0.0
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "task_specs": [
+    {
+      "task_id": "simulate_high_connections",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM user_sessions WHERE status = 'active' LIMIT 10",
+          "concurrency": 12,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "max_connections_reached": true,
+        "error_1040_observed": true
+      },
+      "success_criteria": {
+        "max_connections_reached": true,
+        "error_1040_observed": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Concurrent connections exceeding max_connections limit."
+      }
+    }
+  ],
+  "dependencies": []
+}

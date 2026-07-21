@@ -1,0 +1,51 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "MATLAB feeding the database causes 'too many connections' error due to excessive connection creation.",
+  "symptoms": [
+    "Too many connections error",
+    "High number of threads in MySQL"
+  ],
+  "mechanism": "Excessive connection creation by MATLAB threads without proper pooling or batching.",
+  "facts": [
+    {
+      "key": "max_connections default limit",
+      "value": {
+        "default_limit": 151
+      },
+      "source": "explicit_post",
+      "evidence": "MySQL default max_connections is 151, as mentioned in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "MATLAB connection behavior",
+      "value": {
+        "behavior": "Open and close connections for each row insert"
+      },
+      "source": "explicit_post",
+      "evidence": "MATLAB opens and closes connections for each row insert, leading to high connection counts.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Observed threads",
+      "value": {
+        "threads": [
+          149,
+          150
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions 149 and 150 threads during the issue.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The database is configured with default max_connections.",
+    "MATLAB is not using connection pooling or batching."
+  ],
+  "unknowns": [
+    "Exact workload characteristics of MATLAB feeding process.",
+    "Whether connection pooling is feasible in the MATLAB environment."
+  ],
+  "confidence": 0.9
+}

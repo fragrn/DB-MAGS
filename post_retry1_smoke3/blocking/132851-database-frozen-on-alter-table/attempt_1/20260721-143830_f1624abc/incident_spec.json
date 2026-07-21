@@ -1,0 +1,93 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "ALTER TABLE operation caused a database freeze due to lock contention.",
+  "symptoms": [
+    "Database freeze",
+    "Login failures",
+    "Blocked queries"
+  ],
+  "mechanism": "The ALTER TABLE operation requires an ACCESS EXCLUSIVE lock, which was blocked by a long-lived weak lock, causing subsequent queries to queue behind the waiting lock.",
+  "facts": [
+    {
+      "key": "ALTER TABLE operation",
+      "value": {
+        "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+      },
+      "source": "explicit_post",
+      "evidence": "The DBA explicitly mentioned the SQL statement causing the issue.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Table structure",
+      "value": {
+        "table_name": "cliente",
+        "columns": [
+          "rut",
+          "nombre",
+          "razon_social",
+          "direccion",
+          "comuna",
+          "ciudad",
+          "codigo_pais",
+          "activo",
+          "id",
+          "stock",
+          "vigente",
+          "clase",
+          "plan",
+          "plantilla",
+          "facturable",
+          "toolkit",
+          "propietario",
+          "creacion",
+          "codelco",
+          "familia",
+          "enabled_machines",
+          "enabled_canbus",
+          "enabled_horometro",
+          "enabled_comap",
+          "enabled_frio",
+          "enabled_panico",
+          "enabled_puerta",
+          "enabled_rpm",
+          "enabled_supervisor",
+          "demo",
+          "interno",
+          "mqtt_enable",
+          "topicos"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "The table structure was provided in the post.",
+      "confidence": 0.5
+    },
+    {
+      "key": "PostgreSQL version",
+      "value": "9.4.5",
+      "source": "explicit_post",
+      "evidence": "The DBA mentioned the PostgreSQL version in the post.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Lock contention",
+      "value": {
+        "type": "ACCESS EXCLUSIVE",
+        "cause": "long-lived weak lock"
+      },
+      "source": "post_hypothesis",
+      "evidence": "The second answer hypothesizes that a long-lived weak lock caused the issue.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The database environment is similar to the one described in the post.",
+    "The table structure and constraints are accurately represented in the post.",
+    "The issue is reproducible with synthetic data and similar locking conditions."
+  ],
+  "unknowns": [
+    "The exact workload and query patterns during the incident.",
+    "Whether any other operations were running concurrently with the ALTER TABLE."
+  ],
+  "confidence": 0.9
+}

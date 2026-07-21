@@ -1,0 +1,184 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MySQL database exhibits high CPU usage during benchmarking, likely due to inefficient queries, lack of indexes, and contention issues.",
+    "symptoms": [
+      "High CPU usage",
+      "Low query cache efficiency",
+      "Joins performed without indexes",
+      "High connection usage"
+    ],
+    "mechanism": "Inefficient query execution, lack of indexes, and contention in query cache or mutexes.",
+    "facts": [
+      {
+        "key": "high_cpu_usage",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions high CPU usage during benchmarking.",
+        "confidence": 0.9
+      },
+      {
+        "key": "joins_without_indexes",
+        "value": {
+          "count": 6782
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output shows 6782 joins performed without indexes.",
+        "confidence": 0.9
+      },
+      {
+        "key": "query_cache_efficiency",
+        "value": {
+          "efficiency": 7.8
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output shows query cache efficiency at 7.8%.",
+        "confidence": 0.8
+      },
+      {
+        "key": "connection_usage",
+        "value": {
+          "usage": "100%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output shows highest connection usage at 100%.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The benchmarking workload is read-only.",
+      "Query cache contention contributes to CPU usage.",
+      "Mutex contention may be present."
+    ],
+    "unknowns": [
+      "Exact query patterns causing contention",
+      "Impact of VM CPU performance on observed behavior"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing reproduction setup.",
+    "missing_capabilities": [
+      "Target database environment"
+    ],
+    "unmatched_conditions": [
+      "Database 'post_retry_resource_limitation_130884_mysq_r68160_a2' not found"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_130884_mysq_r68160_a2",
+    "requirements": [
+      "Dedicated test database"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_130884_mysq_r68160_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "main_table",
+        "purpose": "Primary synthetic table to simulate query patterns causing contention.",
+        "target_rows": 100000,
+        "distribution_notes": "Simulates skewed data distribution and join patterns."
+      },
+      {
+        "name": "ref_table",
+        "purpose": "Reference table for joins.",
+        "target_rows": 100,
+        "distribution_notes": "Simulates many-to-one join relationships."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "main_table": 100000,
+        "ref_table": 100
+      },
+      "value_skew": {
+        "main_table.category": "Rare values are sparse."
+      },
+      "predicate_selectivity": {
+        "main_table.category = 'rare'": 0.001
+      },
+      "join_selectivity": {
+        "main_table.ref_id = ref_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "main_table",
+      "ref_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+        "objective": "Verify query plan and contention patterns.",
+        "expected_evidence": [
+          "Plan shows range scans or joins relevant to contention.",
+          "Query cache or mutex contention visible in EXPLAIN."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query cache contention reduced",
+      "Mutex contention reduced",
+      "CPU usage normalized"
+    ],
+    "symptom_evidence": [
+      "High CPU usage",
+      "Low query cache efficiency"
+    ],
+    "mechanism_evidence": [
+      "Joins performed without indexes",
+      "Query cache contention"
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High CPU usage due to inefficient queries and contention",
+    "target_database": "post_retry_resource_limitation_130884_mysq_r68160_a2",
+    "dba_description": "Reproduce high CPU usage in MySQL due to inefficient queries and contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to recreate the missing database environment?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database environment. Synthetic data and schema design are prepared but cannot be implemented without the database."
+}

@@ -1,0 +1,32 @@
+{
+  "status": "accepted",
+  "matched": true,
+  "decision": "accept",
+  "weak_match": false,
+  "concerns": [],
+  "recommended_changes": [],
+  "rounds": [
+    {
+      "decision": "accept",
+      "reasoning": "The observed plan for the calibration query demonstrates an efficient mechanism for retrieving the row with id = 1 using an index scan on the primary key index (tools_pkey). This matches the expected evidence that the query should return a single row with id = 1, and the plan confirms that the table and data are correctly set up for the experiment.",
+      "query_assessments": [
+        {
+          "query_id": "calibration_query_1",
+          "sql": "SELECT * FROM tools WHERE id = 1;",
+          "matched": true,
+          "observed_plan_summary": "Index Scan on tools using tools_pkey with condition id = 1.",
+          "supporting_evidence": [
+            "The plan uses an index scan on the primary key index (tools_pkey).",
+            "The plan confirms that the query will return a single row with id = 1."
+          ],
+          "discrepancies": []
+        }
+      ],
+      "concerns": [],
+      "recommended_changes": [],
+      "missing_information": [],
+      "round": 1,
+      "matched": true
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/why-is-my-query-suddenly-slower-than-it-was-yesterday.txt",
+  "category": "slowsql",
+  "slug": "why-is-my-query-suddenly-slower-than-it-was-yesterday",
+  "status": "blocked",
+  "reason": "Missing capabilities: Existing database environment",
+  "attempts": [
+    {
+      "attempt": 1,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-is-my-query-suddenly-slower-than-it-was-yesterday/attempt_1/20260721-155642_11d161d2",
+      "status": "failed",
+      "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "task_specs[0].actions[0].sql",
+          "before": "EXEC sys.sp_recompile @objname = N'main_table';",
+          "after": "EXEC sys.sp_recompile 'repro_value' = N'main_table';",
+          "reason": "Replace unresolved SQL placeholders with synthetic literals."
+        }
+      ],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 2,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-is-my-query-suddenly-slower-than-it-was-yesterday/attempt_2/20260721-155702_1cf9ddec",
+      "status": "blocked",
+      "reason": "Missing capabilities: Existing database environment",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": [
+        "Existing database environment"
+      ]
+    }
+  ]
+}

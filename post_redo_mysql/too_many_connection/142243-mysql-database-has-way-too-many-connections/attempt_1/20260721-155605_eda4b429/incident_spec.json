@@ -1,0 +1,60 @@
+{
+  "dbms": "mysql",
+  "dbms_version": "5.7.12",
+  "summary": "Excessive connection errors due to insufficient max_connections and inefficient connection handling in background jobs.",
+  "symptoms": [
+    "Connection_errors_max_connections is extremely high (e.g., 19,102).",
+    "Max_used_connections reaches the configured limit (501).",
+    "Background jobs fail due to connection exhaustion."
+  ],
+  "mechanism": "Background job processes (e.g., Sidekiq) create excessive concurrent connections, exceeding max_connections and causing failures.",
+  "facts": [
+    {
+      "key": "max_connections",
+      "value": {
+        "configured": 500
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions max_connections set to 500.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Connection_errors_max_connections",
+      "value": {
+        "count": 19102
+      },
+      "source": "explicit_post",
+      "evidence": "Post includes SHOW STATUS output showing Connection_errors_max_connections = 19102.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Sidekiq job pool size",
+      "value": {
+        "processes": 4,
+        "jobs_per_process": 200
+      },
+      "source": "explicit_post",
+      "evidence": "Post describes Sidekiq configuration with 4 processes and 200 jobs per process.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Threads_connected",
+      "value": {
+        "count": 501
+      },
+      "source": "explicit_post",
+      "evidence": "Post includes SHOW STATUS output showing Threads_connected = 501 during job execution.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "Background jobs are not efficiently releasing connections.",
+    "Sidekiq pool size is unnecessarily high for the workload.",
+    "Connection pooling or wait_timeout settings may be suboptimal."
+  ],
+  "unknowns": [
+    "Exact workload characteristics of the background jobs.",
+    "Whether connection pooling is implemented in the Rails applications."
+  ],
+  "confidence": 0.9
+}

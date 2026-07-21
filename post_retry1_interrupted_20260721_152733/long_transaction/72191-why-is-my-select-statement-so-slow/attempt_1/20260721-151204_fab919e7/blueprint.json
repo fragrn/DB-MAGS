@@ -1,0 +1,244 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Query performance issue when filtering databases based on table existence and state.",
+    "symptoms": [
+      "Slow execution of SELECT statement filtering databases based on table existence and state."
+    ],
+    "mechanism": "Potential blocking due to long-running transactions or inefficient metadata access.",
+    "facts": [
+      {
+        "key": "query_structure",
+        "value": {
+          "original_query": "SELECT name FROM sys.databases WHERE name NOT IN (...) AND CASE WHEN state_desc = 'ONLINE' THEN OBJECT_ID(...) END IS NOT NULL"
+        },
+        "source": "explicit_post",
+        "evidence": "Query structure provided in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "execution_plan",
+        "value": {
+          "clustered_index_seeks": [
+            22,
+            24,
+            48
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Execution plan percentages mentioned in the post.",
+        "confidence": 0.9
+      },
+      {
+        "key": "environment_constraints",
+        "value": {
+          "index_modification": false
+        },
+        "source": "explicit_post",
+        "evidence": "Post explicitly states no control over indexes.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The query performance issue is reproducible in a synthetic environment.",
+      "Blocking due to long-running transactions is a plausible cause."
+    ],
+    "unknowns": [
+      "Exact database schema and table distributions.",
+      "Whether isolation level changes would mitigate the issue."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction can focus on the suspected blocking mechanism and metadata access inefficiencies.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema of sys.databases and OBJECT_ID behavior."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_long_transaction_72191_why_is_m_r924354_a1",
+    "requirements": [
+      "Azure SQL Edge compatibility"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_72191_why_is_m_r924354_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS sys_databases (name SYSNAME PRIMARY KEY, state_desc VARCHAR(32), schema_id INT, table_name SYSNAME)",
+      "CREATE TABLE IF NOT EXISTS sys_tables (schema_id INT, name SYSNAME, PRIMARY KEY (schema_id, name))"
+    ],
+    "generation_sql": [
+      "INSERT INTO sys_databases (name, state_desc, schema_id, table_name) SELECT CONCAT('db_', n), CASE WHEN MOD(n, 4) = 0 THEN 'ONLINE' ELSE 'OFFLINE' END, n, CASE WHEN MOD(n, 10) = 0 THEN '_LOOK_UP_TABLE' ELSE NULL END FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO sys_tables (schema_id, name) SELECT n, '_LOOK_UP_TABLE' FROM generated_numbers WHERE MOD(n, 10) = 0 AND n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "sys_databases",
+        "purpose": "Simulates sys.databases for filtering and metadata access.",
+        "target_rows": 100,
+        "distribution_notes": "Simulates state_desc and table existence skew."
+      },
+      {
+        "name": "sys_tables",
+        "purpose": "Simulates sys.tables for metadata lookup.",
+        "target_rows": 10,
+        "distribution_notes": "Simulates sparse table existence."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "sys_databases": 100,
+        "sys_tables": 10
+      },
+      "value_skew": {
+        "sys_databases.state_desc": "ONLINE is sparse."
+      },
+      "predicate_selectivity": {
+        "sys_databases.state_desc = 'ONLINE'": 0.25
+      },
+      "join_selectivity": {
+        "sys_databases.schema_id = sys_tables.schema_id": "one-to-one for sparse rows."
+      }
+    },
+    "analyze_tables": [
+      "sys_databases",
+      "sys_tables"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT name FROM sys_databases WHERE state_desc = 'ONLINE' AND OBJECT_ID(QUOTENAME(name) + '.[dbo].[_LOOK_UP_TABLE]', 'U') IS NOT NULL",
+        "objective": "Verify that the synthetic schema and data reproduce the suspected mechanism.",
+        "expected_evidence": [
+          "The plan includes metadata access for OBJECT_ID.",
+          "The predicate filtering state_desc and table existence is visible in EXPLAIN.",
+          "Blocking or inefficiencies in metadata access are observable."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 100,
+      "max_rows": 1000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query runtime matches expected behavior.",
+      "Execution plan reflects suspected mechanism."
+    ],
+    "symptom_evidence": [
+      "Slow query execution.",
+      "High percentage of clustered index seeks."
+    ],
+    "mechanism_evidence": [
+      "Blocking due to long-running transactions.",
+      "Inefficient metadata access."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Long-running query due to metadata access inefficiencies or blocking.",
+    "target_database": "post_retry_long_transaction_72191_why_is_m_r924354_a1",
+    "dba_description": "Reproducing slow SELECT query filtering databases based on table existence and state.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_72191_why_is_m_r924354_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_long_transaction_72191_why_is_m_r924354_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup for reproduction"
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_72191_why_is_m_r924354_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS sys_databases (name SYSNAME PRIMARY KEY, state_desc VARCHAR(32), schema_id INT, table_name SYSNAME)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS sys_tables (schema_id INT, name SYSNAME, PRIMARY KEY (schema_id, name))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic schema setup"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "populate_data"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on metadata access inefficiencies and blocking mechanisms suspected in the DBA post."
+}

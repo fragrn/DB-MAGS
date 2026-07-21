@@ -1,0 +1,128 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "The incident involves slow query execution with RESOURCE_SEMAPHORE waits, indicating memory pressure during query execution. CXCONSUMER waits suggest parallel query execution contributing to the issue.",
+    "symptoms": [
+      "RESOURCE_SEMAPHORE waits",
+      "CXCONSUMER waits",
+      "slow query execution under high user connections"
+    ],
+    "mechanism": "Memory pressure caused by parallel query execution and excessive memory grants, leading to RESOURCE_SEMAPHORE waits.",
+    "facts": [
+      {
+        "key": "RESOURCE_SEMAPHORE waits",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The DBA post explicitly mentions RESOURCE_SEMAPHORE waits observed in sp_whoisactive.",
+        "confidence": 0.9
+      },
+      {
+        "key": "CXCONSUMER waits",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post mentions CXCONSUMER waits, which are associated with parallel query execution.",
+        "confidence": 0.8
+      },
+      {
+        "key": "MAXDOP set to 0",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post states that MAXDOP is set to 0, allowing queries to utilize all CPU cores.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Memory pressure affecting queries",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The sp_Blitz output indicates forced memory grants due to memory pressure.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "Parallel query execution contributes significantly to memory pressure.",
+      "The database environment has sufficient hardware resources but suffers from configuration issues."
+    ],
+    "unknowns": [
+      "Exact query patterns causing RESOURCE_SEMAPHORE waits.",
+      "Impact of other server configurations on the incident."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema setup and reproduction. Synthetic reproduction requires a valid database environment.",
+    "missing_capabilities": [
+      "Existing target database environment"
+    ],
+    "unmatched_conditions": [
+      "Database creation or inspection failed."
+    ],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_220486_slow_r331025_a4",
+    "requirements": [
+      "Dedicated test database for synthetic reproduction."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_220486_slow_r331025_a4",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database environment must exist before reproduction."
+    ],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "RESOURCE_SEMAPHORE waits",
+    "target_database": "post_retry_resource_limitation_220486_slow_r331025_a4",
+    "dba_description": "Slow query execution with RESOURCE_SEMAPHORE and CXCONSUMER waits under high user connections.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Why does the target database not exist?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database. Synthetic reproduction requires a valid database environment."
+}

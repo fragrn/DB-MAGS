@@ -1,0 +1,226 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MATLAB feeding the database results in 'too many connections' error due to rapid connection opening and closing.",
+    "symptoms": [
+      "Too many connections error",
+      "High thread count",
+      "Rapid connection opening and closing"
+    ],
+    "mechanism": "Excessive connection churn leads to hitting the max_connections limit.",
+    "facts": [
+      {
+        "key": "MATLAB feeding database",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "MATLAB is used to feed the database, as stated in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Too many connections error",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The error 'too many connections' is explicitly mentioned in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Rapid connection opening and closing",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post describes opening and closing connections for each row insertion.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Max_connections limit",
+        "value": {
+          "default_limit": 151
+        },
+        "source": "post_hypothesis",
+        "evidence": "Answers mention the default MySQL max_connections limit.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "MATLAB threads are responsible for the majority of connections.",
+      "Connection pooling or batching is not implemented."
+    ],
+    "unknowns": [
+      "Exact MATLAB configuration and threading behavior.",
+      "Whether connection pooling is feasible in the MATLAB environment."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of excessive connection churn leading to max_connections limit can be reproduced. Exact reproduction of MATLAB behavior is blocked due to lack of MATLAB integration.",
+    "missing_capabilities": [
+      "MATLAB integration"
+    ],
+    "unmatched_conditions": [
+      "MATLAB-specific threading and connection behavior"
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_4717_too_ma_r726463_a1",
+    "requirements": [
+      "Dedicated test database",
+      "Ability to modify max_connections"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_4717_too_ma_r726463_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS synthetic_table (id INT PRIMARY KEY, payload VARCHAR(255))"
+    ],
+    "generation_sql": [
+      "INSERT INTO synthetic_table (id, payload) SELECT n, CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "synthetic_table",
+        "purpose": "Simulate rapid row insertion workload causing connection churn.",
+        "target_rows": 10000,
+        "distribution_notes": "Uniform distribution of rows to simulate consistent workload."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "synthetic_table": 10000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "synthetic_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM synthetic_table",
+        "objective": "Verify that the table is populated correctly.",
+        "expected_evidence": [
+          "Row count matches the expected number of inserted rows."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "INSERT INTO synthetic_table (id, payload) VALUES (?, ?)"
+    ],
+    "concurrency": 150,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Connection churn leads to hitting max_connections limit."
+    ],
+    "symptom_evidence": [
+      "Too many connections error observed during workload."
+    ],
+    "mechanism_evidence": [
+      "Connection churn behavior visible in logs or metrics."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "too_many_connections",
+    "target_database": "post_retry_too_many_connection_4717_too_ma_r726463_a1",
+    "dba_description": "Reproduce 'too many connections' error caused by rapid connection churn.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_4717_too_ma_r726463_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_4717_too_ma_r726463_a1"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_4717_too_ma_r726463_a1"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS synthetic_table (id INT PRIMARY KEY, payload VARCHAR(255))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "connection churn"
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO synthetic_table (id, payload) VALUES (?, ?)",
+          "concurrency": 150,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "connections_used": "high"
+      },
+      "success_criteria": {
+        "too_many_connections_error": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "connection churn"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "simulate_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Exact MATLAB threading behavior"
+  ],
+  "rationale": "The mechanism of connection churn leading to max_connections limit is reproducible using synthetic data and workload."
+}

@@ -1,0 +1,141 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_220486_slow_r240206_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial setup for synthetic database."
+      }
+    },
+    {
+      "task_id": "prepare_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE workload_table (id INT PRIMARY KEY, category VARCHAR(64), value INT, payload NVARCHAR(MAX))"
+                },
+                {
+                  "sql": "CREATE TABLE reference_table (id INT PRIMARY KEY, status INT, description NVARCHAR(255))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema preparation for workload simulation."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r240206_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO reference_table (id, status, description) SELECT n, MOD(n, 5), CONCAT('Description_', n) FROM (SELECT TOP 100 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers"
+                },
+                {
+                  "sql": "INSERT INTO workload_table (id, category, value, payload) SELECT n, CASE WHEN MOD(n, 1000) = 0 THEN 'high' ELSE 'low' END, n % 100, REPLICATE(CAST('A' AS NVARCHAR(MAX)), 100) FROM (SELECT TOP 10000 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.all_objects) AS numbers"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data generation for workload simulation."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT w.* FROM workload_table w JOIN reference_table r ON w.value = r.id WHERE w.category = 'high' ORDER BY w.id DESC",
+          "concurrency": 10,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "RESOURCE_SEMAPHORE_waits": "high",
+        "memory_grants": "high",
+        "parallelism": "visible"
+      },
+      "success_criteria": {
+        "symptoms_observed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Workload execution to reproduce RESOURCE_SEMAPHORE waits."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "prepare_data"
+    ],
+    [
+      "prepare_data",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ]
+}

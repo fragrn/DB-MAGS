@@ -1,0 +1,195 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Concurrent UPDATE statements on a single row in a small table experience significant delays due to locking contention.",
+    "symptoms": [
+      "UPDATE statements take minutes to complete despite the small table size.",
+      "Exclusive locks are observed on the target row during concurrent updates."
+    ],
+    "mechanism": "Row-level locking contention caused by multiple concurrent updates targeting the same row.",
+    "facts": [
+      {
+        "key": "table_schema",
+        "value": {
+          "columns": [
+            "scan_uuid",
+            "num_shards_completed"
+          ],
+          "indexes": []
+        },
+        "source": "explicit_post",
+        "evidence": "Table schema provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "update_query",
+        "value": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1",
+        "source": "explicit_post",
+        "evidence": "SQL query provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "lock_type",
+        "value": "ExclusiveLock",
+        "source": "explicit_post",
+        "evidence": "Lock type observed in the provided query output.",
+        "confidence": 1.0
+      },
+      {
+        "key": "concurrency",
+        "value": "hundreds of nodes performing updates",
+        "source": "explicit_post",
+        "evidence": "Concurrency described in the post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The database is PostgreSQL based on the schema and locking behavior.",
+      "The issue is caused by row-level locking contention due to concurrent updates."
+    ],
+    "unknowns": [
+      "Exact PostgreSQL version.",
+      "Whether the table has any hidden constraints or triggers."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction requires simulating concurrent updates and observing locking contention, which is feasible with PostgreSQL.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "The target database does not exist, requiring setup."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_284397_concurrent_upda_r918542_a1",
+    "requirements": [
+      "Dedicated test database setup",
+      "Concurrency simulation tools"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_284397_concurrent_upda_r918542_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+    ],
+    "generation_sql": [
+      "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) SELECT gen_random_uuid(), 0 FROM generate_series(1, 1)"
+    ],
+    "tables": [
+      {
+        "name": "host_scan_complete_log_counts",
+        "purpose": "Simulate the table experiencing locking contention during concurrent updates.",
+        "target_rows": 1,
+        "distribution_notes": "Single row table to reproduce contention."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "host_scan_complete_log_counts": 1
+      },
+      "value_skew": {},
+      "predicate_selectivity": {
+        "scan_uuid = $1": 1.0
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "host_scan_complete_log_counts"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = gen_random_uuid()",
+        "objective": "Verify that the table schema and data are correctly set up.",
+        "expected_evidence": [
+          "The query returns the single row in the table."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1,
+      "max_rows": 1,
+      "growth_factor": 2.0,
+      "max_rounds": 1
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = (SELECT scan_uuid FROM host_scan_complete_log_counts LIMIT 1)"
+    ],
+    "concurrency": 100,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Lock contention is observed during concurrent updates.",
+      "Update latency increases with concurrency."
+    ],
+    "symptom_evidence": [
+      "Exclusive locks are observed on the single row.",
+      "Update statements take longer to complete."
+    ],
+    "mechanism_evidence": [
+      "Row-level locking contention is visible in the database logs or monitoring tools."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "Row-level locking contention during concurrent updates.",
+    "target_database": "post_retry_blocking_284397_concurrent_upda_r918542_a1",
+    "dba_description": "Simulate concurrent updates on a single row in a small table to reproduce locking contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_upda_r918542_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_284397_concurrent_upda_r918542_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database setup"
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating concurrent updates to observe locking contention, which aligns with the described issue."
+}

@@ -1,0 +1,60 @@
+{
+  "database": "post_retry_resource_limitation_17677_why_i_r211127_a4",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS large_table (id INT PRIMARY KEY, group_col VARCHAR(512), text_col TEXT, payload VARCHAR(255))",
+    "CREATE TABLE IF NOT EXISTS small_table (id INT PRIMARY KEY, ref_col VARCHAR(64))"
+  ],
+  "generation_sql": [
+    "INSERT INTO small_table (id, ref_col) SELECT n, CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+    "INSERT INTO large_table (id, group_col, text_col, payload) SELECT n, CONCAT('group_', MOD(n, 10)), REPEAT('text_', MOD(n, 5)), CONCAT('payload_', n) FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "large_table",
+      "purpose": "Primary table to simulate temp table creation with large columns and TEXT fields",
+      "target_rows": 100000,
+      "distribution_notes": "Simulates skewed data with large columns and TEXT fields for temp table creation."
+    },
+    {
+      "name": "small_table",
+      "purpose": "Reference table for joins or filters in the reproduction queries",
+      "target_rows": 100,
+      "distribution_notes": "Used for simulating join fanout and selectivity."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "large_table": 100000,
+      "small_table": 100
+    },
+    "value_skew": {
+      "large_table.group_col": "Skewed distribution with repetitive patterns"
+    },
+    "predicate_selectivity": {
+      "large_table.group_col = 'group_1'": 0.1
+    },
+    "join_selectivity": {
+      "large_table.id = small_table.id": "one-to-one"
+    }
+  },
+  "analyze_tables": [
+    "large_table",
+    "small_table"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT l.* FROM large_table l JOIN small_table s ON s.id = l.id WHERE l.group_col = 'group_1' ORDER BY l.id DESC LIMIT 10",
+      "objective": "Verify temp table creation mechanism and disk-based behavior.",
+      "expected_evidence": [
+        "EXPLAIN shows temp table creation due to large columns or TEXT fields.",
+        "Disk-based temp table behavior is visible in the plan."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

@@ -1,0 +1,237 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "High CPU usage in MySQL database during benchmarking with read-heavy workload.",
+    "symptoms": [
+      "High CPU usage (500% utilization across 5 vCPUs).",
+      "Inefficient queries with joins performed without indexes.",
+      "Low query cache efficiency (7.8%).",
+      "High query cache prunes per day (39,159,937).",
+      "High connection usage (100%)."
+    ],
+    "mechanism": "Inefficient query execution due to missing indexes, contention on query cache, and excessive simultaneous connections.",
+    "facts": [
+      {
+        "key": "CPU utilization",
+        "value": {
+          "utilization": "500% across 5 vCPUs"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions high CPU usage during benchmarking.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Query cache efficiency",
+        "value": {
+          "efficiency": "7.8%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output shows low query cache efficiency.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Joins without indexes",
+        "value": {
+          "count": 6782
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output highlights joins performed without indexes.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Query cache prunes",
+        "value": {
+          "count": 39159937
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output shows high query cache prunes per day.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Connection usage",
+        "value": {
+          "usage": "100% (152/151)"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output indicates highest connection usage exceeded the limit.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The workload is read-heavy, as indicated by the benchmarking scenario.",
+      "The database schema and workload involve joins that lack proper indexing.",
+      "Query cache contention is a significant contributor to CPU usage.",
+      "The database is configured with default or suboptimal settings for the observed workload."
+    ],
+    "unknowns": [
+      "Exact schema and query patterns causing the joins without indexes.",
+      "Whether the query cache contention is the primary bottleneck or a secondary issue.",
+      "The impact of increasing table_open_cache and join_buffer_size on performance."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The database does not exist in the environment, but the incident can be reproduced using synthetic data and a read-heavy workload with joins lacking indexes.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and query patterns are unknown."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_130884_mysq_r328875_a2",
+    "requirements": [
+      "MySQL 5.5 or compatible version",
+      "Dedicated test database"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_130884_mysq_r328875_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "main_table",
+        "purpose": "Primary table for reproducing read-heavy workload with joins.",
+        "target_rows": 100000,
+        "distribution_notes": "Skewed distribution with rare and common categories."
+      },
+      {
+        "name": "ref_table",
+        "purpose": "Reference table for join operations.",
+        "target_rows": 100,
+        "distribution_notes": "Small table with uniform distribution."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "main_table": 100000,
+        "ref_table": 100
+      },
+      "value_skew": {
+        "main_table.category": "rare values are sparse and intentionally positioned."
+      },
+      "predicate_selectivity": {
+        "main_table.category = 'rare'": 0.001
+      },
+      "join_selectivity": {
+        "main_table.ref_id = ref_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "main_table",
+      "ref_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan examines the table or index range relevant to the suspected mechanism.",
+          "The predicate or join behavior needed by the reproduction is visible in EXPLAIN.",
+          "The plan evidence distinguishes this mechanism from a trivial point lookup."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10"
+    ],
+    "concurrency": 150,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "High CPU usage is observed during workload execution.",
+      "Query cache contention is visible in performance metrics.",
+      "Joins without indexes are identified in EXPLAIN plans."
+    ],
+    "symptom_evidence": [
+      "CPU utilization exceeds 90% across all vCPUs.",
+      "Query cache efficiency remains below 10%.",
+      "High number of joins without indexes in query execution plans."
+    ],
+    "mechanism_evidence": [
+      "Query cache contention observed in performance metrics.",
+      "EXPLAIN plans show joins without indexes."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High CPU usage due to inefficient queries and query cache contention.",
+    "target_database": "post_retry_resource_limitation_130884_mysq_r328875_a2",
+    "dba_description": "Reproduce high CPU usage in MySQL database during read-heavy workload with inefficient queries and query cache contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_130884_mysq_r328875_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_resource_limitation_130884_mysq_r328875_a2"
+                },
+                {
+                  "sql": "USE post_retry_resource_limitation_130884_mysq_r328875_a2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database environment setup"
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "What are the exact queries causing the joins without indexes?",
+    "What is the impact of query cache contention on overall performance?"
+  ],
+  "rationale": "The incident can be reproduced by simulating a read-heavy workload with joins lacking indexes and query cache contention. Synthetic data and workload parameters are designed to mimic the described symptoms and mechanisms."
+}

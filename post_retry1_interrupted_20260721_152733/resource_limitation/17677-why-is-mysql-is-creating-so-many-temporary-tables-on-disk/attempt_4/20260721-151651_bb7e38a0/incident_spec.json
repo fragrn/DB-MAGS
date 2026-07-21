@@ -1,0 +1,66 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "MySQL creates excessive temporary tables on disk, influenced by query patterns and configuration settings.",
+  "symptoms": [
+    "High percentage of temporary tables created on disk",
+    "Performance concerns due to disk-based temp tables"
+  ],
+  "mechanism": "Implicit temporary tables exceed memory limits or involve unsupported data types (e.g., TEXT/BLOB), triggering MyISAM disk-based storage.",
+  "facts": [
+    {
+      "key": "tmp_table_size",
+      "value": {
+        "current": "200M"
+      },
+      "source": "explicit_post",
+      "evidence": "Post configuration details",
+      "confidence": 1.0
+    },
+    {
+      "key": "max_heap_table_size",
+      "value": {
+        "current": "200M"
+      },
+      "source": "explicit_post",
+      "evidence": "Post configuration details",
+      "confidence": 1.0
+    },
+    {
+      "key": "temporary table creation",
+      "value": {
+        "disk_percentage": 30
+      },
+      "source": "explicit_post",
+      "evidence": "Post statistics",
+      "confidence": 1.0
+    },
+    {
+      "key": "TEXT/BLOB fields",
+      "value": {
+        "impact": "disk-based temp tables"
+      },
+      "source": "post_hypothesis",
+      "evidence": "Answer 1 explanation",
+      "confidence": 0.9
+    },
+    {
+      "key": "query patterns",
+      "value": {
+        "GROUP BY, UNION, ORDER BY with large columns": "disk-based temp tables"
+      },
+      "source": "post_hypothesis",
+      "evidence": "Answer 1 explanation",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "Queries involve TEXT/BLOB fields or large columns",
+    "Implicit temporary tables exceed memory limits"
+  ],
+  "unknowns": [
+    "Exact query patterns causing temp table creation",
+    "Schema details of the database"
+  ],
+  "confidence": 0.8
+}

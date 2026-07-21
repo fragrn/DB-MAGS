@@ -1,0 +1,146 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "ALTER TABLE operation caused blocking due to lock contention.",
+    "symptoms": [
+      "Database frozen during ALTER TABLE operation",
+      "Login system blocked due to table lock",
+      "Long-lived weak locks preventing DDL completion"
+    ],
+    "mechanism": "Lock contention caused by an ACCESS EXCLUSIVE lock request during ALTER TABLE, queued behind long-lived weak locks.",
+    "facts": [
+      {
+        "key": "ALTER TABLE statement",
+        "value": {
+          "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+        },
+        "source": "explicit_post",
+        "evidence": "Post includes the exact SQL statement causing the issue.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Lock type",
+        "value": {
+          "type": "ACCESS EXCLUSIVE"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions the lock type required for ALTER TABLE.",
+        "confidence": 1.0
+      },
+      {
+        "key": "PostgreSQL version",
+        "value": {
+          "version": "9.4.5"
+        },
+        "source": "explicit_post",
+        "evidence": "Post explicitly states the PostgreSQL version.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Table structure",
+        "value": {
+          "table": "cliente"
+        },
+        "source": "explicit_post",
+        "evidence": "Post includes the full table schema.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Blocking mechanism",
+        "value": {
+          "type": "lock contention"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Post and answers hypothesize lock contention due to long-lived weak locks.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The database environment matches PostgreSQL 9.4.5 behavior.",
+      "Synthetic data can reproduce lock contention under similar conditions."
+    ],
+    "unknowns": [
+      "Exact workload causing weak locks",
+      "Whether the blocking process was idle-in-transaction or actively querying"
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing setup and reproduction.",
+    "missing_capabilities": [
+      "Database environment for post_retry_blocking_132851_database_frozen_r896472_a2"
+    ],
+    "unmatched_conditions": [
+      "Database environment inspection failed"
+    ],
+    "confidence": 1.0
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_132851_database_frozen_r896472_a2",
+    "requirements": [
+      "Dedicated test database matching PostgreSQL 9.4.5 behavior"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_132851_database_frozen_r896472_a2",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database blocking symptoms reproduced",
+      "Lock contention visible in pg_locks"
+    ],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocking during ALTER TABLE due to lock contention",
+    "target_database": "post_retry_blocking_132851_database_frozen_r896472_a2",
+    "dba_description": "Database frozen during ALTER TABLE operation due to lock contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to recreate the missing database environment?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database environment. Synthetic data and schema cannot be prepared without a valid database context."
+}

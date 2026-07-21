@@ -1,0 +1,229 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Excessive creation of temporary tables on disk in MySQL due to query patterns and configuration limits.",
+    "symptoms": [
+      "High percentage of temporary tables created on disk.",
+      "Performance concerns related to disk-based temporary tables."
+    ],
+    "mechanism": "MySQL creates temporary tables on disk when certain conditions are met, such as the presence of TEXT/BLOB fields, exceeding tmp_table_size or max_heap_table_size, or using large columns with GROUP BY, UNION, or ORDER BY.",
+    "facts": [
+      {
+        "key": "tmp_table_size and max_heap_table_size limits",
+        "value": {
+          "tmp_table_size": "200M",
+          "max_heap_table_size": "200M"
+        },
+        "source": "explicit_post",
+        "evidence": "Configuration details provided in the post.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Temporary table creation statistics",
+        "value": {
+          "total_temp_tables": 17158,
+          "disk_temp_tables_percentage": 30
+        },
+        "source": "explicit_post",
+        "evidence": "Statistics shared by the DBA.",
+        "confidence": 0.9
+      },
+      {
+        "key": "TEXT/BLOB fields and large columns",
+        "value": {
+          "impact_on_disk_temp_tables": true
+        },
+        "source": "post_hypothesis",
+        "evidence": "Answer 1 mentions TEXT/BLOB fields and large columns as contributors.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "Queries involve TEXT/BLOB fields or large columns.",
+      "The workload includes GROUP BY, UNION, or ORDER BY operations."
+    ],
+    "unknowns": [
+      "Exact query patterns causing the issue.",
+      "Whether the database schema includes TEXT/BLOB fields or large columns."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of disk-based temporary table creation can be reproduced by simulating queries with TEXT/BLOB fields and large columns exceeding tmp_table_size or max_heap_table_size.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_i_r760505_a4",
+    "requirements": [
+      "Dedicated test database",
+      "MySQL configuration access"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_i_r760505_a4",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS large_table (id INT PRIMARY KEY, large_text_field TEXT, large_blob_field BLOB, category VARCHAR(64), payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS small_table (id INT PRIMARY KEY, ref_id INT, name VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO small_table (id, ref_id, name) SELECT n, MOD(n, 10), CONCAT('name_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO large_table (id, large_text_field, large_blob_field, category, payload) SELECT n, REPEAT('text_', n % 10), REPEAT('blob_', n % 10), CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, CONCAT('payload_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "large_table",
+        "purpose": "Primary table with TEXT/BLOB fields and large columns to trigger disk-based temporary table creation.",
+        "target_rows": 100000,
+        "distribution_notes": "Skewed distribution with rare categories and large text/blob data."
+      },
+      {
+        "name": "small_table",
+        "purpose": "Reference table for joins and filters.",
+        "target_rows": 100,
+        "distribution_notes": "Uniform distribution with small payloads."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "large_table": 100000,
+        "small_table": 100
+      },
+      "value_skew": {
+        "large_table.category": "rare values are sparse and intentionally positioned by the agent"
+      },
+      "predicate_selectivity": {
+        "large_table.category = 'rare'": 0.001
+      },
+      "join_selectivity": {
+        "large_table.ref_id = small_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "large_table",
+      "small_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT l.* FROM large_table l JOIN small_table s ON s.id = l.ref_id WHERE l.category = 'rare' ORDER BY l.id DESC LIMIT 10",
+        "objective": "Verify that the prepared data and configuration lead to disk-based temporary table creation.",
+        "expected_evidence": [
+          "EXPLAIN shows disk-based temporary table creation due to TEXT/BLOB fields or large columns.",
+          "The plan includes operations like GROUP BY, UNION, or ORDER BY."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Temporary tables are created on disk under the expected conditions.",
+      "EXPLAIN output matches the mechanism described in the post."
+    ],
+    "symptom_evidence": [
+      "High percentage of disk-based temporary tables in query execution statistics."
+    ],
+    "mechanism_evidence": [
+      "EXPLAIN shows disk-based temporary table creation due to TEXT/BLOB fields or large columns."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Excessive disk-based temporary table creation",
+    "target_database": "post_retry_resource_limitation_17677_why_i_r760505_a4",
+    "dba_description": "Reproduce the conditions leading to excessive disk-based temporary table creation in MySQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "configure_mysql_limits",
+      "task_type": "configuration",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_i_r760505_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL tmp_table_size = 200 * 1024 * 1024"
+                },
+                {
+                  "sql": "SET GLOBAL max_heap_table_size = 200 * 1024 * 1024"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tmp_table_size": "200M",
+        "max_heap_table_size": "200M"
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Configuration limits contributing to disk-based temporary tables."
+      }
+    },
+    {
+      "task_id": "validate_disk_temp_tables",
+      "task_type": "validation",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "EXPLAIN SELECT l.* FROM large_table l JOIN small_table s ON s.id = l.ref_id WHERE l.category = 'rare' ORDER BY l.id DESC LIMIT 10",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "plan_evidence": "Disk-based temporary table creation visible in EXPLAIN."
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Query patterns triggering disk-based temporary tables."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "configure_mysql_limits",
+      "validate_disk_temp_tables"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating the conditions described in the DBA post, including configuration limits and query patterns that lead to disk-based temporary table creation."
+}

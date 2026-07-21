@@ -1,0 +1,43 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "ALTER TABLE operation caused a database freeze due to lock contention.",
+  "symptoms": [
+    "Database freeze during ALTER TABLE",
+    "Login operations blocked",
+    "High lock contention"
+  ],
+  "mechanism": "ALTER TABLE ADD COLUMN requires an ACCESS EXCLUSIVE lock, which queued behind a long-lived weak lock, causing cascading lock contention.",
+  "facts": [
+    {
+      "key": "ALTER TABLE ADD COLUMN requires ACCESS EXCLUSIVE lock",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "PostgreSQL documentation and DBA post description.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Weak lock held by idle transaction",
+      "value": {},
+      "source": "post_hypothesis",
+      "evidence": "DBA post suggests idle-in-transaction connections may hold weak locks.",
+      "confidence": 0.8
+    },
+    {
+      "key": "Lock contention cascades",
+      "value": {},
+      "source": "post_hypothesis",
+      "evidence": "Post describes cascading lock contention after the ACCESS EXCLUSIVE lock request.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "The database schema and workload are representative of the described incident.",
+    "Idle-in-transaction connections are a plausible cause of weak locks."
+  ],
+  "unknowns": [
+    "Exact workload and query patterns during the incident.",
+    "Whether other operations were running concurrently with the ALTER TABLE."
+  ],
+  "confidence": 0.85
+}

@@ -1,0 +1,72 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_update_sta_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_284397_concurrent_update_sta_a3"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+                },
+                {
+                  "sql": "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES (gen_random_uuid(), 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "table_created": true,
+        "row_inserted": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Setup environment for contention reproduction."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1",
+          "concurrency": 200,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention_observed": true,
+        "query_execution_time": "significant"
+      },
+      "success_criteria": {
+        "contention_reproduced": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Reproduce contention due to concurrent updates."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "run_workload"
+    ]
+  ]
+}

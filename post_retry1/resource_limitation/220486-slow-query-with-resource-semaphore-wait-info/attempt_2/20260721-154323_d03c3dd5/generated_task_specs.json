@@ -1,0 +1,60 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r803267_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET MAXDOP 0"
+                },
+                {
+                  "sql": "SET QUERY_STORE = OFF"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Parallelism and memory grants causing RESOURCE_SEMAPHORE waits."
+      }
+    },
+    {
+      "task_id": "execute_workload",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+          "concurrency": 10,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Parallelism and memory grants causing RESOURCE_SEMAPHORE waits."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "execute_workload"
+    ]
+  ]
+}

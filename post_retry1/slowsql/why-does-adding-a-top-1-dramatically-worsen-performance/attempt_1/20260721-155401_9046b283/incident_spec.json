@@ -1,0 +1,61 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Performance degradation observed when adding TOP 1 to a query involving joins and ORDER BY.",
+  "symptoms": [
+    "Query with TOP 1 never finishes",
+    "Query plan changes from Hash Match to Nested Loops with Table Spool"
+  ],
+  "mechanism": "Row Goal optimization changes the query plan, leading to inefficient execution paths.",
+  "facts": [
+    {
+      "key": "query_with_top_1",
+      "value": {
+        "sql": "SELECT TOP 1 dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+      },
+      "source": "explicit_post",
+      "evidence": "Query provided in the forum post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "query_without_top_1",
+      "value": {
+        "sql": "SELECT dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+      },
+      "source": "explicit_post",
+      "evidence": "Query provided in the forum post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "table_cardinality",
+      "value": {
+        "DOCUMENT_QUEUE": 5000,
+        "CORRESPONDENCE_JOURNAL": 1400000
+      },
+      "source": "explicit_post",
+      "evidence": "Cardinality provided in the forum post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "indexes",
+      "value": {
+        "CORRESPONDENCE_JOURNAL": [
+          "DOCUMENT_ID",
+          "FILE_NUMBER"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Index information provided in the forum post.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The database schema matches the description in the post.",
+    "The optimizer behavior is consistent with SQL Server's row goal mechanism."
+  ],
+  "unknowns": [
+    "Exact SQL Server version",
+    "Impact of TEMPDB performance on the Table Spool operator"
+  ],
+  "confidence": 0.9
+}

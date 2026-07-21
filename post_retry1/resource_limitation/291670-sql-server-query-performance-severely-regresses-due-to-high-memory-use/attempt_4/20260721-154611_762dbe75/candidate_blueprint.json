@@ -1,0 +1,236 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "SQL Server query performance regresses severely due to high memory usage and parameter sniffing differences between SSMS and application environments.",
+    "symptoms": [
+      "Queries timeout when memory is filled.",
+      "SSMS executes the same stored procedure quickly while the application times out.",
+      "Memory consumption spikes and disk reads are slow during query execution."
+    ],
+    "mechanism": "Parameter sniffing differences between SSMS and application environments lead to suboptimal execution plans. High memory usage exacerbates performance degradation.",
+    "facts": [
+      {
+        "key": "High memory usage leads to query timeouts.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "DBA observed that restarting SQL Server clears memory and resolves query timeouts temporarily.",
+        "confidence": 0.9
+      },
+      {
+        "key": "SSMS uses ARITHABORT, leading to different execution plans.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "DBA identified ARITHABORT as the parameter causing execution plan differences.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Parameter sniffing affects execution plans.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "DBA confirmed parameter sniffing as the root cause after testing and reading Erland Sommarskog's article.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The synthetic database will reproduce memory pressure and execution plan differences.",
+      "The application environment mimics the parameter sniffing behavior described."
+    ],
+    "unknowns": [
+      "Exact schema and data distribution of the production database.",
+      "Impact of other SQL Server settings on memory usage and execution plans."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction of parameter sniffing and memory pressure mechanisms is feasible with synthetic data and controlled environment settings.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and production workload are unavailable."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_291670_sql_r971585_a4",
+    "requirements": [
+      "Azure SQL Edge compatibility"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_291670_sql_r971585_a4",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS notifications (id INT PRIMARY KEY, account_id INT, notified_at_utc DATETIME, payload NVARCHAR(MAX))",
+      "CREATE TABLE IF NOT EXISTS reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, payload NVARCHAR(MAX))"
+    ],
+    "generation_sql": [
+      "INSERT INTO notifications (id, account_id, notified_at_utc, payload) SELECT n, MOD(n, 1000), DATEADD(SECOND, n, '2023-01-01 00:00:00'), CONCAT('notification_', n) FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO reports (id, account_id, received_at_utc, payload) SELECT n, MOD(n, 1000), DATEADD(SECOND, n, '2023-01-01 00:00:00'), CONCAT('report_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "notifications",
+        "purpose": "Primary table for synthetic workload simulating high memory usage and query sorting.",
+        "target_rows": 100000,
+        "distribution_notes": "Simulate skewed account_id distribution and time-based sorting."
+      },
+      {
+        "name": "reports",
+        "purpose": "Secondary table for join and sorting operations.",
+        "target_rows": 100000,
+        "distribution_notes": "Simulate skewed account_id distribution and time-based sorting."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "notifications": 100000,
+        "reports": 100000
+      },
+      "value_skew": {
+        "notifications.account_id": "Skewed distribution to simulate large accounts."
+      },
+      "predicate_selectivity": {
+        "notifications.account_id = 1": 0.01
+      },
+      "join_selectivity": {
+        "notifications.account_id = reports.account_id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "notifications",
+      "reports"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT n.* FROM notifications n JOIN reports r ON r.account_id = n.account_id WHERE n.account_id = 1 ORDER BY n.notified_at_utc DESC",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan includes sorting and join operations relevant to the suspected mechanism.",
+          "The predicate or join behavior needed by the reproduction is visible in EXPLAIN.",
+          "The plan evidence distinguishes this mechanism from a trivial point lookup."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Execution plan matches the expected mechanism.",
+      "Query performance regresses under simulated memory pressure."
+    ],
+    "symptom_evidence": [
+      "Query timeout under high memory usage.",
+      "Execution plan differences between SSMS and application environments."
+    ],
+    "mechanism_evidence": [
+      "Parameter sniffing leads to suboptimal execution plans.",
+      "Memory pressure affects query performance."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance regression due to high memory usage and parameter sniffing.",
+    "target_database": "post_retry_resource_limitation_291670_sql_r971585_a4",
+    "dba_description": "Investigate query performance regression caused by high memory usage and parameter sniffing differences between SSMS and application environments.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r971585_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_291670_sql_r971585_a4"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial setup for synthetic reproduction."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "data_generation",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r971585_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS notifications (id INT PRIMARY KEY, account_id INT, notified_at_utc DATETIME, payload NVARCHAR(MAX))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, payload NVARCHAR(MAX))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic schema setup for reproduction."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The synthetic reproduction focuses on parameter sniffing and memory pressure mechanisms described in the DBA post. The schema and data generation simulate the described workload and query behavior."
+}

@@ -1,0 +1,34 @@
+{
+  "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/blocking/132851-database-frozen-on-alter-table.txt",
+  "category": "blocking",
+  "slug": "132851-database-frozen-on-alter-table",
+  "status": "abandoned",
+  "reason": "Stopped after 2 attempt(s): ERROR:  column \"stock\" of relation \"cliente\" does not exist\nLINE 1: ..., direccion, comuna, ciudad, codigo_pais, activo, stock, vig...\n                                                             ^",
+  "attempts": [
+    {
+      "attempt": 1,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1_smoke3/blocking/132851-database-frozen-on-alter-table/attempt_1/20260721-143830_f1624abc",
+      "status": "failed",
+      "reason": "ERROR:  duplicate key value violates unique constraint \"pk_cliente\"\nDETAIL:  Key (rut)=(rut_1) already exists.",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 2,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1_smoke3/blocking/132851-database-frozen-on-alter-table/attempt_2/20260721-143846_b97f7303",
+      "status": "failed",
+      "reason": "ERROR:  column \"stock\" of relation \"cliente\" does not exist\nLINE 1: ..., direccion, comuna, ciudad, codigo_pais, activo, stock, vig...\n                                                             ^",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "task_specs[0].actions[0].database",
+          "before": "postgres",
+          "after": "post_retry_blocking_132851_database_frozen_on_al_a2",
+          "reason": "Use per-post attempt database."
+        }
+      ],
+      "missing_capabilities": []
+    }
+  ]
+}

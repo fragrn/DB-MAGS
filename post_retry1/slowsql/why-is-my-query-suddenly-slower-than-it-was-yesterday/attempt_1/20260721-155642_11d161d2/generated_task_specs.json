@@ -1,0 +1,29 @@
+{
+  "task_specs": [
+    {
+      "task_id": "parameter_sniffing_reproduction",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "EXEC sys.sp_recompile 'repro_value' = N'main_table';",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {
+        "runtime_change": "visible",
+        "plan_cache_change": "visible"
+      },
+      "success_criteria": {
+        "runtime_stability": true,
+        "plan_cache_stability": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "parameter_sniffing"
+      }
+    }
+  ],
+  "dependencies": []
+}

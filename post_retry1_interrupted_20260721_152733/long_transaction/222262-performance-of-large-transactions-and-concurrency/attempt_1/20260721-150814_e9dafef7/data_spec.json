@@ -1,0 +1,43 @@
+{
+  "database": "post_retry_long_transaction_222262_perform_r694580_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+  ],
+  "generation_sql": [
+    "INSERT INTO tools (description) SELECT CONCAT('tool_', n) FROM generate_series(1, {row_count}) AS n;"
+  ],
+  "tables": [
+    {
+      "name": "tools",
+      "purpose": "Primary table for simulating row-level locking and transaction behavior.",
+      "target_rows": 100000,
+      "distribution_notes": "Uniform distribution of rows with unique descriptions."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "tools": 100000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "tools"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM tools WHERE id = 1;",
+      "objective": "Verify that reads are not blocked by the update transaction.",
+      "expected_evidence": [
+        "Query returns the old value of the row until the transaction commits."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

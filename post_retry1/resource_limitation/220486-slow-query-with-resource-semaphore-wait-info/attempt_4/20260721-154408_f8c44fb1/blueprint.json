@@ -1,0 +1,271 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Slow query execution with RESOURCE_SEMAPHORE waits and CXCONSUMER waits due to parallelism and memory pressure.",
+    "symptoms": [
+      "RESOURCE_SEMAPHORE waits observed during query execution.",
+      "CXCONSUMER waits indicating parallel query execution.",
+      "Slow query performance under high user connection load."
+    ],
+    "mechanism": "Excessive parallelism and memory grants causing RESOURCE_SEMAPHORE waits.",
+    "facts": [
+      {
+        "key": "RESOURCE_SEMAPHORE waits",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "RESOURCE_SEMAPHORE waits observed in sp_whoisactive and sp_BlitzCache results.",
+        "confidence": 0.9
+      },
+      {
+        "key": "CXCONSUMER waits",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "CXCONSUMER waits observed in sp_whoisactive results.",
+        "confidence": 0.9
+      },
+      {
+        "key": "MAXDOP set to 0",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "DBA noted MAXDOP set to 0 causing queries to utilize all CPU cores.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Memory pressure affecting queries",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "11 forced grants reported in sys.dm_exec_query_resource_semaphores.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "Parallelism is contributing to memory pressure and RESOURCE_SEMAPHORE waits.",
+      "Query execution plans involve high memory grants."
+    ],
+    "unknowns": [
+      "Exact query patterns causing RESOURCE_SEMAPHORE waits.",
+      "Impact of other server configurations on memory pressure."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction can simulate RESOURCE_SEMAPHORE waits by creating synthetic queries with high memory grants and parallelism. Exact reproduction of the production environment is not possible due to lack of access to original data and configurations.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_220486_slow_r848989_a4",
+    "requirements": [
+      "Dedicated SQL Server test database"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_220486_slow_r848989_a4",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS synthetic_queries (id INT PRIMARY KEY, query_pattern NVARCHAR(MAX), memory_grant INT, parallelism INT)",
+      "CREATE TABLE IF NOT EXISTS query_execution_logs (id INT PRIMARY KEY, query_id INT, execution_time_ms INT, wait_type NVARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = ?', 100, 8)",
+      "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (2, 'SELECT COUNT(*) FROM large_table GROUP BY col2', 200, 16)"
+    ],
+    "tables": [
+      {
+        "name": "synthetic_queries",
+        "purpose": "Simulate queries with high memory grants and parallelism to reproduce RESOURCE_SEMAPHORE waits.",
+        "target_rows": 2,
+        "distribution_notes": "Queries designed to simulate high memory pressure and parallel execution."
+      },
+      {
+        "name": "query_execution_logs",
+        "purpose": "Log execution metrics and wait types for synthetic queries.",
+        "target_rows": 100,
+        "distribution_notes": "Logs capturing execution time and wait types for analysis."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "synthetic_queries": 2,
+        "query_execution_logs": 100
+      },
+      "value_skew": {
+        "synthetic_queries.memory_grant": "High memory grants skewed towards specific queries."
+      },
+      "predicate_selectivity": {
+        "synthetic_queries.parallelism > 8": 0.5
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "synthetic_queries",
+      "query_execution_logs"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM synthetic_queries WHERE memory_grant > 50 AND parallelism > 8",
+        "objective": "Verify that the synthetic data triggers RESOURCE_SEMAPHORE waits under high parallelism and memory grants.",
+        "expected_evidence": [
+          "Execution plan shows high memory grants and parallelism.",
+          "RESOURCE_SEMAPHORE waits are visible in execution logs."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10,
+      "max_rows": 1000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT * FROM synthetic_queries WHERE memory_grant > 50 AND parallelism > 8"
+    ],
+    "concurrency": 10,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "RESOURCE_SEMAPHORE waits observed in execution logs.",
+      "Execution plans show high memory grants and parallelism."
+    ],
+    "symptom_evidence": [
+      "RESOURCE_SEMAPHORE waits observed during workload execution.",
+      "Slow query performance under high concurrency."
+    ],
+    "mechanism_evidence": [
+      "Execution plans confirm high memory grants and parallelism contributing to waits."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "RESOURCE_SEMAPHORE waits",
+    "target_database": "post_retry_resource_limitation_220486_slow_r848989_a4",
+    "dba_description": "Simulate RESOURCE_SEMAPHORE waits caused by high memory grants and parallelism.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r848989_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_220486_slow_r848989_a4"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial setup for synthetic reproduction."
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r848989_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE synthetic_queries (id INT PRIMARY KEY, query_pattern NVARCHAR(MAX), memory_grant INT, parallelism INT)"
+                },
+                {
+                  "sql": "CREATE TABLE query_execution_logs (id INT PRIMARY KEY, query_id INT, execution_time_ms INT, wait_type NVARCHAR(64))"
+                },
+                {
+                  "sql": "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = 'repro_value'', 100, 8)"
+                },
+                {
+                  "sql": "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (2, 'SELECT COUNT(*) FROM large_table GROUP BY col2', 200, 16)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_populated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data preparation for reproduction."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM synthetic_queries WHERE memory_grant > 50 AND parallelism > 8",
+          "concurrency": 10,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "RESOURCE_SEMAPHORE_waits": "observed"
+      },
+      "success_criteria": {
+        "symptoms_reproduced": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Workload execution to simulate RESOURCE_SEMAPHORE waits."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "populate_data"
+    ],
+    [
+      "populate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating RESOURCE_SEMAPHORE waits by creating synthetic queries with high memory grants and parallelism. The setup and workload execution are designed to isolate the mechanism causing the observed symptoms."
+}

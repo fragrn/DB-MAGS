@@ -1,0 +1,34 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_r513477_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) NOT NULL PRIMARY KEY, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL NOT NULL UNIQUE, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false);"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "lock_contention"
+      }
+    }
+  ],
+  "dependencies": []
+}

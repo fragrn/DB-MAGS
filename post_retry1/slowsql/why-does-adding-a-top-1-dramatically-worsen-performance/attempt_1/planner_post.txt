@@ -1,0 +1,303 @@
+https://dba.stackexchange.com/questions/127639/why-does-adding-a-top-1-dramatically-worsen-performance
+
+Why does adding a TOP 1 dramatically worsen performance?
+Asked 10 years, 5 months ago
+Modified 4 years, 6 months ago
+Viewed 16k times
+42
+
+I have a fairly simple query
+
+SELECT TOP 1 dc.DOCUMENT_ID,
+        dc.COPIES,
+        dc.REQUESTOR,
+        dc.D_ID,
+        cj.FILE_NUMBER
+FROM DOCUMENT_QUEUE dc
+JOIN CORRESPONDENCE_JOURNAL cj
+    ON dc.DOCUMENT_ID = cj.DOCUMENT_ID
+WHERE dc.QUEUE_DATE <= GETDATE()
+  AND dc.PRINT_LOCATION = 2
+ORDER BY cj.FILE_NUMBER
+That is giving me horrible performance (like never bothered to wait for it to finish). The query plan looks like this:
+SELECT
+Cost: 0 %
+
+→ Top
+   Cost: 0 %
+
+→ Nested Loops (Inner Join)
+   Cost: 56 %
+
+   ├─→ Index Scan (NonClustered)
+   │    [CORRESPONDENCE_JOURNAL].[ix...
+   │    Cost: 1 %
+
+   └─→ Table Spool (Lazy Spool)
+        Cost: 39 %
+
+        → Clustered Index Scan (Clustered)
+           [DOCUMENT_QUEUE].[PK_DOCUMEN...
+           Cost: 4 %
+
+However if I remove the TOP 1 I get a plan that looks like this and it runs in 1-2 seconds:
+SELECT
+Cost: 0 %
+
+→ Hash Match (Inner Join)
+   Cost: 67 %
+
+   ├─→ Clustered Index Scan (Clustered)
+   │    [DOCUMENT_QUEUE].[PK_DOCUMEN...
+   │    Cost: 0 %
+
+   └─→ Index Scan (NonClustered)
+        [CORRESPONDENCE_JOURNAL].[ix...
+        Cost: 33 %
+
+Correct PK & indexing below.
+
+The fact that the TOP 1 changed the query plan doesn't surprise me, I'm just a bit surprised that it makes it so much worse.
+
+Note: I've read the results from this post and understand the concept of a Row Goal etc. What I'm curious about is how I can go about changing the query so that it uses the better plan. Currently I'm dumping the data into a temp table then pulling the first row off of it. I'm wondering if there is a better method.
+
+Edit For people reading this after the fact here are a few extra pieces of information.
+
+Document_Queue - PK/CI is D_ID and it has ~5k rows.
+Correspondence_Journal - PK/CI is FILE_NUMBER, CORRESPONDENCE_ID and it has ~1.4 mil rows.
+When I started there were no other indexes. I ended up with one on Correspondence_Journal (Document_Id, File_Number)
+
+sql-serversql-server-2008-r2performanceperformance-tuningquery-performance
+Share
+Improve this question
+Follow
+edited Jan 7, 2020 at 22:23
+Community's user avatar
+CommunityBot
+1
+asked Jan 28, 2016 at 18:40
+Kenneth Fisher's user avatar
+Kenneth Fisher
+24.3k1313 gold badges6565 silver badges116116 bronze badges
+1
+Do you have a foreign key constraint that enforces the DOCUMENT_ID relationship between the two tables (or does every record in CORRESPONDENCE_JOURNAL have a matching record in DOCUMENT_QUEUE)? – 
+Daniel Hutmacher
+ CommentedJan 28, 2016 at 19:12 
+Add a comment
+6 Answers
+Sorted by:
+
+Highest score (default)
+30
+
+Try forcing a hash join*
+
+SELECT TOP 1 
+       dc.DOCUMENT_ID,
+       dc.COPIES,
+       dc.REQUESTOR,
+       dc.D_ID,
+       cj.FILE_NUMBER
+FROM DOCUMENT_QUEUE dc
+INNER HASH JOIN CORRESPONDENCE_JOURNAL cj
+        ON dc.DOCUMENT_ID = cj.DOCUMENT_ID
+       AND dc.QUEUE_DATE <= GETDATE()
+       AND dc.PRINT_LOCATION = 2
+ORDER BY cj.FILE_NUMBER
+The optimizer probably thought a loop was going to be better with top 1 and that kind of makes sense but in reality it did not work here. Just a guess here but maybe the estimated cost of that spool was off - it uses TEMPDB - you may have a poorly performing TEMPDB.
+
+* Be careful with join hints, because they force plan table access order to match the written order of the tables in the query (just as if OPTION (FORCE ORDER) had been specified). From the documentation link:
+
+Remarks
+Join hints are specified in the FROM clause of a query. Join hints enforce a join strategy
+between two tables. If a join hint is specified for any two tables, the query optimizer
+automatically enforces the join order for all joined tables in the query, based on the position
+of the ON keywords. When a CROSS JOIN is used without the ON clause, parentheses can be
+used to indicate the join order.
+
+This may not produce any undesirable effects in the example, but in general, it very well might. FORCE ORDER (implied or explicit) is a very powerful hint that goes beyond enforcing order; it prevents a broad range of optimizer techniques being applied, including partial aggregations and reordering.
+
+An OPTION (HASH JOIN) query hint may be less intrusive in suitable cases, since this does not imply FORCE ORDER. It does, however, apply to all joins in the query. Other solutions are available.
+
+Share
+Improve this answer
+Follow
+edited Jan 28, 2016 at 19:53
+Paul White's user avatar
+Paul White♦
+96.3k3030 gold badges448448 silver badges703703 bronze badges
+answered Jan 28, 2016 at 19:18
+paparazzo's user avatar
+paparazzo
+5,05811 gold badge2020 silver badges3232 bronze badges
+1
+Looks like the correct answer and the only difference between it and the simpler plan was an additional Sort at the front. – 
+Kenneth Fisher
+ CommentedJan 28, 2016 at 19:34 
+3
+Not sure I like this answer. Join hints are very invasive. Some simple indexing changes should be tried first, for example index on the date column. – 
+usr
+ CommentedJan 29, 2016 at 13:04
+@usr It is a simple PK join that runs in less one second. Pretty safe bet here. – 
+paparazzo
+ CommentedJan 29, 2016 at 15:50
+4
+In forcing a hash join, you're forcing a scan of the large table. There are better options. – 
+Rob Farley
+ CommentedJan 30, 2016 at 6:51
+Add a comment
+30
+
+Since you get the correct plan with the ORDER BY, maybe you could just roll your own TOP operator?
+
+SELECT DOCUMENT_ID, COPIES, REQUESTOR, D_ID, FILE_NUMBER
+FROM (
+    SELECT dc.DOCUMENT_ID,
+           dc.COPIES,
+           dc.REQUESTOR,
+           dc.D_ID,
+           cj.FILE_NUMBER,
+           ROW_NUMBER() OVER (ORDER BY cj.FILE_NUMBER) AS _rownum
+    FROM DOCUMENT_QUEUE dc
+    INNER JOIN CORRESPONDENCE_JOURNAL cj
+        ON dc.DOCUMENT_ID = cj.DOCUMENT_ID
+    WHERE dc.QUEUE_DATE <= GETDATE()
+      AND dc.PRINT_LOCATION = 2
+) AS sub
+WHERE _rownum=1;
+In my mind, the query plan for the ROW_NUMBER() above should be the same as if you had an ORDER BY. The query plan should now have a Segment, Sequence Project and finally a Filter operator, the rest should look just like your good plan.
+
+Share
+Improve this answer
+Follow
+answered Jan 28, 2016 at 19:27
+Daniel Hutmacher's user avatar
+Daniel Hutmacher
+9,20311 gold badge2828 silver badges5252 bronze badges
+3
+Actually while it did give the top operator (and a bunch of other stuff (a sequence project, segment, and sort) ) it still ran subsecond. I'm going to give the correct answer to @frisbee though since his was first and it's simpler. Great answer though. – 
+Kenneth Fisher
+ CommentedJan 28, 2016 at 19:31 
+10
+@KennethFisher, frisbee's answer is simpler, but in the way a sledgehammer drives a finish nail more simply than a standard framing hammer. It also comes with a lot of risk, especially if left in place for the long haul. I wouldn't use hints like that except in testing or maybe, MAYBE a fringe exception. – 
+Steve Mangiameli
+ CommentedJan 28, 2016 at 20:30 
+@SteveMangiameli In this particular case there is only the one join so a number of the concerns go away. I'm aware of the risks of using a join hint (or query hint) I just think it's justified in this case. – 
+Kenneth Fisher
+ CommentedJan 28, 2016 at 20:34
+5
+@KennethFisher Imo, the main risk of query hints is that as your data grows or changes, the query plan you enforce can become worse than what the system would have found on its own. You have already seen how a small mistake in the plan can seriously impact performance. Using a hint in production is declaring, "I know this plan will always, always be the best because I so fully understand the planner and how my data will behave over the lifetime of this query in production." I have never been that confident about a query. – 
+jpmc26
+ CommentedJan 30, 2016 at 6:31 
+Add a comment
+29
+
+Edit: +1 works in this situation because it turns out that FILE_NUMBER is a zero-padded string version of an integer. A better solution here for strings is to append '' (the empty string), as appending a value can affect order, or for numbers to add something which is a constant but contains a non-deterministic function, such as sign(rand()+1). The idea of 'breaking the sort' is still valid here, it's just that my method wasn't ideal.
+
++1
+
+No, I don't mean I'm agreeing with anything, I mean that as a solution. If you change your query to ORDER BY cj.FILE_NUMBER + 1 then the TOP 1 will behave differently.
+
+You see, with the small row goal in place for an ordered query, the system will try to consume the data in order, to avoid having a Sort operator. It will also avoid building a hash table, figuring that it probably doesn't have to do too much work to find that first row. In your case, this is wrong - from the thickness of those arrows, it looks like it's having to consume a lot of data to find a single match.
+
+The thickness of those arrows suggests that your DOCUMENT_QUEUE (DQ) table is much smaller than your CORRESPONDENCE_JOURNAL (CJ) table. And tha
+
+[... middle of long forum export omitted by batch planner compaction ...]
+
+o check through the DQ rows until a CJ row is found. Indeed, that's what the Query Optimizer (QO) would do if it didn't have this pesky ORDER BY in there, that's nicely supported by a covering index on CJ.
+
+So if you dropped the ORDER BY completely, I expect you'd get a plan which involved a Nested Loop, iterating over the rows in DQ, seeking into CJ to make sure the row exists. And with TOP 1, this would stop after a single row had been pulled.
+
+But if you do actually need the first row in FILE_NUMBER order, then you could trick the system into ignoring that index which seems (incorrectly) to be so helpful, by doing ORDER BY CJ.FILE_NUMBER+1 - which we know will keep the same order as before, but importantly the QO doesn't. The QO will focus on getting the whole set out, so that a Top N Sort operator can be satisfied. This method should produce a plan which contains a Compute Scalar operator to work out the value for ordering, and a Top N Sort operator to get the first row. But to the right of these, you should see a nice Nested Loop, doing lots of Seeks on CJ. And better performance than running through a large table of rows which don't match anything in DQ.
+
+The Hash Match isn't necessarily awful, but if the set of rows you're returning from DQ is way smaller than CJ (as I would expect it to be), then the Hash Match is going to be scanning a lot more of CJ than it needs.
+
+Note: I used +1 instead of +0 because the query optimizer is likely to recognise that +0 changes nothing. Of course, the same thing might apply to the +1, if not now, then at some point in the future.
+
+Share
+Improve this answer
+Follow
+edited Feb 8, 2016 at 2:20
+answered Jan 29, 2016 at 2:41
+Rob Farley's user avatar
+Rob Farley
+16.4k22 gold badges4040 silver badges6262 bronze badges
+Add a comment
+8
+
+I've read the results from this post and understand the concept of a Row Goal etc. What I'm curious about is how I can go about changing the query so that it uses the better plan
+
+Adding OPTION (QUERYTRACEON 4138) turns off the effect of row goals for that query only, without being overly prescriptive about the final plan, and will probably be the simplest/most direct way.
+
+If adding this hint gives you a permissions error (required for DBCC TRACEON), you could apply it using a plan guide:
+
+Using QUERYTRACEON in plan guides by spaghettidba
+
+...or just use a stored procedure:
+
+What Permissions does QUERYTRACEON Need? by Kendra Little
+
+Share
+Improve this answer
+Follow
+edited Apr 13, 2017 at 12:42
+Community's user avatar
+CommunityBot
+1
+answered Jan 30, 2016 at 15:03
+Martin Smith's user avatar
+Martin Smith
+89.2k1515 gold badges263263 silver badges373373 bronze badges
+Add a comment
+3
+
+Newer versions of SQL Server offer different (and arguably better) options for dealing with queries that get suboptimal performance when the optimizer is able to apply row goal optimizations. SQL Server 2016 SP1 introduced the DISABLE_OPTIMIZER_ROWGOAL use hint which has the same effect as trace flag 4138. (See this blog post for an example of how to use it.)
+
+If you're not on that version you can also consider using the OPTIMIZE FOR query hint to get a query plan designed to return all rows instead of just 1. The query below will return the same results as the one in the question but it won't be created with the goal of getting just 1 row.
+
+DECLARE @top INT = 1;
+
+SELECT TOP (@top) dc.DOCUMENT_ID,
+        dc.COPIES,
+        dc.REQUESTOR,
+        dc.D_ID,
+        cj.FILE_NUMBER
+FROM DOCUMENT_QUEUE dc
+JOIN CORRESPONDENCE_JOURNAL cj
+    ON dc.DOCUMENT_ID = cj.DOCUMENT_ID
+WHERE dc.QUEUE_DATE <= GETDATE()
+  AND dc.PRINT_LOCATION = 2
+ORDER BY cj.FILE_NUMBER
+OPTION (OPTIMIZE FOR (@top = 987654321));
+Share
+Improve this answer
+Follow
+edited Dec 29, 2021 at 0:56
+nateirvin's user avatar
+nateirvin
+75611 gold badge66 silver badges2222 bronze badges
+answered Apr 9, 2018 at 3:41
+Joe Obbish's user avatar
+Joe Obbish
+33.6k44 gold badges7777 silver badges156156 bronze badges
+Add a comment
+2
+
+Since you're doing a TOP(1), I recommend making the ORDER BY deterministic for a start. At the very least this will ensure results are functionally predictable (always useful for regression testing). It looks like you need to add DC.D_ID and CJ.CORRESPONDENCE_ID for that.
+
+When looking at query plans, I sometimes find it instructive to simplify the query: Possibly select all the relevant dc rows into a temp table in advance, to eliminate issues with cardinality estimation on QUEUE_DATE and PRINT_LOCATION. This should be fast given the low rowcount. You can then add indexes to this temp table if necessary without altering the permanent table.
+
+Share
+Improve this answer
+Follow
+edited Jan 31, 2016 at 13:13
+James Anderson's user avatar
+James Anderson
+5,80422 gold badges2929 silver badges4444 bronze badges
+answered Jan 31, 2016 at 10:54
+Simon Birch's user avatar
+Simon Birch
+2122 bronze badges
+Add a comment
+
+[Batch planner note: the original full post is saved as source_post.txt. This planning input was compacted to remove linked-page snapshots or excessive length.]

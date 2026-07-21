@@ -1,0 +1,182 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Performance issues with a query on the 'calls' table, which involves multiple conditions and returns a large result set.",
+    "symptoms": [
+      "Query takes 4.5 seconds for a simplified version and over 7 minutes for the full query.",
+      "EXPLAIN shows scanning 1.6M rows with 'Using where'."
+    ],
+    "mechanism": "Inefficient index usage due to range conditions and low cardinality columns in the WHERE clause.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "simplified_query": "4.5 seconds",
+          "full_query": ">7 minutes"
+        },
+        "source": "explicit_post",
+        "evidence": "DBA reported execution times for simplified and full queries.",
+        "confidence": 0.9
+      },
+      {
+        "key": "EXPLAIN_output",
+        "value": {
+          "rows_scanned": 1660009,
+          "index_used": "idx_CustID_DateStart"
+        },
+        "source": "explicit_post",
+        "evidence": "EXPLAIN output provided in the post.",
+        "confidence": 0.9
+      },
+      {
+        "key": "table_schema",
+        "value": {
+          "fields": [
+            "ID",
+            "CustID",
+            "DateStart",
+            "CallLength",
+            "Direction"
+          ],
+          "indexes": [
+            "idx_CustID_DateStart",
+            "idx_DateStart"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Schema and index details shared in the post.",
+        "confidence": 0.9
+      },
+      {
+        "key": "index_cardinality",
+        "value": {
+          "idx_CustID": 1685,
+          "idx_DateStart": 4596
+        },
+        "source": "explicit_post",
+        "evidence": "Index cardinality values provided in the post.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The database schema and indexes are accurately described in the post.",
+      "The simplified query is representative of the performance bottleneck."
+    ],
+    "unknowns": [
+      "Exact data distribution in the 'calls' table.",
+      "Impact of other subqueries and joins in the full query."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database 'post_retry_slowsql_mysql_query_performance_r334868_a1' does not exist, preventing setup and reproduction.",
+    "missing_capabilities": [
+      "Target database environment"
+    ],
+    "unmatched_conditions": [
+      "Database creation or inspection failed."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_mysql_query_performance_r334868_a1",
+    "requirements": [
+      "Create the target database before proceeding."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_mysql_query_performance_r334868_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS calls (ID INT AUTO_INCREMENT PRIMARY KEY, CustID INT NOT NULL, DateStart DATE NOT NULL, CallLength TIME NOT NULL, Direction INT NOT NULL, EffectiveFlag SMALLINT NOT NULL, OrigNumber VARCHAR(16), INDEX idx_CustID_DateStart (CustID, DateStart), INDEX idx_DateStart (DateStart))"
+    ],
+    "generation_sql": [
+      "INSERT INTO calls (CustID, DateStart, CallLength, Direction, EffectiveFlag, OrigNumber) SELECT MOD(n, 1000), DATE_ADD('2013-01-01', INTERVAL MOD(n, 365) DAY), TIME(MOD(n, 86400)), MOD(n, 2), MOD(n, 2), CONCAT('Orig_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "calls",
+        "purpose": "Primary table to reproduce the query performance issue.",
+        "target_rows": 1000000,
+        "distribution_notes": "Simulate skewed distribution for CustID and DateStart, with low cardinality for Direction."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "calls": 1000000
+      },
+      "value_skew": {
+        "calls.Direction": "Low cardinality (2 distinct values)."
+      },
+      "predicate_selectivity": {
+        "calls.DateStart BETWEEN '2013-01-01' AND '2013-12-31'": 0.1
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "calls"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT DateStart, ID, NumbID, EffectiveFlag, OrigNumber FROM calls WHERE DateStart <= '2013-12-31' AND DateStart >= '2013-01-01' AND CallLength >= '00:00:00' AND Direction = 1 AND CustID IN (474,482,250,268,197,604,132,359,279,441,118,448,152,133,380,162,249,679,226,259,2450,2408,2451,2453,2439,2454,2444,2445,2452)",
+        "objective": "Validate index usage and query performance for the simplified query.",
+        "expected_evidence": [
+          "EXPLAIN shows range scan on idx_CustID_DateStart.",
+          "Rows scanned match the expected selectivity."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query execution time under 5 seconds for simplified query.",
+      "EXPLAIN shows efficient index usage."
+    ],
+    "symptom_evidence": [
+      "Query execution time matches reported symptoms.",
+      "EXPLAIN output matches reported index usage."
+    ],
+    "mechanism_evidence": [
+      "Index usage aligns with suspected inefficiency due to range conditions."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Slow query performance due to inefficient index usage.",
+    "target_database": "post_retry_slowsql_mysql_query_performance_r334868_a1",
+    "dba_description": "Reproduce and analyze performance issues with the 'calls' table query.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Why does the target database not exist?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database. Synthetic data and schema design are prepared based on the post, but execution cannot proceed without the database environment."
+}

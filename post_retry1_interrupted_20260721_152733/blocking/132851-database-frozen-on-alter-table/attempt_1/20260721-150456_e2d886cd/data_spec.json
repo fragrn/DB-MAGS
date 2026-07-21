@@ -1,0 +1,44 @@
+{
+  "database": "post_retry_blocking_132851_database_frozen_r496449_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) NOT NULL, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL NOT NULL, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN NOT NULL DEFAULT false, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN NOT NULL DEFAULT false, CONSTRAINT pk_cliente PRIMARY KEY (rut));"
+  ],
+  "generation_sql": [
+    "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo) SELECT md5(i::text), 'Name_' || i, 'Razon_' || i, 'Address_' || i, 'Comuna_' || i, 'City_' || i, 'CL', true FROM generate_series(1, {row_count}) AS s(i);"
+  ],
+  "tables": [
+    {
+      "name": "cliente",
+      "purpose": "Primary table to simulate the ALTER TABLE operation and lock contention.",
+      "target_rows": 10000,
+      "distribution_notes": "Uniform distribution of rows to simulate a realistic workload."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "cliente": 10000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "cliente"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM cliente WHERE rut = 'some_value';",
+      "objective": "Verify that SELECT queries can run concurrently with the ALTER TABLE operation.",
+      "expected_evidence": [
+        "The SELECT query is blocked during the ALTER TABLE operation.",
+        "Lock contention is visible in pg_locks during the operation."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

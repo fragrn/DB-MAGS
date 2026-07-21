@@ -1,0 +1,42 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "Investigating the performance and concurrency behavior of large transactions in PostgreSQL.",
+  "symptoms": [
+    "Blocked transactions when attempting to update rows locked by another transaction.",
+    "Potential serialization errors in higher isolation levels."
+  ],
+  "mechanism": "PostgreSQL's MVCC (Multiversion Concurrency Control) model and transaction isolation levels determine the behavior of concurrent transactions and their impact on performance.",
+  "facts": [
+    {
+      "key": "MVCC allows reads and writes to not block each other.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Postgres documentation on MVCC and concurrency control.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Transactions can block each other when attempting to update the same rows.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Example provided in the DBA post with two sessions updating the same row.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Higher isolation levels can lead to serialization errors.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Postgres documentation on transaction isolation levels.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The PostgreSQL version used for reproduction will behave similarly to version 9.3 as described in the post.",
+    "The synthetic data and workload will sufficiently mimic the described scenario to reproduce the behavior."
+  ],
+  "unknowns": [
+    "Exact schema and data distribution of the original database.",
+    "Whether the issue is specific to PostgreSQL 9.3 or generalizable to other versions."
+  ],
+  "confidence": 0.9
+}

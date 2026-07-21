@@ -1,0 +1,119 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Query performance degradation due to parameter sniffing or related execution plan issues.",
+    "symptoms": [
+      "Query suddenly slower than before",
+      "Execution plan changes based on parameter values"
+    ],
+    "mechanism": "Parameter sniffing causing suboptimal execution plan caching.",
+    "facts": [
+      {
+        "key": "parameter_sniffing",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions parameter sniffing as a common cause of query performance degradation.",
+        "confidence": 0.9
+      },
+      {
+        "key": "execution_plan_cache",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Cached execution plans are influenced by initial parameter values.",
+        "confidence": 0.8
+      },
+      {
+        "key": "query_plan_variability",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Different parameters lead to different query plans.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The database schema and workload are representative of the described issue.",
+      "Parameter sniffing is the primary cause of the degradation."
+    ],
+    "unknowns": [
+      "Exact schema and workload details",
+      "Specific parameter values causing the issue"
+    ],
+    "confidence": 0.7
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing setup and reproduction.",
+    "missing_capabilities": [
+      "Existing database environment"
+    ],
+    "unmatched_conditions": [
+      "Database schema and workload unavailable"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_slowsql_why_is_my_query_suddenl_r622545_a2",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_why_is_my_query_suddenl_r622545_a2",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database exists and is accessible",
+      "Schema matches expected reproduction"
+    ],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance degradation due to parameter sniffing",
+    "target_database": "post_retry_slowsql_why_is_my_query_suddenl_r622545_a2",
+    "dba_description": "Query suddenly slower than before due to parameter sniffing or execution plan issues.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to proceed without the target database environment?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database environment. Without the database, schema, or workload, no further steps can be taken."
+}

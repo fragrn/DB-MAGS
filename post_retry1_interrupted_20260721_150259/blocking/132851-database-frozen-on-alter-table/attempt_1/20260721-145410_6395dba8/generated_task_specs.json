@@ -1,0 +1,102 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_r850712_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS cliente (rut character varying(30) NOT NULL, nombre character varying(150) NOT NULL, razon_social character varying(150) NOT NULL, direccion character varying(200) NOT NULL, comuna character varying(100) NOT NULL, ciudad character varying(100) NOT NULL, codigo_pais character varying(3) NOT NULL, activo boolean DEFAULT true, id serial NOT NULL, stock boolean DEFAULT false, vigente boolean DEFAULT true, clase integer DEFAULT 1, plan integer DEFAULT 1, plantilla character varying(15) DEFAULT 'WAYPOINT'::character varying, facturable integer DEFAULT 1, toolkit integer DEFAULT 0, propietario integer DEFAULT 0, creacion timestamp without time zone DEFAULT now(), codelco boolean NOT NULL DEFAULT false, familia integer DEFAULT 0, enabled_machines boolean DEFAULT false, enabled_canbus boolean DEFAULT false, enabled_horometro boolean DEFAULT false, enabled_comap boolean DEFAULT false, enabled_frio boolean DEFAULT false, enabled_panico boolean DEFAULT false, enabled_puerta boolean DEFAULT false, enabled_rpm boolean DEFAULT false, enabled_supervisor integer DEFAULT 0, demo boolean, interno boolean, mqtt_enable boolean NOT NULL DEFAULT false, CONSTRAINT pk_cliente PRIMARY KEY (rut));"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "schema setup"
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_r850712_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo) SELECT 'rut_' || n, 'nombre_' || n, 'razon_social_' || n, 'direccion_' || n, 'comuna_' || n, 'ciudad_' || n, 'CL', CASE WHEN n % 2 = 0 THEN true ELSE false END FROM generate_series(1, 10000) n;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "data generation"
+      }
+    },
+    {
+      "task_id": "simulate_lock_contention",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; SELECT * FROM cliente WHERE rut = 'rut_1'; -- Simulate idle transaction",
+          "concurrency": 10,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM cliente WHERE rut = 'rut_2'; -- Simulate active query",
+          "concurrency": 10,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "lock_contention_observed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "lock contention"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_schema",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "simulate_lock_contention"
+    ]
+  ]
+}

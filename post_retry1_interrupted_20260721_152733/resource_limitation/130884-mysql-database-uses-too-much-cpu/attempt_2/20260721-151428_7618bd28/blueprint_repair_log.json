@@ -1,0 +1,17 @@
+{
+  "changes": [
+    {
+      "path": "task_specs[1].actions[0].scripts[0].steps[2].sql",
+      "before": "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM (SELECT @rownum := @rownum + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t1, (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t2, (SELECT @rownum := 0) t3) numbers WHERE n <= 100",
+      "after": "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t1, (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t2, (SELECT 'repro_value' := 0) t3) numbers WHERE n <= 100",
+      "reason": "Replace unresolved SQL placeholders with synthetic literals."
+    },
+    {
+      "path": "task_specs[1].actions[0].scripts[0].steps[3].sql",
+      "before": "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM (SELECT @rownum := @rownum + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t1, (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t2, (SELECT @rownum := 0) t3) numbers WHERE n <= 100000",
+      "after": "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t1, (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t2, (SELECT 'repro_value' := 0) t3) numbers WHERE n <= 100000",
+      "reason": "Replace unresolved SQL placeholders with synthetic literals."
+    }
+  ],
+  "timestamp": 1784618094.55173
+}

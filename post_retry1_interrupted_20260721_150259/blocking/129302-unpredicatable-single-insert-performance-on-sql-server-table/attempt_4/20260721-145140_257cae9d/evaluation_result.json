@@ -1,0 +1,127 @@
+{
+  "symptom_hit": false,
+  "mechanism_hit": false,
+  "plan_similarity": 0.0,
+  "success": false,
+  "reason": "The reproduction did not successfully demonstrate the reported symptoms or mechanism. The workload execution failed due to an invalid object name 'Communication', preventing the observation of blocking behavior or contention caused by excessive indexes.",
+  "unmatched_conditions": [
+    "Blocked requests waiting for LCK_M_S lock type.",
+    "Blocking session ID reported but no active blocker found.",
+    "Uncommitted transactions holding locks cause blocking.",
+    "Excessive indexes contribute to contention during inserts."
+  ],
+  "evidence": {
+    "execution_trace": {
+      "tasks": {
+        "setup_environment": {
+          "status": "success"
+        },
+        "run_workload": {
+          "status": "success",
+          "actions": [
+            {
+              "error_count": 140,
+              "errors": [
+                "Msg 208, Level 16, State 1, Server 883f252a88e4, Line 1\nInvalid object name 'Communication'."
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "observations": {
+      "baseline": {
+        "schema": {
+          "Communication": {
+            "columns": [
+              {
+                "name": "id",
+                "type": "int",
+                "nullable": "NO"
+              },
+              {
+                "name": "comm_action",
+                "type": "nvarchar",
+                "nullable": "YES"
+              },
+              {
+                "name": "comm_channelid",
+                "type": "int",
+                "nullable": "YES"
+              },
+              {
+                "name": "payload",
+                "type": "nvarchar",
+                "nullable": "YES"
+              }
+            ],
+            "indexes": [
+              {
+                "name": "idx_comm_action",
+                "type": "NONCLUSTERED"
+              },
+              {
+                "name": "idx_comm_channelid",
+                "type": "NONCLUSTERED"
+              },
+              {
+                "name": "idx_payload",
+                "type": "NONCLUSTERED"
+              },
+              {
+                "name": "PK__Communic__3213E83FB5225748",
+                "type": "CLUSTERED"
+              }
+            ]
+          }
+        }
+      },
+      "after": {
+        "schema": {
+          "Communication": {
+            "columns": [
+              {
+                "name": "id",
+                "type": "int",
+                "nullable": "NO"
+              },
+              {
+                "name": "comm_action",
+                "type": "nvarchar",
+                "nullable": "YES"
+              },
+              {
+                "name": "comm_channelid",
+                "type": "int",
+                "nullable": "YES"
+              },
+              {
+                "name": "payload",
+                "type": "nvarchar",
+                "nullable": "YES"
+              }
+            ],
+            "indexes": [
+              {
+                "name": "idx_comm_action",
+                "type": "NONCLUSTERED"
+              },
+              {
+                "name": "idx_comm_channelid",
+                "type": "NONCLUSTERED"
+              },
+              {
+                "name": "idx_payload",
+                "type": "NONCLUSTERED"
+              },
+              {
+                "name": "PK__Communic__3213E83FB5225748",
+                "type": "CLUSTERED"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,242 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Investigating the performance and concurrency behavior of large transactions in PostgreSQL.",
+    "symptoms": [
+      "Blocked transactions due to row-level locks.",
+      "Potential serialization errors in higher isolation levels.",
+      "Performance degradation for long-lived transactions."
+    ],
+    "mechanism": "PostgreSQL's MVCC model and transaction isolation levels determine the behavior of concurrent transactions, including row-level locking and snapshot visibility.",
+    "facts": [
+      {
+        "key": "MVCC behavior",
+        "value": {
+          "reads do not block writes and writes do not block reads.": "explicit_post",
+          "evidence": "PostgreSQL documentation and DBA post explanation.",
+          "confidence": 1.0
+        },
+        "Transaction isolation levels affect conflict resolution and serialization errors.": "explicit_post",
+        "evidence": "PostgreSQL documentation and DBA post explanation.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The target database will be created and initialized for the experiment.",
+      "The PostgreSQL version used in the test environment supports MVCC and transaction isolation levels as described in PostgreSQL 9.3 documentation."
+    ],
+    "unknowns": [
+      "Exact PostgreSQL version in the test environment.",
+      "Whether the synthetic data will fully replicate the locking and concurrency behavior of the original scenario."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The PostgreSQL adapter is available, but the target database does not exist. Synthetic data and schema can be created to reproduce the mechanism.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Target database does not exist."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_long_transaction_222262_perform_r89571_a4",
+    "requirements": [
+      "The database must be created before running the experiment."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_222262_perform_r89571_a4",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+    ],
+    "generation_sql": [
+      "INSERT INTO tools (description) SELECT 'tool_' || g FROM generate_series(1, {row_count}) g;"
+    ],
+    "tables": [
+      {
+        "name": "tools",
+        "purpose": "Simulates a table with rows that will be updated in large transactions.",
+        "target_rows": 100000,
+        "distribution_notes": "Uniform distribution of rows with unique descriptions."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "tools": 100000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "tools"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM tools WHERE id = 1;",
+        "objective": "Verify that the table and data are accessible.",
+        "expected_evidence": [
+          "The query returns a single row with id = 1.",
+          "The EXPLAIN plan shows a simple index or sequential scan."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id <= 50000; COMMIT;"
+    ],
+    "concurrency": 2,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Transaction blocking behavior matches expected MVCC behavior.",
+      "Performance metrics (e.g., transaction duration) are within expected ranges."
+    ],
+    "symptom_evidence": [
+      "Blocked transactions due to row-level locks.",
+      "Serialization errors in higher isolation levels."
+    ],
+    "mechanism_evidence": [
+      "EXPLAIN plans show row-level locking and snapshot visibility behavior."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "Transaction blocking and performance degradation in large transactions.",
+    "target_database": "post_retry_long_transaction_222262_perform_r89571_a4",
+    "dba_description": "Investigating the performance and concurrency behavior of large transactions in PostgreSQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "create_database",
+      "task_type": "raw_command",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "createdb",
+            "post_retry_long_transaction_222262_perform_r89571_a4"
+          ],
+          "duration_sec": 5
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database does not exist."
+      }
+    },
+    {
+      "task_id": "setup_schema",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);",
+          "database": "post_retry_long_transaction_222262_perform_r89571_a4",
+          "concurrency": 1,
+          "duration_sec": 5
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema setup for synthetic data."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO tools (description) SELECT 'tool_' || g FROM generate_series(1, 100000) g;",
+          "database": "post_retry_long_transaction_222262_perform_r89571_a4",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "row_count": 100000
+      },
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data generation for testing."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id <= 50000; COMMIT;",
+          "database": "post_retry_long_transaction_222262_perform_r89571_a4",
+          "concurrency": 2,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "transaction_duration": "measured"
+      },
+      "success_criteria": {
+        "workload_completed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Testing transaction blocking and performance."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "create_database",
+      "setup_schema"
+    ],
+    [
+      "setup_schema",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The experiment is designed to reproduce the described behavior of large transactions in PostgreSQL using synthetic data and a dedicated test database. The tasks ensure proper setup and execution of the workload to observe the mechanism."
+}

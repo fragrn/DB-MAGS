@@ -1,0 +1,43 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to blocking and excessive indexing.",
+  "symptoms": [
+    "Single insert operations occasionally take several minutes.",
+    "Blocking sessions appear in `sys.dm_exec_requests` but the blocking session ID does not correspond to an active query.",
+    "Wait type `LCK_M_S` observed during blocking."
+  ],
+  "mechanism": "Excessive indexing combined with blocking due to uncommitted transactions or lock contention.",
+  "facts": [
+    {
+      "key": "Table has 34 non-clustered indexes.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions the table has 34 indexes.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Blocking sessions appear in `sys.dm_exec_requests`.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post describes blocked sessions with no active queries.",
+      "confidence": 0.8
+    },
+    {
+      "key": "Wait type `LCK_M_S` observed.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions the wait type.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The table schema includes a clustered index and 34 non-clustered indexes.",
+    "The blocking is caused by uncommitted transactions or lock contention."
+  ],
+  "unknowns": [
+    "Exact schema of the table and indexes.",
+    "Whether the blocking sessions are caused by uncommitted transactions or other factors."
+  ],
+  "confidence": 0.8
+}

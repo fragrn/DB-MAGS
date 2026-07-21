@@ -1,0 +1,238 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Investigating the performance and concurrency implications of large transactions in PostgreSQL.",
+    "symptoms": [
+      "Blocked transactions due to row-level locks.",
+      "Potential serialization errors under higher isolation levels.",
+      "Concurrency impact when multiple transactions modify overlapping rows."
+    ],
+    "mechanism": "PostgreSQL's MVCC (Multiversion Concurrency Control) and transaction isolation levels determine how transactions interact with each other, especially when they modify overlapping rows.",
+    "facts": [
+      {
+        "key": "MVCC behavior",
+        "value": {
+          "reads do not block writes and writes do not block reads.": "explicit_post",
+          "evidence": "PostgreSQL documentation and answer 2.",
+          "confidence": 1.0
+        }
+      },
+      {
+        "key": "Row-level locking",
+        "value": {
+          "transactions modifying the same rows can block each other until one commits or rolls back.": "explicit_post",
+          "evidence": "Answer 2 and PostgreSQL documentation.",
+          "confidence": 1.0
+        }
+      },
+      {
+        "key": "Transaction isolation levels",
+        "value": {
+          "higher isolation levels can lead to serialization errors.": "explicit_post",
+          "evidence": "Answer 2 and PostgreSQL documentation.",
+          "confidence": 1.0
+        }
+      }
+    ],
+    "assumptions": [
+      "The database uses the default 'Read Committed' isolation level unless specified otherwise.",
+      "The table schema and workload are representative of the described scenario."
+    ],
+    "unknowns": [
+      "Exact schema and indexes used in the original scenario.",
+      "Specific workload patterns and transaction sizes."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The PostgreSQL adapter is available, but the target database does not exist. Synthetic data and schema can be designed to reproduce the mechanism.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Target database does not exist."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_long_transaction_222262_perform_r12672_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_222262_perform_r12672_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+    ],
+    "generation_sql": [
+      "INSERT INTO tools (description) SELECT 'tool_' || g FROM generate_series(1, {row_count}) g;"
+    ],
+    "tables": [
+      {
+        "name": "tools",
+        "purpose": "Simulate a table with rows that can be updated concurrently by multiple transactions.",
+        "target_rows": 100000,
+        "distribution_notes": "Uniform distribution of rows with unique IDs."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "tools": 100000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "tools"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM tools WHERE id = 1;",
+        "objective": "Verify that the table and data are accessible and correctly populated.",
+        "expected_evidence": [
+          "The query returns a single row with the expected ID and description."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+      "BEGIN; UPDATE tools SET description = 'conflicting_tool' WHERE id BETWEEN 25000 AND 75000; COMMIT;"
+    ],
+    "concurrency": 2,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Transactions exhibit blocking behavior when modifying overlapping rows.",
+      "No deadlocks occur under the default isolation level.",
+      "Serialization errors occur under higher isolation levels."
+    ],
+    "symptom_evidence": [
+      "Blocked transactions due to row-level locks.",
+      "Serialization errors under higher isolation levels."
+    ],
+    "mechanism_evidence": [
+      "MVCC behavior allows reads and writes to proceed concurrently.",
+      "Row-level locks prevent simultaneous updates to the same rows."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Transaction blocking and concurrency behavior under MVCC.",
+    "target_database": "post_retry_long_transaction_222262_perform_r12672_a1",
+    "dba_description": "Investigate how large transactions interact with concurrent updates in PostgreSQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "initialize_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_222262_perform_r12672_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema initialization for synthetic reproduction."
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_222262_perform_r12672_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO tools (description) SELECT 'tool_' || g FROM generate_series(1, 100000) g;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data population for synthetic reproduction."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+          "concurrency": 2,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Simulating concurrent transactions to observe blocking and serialization behavior."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "initialize_schema",
+      "populate_data"
+    ],
+    [
+      "populate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The experiment is designed to reproduce the described concurrency behavior using synthetic data and schema in PostgreSQL. The tasks ensure schema initialization, data population, and workload execution to observe the blocking and serialization behavior under MVCC."
+}

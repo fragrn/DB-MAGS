@@ -1,0 +1,16 @@
+{
+  "validation_criteria": [
+    "Blocking behavior is observed during single insert operations.",
+    "Wait type LCK_M_S is confirmed in sys.dm_exec_requests.",
+    "The presence of 34 indexes is confirmed to impact insert performance."
+  ],
+  "symptom_evidence": [
+    "Single insert takes an unusually long time.",
+    "Blocking session ID is reported but not active."
+  ],
+  "mechanism_evidence": [
+    "Blocking caused by uncommitted transactions holding locks.",
+    "Excessive index maintenance during inserts contributes to poor performance."
+  ],
+  "minimum_plan_similarity": 0.6
+}

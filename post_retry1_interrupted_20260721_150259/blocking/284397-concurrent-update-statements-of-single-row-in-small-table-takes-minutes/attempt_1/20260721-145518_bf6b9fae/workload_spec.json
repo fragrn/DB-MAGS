@@ -1,0 +1,9 @@
+{
+  "enabled": true,
+  "method": "sql",
+  "queries": [
+    "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = (SELECT scan_uuid FROM host_scan_complete_log_counts LIMIT 1)"
+  ],
+  "concurrency": 100,
+  "duration_sec": 30
+}

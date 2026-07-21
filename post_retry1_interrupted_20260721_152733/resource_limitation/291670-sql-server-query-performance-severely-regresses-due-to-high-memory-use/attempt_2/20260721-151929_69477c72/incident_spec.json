@@ -1,0 +1,50 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "SQL Server query performance regresses severely due to high memory use and parameter sniffing issues.",
+  "symptoms": [
+    "Queries timeout under high memory usage.",
+    "Performance differences between SSMS and application queries.",
+    "Memory consumption spikes and fails to release efficiently."
+  ],
+  "mechanism": "Parameter sniffing combined with memory pressure and inefficient query plans.",
+  "facts": [
+    {
+      "key": "High memory consumption leads to query timeouts.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post describes memory filling up and queries failing until SQL Server is restarted.",
+      "confidence": 0.9
+    },
+    {
+      "key": "SSMS and application queries behave differently due to ARITHABORT setting.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post identifies ARITHABORT as a key difference causing plan divergence.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Parameter sniffing affects execution plans.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post references Erland Sommarskog's article on parameter sniffing and its impact.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Sort operations and tempdb usage contribute to performance issues.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post describes sort operations going to tempdb multiple times.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The described behavior is reproducible in a synthetic environment.",
+    "The database schema and workload can be approximated based on the post."
+  ],
+  "unknowns": [
+    "Exact schema details for the tables involved.",
+    "Precise workload characteristics and query patterns."
+  ],
+  "confidence": 0.8
+}

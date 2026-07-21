@@ -1,0 +1,8 @@
+{
+  "database": "post_retry_too_many_connection_4717_too_ma_r744225_a2",
+  "statement_count": 2,
+  "statements": [
+    "CREATE TABLE IF NOT EXISTS test_table (id INT AUTO_INCREMENT PRIMARY KEY, data VARCHAR(255))",
+    "INSERT INTO test_table (data) SELECT CONCAT('row_', n) FROM (SELECT @rownum := @rownum + 1 AS n FROM (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) t1, (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) t2, (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) t3, (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) t4, (SELECT @rownum := 0) t5 LIMIT 1000) numbers"
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "High percentage of temporary tables being created on disk in MySQL.",
+    "symptoms": [
+      "High percentage of temporary tables created on disk (30% or more).",
+      "Performance concerns due to disk I/O overhead from temporary tables."
+    ],
+    "mechanism": "MySQL creates temporary tables on disk when certain conditions are met, such as the use of TEXT/BLOB fields, exceeding tmp_table_size or max_heap_table_size, or large columns in GROUP BY/ORDER BY operations.",
+    "facts": [
+      {
+        "key": "tmp_table_size",
+        "value": {
+          "current_value": "200M"
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA mentioned increasing tmp_table_size to 200M.",
+        "confidence": 0.5
+      },
+      {
+        "key": "max_heap_table_size",
+        "value": {
+          "current_value": "200M"
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA mentioned increasing max_heap_table_size to 200M.",
+        "confidence": 0.5
+      },
+      {
+        "key": "disk_temp_table_percentage",
+        "value": {
+          "current_value": "30%"
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA observed that 30% of temporary tables were created on disk.",
+        "confidence": 0.5
+      },
+      {
+        "key": "MySQL storage engine for temporary tables",
+        "value": {
+          "memory_engine": "MEMORY",
+          "disk_engine": "MyISAM"
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA and answer authors noted that MEMORY is used for in-memory temp tables and MyISAM for disk-based temp tables.",
+        "confidence": 0.5
+      },
+      {
+        "key": "TEXT/BLOB fields",
+        "value": {
+          "impact": "Forces disk-based temporary tables"
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA and answer authors mentioned TEXT/BLOB fields as a cause for disk-based temp tables.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database schema includes queries with GROUP BY, ORDER BY, or UNION operations.",
+      "Some tables may contain TEXT or BLOB fields.",
+      "The database workload involves queries that generate large intermediate result sets."
+    ],
+    "unknowns": [
+      "The exact schema of the database.",
+      "The specific queries causing the creation of disk-based temporary tables.",
+      "Whether the observed behavior is causing a measurable performance issue."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, making it impossible to proceed with the reproduction.",
+    "missing_capabilities": [
+      "Target database does not exist."
+    ],
+    "unmatched_conditions": [],
+    "confidence": 1.0
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_i_r168974_a2",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_i_r168974_a2",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High percentage of disk-based temporary tables",
+    "target_database": "post_retry_resource_limitation_17677_why_i_r168974_a2",
+    "dba_description": "Investigate why a high percentage of temporary tables are being created on disk in MySQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "What is the exact schema of the database?",
+    "What are the specific queries causing disk-based temporary tables?",
+    "Is the observed behavior causing a measurable performance issue?"
+  ],
+  "rationale": "The target database does not exist, which blocks the ability to proceed with the reproduction. The incident involves understanding the conditions under which MySQL creates disk-based temporary tables, but without the database, no schema or workload can be analyzed or reproduced."
+}

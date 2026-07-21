@@ -1,0 +1,55 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_slowsql_why_does_adding_a_top_1_r486967_a3"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_slowsql_why_does_adding_a_top_1_r486967_a3'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"dbms_version\": null,\n    \"summary\": \"Performance degradation when using TOP 1 in a query with ORDER BY.\",\n    \"symptoms\": [\"Query with TOP 1 and ORDER BY performs significantly worse than the same query without TOP 1.\"],\n    \"mechanism\": \"The SQL Server query optimizer applies a row goal optimization when TOP 1 is used, which can lead to suboptimal plans such as nested loops with spooling instead of hash joins.\",\n    \"facts\": [\n      {\"key\": \"query_with_top_1\", \"value\": {\"sql\": \"SELECT TOP 1 ... ORDER BY ...\"}, \"source\": \"explicit_post\", \"evidence\": \"The DBA post explicitly describes the query with TOP 1 and its performance issues.\", \"confidence\": 1.0},\n      {\"key\": \"query_without_top_1\", \"value\": {\"sql\": \"SELECT ... ORDER BY ...\"}, \"source\": \"explicit_post\", \"evidence\": \"The DBA post describes the improved performance of the query without TOP 1.\", \"confidence\": 1.0},\n      {\"key\": \"row_goal_optimization\", \"value\": {\"effect\": \"suboptimal plan with nested loops and spooling\"}, \"source\": \"post_hypothesis\", \"evidence\": \"The post discusses the concept of row goal optimization and its impact on the query plan.\", \"confidence\": 0.9},\n      {\"key\": \"table_sizes\", \"value\": {\"DOCUMENT_QUEUE\": 5000, \"CORRESPONDENCE_JOURNAL\": 1400000}, \"source\": \"explicit_post\", \"evidence\": \"The post provides approximate row counts for the tables involved.\", \"confidence\": 1.0},\n      {\"key\": \"indexes\", \"value\": {\"DOCUMENT_QUEUE\": \"PK on D_ID\", \"CORRESPONDENCE_JOURNAL\": \"PK on FILE_NUMBER, CORRESPONDENCE_ID and additional index on DOCUMENT_ID, FILE_NUMBER\"}, \"source\": \"explicit_post\", \"evidence\": \"The post describes the indexing setup.\", \"confidence\": 1.0}\n    ],\n    \"assumptions\": [\n      \"The described behavior is reproducible in the Azure SQL Edge environment.\",\n      \"The optimizer behavior for row goal optimization is consistent across SQL Server versions.\"\n    ],\n    \"unknowns\": [\n      \"Exact SQL Server version used in the original environment.\",\n      \"Whether TEMPDB performance issues contributed to the observed behavior.\"\n    ],\n    \"confidence\": 0.9\n  },\n  \"feasibility\": {\n    \"level\": \"mechanism\",\n    \"rationale\": \"The Azure SQL Edge environment supports SQL Server-compatible syntax and query plans, but it may not fully replicate all optimizer behaviors of SQL Server 2008 R2.\",\n    \"missing_capabilities\": [\"Full SQL Server 2008 R2 optimizer behavior\"],\n    \"unmatched_conditions\": [\"TEMPDB performance impact\"],\n    \"confidence\": 0.8\n  },\n  \"environment_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"database\": \"post_retry_slowsql_why_does_adding_a_top_1_r486967_a3\",\n    \"requirements\": [\"Azure SQL Edge compatibility\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_slowsql_why_does_adding_a_top_1_r486967_a3\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS DOCUMENT_QUEUE (D_ID INT PRIMARY KEY, DOCUMENT_ID INT, COPIES INT, REQUESTOR NVARCHAR(255), QUEUE_DATE DATETIME, PRINT_LOCATION INT)\",\n      \"CREATE TABLE IF NOT EXISTS CORRESPONDENCE_JOURNAL (FILE_NUMBER NVARCHAR(255) PRIMARY KEY, CORRESPONDENCE_ID INT, DOCUMENT_ID INT, INDEX ix_document_id_file_number (DOCUMENT_ID, FILE_NUMBER))\"\n    ],\n    \"generation_sql\": [\n      \"INSERT INTO DOCUMENT_QUEUE (D_ID, DOCUMENT_ID, COPIES, REQUESTOR, QUEUE_DATE, PRINT_LOCATION) SELECT n, n, n % 10, CONCAT('Requestor_', n), DATEADD(DAY, -n % 30, GETDATE()), n % 3 FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers\",\n      \"INSERT INTO CORRESPONDENCE_JOURNAL (FILE_NUMBER, CORRESPONDENCE_ID, DOCUMENT_ID) SELECT CONCAT('File_', n), n, n % 5000 FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers\"\n    ],\n    \"tables\": [\n      {\n        \"name\": \"DOCUMENT_QUEUE\",\n        \"purpose\": \"Primary table with smaller cardinality driving the join.\",\n        \"target_rows\": 5000,\n        \"distribution_notes\": \"Uniform distribut"
+  }
+]

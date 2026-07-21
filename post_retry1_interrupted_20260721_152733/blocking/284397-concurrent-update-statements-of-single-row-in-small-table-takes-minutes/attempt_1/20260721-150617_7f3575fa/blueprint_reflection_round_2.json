@@ -1,0 +1,240 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Concurrent UPDATE statements on a single row in a small table cause significant delays due to locking contention.",
+    "symptoms": [
+      "UPDATE statements take minutes to complete",
+      "ExclusiveLock contention observed",
+      "RowExclusiveLock contention observed"
+    ],
+    "mechanism": "High concurrency on a single row leads to lock contention, as PostgreSQL enforces row-level locks during updates. Without indexes, the table scan exacerbates contention.",
+    "facts": [
+      {
+        "key": "table_schema",
+        "value": {
+          "columns": [
+            "scan_uuid",
+            "num_shards_completed"
+          ],
+          "indexes": []
+        },
+        "source": "explicit_post",
+        "evidence": "Table schema provided in the post",
+        "confidence": 1.0
+      },
+      {
+        "key": "update_pattern",
+        "value": {
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1"
+        },
+        "source": "explicit_post",
+        "evidence": "SQL provided in the post",
+        "confidence": 1.0
+      },
+      {
+        "key": "lock_contention",
+        "value": {
+          "types": [
+            "ExclusiveLock",
+            "RowExclusiveLock"
+          ],
+          "age": "minutes"
+        },
+        "source": "explicit_post",
+        "evidence": "Lock contention details provided in the post",
+        "confidence": 1.0
+      },
+      {
+        "key": "concurrency",
+        "value": {
+          "nodes": "few hundred",
+          "connections": "direct"
+        },
+        "source": "explicit_post",
+        "evidence": "Concurrency details provided in the post",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The workload involves frequent updates to the same row identified by scan_uuid.",
+      "The absence of indexes contributes to table scan overhead.",
+      "PostgreSQL's locking mechanism is the primary cause of delays."
+    ],
+    "unknowns": [
+      "Exact PostgreSQL version",
+      "Impact of adding indexes or changing the update strategy"
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The reproduction failed due to an inability to establish the required database environment. Connection errors indicate the database 'neo' does not exist, preventing setup and workload execution.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database environment setup failed",
+      "No workload execution occurred"
+    ],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_284397_concurrent_upda_r577208_a1",
+    "requirements": [
+      "Dedicated test database",
+      "PostgreSQL-compatible environment"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_284397_concurrent_upda_r577208_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+    ],
+    "generation_sql": [
+      "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES ('00000000-0000-0000-0000-000000000001', 0)"
+    ],
+    "tables": [
+      {
+        "name": "host_scan_complete_log_counts",
+        "purpose": "Simulates the small table with a single row frequently updated by concurrent connections.",
+        "target_rows": 1,
+        "distribution_notes": "Single-row table to reproduce contention on updates."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "host_scan_complete_log_counts": 1
+      },
+      "value_skew": {
+        "host_scan_complete_log_counts.scan_uuid": "Single UUID value"
+      },
+      "predicate_selectivity": {
+        "scan_uuid = '00000000-0000-0000-0000-000000000001'": 1.0
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "host_scan_complete_log_counts"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = '00000000-0000-0000-0000-000000000001'",
+        "objective": "Verify that the table contains the single row required for contention reproduction.",
+        "expected_evidence": [
+          "The query retrieves the single row with scan_uuid = '00000000-0000-0000-0000-000000000001'.",
+          "No additional rows are present in the table."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1,
+      "max_rows": 1,
+      "growth_factor": 2.0,
+      "max_rounds": 1
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = '00000000-0000-0000-0000-000000000001'"
+    ],
+    "concurrency": 100,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Lock contention observed",
+      "Update delays measured"
+    ],
+    "symptom_evidence": [
+      "Long lock ages in pg_locks",
+      "Slow completion of UPDATE statements"
+    ],
+    "mechanism_evidence": [
+      "ExclusiveLock contention",
+      "RowExclusiveLock contention"
+    ],
+    "minimum_plan_similarity": 0.8
+  },
+  "experiment_request": {
+    "target_anomaly": "Lock contention due to concurrent updates",
+    "target_database": "post_retry_blocking_284397_concurrent_upda_r577208_a1",
+    "dba_description": "Concurrent UPDATE statements on a single row in a small table cause significant delays due to locking contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES ('00000000-0000-0000-0000-000000000001', 0)",
+          "concurrency": 1,
+          "duration_sec": 1
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "table_exists": true,
+        "row_count": 1
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial setup for reproduction"
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = '00000000-0000-0000-0000-000000000001'",
+          "concurrency": 100,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention": true,
+        "update_delays": true
+      },
+      "success_criteria": {
+        "symptom_reproduced": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Concurrent updates causing lock contention"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Why was the database environment not correctly established?",
+    "What steps are needed to ensure the database exists for future attempts?"
+  ],
+  "rationale": "The reproduction failed due to a missing database environment, blocking the ability to validate symptoms and mechanisms. Future attempts must ensure the database exists and is accessible."
+}

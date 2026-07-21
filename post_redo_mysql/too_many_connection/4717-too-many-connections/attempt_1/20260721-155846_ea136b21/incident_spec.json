@@ -1,0 +1,52 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "MATLAB feeding the database results in 'too many connections' error due to rapid connection opening and closing.",
+  "symptoms": [
+    "Too many connections error",
+    "High thread count",
+    "Rapid connection opening and closing"
+  ],
+  "mechanism": "Excessive connection churn leads to hitting the max_connections limit.",
+  "facts": [
+    {
+      "key": "MATLAB feeding database",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "MATLAB is used to feed the database, as stated in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Too many connections error",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The error 'too many connections' is explicitly mentioned in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Rapid connection opening and closing",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post describes opening and closing connections for each row insertion.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Max_connections limit",
+      "value": {
+        "default_limit": 151
+      },
+      "source": "post_hypothesis",
+      "evidence": "Answers mention the default MySQL max_connections limit.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "MATLAB threads are responsible for the majority of connections.",
+    "Connection pooling or batching is not implemented."
+  ],
+  "unknowns": [
+    "Exact MATLAB configuration and threading behavior.",
+    "Whether connection pooling is feasible in the MATLAB environment."
+  ],
+  "confidence": 0.85
+}

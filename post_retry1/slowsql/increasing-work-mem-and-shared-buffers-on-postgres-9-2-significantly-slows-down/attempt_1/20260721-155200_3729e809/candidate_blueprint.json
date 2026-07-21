@@ -1,0 +1,136 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Increasing work_mem and shared_buffers in PostgreSQL 9.2 unexpectedly slowed down queries, particularly those involving Hash Joins.",
+    "symptoms": [
+      "Query performance degradation after increasing memory settings.",
+      "Hash Join operations became slower.",
+      "Sequential scans also showed slower performance."
+    ],
+    "mechanism": "Memory allocation changes affected caching behavior, leading to slower query execution due to altered interaction between PostgreSQL shared buffers and OS-level caching.",
+    "facts": [
+      {
+        "key": "work_mem increase slowed queries",
+        "value": {
+          "default": "1MB",
+          "new": "96MB"
+        },
+        "source": "explicit_post",
+        "evidence": "Post author observed slower query performance with increased work_mem settings.",
+        "confidence": 0.9
+      },
+      {
+        "key": "shared_buffers increase slowed queries",
+        "value": {
+          "default": "128k",
+          "new": "3840MB"
+        },
+        "source": "explicit_post",
+        "evidence": "Post author observed slower query performance with increased shared_buffers settings.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Hash Join slower with increased buffers",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "EXPLAIN (ANALYZE, BUFFERS) showed slower Hash Join operations.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Sequential scans slower with increased buffers",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "EXPLAIN (ANALYZE, BUFFERS) showed slower sequential scans.",
+        "confidence": 0.8
+      },
+      {
+        "key": "OS-level caching interaction suspected",
+        "value": {},
+        "source": "post_hypothesis",
+        "evidence": "Post author and commenters hypothesized interaction between PostgreSQL shared buffers and OS-level caching.",
+        "confidence": 0.7
+      }
+    ],
+    "assumptions": [
+      "PostgreSQL 9.2 behavior is representative of the issue.",
+      "Synthetic data can reproduce query plans and caching behavior.",
+      "Default_statistics_target and other settings remain unchanged."
+    ],
+    "unknowns": [
+      "Exact impact of OS-level caching on query performance.",
+      "Whether the issue persists in newer PostgreSQL versions."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema creation and reproduction.",
+    "missing_capabilities": [
+      "Existing target database"
+    ],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_slowsql_increasing_work_mem_and_r320805_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_increasing_work_mem_and_r320805_a1",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance degradation due to increased memory settings.",
+    "target_database": "post_retry_slowsql_increasing_work_mem_and_r320805_a1",
+    "dba_description": "Investigate why increasing work_mem and shared_buffers in PostgreSQL 9.2 slowed down queries.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "How can the missing database be created or restored for reproduction?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database. Without the database, schema creation and data generation cannot proceed."
+}

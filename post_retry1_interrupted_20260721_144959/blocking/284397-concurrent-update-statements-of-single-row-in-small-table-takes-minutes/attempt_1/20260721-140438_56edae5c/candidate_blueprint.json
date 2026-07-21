@@ -1,0 +1,274 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Concurrent UPDATE statements on a single row in a small table experience significant delays due to locking contention.",
+    "symptoms": [
+      "UPDATE statements take minutes to complete despite the table being small.",
+      "Locks are observed with long ages indicating contention."
+    ],
+    "mechanism": "Row-level locking contention caused by frequent concurrent updates to the same row.",
+    "facts": [
+      {
+        "key": "table_structure",
+        "value": {
+          "columns": [
+            "scan_uuid (UUID, NOT NULL)",
+            "num_shards_completed (NUMERIC, NOT NULL, DEFAULT 0)"
+          ],
+          "indexes": "None"
+        },
+        "source": "explicit_post",
+        "evidence": "Table schema provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "update_pattern",
+        "value": "Concurrent updates incrementing num_shards_completed for the same scan_uuid.",
+        "source": "explicit_post",
+        "evidence": "SQL statement provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "locking_behavior",
+        "value": "Exclusive locks observed with long ages.",
+        "source": "explicit_post",
+        "evidence": "Lock age query output provided in the post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The contention is primarily due to row-level locks on the same scan_uuid."
+    ],
+    "unknowns": [
+      "Impact of adding indexes or changing the update strategy.",
+      "Exact workload characteristics (e.g., frequency of updates)."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of row-level locking contention can be reproduced with synthetic data and workload.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "The target database does not exist; it must be created before proceeding."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_284397_concurrent_update_sta_a1",
+    "requirements": [
+      "Create the target database before proceeding."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_284397_concurrent_update_sta_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+    ],
+    "generation_sql": [
+      "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) SELECT gen_random_uuid(), 0 FROM generate_series(1, {row_count})"
+    ],
+    "tables": [
+      {
+        "name": "host_scan_complete_log_counts",
+        "purpose": "Simulate the small table experiencing contention due to concurrent updates.",
+        "target_rows": 1,
+        "distribution_notes": "Single-row table to reproduce contention."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "host_scan_complete_log_counts": 1
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "host_scan_complete_log_counts"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = 'some_uuid'",
+        "objective": "Verify that the table is correctly populated and accessible.",
+        "expected_evidence": [
+          "The query retrieves the single row from the table."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1,
+      "max_rows": 1,
+      "growth_factor": 1.0,
+      "max_rounds": 1
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      {
+        "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = 'some_uuid'",
+        "concurrency": 100,
+        "duration_sec": 30
+      }
+    ],
+    "concurrency": 100,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Lock contention is observed during concurrent updates."
+    ],
+    "symptom_evidence": [
+      "Long lock ages and delayed query completion."
+    ],
+    "mechanism_evidence": [
+      "Exclusive locks on the single row being updated."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Row-level locking contention during concurrent updates.",
+    "target_database": "post_retry_blocking_284397_concurrent_update_sta_a1",
+    "dba_description": "Reproduce contention caused by concurrent updates to a single row in a small table.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "create_database",
+      "task_type": "raw_command",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "createdb",
+            "post_retry_blocking_284397_concurrent_update_sta_a1"
+          ],
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database does not exist."
+      }
+    },
+    {
+      "task_id": "setup_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_update_sta_a1",
+          "duration_sec": 10,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema setup required."
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_284397_concurrent_update_sta_a1",
+          "duration_sec": 10,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES ('some_uuid', 0)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_populated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data population required."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = 'some_uuid'",
+          "concurrency": 100,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention": true
+      },
+      "success_criteria": {
+        "symptoms_reproduced": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Concurrent workload causing contention."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "create_database",
+      "setup_schema"
+    ],
+    [
+      "setup_schema",
+      "populate_data"
+    ],
+    [
+      "populate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The mechanism of row-level locking contention can be reproduced with a single-row table and concurrent updates. Synthetic data and workload are sufficient to simulate the described behavior."
+}

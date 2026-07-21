@@ -1,0 +1,62 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_blocking_284397_concurrent_upda_r450040_a3"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_blocking_284397_concurrent_upda_r450040_a3'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"postgresql\",\n    \"dbms_version\": null,\n    \"summary\": \"Concurrent UPDATE statements on a single row in a small table take minutes to complete.\",\n    \"symptoms\": [\n      \"Long execution times for concurrent UPDATE statements.\",\n      \"Exclusive locks observed on the table.\",\n      \"No deadlocks, but significant contention.\"\n    ],\n    \"mechanism\": \"Row-level locking contention due to multiple concurrent updates on the same row.\",\n    \"facts\": [\n      {\n        \"key\": \"table_schema\",\n        \"value\": {\n          \"table_name\": \"host_scan_complete_log_counts\",\n          \"columns\": [\n            {\"name\": \"scan_uuid\", \"type\": \"uuid\", \"constraints\": [\"not null\"]},\n            {\"name\": \"num_shards_completed\", \"type\": \"numeric\", \"constraints\": [\"not null\", \"default 0\"]}\n          ]\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Schema provided in the DBA post.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"update_pattern\",\n        \"value\": \"UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1\",\n        \"source\": \"explicit_post\",\n        \"evidence\": \"SQL provided in the DBA post.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"lock_analysis\",\n        \"value\": \"Exclusive locks observed on the table during concurrent updates.\",\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Lock analysis query output provided in the DBA post.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"concurrent_nodes\",\n        \"value\": \"A few hundred nodes perform updates concurrently.\",\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Description of workload in the DBA post.\",\n        \"confidence\": 1.0\n      }\n    ],\n    \"assumptions\": [\n      \"The database uses default isolation levels (likely READ COMMITTED or REPEATABLE READ).\",\n      \"The workload involves frequent updates to the same row identified by scan_uuid.\"\n    ],\n    \"unknowns\": [\n      \"Exact PostgreSQL version and configuration.\",\n      \"Whether any connection pooling or retry logic is in place.\"\n    ],\n    \"confidence\": 0.9\n  },\n  \"feasibility\": {\n    \"level\": \"blocked\",\n    \"rationale\": \"The target database 'post_retry_blocking_284397_concurrent_upda_r450040_a3' does not exist, preventing schema creation and reproduction.\",\n    \"missing_capabilities\": [],\n    \"unmatched_conditions\": [\"Database environment is unavailable.\"],\n    \"confidence\": 1.0\n  },\n  \"environment_spec\": {\n    \"dbms\": \"postgresql\",\n    \"database\": \"post_retry_blocking_284397_concurrent_upda_r450040_a3\",\n    \"requirements\": [],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_blocking_284397_concurrent_upda_r450040_a3\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)\"\n    ],\n    \"generation_sql\": [\n      \"INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) SELECT gen_random_uuid(), 0 FROM generate_series(1, 1)\"\n    ],\n    \"tables\": [\n      {\n        \"name\": \"host_scan_complete_log_counts\",\n        \"purpose\": \"Primary table for reproducing row-level locking contention.\",\n        \"target_rows\": 1,\n        \"distribution_notes\": \"Single-row table to simulate contention.\"\n      }\n    ],\n    \"constraints\": {\n      \"cardinality\": {\"host_scan_complete_log_counts\": 1},\n      \"value_skew\": {},\n      \"predicate_selectivity\": {\"scan_uuid = <value>\": 1.0},\n      \"join_selectivity\": {}\n    },\n    \"analyze_tables\": [\"host_scan_complete_log_counts\"],\n    \"calibration_queries\": [\n      {\n        \"sql\": \"SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = gen_random_uuid()\",\n        \"objective\": \"Verify that the table and data are correctly set up for contention testing.\",\n        \"expected_evidence\": [\n          \"Query returns the single row in the table.\",\n          \"Query plan shows a sequential"
+  },
+  {
+    "step": "final_validation",
+    "event": "canonicalized_blueprint",
+    "changes": [
+      "normalized data_spec.scale_strategy"
+    ]
+  }
+]

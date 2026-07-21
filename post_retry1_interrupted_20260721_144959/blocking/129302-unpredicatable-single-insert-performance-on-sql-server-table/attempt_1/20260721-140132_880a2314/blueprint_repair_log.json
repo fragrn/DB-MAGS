@@ -1,0 +1,28 @@
+{
+  "changes": [
+    {
+      "path": "data_spec.analyze_tables",
+      "before": [
+        "dbo.Communication"
+      ],
+      "after": [
+        "Communication"
+      ],
+      "reason": "Use unqualified table names."
+    },
+    {
+      "path": "workload_spec.queries",
+      "before": [
+        {
+          "sql": "BEGIN TRANSACTION; INSERT INTO dbo.Communication (comm_action, comm_channelid, payload) VALUES (N'Deskwork', 11, N'TestPayload'); WAITFOR DELAY '00:30:00'; COMMIT;",
+          "description": "Simulates an uncommitted transaction holding locks."
+        }
+      ],
+      "after": [
+        "BEGIN TRANSACTION; INSERT INTO dbo.Communication (comm_action, comm_channelid, payload) VALUES (N'Deskwork', 11, N'TestPayload'); WAITFOR DELAY '00:30:00'; COMMIT;"
+      ],
+      "reason": "Runtime SQL background workload expects query strings."
+    }
+  ],
+  "timestamp": 1784613709.675829
+}

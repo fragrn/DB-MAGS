@@ -1,0 +1,68 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_mysql_query_performance_r541792_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_slowsql_mysql_query_performance_r541792_a2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup"
+      }
+    },
+    {
+      "task_id": "create_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_mysql_query_performance_r541792_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS calls (ID INT AUTO_INCREMENT PRIMARY KEY, CustID INT NOT NULL, DateStart DATE NOT NULL, CallLength TIME NOT NULL, Direction INT NOT NULL, OrigNumber VARCHAR(16), EffectiveFlag SMALLINT, INDEX idx_CustID_DateStart (CustID, DateStart))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema creation"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "create_schema"
+    ]
+  ]
+}

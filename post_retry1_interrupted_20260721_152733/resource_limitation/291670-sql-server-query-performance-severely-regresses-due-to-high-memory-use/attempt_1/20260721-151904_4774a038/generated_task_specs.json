@@ -1,0 +1,78 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r344223_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_291670_sql_r344223_a1;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Setup environment for reproduction"
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r344223_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS Accounts (id INT PRIMARY KEY, name NVARCHAR(255), data_size INT, last_accessed DATETIME);"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS Notifications (id INT PRIMARY KEY, account_id INT, message NVARCHAR(MAX), created_at DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Populate schema and data"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "populate_data"
+    ]
+  ]
+}

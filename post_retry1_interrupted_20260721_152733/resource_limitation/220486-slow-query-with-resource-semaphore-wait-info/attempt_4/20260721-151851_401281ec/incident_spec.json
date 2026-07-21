@@ -1,0 +1,50 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "The incident involves slow query execution with RESOURCE_SEMAPHORE waits, indicating memory pressure during query execution. CXCONSUMER waits suggest parallel query execution contributing to the issue.",
+  "symptoms": [
+    "RESOURCE_SEMAPHORE waits",
+    "CXCONSUMER waits",
+    "slow query execution under high user connections"
+  ],
+  "mechanism": "Memory pressure caused by parallel query execution and excessive memory grants, leading to RESOURCE_SEMAPHORE waits.",
+  "facts": [
+    {
+      "key": "RESOURCE_SEMAPHORE waits",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The DBA post explicitly mentions RESOURCE_SEMAPHORE waits observed in sp_whoisactive.",
+      "confidence": 0.9
+    },
+    {
+      "key": "CXCONSUMER waits",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions CXCONSUMER waits, which are associated with parallel query execution.",
+      "confidence": 0.8
+    },
+    {
+      "key": "MAXDOP set to 0",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post states that MAXDOP is set to 0, allowing queries to utilize all CPU cores.",
+      "confidence": 0.8
+    },
+    {
+      "key": "Memory pressure affecting queries",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The sp_Blitz output indicates forced memory grants due to memory pressure.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "Parallel query execution contributes significantly to memory pressure.",
+    "The database environment has sufficient hardware resources but suffers from configuration issues."
+  ],
+  "unknowns": [
+    "Exact query patterns causing RESOURCE_SEMAPHORE waits.",
+    "Impact of other server configurations on the incident."
+  ],
+  "confidence": 0.85
+}

@@ -1,0 +1,63 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Nested loops join dominates query cost in a multi-table join scenario.",
+  "symptoms": [
+    "High query execution time",
+    "Nested loops join consuming 90% of query cost"
+  ],
+  "mechanism": "Inefficient join conditions involving OR clauses and large intermediate result sets.",
+  "facts": [
+    {
+      "key": "query_structure",
+      "value": {
+        "tables": [
+          "category",
+          "category_voc",
+          "category_link"
+        ],
+        "joins": [
+          "INNER JOIN",
+          "LEFT OUTER JOIN"
+        ],
+        "conditions": [
+          "OR clause in join",
+          "IN subquery"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Query provided in the DBA post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "performance_issue",
+      "value": {
+        "nested_loops_cost": "89%",
+        "actual_rows": 28863
+      },
+      "source": "explicit_post",
+      "evidence": "Execution plan details shared in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "suggested_optimizations",
+      "value": {
+        "split_joins": "Separate OR conditions into multiple joins.",
+        "use_coalesce": "Replace OR with COALESCE in join conditions.",
+        "cross_apply": "Use CROSS APPLY for filtering."
+      },
+      "source": "explicit_post",
+      "evidence": "Recommendations in the DBA post and answers.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The database schema and indexes are as described in the post.",
+    "The query structure and execution plan are representative of the production environment."
+  ],
+  "unknowns": [
+    "Exact data distribution and cardinality of the involved tables.",
+    "Impact of suggested optimizations on the execution plan."
+  ],
+  "confidence": 0.9
+}

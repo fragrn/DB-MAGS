@@ -1,0 +1,377 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/220486/slow-query-with-resource-semaphore-wait-info
+Canonical URL: https://dba.stackexchange.com/questions/220486/slow-query-with-resource-semaphore-wait-info
+Title: Slow Query with RESOURCE_SEMAPHORE wait info
+Question ID: 220486
+License: None; author: user9516827
+
+# Question
+
+Hi I see lot of `RESOURCE_SEMAPHORE` as wait_info when i run `sp_whoisactive` in my sql database server.I see few `CXCONSUMER` as well.I learned that `CXCONSUMER` is because of parallel query execution.How to avoid `RESOURCE_SEMAPHORE`?
+
+I see slow query execution whenever the user connection increases.Since most of the queries are running in parallel mode and `MAXDOP` is set to 0(causing the queries to utilize all CPU cores.) i believe that this makes other queries to wait.I am not sure whether i am right about this.
+Is there any other inference/suggestions?
+
+Here is the results for `EXEC sp_Blitz @OutputType = 'MARKDOWN', @CheckServerInfo = 1;`
+
+Priority 1: Backup:
+
+- Backing Up to Same Drive Where Databases Reside - 350 backups done on drive D:\ in the last two weeks, where database files also live.
+This represents a serious risk if that array fails.
+
+Priority 1: Reliability:
+
+Priority 5: Reliability:
+
+- Priority Boost Enabled - Priority Boost sounds awesome, but it can actually cause your SQL Server to crash.
+
+Priority 10: Performance:
+
+-
+Query Store Disabled - The new SQL Server 2016 Query Store feature has not been enabled on this database.
+
+- Services.Demp
+
+Priority 20: Reliability:
+
+- Plan Guides Failing Services.Demp - The [Services.Demp] database has plan guides that are no longer valid, so the queries involved may be
+failing silently.
+
+Priority 50: DBCC Events:
+
+- Overall Events - 368 DBCC events have taken place between Oct 18 2018 5:18AM and Oct 19 2018 10:45AM. This does not include CHECKDB
+and other usually benign DBCC events.
+
+Priority 50: Performance:
+
+-
+Poison Wait Detected: CMEMTHREAD & NUMA - 0:12:38:38 of this wait have been recorded. In servers with over 8 cores per NUMA node,
+when CMEMTHREAD waits are a bottleneck, trace flag 8048 may be needed.
+
+-
+Poison Wait Detected: RESOURCE_SEMAPHORE - 10:10:03:16 of this wait have been recorded. This wait often indicates killer performance
+problems.
+
+-
+Poison Wait Detected: THREADPOOL - 0:06:59:08 of this wait have been recorded. This wait often indicates killer performance problems.
+
+Priority 50: Reliability:
+
+-
+Page Verification Not Optimal
+
+-
+Services.Demp - Database [Services.Demp] has NONE for page verification. SQL Server may have a harder time recognizing and
+recovering from storage corruption. Consider using CHECKSUM instead.
+
+-
+iyeTek.Services.ValueObjects - Database [iyeTek.Services.ValueObjects] has NONE for page verification. SQL
+Server may have a harder time recognizing and recovering from storage
+corruption. Consider using CHECKSUM instead.
+
+-
+Remote DAC Disabled - Remote access to the Dedicated Admin Connection (DAC) is not enabled. The DAC can make remote
+troubleshooting much easier when SQL Server is unresponsive.
+
+Priority 100: Performance:
+
+-
+Many Plans for One Query - 58 plans are present for a single query in the plan cache - meaning we probably have parameterization issues.
+
+-
+Memory Pressure Affecting Queries - 11 forced grants reported in the DMV sys.dm_exec_query_resource_semaphores, indicating memory
+pressure has affected query runtimes.
+
+-
+Repetitive Steps In Maintenance Plans - The maintenance plan AICS Maintenance is doing repetitive work on indexes and statistics.
+Perhaps it's time to try something more modern?
+
+-
+Shrink Database Step In Maintenance Plan
+
+-
+The maintenance plan AICS Maintenance has a step to shrink databases in it. Shrinking databases is as outdated as maintenance
+plans. (Schedule: [AICS Maintenance.Check Database])
+
+-
+The maintenance plan AICS Maintenance has a step to shrink databases in it. Shrinking databases is as outdated as maintenance
+plans. (Schedule: [AICS Maintenance.Cleanup history])
+
+-
+The maintenance plan AICS Maintenance has a step to shrink databases in it. Shrinking databases is as outdated as maintenance
+plans. (Schedule: [AICS Maintenance.Cleanup Narrative Locks])
+
+-
+The maintenance plan AICS Maintenance has a step to shrink databases in it. Shrinking databases is as outdated as maintenance
+plans. (Schedule: [AICS Maintenance.Full backup])
+
+-
+The maintenance plan AICS Maintenance has a step to shrink databases in it. Shrinking databases is as outdated as maintenance
+plans. (Schedule: [AICS Maintenance.Reorganize Index])
+
+-
+The maintenance plan AICS Maintenance has a step to shrink databases in it. Shrinking databases is as outdated as maintenance
+plans. (Schedule: [AICS Maintenance.Scrub old backups])
+
+-
+The maintenance plan AICS Maintenance has a step to shrink databases in it. Shrinking databases is as outdated as maintenance
+plans. (Schedule: [AICS Maintenance.Shrink Database])
+
+-
+The maintenance plan AICS Maintenance has a step to shrink databases in it. Shrinking databases is as outdated as maintenance
+plans. (Schedule: [AICS Maintenance.Transaction backup])
+
+-
+The maintenance plan AICS Maintenance has a step to shrink databases in it. Shrinking databases is as outdated as maintenance
+plans. (Schedule: [AICS Maintenance.Update Statistics Task])
+
+Priority 110: Performance:
+
+-
+Active Tables Without Clustered Indexes
+
+- Services.Demp - The [Services.Demp] database has heaps - tables without a clustered index - that are being actively queried.
+
+-
+Parallelism Rocket Surgery
+
+- Services.Demp - [Services.Demp] has a make_parallel function, indicating that an advanced developer may be manhandling SQL Server
+into forcing queries to go parallel.
+
+Priority 150: Performance:
+
+-
+Deadlocks Happening Daily - 1316 deadlocks have been recorded since startup.
+
+-
+Foreign Keys Not Trusted SQLdmRepository - The [SQLdmRepository] database has foreign keys that were probably disabled, data was
+changed, and then the key was enabled again. Simply enabling the key
+is not enough for the optimizer to use this key - we have to alter the
+table using the WITH CHECK CHECK CONSTRAINT parameter.
+
+-
+Queries Forcing Join Hints - 6033 instances of join hinting have been recorded since restart. This means queries are bossing the SQL
+Server optimizer around, and if they don't know what they're doing,
+this can cause more harm than good. This can also explain why DBA
+tuning efforts aren't working.
+
+-
+Queries Forcing Order Hints - 8738 instances of order hinting have been recorded since restart. This means queries are bossing the SQL
+Server optimizer around, and if they don't know what they're doing,
+this can cause more harm than good. This can also explain why DBA
+tuning efforts aren't working.
+
+Priority 170: File Configuration:
+
+- File growth set to percent
+
+- Services.Demp - The [Services.Demp] database file D:\SQL_Log\Services.Demp.Test.ldf has grown to 6 GB, and is using
+percent filegrowth settings. This can lead to slow performance during
+growths if Instant File Initialization is not enabled.
+
+Priority 200: Informational:
+
+-
+Agent Jobs Starting Simultaneously - Multiple SQL Server Agent jobs are configured to start simultaneously. For detailed schedule
+listings, see the query in the URL.
+
+-
+Linked Server Configured
+
+-
+A-SQL-02 is configured as a linked server. Check its security configuration to make sure it isn't connecting with SA or some other
+bone-headed administrative login, because any user who queries it
+might get admin-level permissions.
+
+-
+E-SQL-02 is configured as a linked server. Check its security configuration to make sure it isn't connecting with SA or some other
+bone-headed administrative login, because any user who queries it
+might get admin-level permissions.
+
+-
+Replication In Use Services.Demp - Database [Services.Demp] is a replication publisher, subscriber, or distributor.
+
+Priority 200: Non-Active Server Config:
+
+- scan for startup procs - This sp_configure option isn't running under its set value. Its set value is 1 and its running value is 0.
+When someone does a RECONFIGURE or restarts the instance, this setting
+will start taking effect.
+
+Priority 200: Non-Default Server Config:
+
+-
+Agent XPs - This sp_configure option has been changed. Its default value is 0 and it has been set to 1.
+
+-
+backup compression default - This sp_configure option has been changed. Its default value is 0 and it has been set to 1.
+
+-
+cost threshold for parallelism - This sp_configure option has been changed. Its default value is 5 and it has been set to 20.
+
+-
+Database Mail XPs - This sp_configure option has been changed. Its default value is 0 and it has been set to 1.
+
+-
+max degree of parallelism - This sp_configure option has been changed. Its default value is 0 and it has been set to 8.
+
+-
+max server memory (MB) - This sp_configure option has been changed. Its default value is 2147483647 and it has been set to 102400.
+
+-
+max text repl size (B) - This sp_configure option has been changed. Its default value is 65536 and it has been set to -1.
+
+-
+optimize for ad hoc workloads - This sp_co
+
+[... middle of long forum export omitted by batch planner compaction ...]
+
+ICS Maintenance has a step to shrink databases in it. Shrinking databases
+is as outdated as maintenance plans.
+
+-
+User-Created Statistics In Place
+
+- Services.Demp - [Services.Demp] has 39 user-created statistics. This indicates that someone is being a rocket scientist with the
+stats, and might actually be slowing things down, especially during
+stats updates.
+
+Priority 210: Non-Default Database Config:
+
+-
+ANSI NULL Default Enabled - This database setting is not the default.
+
+- Services.Demp
+
+Priority 210: Non-Default Database Scoped Config:
+
+-
+QUERY_OPTIMIZER_HOTFIXES - Set value: 1 Default: 0 Set value for secondary: Empty Default value for secondary: Empty
+
+- Services.Demp
+
+Priority 240: Wait Stats:
+
+-
+1 - CXCONSUMER - 44128.7 hours of waits, 914.1 minutes average wait time per hour, 12.5% signal wait, 52996076747 waiting tasks, 3.0 ms
+average wait time.
+
+-
+2 - CXPACKET - 36512.8 hours of waits, 756.4 minutes average wait time per hour, 4.7% signal wait, 34981080293 waiting tasks, 3.8 ms
+average wait time.
+
+Priority 250: Server Info:
+
+-
+Default Trace Contents - The default trace holds 29 hours of data between Oct 18 2018 5:15AM and Oct 19 2018 10:53AM. The default trace
+files are located in: D:\Program Files\Microsoft SQL
+Server\MSSQL13.MSSQLSERVER\MSSQL\Log
+
+-
+Drive C Space - 691653.00MB free on C drive
+
+-
+Drive D Space - 3783842.00MB free on D drive
+
+-
+Hardware - Logical processors: 40. Physical memory: 127GB.
+
+-
+Hardware - NUMA Config
+
+-
+Node: 0 State: ONLINE Online schedulers: 10 Offline schedulers: 0 Processor Group: 0 Memory node: 0 Memory VAS Reserved GB: 152
+
+-
+Node: 1 State: ONLINE Online schedulers: 10 Offline schedulers: 0 Processor Group: 0 Memory node: 0 Memory VAS Reserved GB: 152
+
+-
+Node: 2 State: ONLINE Online schedulers: 10 Offline schedulers: 0 Processor Group: 0 Memory node: 1 Memory VAS Reserved GB: 0
+
+-
+Node: 3 State: ONLINE Online schedulers: 10 Offline schedulers: 0 Processor Group: 0 Memory node: 1 Memory VAS Reserved GB: 0
+
+-
+Instant File Initialization Enabled - The service account has the Perform Volume Maintenance Tasks permission.
+
+-
+Server Last Restart - Jun 19 2018 6:34PM
+
+-
+Server Name - E-SQL-01
+
+-
+Services
+
+-
+Service: SQL Full-text Filter Daemon Launcher (MSSQLSERVER) runs under service account NT Service\MSSQLFDLauncher. Last startup time:
+not shown.. Startup type: Manual, currently Running.
+
+-
+Service: SQL Server (MSSQLSERVER) runs under service account NT AUTHORITY\NETWORKSERVICE. Last startup time: Jun 20 2018 6:25PM.
+Startup type: Automatic, currently Running.
+
+-
+Service: SQL Server Agent (MSSQLSERVER) runs under service account NT AUTHORITY\NETWORKSERVICE. Last startup time: not shown.. Startup
+type: Automatic, currently Running.
+
+-
+SQL Server Last Restart - Jun 20 2018 6:25PM
+
+-
+SQL Server Service - Version: 13.0.5026.0. Patch Level: SP2. Edition: Standard Edition (64-bit). AlwaysOn Enabled: 0. AlwaysOn Mgr
+Status: 2
+
+-
+Windows Version - I have no idea which version of Windows you're on. Sorry.
+
+Priority 254: Rundate:
+
+- Captain's log: stardate something and something...
+
+Here is the screenshot of `EXEC sp_BlitzCache @SortOrder = 'memory grant';`
+
+[image: enter image description here https://i.sstatic.net/xYd9f.png]
+(https://i.sstatic.net/xYd9f.png)
+
+I ran the ring buffer query to check physical memory.Here is the result and also i see that cache is cleared in regular intervals.
+
+[image: enter image description here https://i.sstatic.net/rhjR3.png]
+(https://i.sstatic.net/rhjR3.png)
+
+I don't understand why this is tagged as hold or a broad question.
+Provided the specific informations.
+
+Here is the plan for a slow query.
+Execution Plan (https://www.brentozar.com/pastetheplan/?id=HkQbcn2sQ)
+
+# Answers
+
+## Answer 1
+Author: Erik Darling
+Accepted: no
+Score: 3
+License: CC BY-SA 4.0
+
+Bit of a comment answer, because we need a lot more information.
+
+Resource semaphore isn't typically something you troubleshoot by looking at one query plan.
+
+It's the result of a bunch of queries (or sometimes a bunch of the same query) asking for and getting memory, while other queries are waiting for them to finish and release it.
+
+Since you're on a version of SQL Server reporting CXCONSUMER waits, head on over here: http://firstresponderkit.org (http://firstresponderkit.org) -- it's the repo for the open source scripts my company writes.
+
+You can grab them all, but to start with you'll need `sp_Blitz`, and `sp_BlitzCache`.
+
+Run this command, and update your question with the results:
+
+`EXEC sp_Blitz @OutputType = 'MARKDOWN', @CheckServerInfo = 1;`
+
+Next, run this:
+
+`EXEC sp_BlitzCache @SortOrder = 'memory grant';`
+
+And paste the plans (http://pastetheplan.com) for the top couple/few queries so you can update your question to share them.
+
+But fair warning: if you're hitting resource semaphore waits, there's a good chance your plan cache has cleared out plans for the offending queries already.
+
+[Batch planner note: the original full post is saved as source_post.txt. This planning input was compacted to remove linked-page snapshots or excessive length.]

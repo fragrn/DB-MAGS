@@ -1,0 +1,71 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "PostgreSQL performance degradation observed, with operations taking 4x longer than usual.",
+  "symptoms": [
+    "Database backup duration increased from ~1 hour to ~4 hours.",
+    "Data synchronization between servers slowed significantly.",
+    "Queries that previously took seconds now hang for days.",
+    "High memory usage and swapping observed on one server."
+  ],
+  "mechanism": "Potential Linux kernel settings and PostgreSQL configuration issues impacting I/O and memory management.",
+  "facts": [
+    {
+      "key": "PostgreSQL version",
+      "value": {
+        "version": "9.4.4"
+      },
+      "source": "explicit_post",
+      "evidence": "PostgreSQL version mentioned in the configuration details.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Linux kernel settings",
+      "value": {
+        "transparent_hugepage": "enabled",
+        "vm.dirty_background_ratio": 10,
+        "I/O scheduler": "cfq"
+      },
+      "source": "explicit_post",
+      "evidence": "Linux settings provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Memory usage",
+      "value": {
+        "Server A": {
+          "used": 347,
+          "free": 30,
+          "swap_used": 1
+        },
+        "Server B": {
+          "used": 366,
+          "free": 11,
+          "swap_used": 1
+        }
+      },
+      "source": "explicit_post",
+      "evidence": "Memory usage statistics provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "Performance degradation",
+      "value": {
+        "backup_duration": "4x slower",
+        "query_duration": "days instead of seconds"
+      },
+      "source": "explicit_post",
+      "evidence": "Performance issues described in the post.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The database schema and workload are similar between Server A and Server B.",
+    "Linux kernel settings are contributing to the performance degradation."
+  ],
+  "unknowns": [
+    "Exact query workload causing the performance degradation.",
+    "Impact of connection pooling configurations on performance."
+  ],
+  "confidence": 0.8
+}

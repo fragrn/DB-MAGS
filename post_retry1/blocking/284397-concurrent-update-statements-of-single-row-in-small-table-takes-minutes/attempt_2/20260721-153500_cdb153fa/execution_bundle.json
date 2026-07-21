@@ -1,0 +1,201 @@
+{
+  "baseline": {
+    "schema": {
+      "host_scan_complete_log_counts": {
+        "columns": [
+          {
+            "name": "scan_uuid",
+            "type": "uuid",
+            "nullable": "NO"
+          },
+          {
+            "name": "num_shards_completed",
+            "type": "numeric",
+            "nullable": "NO"
+          }
+        ],
+        "indexes": []
+      }
+    },
+    "table_stats": [
+      {
+        "table_name": "host_scan_complete_log_counts",
+        "estimated_rows": 1,
+        "total_bytes": 16384
+      }
+    ],
+    "db_metrics": {
+      "dbms": "postgresql",
+      "version": "PostgreSQL 18.4 (Homebrew) on aarch64-apple-darwin24.6.0, compiled by Apple clang version 17.0.0 (clang-1700.6.4.2), 64-bit",
+      "activity": [
+        "|Activity|8",
+        "active||1"
+      ]
+    }
+  },
+  "execution_trace": {
+    "tasks": {
+      "setup_environment": {
+        "task_id": "setup_environment",
+        "status": "success",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "dbms": "postgresql",
+            "thread_count": 1,
+            "executed_steps": 2,
+            "error_count": 0,
+            "errors": []
+          }
+        ],
+        "errors": []
+      },
+      "run_workload": {
+        "task_id": "run_workload",
+        "status": "success",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "dbms": "postgresql",
+            "database": "",
+            "concurrency": 100,
+            "duration_sec": 30.0,
+            "executions": 0,
+            "latency_ms": {
+              "min": null,
+              "p50": null,
+              "p95": null,
+              "max": null
+            },
+            "error_count": 2183,
+            "errors": [
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist",
+              "psql: error: connection to server on socket \"/tmp/.s.PGSQL.5432\" failed: FATAL:  database \"neo\" does not exist"
+            ],
+            "latency_artifact": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/284397-concurrent-update-statements-of-single-row-in-small-table-takes-minutes/attempt_2/20260721-153500_cdb153fa/run_workload_postgres_raw_sql_latencies.json"
+          }
+        ],
+        "errors": []
+      }
+    },
+    "cleanup_status": "success",
+    "cleanup_errors": []
+  },
+  "after": {
+    "schema": {
+      "host_scan_complete_log_counts": {
+        "columns": [
+          {
+            "name": "scan_uuid",
+            "type": "uuid",
+            "nullable": "NO"
+          },
+          {
+            "name": "num_shards_completed",
+            "type": "numeric",
+            "nullable": "NO"
+          }
+        ],
+        "indexes": []
+      }
+    },
+    "table_stats": [
+      {
+        "table_name": "host_scan_complete_log_counts",
+        "estimated_rows": 2,
+        "total_bytes": 57344
+      }
+    ],
+    "db_metrics": {
+      "dbms": "postgresql",
+      "version": "PostgreSQL 18.4 (Homebrew) on aarch64-apple-darwin24.6.0, compiled by Apple clang version 17.0.0 (clang-1700.6.4.2), 64-bit",
+      "activity": [
+        "|Activity|7",
+        "active||1",
+        "|Timeout|1"
+      ]
+    }
+  },
+  "task_dag": {
+    "tasks": {
+      "setup_environment": {
+        "task_id": "setup_environment",
+        "task_type": "raw_transaction_script",
+        "actions": [
+          {
+            "kind": "raw_transaction_script",
+            "database": "post_retry_blocking_284397_concurrent_upda_r300037_a2",
+            "duration_sec": 1,
+            "scripts": [
+              {
+                "role": "configure",
+                "autocommit": true,
+                "concurrency": 1,
+                "steps": [
+                  {
+                    "sql": "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+                  },
+                  {
+                    "sql": "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES ('00000000-0000-0000-0000-000000000001', 0)"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "expected_metrics": {},
+        "success_criteria": {
+          "table_created": true,
+          "data_inserted": true
+        },
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "Row-level locking contention"
+        }
+      },
+      "run_workload": {
+        "task_id": "run_workload",
+        "task_type": "raw_sql_workload",
+        "actions": [
+          {
+            "kind": "raw_sql_workload",
+            "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = '00000000-0000-0000-0000-000000000001'",
+            "concurrency": 100,
+            "duration_sec": 30
+          }
+        ],
+        "expected_metrics": {
+          "lock_age": "increased",
+          "query_duration": "increased"
+        },
+        "success_criteria": {
+          "lock_contention_observed": true
+        },
+        "risk_assessment": "low",
+        "metadata": {
+          "root_cause": "Row-level locking contention"
+        }
+      }
+    },
+    "edges": [
+      {
+        "source": "setup_environment",
+        "target": "run_workload",
+        "condition": ""
+      }
+    ],
+    "schedule": {
+      "setup_environment": 0.0,
+      "run_workload": 0.0
+    }
+  },
+  "safety": {
+    "approved": true,
+    "reasons": [],
+    "scope": "InputAnalysisAgent external DBMS dedicated database safety",
+    "dag_task_count": 2
+  }
+}

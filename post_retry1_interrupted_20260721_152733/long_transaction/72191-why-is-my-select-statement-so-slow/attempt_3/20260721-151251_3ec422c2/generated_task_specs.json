@@ -1,0 +1,58 @@
+{
+  "task_specs": [
+    {
+      "task_id": "create_databases_and_tables",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_72191_why_is_m_r971452_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE db1;"
+                },
+                {
+                  "sql": "CREATE DATABASE db2;"
+                },
+                {
+                  "sql": "CREATE DATABASE db3;"
+                },
+                {
+                  "sql": "CREATE DATABASE db4;"
+                },
+                {
+                  "sql": "USE db1; CREATE SCHEMA dbo; CREATE TABLE dbo._LOOK_UP_TABLE (id INT PRIMARY KEY, value NVARCHAR(255));"
+                },
+                {
+                  "sql": "USE db2; CREATE SCHEMA dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));"
+                },
+                {
+                  "sql": "USE db3; CREATE SCHEMA dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));"
+                },
+                {
+                  "sql": "USE db4; CREATE SCHEMA dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "databases_created": true,
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Slow OBJECT_ID checks across multiple databases."
+      }
+    }
+  ],
+  "dependencies": []
+}

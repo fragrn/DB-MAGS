@@ -427,16 +427,85 @@ class SqlServerAdapter:
         self.create_database_if_not_exists(database)
         executed: list[str] = []
         for sql in schema_sql:
-            self.execute(database, sql, timeout=240)
-            executed.append(sql)
+            statement = self._translate_setup_sql(sql)
+            if not statement:
+                continue
+            self.execute(database, statement, timeout=240)
+            executed.append(statement)
         for sql in generation_sql:
-            statement = sql.format(row_count=row_count)
+            statement = self._translate_setup_sql(sql.format(row_count=row_count))
+            if not statement:
+                continue
             self.execute(database, statement, timeout=300)
             executed.append(statement)
         for table in analyze_tables:
             _safe_sqlserver_identifier(table)
             self.execute(database, f"UPDATE STATISTICS [{table}]", timeout=180)
         return {"database": database, "dbms": "sqlserver", "statement_count": len(executed), "statements": executed}
+
+    @staticmethod
+    def _translate_setup_sql(sql: str) -> str:
+        """Translate common MySQL/Postgres idempotent DDL shorthand into T-SQL."""
+        statement = str(sql).strip().rstrip(";")
+        statement = re.sub(r"^\s*CREATE\s+DATABASE\s+IF\s+NOT\s+EXISTS\s+\[?[A-Za-z_][A-Za-z0-9_]*\]?\s*;?\s*", "", statement, flags=re.I)
+        statement = re.sub(r"^\s*USE\s+\[?[A-Za-z_][A-Za-z0-9_]*\]?\s*;?\s*", "", statement, flags=re.I)
+        statement = re.sub(r"^\s*CREATE\s+SCHEMA\s+IF\s+NOT\s+EXISTS\s+\[?[A-Za-z_][A-Za-z0-9_]*\]?\s*;?\s*", "", statement, flags=re.I)
+        if not statement.strip():
+            return ""
+        table_match = re.match(
+            r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+((?:dbo\.)?\[?[A-Za-z_][A-Za-z0-9_]*\]?)(\s*\(.*\))$",
+            statement,
+            flags=re.I | re.S,
+        )
+        if table_match:
+            table = table_match.group(1).strip("[]")
+            body = table_match.group(2)
+            if "." not in table:
+                table = "dbo." + table
+            statement = f"IF OBJECT_ID(N'{table}', N'U') IS NULL CREATE TABLE {table} {body}"
+        index_match = re.match(
+            r"CREATE\s+(UNIQUE\s+)?(?:(CLUSTERED|NONCLUSTERED)\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+(\[?[A-Za-z_][A-Za-z0-9_]*\]?)\s+ON\s+((?:(?:\[?dbo\]?)\.)?\[?[A-Za-z_][A-Za-z0-9_]*\]?)(\s*\(.*\))$",
+            statement,
+            flags=re.I | re.S,
+        )
+        if index_match:
+            unique = index_match.group(1) or ""
+            clustered = (index_match.group(2) or "").upper()
+            index = index_match.group(3).strip("[]")
+            table = index_match.group(4).replace("[", "").replace("]", "")
+            cols = index_match.group(5)
+            if "." not in table:
+                table = "dbo." + table
+            statement = (
+                f"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'{index}' "
+                f"AND object_id = OBJECT_ID(N'{table}')) CREATE {unique}{clustered + ' ' if clustered else ''}INDEX {index} ON {table} {cols}"
+            )
+        else:
+            plain_index_match = re.match(
+                r"CREATE\s+(UNIQUE\s+)?(?:(CLUSTERED|NONCLUSTERED)\s+)?INDEX\s+(\[?[A-Za-z_][A-Za-z0-9_]*\]?)\s+ON\s+((?:(?:\[?dbo\]?)\.)?\[?[A-Za-z_][A-Za-z0-9_]*\]?)(\s*\(.*\))$",
+                statement,
+                flags=re.I | re.S,
+            )
+            if plain_index_match:
+                unique = plain_index_match.group(1) or ""
+                clustered = (plain_index_match.group(2) or "").upper()
+                index = plain_index_match.group(3).strip("[]")
+                table = plain_index_match.group(4).replace("[", "").replace("]", "")
+                cols = plain_index_match.group(5)
+                if "." not in table:
+                    table = "dbo." + table
+                statement = (
+                    f"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'{index}' "
+                    f"AND object_id = OBJECT_ID(N'{table}')) CREATE {unique}{clustered + ' ' if clustered else ''}INDEX {index} ON {table} {cols}"
+                )
+        statement = re.sub(r"\bSERIAL\b", "INT IDENTITY(1,1)", statement, flags=re.I)
+        statement = re.sub(r"\bBOOLEAN\b", "BIT", statement, flags=re.I)
+        statement = re.sub(r"\bNVARCHAR\s*\(\s*MAX\s*\)", "NVARCHAR(450)", statement, flags=re.I)
+        # Synthetic SQL Server reproductions often start from MySQL/PostgreSQL-ish
+        # TEXT columns. NVARCHAR(MAX) cannot be used as an index key, so keep the
+        # translated type bounded enough for synthetic indexed predicates.
+        statement = re.sub(r"\bTEXT\b", "NVARCHAR(450)", statement, flags=re.I)
+        return statement
 
     def explain(self, database: str, sql: str) -> dict[str, Any]:
         stripped = _strip_sqlserver_explain(sql)

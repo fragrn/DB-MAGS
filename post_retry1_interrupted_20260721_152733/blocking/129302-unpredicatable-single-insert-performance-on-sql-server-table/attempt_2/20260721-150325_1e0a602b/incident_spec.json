@@ -1,0 +1,62 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to blocking and excessive indexes.",
+  "symptoms": [
+    "Single record insert performance is extremely poor.",
+    "Blocking sessions appear in sys.dm_exec_requests but are not active.",
+    "Wait type observed is LCK_M_S."
+  ],
+  "mechanism": "Blocking caused by uncommitted transactions and contention on locks, exacerbated by excessive indexes.",
+  "facts": [
+    {
+      "key": "table_size",
+      "value": {
+        "rows": 8000000
+      },
+      "source": "explicit_post",
+      "evidence": "The table is described as having 8 million rows.",
+      "confidence": 0.9
+    },
+    {
+      "key": "index_count",
+      "value": {
+        "count": 34
+      },
+      "source": "explicit_post",
+      "evidence": "The table has 34 indexes in addition to a clustered index.",
+      "confidence": 0.9
+    },
+    {
+      "key": "blocking_symptom",
+      "value": {
+        "type": "LCK_M_S",
+        "duration": "prolonged"
+      },
+      "source": "explicit_post",
+      "evidence": "Blocked requests are waiting for LCK_M_S.",
+      "confidence": 0.8
+    },
+    {
+      "key": "blocking_session_behavior",
+      "value": {
+        "state": "sleeping",
+        "no_active_requests": true
+      },
+      "source": "explicit_post",
+      "evidence": "Blocking sessions are sleeping and have no active requests.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The blocking behavior is reproducible under synthetic conditions.",
+    "Excessive indexes contribute to contention during inserts.",
+    "Uncommitted transactions are a primary cause of blocking."
+  ],
+  "unknowns": [
+    "Exact schema of the Communication table.",
+    "Specific workload patterns leading to contention.",
+    "Whether other factors like disk I/O or memory pressure contribute."
+  ],
+  "confidence": 0.8
+}

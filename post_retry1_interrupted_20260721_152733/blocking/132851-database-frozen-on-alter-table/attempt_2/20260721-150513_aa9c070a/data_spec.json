@@ -1,0 +1,47 @@
+{
+  "database": "post_retry_blocking_132851_database_frozen_r513477_a2",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) NOT NULL PRIMARY KEY, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL NOT NULL UNIQUE, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false);",
+    "CREATE INDEX IF NOT EXISTS index_cliente ON cliente (rut);",
+    "CREATE INDEX IF NOT EXISTS index_cliente_activo ON cliente (activo);",
+    "CREATE INDEX IF NOT EXISTS index_cliente_id_activo ON cliente (id, activo);",
+    "CREATE INDEX IF NOT EXISTS index_cliente_rut_activo ON cliente (rut, activo);"
+  ],
+  "generation_sql": [
+    "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo, stock, vigente, clase, plan, plantilla, facturable, toolkit, propietario, creacion, codelco, familia, enabled_machines, enabled_canbus, enabled_horometro, enabled_comap, enabled_frio, enabled_panico, enabled_puerta, enabled_rpm, enabled_supervisor, demo, interno, mqtt_enable) SELECT md5(random()::text), md5(random()::text), md5(random()::text), md5(random()::text), md5(random()::text), md5(random()::text), 'CL', true, false, true, 1, 1, 'WAYPOINT', 1, 0, 0, now(), false, 0, false, false, false, false, false, false, false, false, 0, false, false, false FROM generate_series(1, {row_count});"
+  ],
+  "tables": [
+    {
+      "name": "cliente",
+      "purpose": "Primary table to simulate the ALTER TABLE lock contention.",
+      "target_rows": 10000,
+      "distribution_notes": "Uniform distribution of rows with no specific skew."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "cliente": 10000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "cliente"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM cliente WHERE activo = true LIMIT 10;",
+      "objective": "Verify that the table is populated and queries can run without contention.",
+      "expected_evidence": [
+        "Query executes successfully and returns rows."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

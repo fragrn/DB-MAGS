@@ -1,0 +1,219 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Performance degradation observed when adding TOP 1 to a query involving joins and ORDER BY.",
+    "symptoms": [
+      "Query with TOP 1 never finishes",
+      "Query plan changes from Hash Match to Nested Loops with Table Spool"
+    ],
+    "mechanism": "Row Goal optimization changes the query plan, leading to inefficient execution paths.",
+    "facts": [
+      {
+        "key": "query_with_top_1",
+        "value": {
+          "sql": "SELECT TOP 1 dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+        },
+        "source": "explicit_post",
+        "evidence": "Query provided in the forum post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "query_without_top_1",
+        "value": {
+          "sql": "SELECT dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+        },
+        "source": "explicit_post",
+        "evidence": "Query provided in the forum post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "table_cardinality",
+        "value": {
+          "DOCUMENT_QUEUE": 5000,
+          "CORRESPONDENCE_JOURNAL": 1400000
+        },
+        "source": "explicit_post",
+        "evidence": "Cardinality provided in the forum post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "indexes",
+        "value": {
+          "CORRESPONDENCE_JOURNAL": [
+            "DOCUMENT_ID",
+            "FILE_NUMBER"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Index information provided in the forum post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The database schema matches the description in the post.",
+      "The optimizer behavior is consistent with SQL Server's row goal mechanism."
+    ],
+    "unknowns": [
+      "Exact SQL Server version",
+      "Impact of TEMPDB performance on the Table Spool operator"
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction requires SQL Server's row goal optimization mechanism, which is supported by the local Azure SQL Edge environment.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact SQL Server version"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_slowsql_why_does_adding_a_top_1_r441042_a1",
+    "requirements": [
+      "Azure SQL Edge compatibility"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_why_does_adding_a_top_1_r441042_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS DOCUMENT_QUEUE (D_ID INT PRIMARY KEY, DOCUMENT_ID INT, COPIES INT, REQUESTOR VARCHAR(255), QUEUE_DATE DATETIME, PRINT_LOCATION INT)",
+      "CREATE TABLE IF NOT EXISTS CORRESPONDENCE_JOURNAL (CORRESPONDENCE_ID INT PRIMARY KEY, DOCUMENT_ID INT, FILE_NUMBER INT)"
+    ],
+    "generation_sql": [
+      "INSERT INTO DOCUMENT_QUEUE (D_ID, DOCUMENT_ID, COPIES, REQUESTOR, QUEUE_DATE, PRINT_LOCATION) SELECT n, n, MOD(n, 10), CONCAT('Requestor_', n), DATEADD(DAY, -MOD(n, 30), GETDATE()), 2 FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO CORRESPONDENCE_JOURNAL (CORRESPONDENCE_ID, DOCUMENT_ID, FILE_NUMBER) SELECT n, MOD(n, 5000), n FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "DOCUMENT_QUEUE",
+        "purpose": "Primary table for the query, representing the document queue.",
+        "target_rows": 5000,
+        "distribution_notes": "Uniform distribution of DOCUMENT_ID, skewed QUEUE_DATE for recent entries."
+      },
+      {
+        "name": "CORRESPONDENCE_JOURNAL",
+        "purpose": "Secondary table for the query, representing correspondence records.",
+        "target_rows": 1400000,
+        "distribution_notes": "Uniform distribution of FILE_NUMBER, many-to-one relationship with DOCUMENT_QUEUE."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "DOCUMENT_QUEUE": 5000,
+        "CORRESPONDENCE_JOURNAL": 1400000
+      },
+      "value_skew": {
+        "DOCUMENT_QUEUE.QUEUE_DATE": "Recent dates are more frequent."
+      },
+      "predicate_selectivity": {
+        "DOCUMENT_QUEUE.PRINT_LOCATION = 2": 0.5
+      },
+      "join_selectivity": {
+        "DOCUMENT_QUEUE.DOCUMENT_ID = CORRESPONDENCE_JOURNAL.DOCUMENT_ID": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "DOCUMENT_QUEUE",
+      "CORRESPONDENCE_JOURNAL"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT TOP 1 dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER",
+        "objective": "Verify that the query plan includes Nested Loops and Table Spool operators.",
+        "expected_evidence": [
+          "Nested Loops operator is visible in the plan.",
+          "Table Spool operator is visible in the plan."
+        ]
+      },
+      {
+        "sql": "SELECT dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER",
+        "objective": "Verify that the query plan includes Hash Match operator.",
+        "expected_evidence": [
+          "Hash Match operator is visible in the plan."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query plan includes expected operators.",
+      "Execution time matches expected behavior."
+    ],
+    "symptom_evidence": [
+      "Query with TOP 1 exhibits degraded performance."
+    ],
+    "mechanism_evidence": [
+      "Row Goal optimization changes the query plan."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Row Goal optimization causing degraded performance with TOP 1.",
+    "target_database": "post_retry_slowsql_why_does_adding_a_top_1_r441042_a1",
+    "dba_description": "Investigate why adding TOP 1 to a query involving joins and ORDER BY causes performance degradation.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_why_does_adding_a_top_1_r441042_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_slowsql_why_does_adding_a_top_1_r441042_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Row Goal optimization"
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on SQL Server's row goal optimization mechanism, which is supported by the local Azure SQL Edge environment."
+}

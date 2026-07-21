@@ -1,0 +1,61 @@
+{
+  "database": "post_retry_resource_limitation_291670_sql_r950190_a3",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS Notifications (id INT PRIMARY KEY, account_id INT, notified_at_utc DATETIME, payload NVARCHAR(MAX))",
+    "CREATE TABLE IF NOT EXISTS Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, details NVARCHAR(MAX))"
+  ],
+  "generation_sql": [
+    "INSERT INTO Notifications (id, account_id, notified_at_utc, payload) SELECT n, MOD(n, 4) + 1, DATEADD(MINUTE, n, '2023-01-01T00:00:00'), CONCAT('Payload_', n) FROM generated_numbers WHERE n <= {row_count}",
+    "INSERT INTO Reports (id, account_id, received_at_utc, details) SELECT n, MOD(n, 4) + 1, DATEADD(MINUTE, n, '2023-01-01T00:00:00'), CONCAT('Details_', n) FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "Notifications",
+      "purpose": "Simulates the table with high row counts and sorting issues.",
+      "target_rows": 100000,
+      "distribution_notes": "Data is distributed across accounts with skewed row counts."
+    },
+    {
+      "name": "Reports",
+      "purpose": "Simulates the table joined with Notifications for sorting.",
+      "target_rows": 100000,
+      "distribution_notes": "Data is distributed across accounts with skewed row counts."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "Notifications": 100000,
+      "Reports": 100000
+    },
+    "value_skew": {
+      "Notifications.account_id": "Skewed distribution with one account having significantly more rows."
+    },
+    "predicate_selectivity": {
+      "Notifications.account_id = 1": 0.05
+    },
+    "join_selectivity": {
+      "Notifications.account_id = Reports.account_id": "many-to-one"
+    }
+  },
+  "analyze_tables": [
+    "Notifications",
+    "Reports"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT n.* FROM Notifications n JOIN Reports r ON r.account_id = n.account_id WHERE n.account_id = 1 ORDER BY n.notified_at_utc DESC",
+      "objective": "Verify that the sorting operation and join produce the expected plan shape.",
+      "expected_evidence": [
+        "The plan includes a Sort operation and tempdb usage.",
+        "The join behavior between Notifications and Reports is visible in EXPLAIN.",
+        "The plan distinguishes parameter sniffing effects."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

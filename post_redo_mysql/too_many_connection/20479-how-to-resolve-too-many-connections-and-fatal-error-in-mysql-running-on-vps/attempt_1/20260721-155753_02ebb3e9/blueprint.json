@@ -1,0 +1,234 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Too many connections error in MySQL due to high concurrent PHP script usage.",
+    "symptoms": [
+      "MySQL error #1040: Too many connections",
+      "High CPU usage by mysqld (100-130%)",
+      "Application errors indicating server is too busy"
+    ],
+    "mechanism": "Exceeding the configured `max_connections` limit in MySQL due to concurrent PHP scripts and application usage.",
+    "facts": [
+      {
+        "key": "max_connections",
+        "value": {
+          "default": 100,
+          "current": 200
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions increasing max_connections to 200 from the default of 100.",
+        "confidence": 0.5
+      },
+      {
+        "key": "open_table_cache",
+        "value": {
+          "default": 400,
+          "current": 512
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions increasing open_table_cache to 512 from the default of 400.",
+        "confidence": 0.5
+      },
+      {
+        "key": "PHP scripts",
+        "value": {
+          "count": 12,
+          "connection_behavior": "each script opens a MySQL connection"
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions 12 PHP scripts running concurrently, each opening a connection.",
+        "confidence": 0.5
+      },
+      {
+        "key": "CPU usage",
+        "value": {
+          "mysqld": "100-130%"
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions `mysqld` consuming 100-130% CPU.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The PHP scripts are not optimized for connection pooling or short-lived connections.",
+      "The server has sufficient RAM to handle increased `max_connections` without swapping."
+    ],
+    "unknowns": [
+      "Exact memory usage per connection and whether it exceeds available RAM.",
+      "Whether persistent connections (e.g., mysql_pconnect) are being used improperly."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The incident can be reproduced by simulating high concurrent connections exceeding the `max_connections` limit, but exact CPU usage patterns may vary.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_20479_how_t_r673816_a1",
+    "requirements": [
+      "Dedicated test database",
+      "Ability to modify global variables"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_20479_how_t_r673816_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255), email VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS logs (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, action VARCHAR(255), timestamp DATETIME, FOREIGN KEY (user_id) REFERENCES users(id))"
+    ],
+    "generation_sql": [
+      "INSERT INTO users (username, email) SELECT CONCAT('user', n), CONCAT('user', n, '@example.com') FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO logs (user_id, action, timestamp) SELECT FLOOR(1 + (RAND() * {row_count})), 'login', NOW() FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "users",
+        "purpose": "Simulates user accounts for the application.",
+        "target_rows": 1000,
+        "distribution_notes": "Uniform distribution of user IDs."
+      },
+      {
+        "name": "logs",
+        "purpose": "Simulates application logs with user actions.",
+        "target_rows": 10000,
+        "distribution_notes": "Randomized user actions to simulate concurrent activity."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "users": 1000,
+        "logs": 10000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "users",
+      "logs"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM logs WHERE action = 'login'",
+        "objective": "Verify that the logs table has been populated with a realistic distribution of actions.",
+        "expected_evidence": [
+          "The query returns a count consistent with the target_rows for the logs table.",
+          "The action column contains the expected value 'login'."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT SLEEP(1) FROM users WHERE id = FLOOR(1 + (RAND() * 1000))",
+      "SELECT COUNT(*) FROM logs WHERE user_id = FLOOR(1 + (RAND() * 1000))"
+    ],
+    "concurrency": 50,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "The database reaches the max_connections limit during the workload.",
+      "The server logs or error messages indicate a #1040 error."
+    ],
+    "symptom_evidence": [
+      "Observation of #1040 errors in the server logs.",
+      "High CPU usage during the workload."
+    ],
+    "mechanism_evidence": [
+      "The workload exceeds the configured max_connections limit.",
+      "The database server exhibits high resource utilization."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Too many connections",
+    "target_database": "post_retry_too_many_connection_20479_how_t_r673816_a1",
+    "dba_description": "Reproduce the 'too many connections' error in MySQL by simulating high concurrent connections.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_20479_how_t_r673816_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_20479_how_t_r673816_a1"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_20479_how_t_r673816_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database setup for reproduction"
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT SLEEP(1) FROM users WHERE id = FLOOR(1 + (RAND() * 1000))",
+          "concurrency": 50,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Simulating high concurrent connections"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "simulate_workload"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident is caused by exceeding the `max_connections` limit in MySQL. The reproduction plan simulates high concurrent connections to trigger the error and validate the mechanism."
+}

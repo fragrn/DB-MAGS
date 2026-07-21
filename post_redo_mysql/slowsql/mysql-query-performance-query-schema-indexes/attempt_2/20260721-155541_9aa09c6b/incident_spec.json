@@ -1,0 +1,68 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Performance issues with a query on a large 'calls' table, involving multiple joins and subqueries.",
+  "symptoms": [
+    "Query execution time exceeds 7 minutes for 1.3M rows.",
+    "Simplified query with range conditions takes 4.5 seconds."
+  ],
+  "mechanism": "Inefficient index usage due to range conditions and IN clause, leading to high row scans.",
+  "facts": [
+    {
+      "key": "query_execution_time",
+      "value": {
+        "simplified_query": "4.5 seconds",
+        "full_query": "over 7 minutes"
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions simplified query taking 4.5 seconds and full query being stopped after 7 minutes.",
+      "confidence": 0.9
+    },
+    {
+      "key": "table_cardinality",
+      "value": {
+        "calls_table": 30000000.0
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions 'calls' table has around 30 million rows.",
+      "confidence": 0.9
+    },
+    {
+      "key": "index_usage",
+      "value": {
+        "idx_CustID_DateStart": "used with range scan"
+      },
+      "source": "explicit_post",
+      "evidence": "EXPLAIN output shows idx_CustID_DateStart being used with range scan.",
+      "confidence": 0.8
+    },
+    {
+      "key": "query_conditions",
+      "value": {
+        "fields": [
+          "DateStart",
+          "CallLength",
+          "Direction",
+          "CustID"
+        ],
+        "range_conditions": [
+          "DateStart",
+          "CallLength"
+        ],
+        "IN_clause": "CustID"
+      },
+      "source": "explicit_post",
+      "evidence": "Post describes query conditions explicitly.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "The database schema and indexes will be recreated synthetically.",
+    "The IN clause with CustID is representative of real-world usage."
+  ],
+  "unknowns": [
+    "Exact data distribution in the 'calls' table.",
+    "Impact of other subqueries and joins in the full query."
+  ],
+  "confidence": 0.85
+}

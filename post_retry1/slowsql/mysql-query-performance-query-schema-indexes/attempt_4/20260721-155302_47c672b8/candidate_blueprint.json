@@ -1,0 +1,170 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Performance issues with a query on a large table containing call data, involving multiple joins and sub-selects.",
+    "symptoms": [
+      "Query execution time exceeds acceptable limits (e.g., 7 minutes for 1.3M rows).",
+      "Simplified sub-select query takes 4.5 seconds."
+    ],
+    "mechanism": "Inefficient index usage and query design, compounded by range conditions and low cardinality columns.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "time": "7 minutes"
+        },
+        "source": "explicit_post",
+        "evidence": "Reported query execution time for 1.3M rows.",
+        "confidence": 1.0
+      },
+      {
+        "key": "simplified_query_time",
+        "value": {
+          "time": "4.5 seconds"
+        },
+        "source": "explicit_post",
+        "evidence": "Reported execution time for simplified query.",
+        "confidence": 1.0
+      },
+      {
+        "key": "table_cardinality",
+        "value": {
+          "rows": 30000000.0
+        },
+        "source": "explicit_post",
+        "evidence": "Reported table size in rows.",
+        "confidence": 1.0
+      },
+      {
+        "key": "index_analysis",
+        "value": {
+          "indexes": [
+            "idx_CustID_DateStart",
+            "idx_DateStart"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Discussed indexes and their usage in the forum post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The database schema and indexes provided in the post are accurate.",
+      "The simplified query is representative of the larger query's performance bottlenecks."
+    ],
+    "unknowns": [
+      "Exact MySQL version.",
+      "Disk I/O characteristics and hardware constraints.",
+      "Data distribution and skew in the 'calls' table."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The specified target database does not exist, preventing schema setup and reproduction.",
+    "missing_capabilities": [
+      "Target database availability."
+    ],
+    "unmatched_conditions": [],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_mysql_query_performance_r382187_a4",
+    "requirements": [
+      "Dedicated test database must exist."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_mysql_query_performance_r382187_a4",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS calls (ID INT AUTO_INCREMENT PRIMARY KEY, CustID INT NOT NULL, DateStart DATE NOT NULL, CallLength TIME NOT NULL, Direction INT NOT NULL, OrigNumber VARCHAR(16), EffectiveFlag SMALLINT(1), INDEX idx_CustID_DateStart (CustID, DateStart), INDEX idx_DateStart (DateStart))"
+    ],
+    "generation_sql": [
+      "INSERT INTO calls (CustID, DateStart, CallLength, Direction, OrigNumber, EffectiveFlag) SELECT MOD(n, 1000), DATE_ADD('2013-01-01', INTERVAL MOD(n, 365) DAY), TIME(MOD(n, 86400)), MOD(n, 2), CONCAT('Orig_', n), MOD(n, 2) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "calls",
+        "purpose": "Primary table for reproducing query performance issues.",
+        "target_rows": 30000000,
+        "distribution_notes": "Simulates skewed data distribution and range conditions."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "calls": 30000000
+      },
+      "value_skew": {
+        "calls.Direction": "Low cardinality (2 distinct values)."
+      },
+      "predicate_selectivity": {
+        "calls.DateStart BETWEEN '2013-01-01' AND '2013-12-31'": 0.1
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "calls"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT DateStart, ID, NumbID, EffectiveFlag, OrigNumber FROM calls WHERE DateStart <= '2013-12-31' AND DateStart >= '2013-01-01' AND CallLength >= '00:00:00' AND Direction = '1' AND CustID IN (474,482,250,268,197,604,132,359,279,441,118,448,152,133,380,162,249,679,226,259,2450,2408,2451,2453,2439,2454,2444,2445,2452)",
+        "objective": "Validate query performance and index usage.",
+        "expected_evidence": [
+          "EXPLAIN shows range scan on idx_CustID_DateStart.",
+          "Query execution time aligns with reported performance."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000000,
+      "max_rows": 30000000,
+      "growth_factor": 3.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query execution time under acceptable limits.",
+      "Index usage aligns with expectations."
+    ],
+    "symptom_evidence": [
+      "Query execution time matches reported symptoms."
+    ],
+    "mechanism_evidence": [
+      "Index usage and range scan behavior align with suspected mechanism."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance degradation due to inefficient index usage.",
+    "target_database": "post_retry_slowsql_mysql_query_performance_r382187_a4",
+    "dba_description": "Performance issues with queries on a large table containing call data.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How can the missing target database be created or restored?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the specified target database. Further steps require resolving this issue."
+}

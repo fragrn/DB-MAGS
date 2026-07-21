@@ -1,0 +1,478 @@
+How to optimize very slow SELECT with LEFT JOINs over big tables
+Asked 10 years, 9 months ago
+Modified 7 years, 5 months ago
+Viewed 181k times
+32
+
+I was googling, self-educating & looking for solution for hours but with no luck. I found a few similar questions here but not this case.
+
+My tables:
+
+persons (~10M rows)
+attributes (location, age,...)
+links (M:M) between persons and attributes (~40M rows)
+Full dump ~280MB
+
+Situation: I try to select all person ids (person_id) from some locations (location.attribute_value BETWEEN 3000 AND 7000), being some gender (gender.attribute_value = 1), born in some years (bornyear.attribute_value BETWEEN 1980 AND 2000) and having some eyes' color (eyecolor.attribute_value IN (2,3)).
+
+This is my query witch tooks 3~4 min. and I'd like to optimize:
+
+SELECT person_id
+FROM person
+    LEFT JOIN attribute location ON location.attribute_type_id = 1 AND location.person_id = person.person_id
+    LEFT JOIN attribute gender ON gender.attribute_type_id = 2 AND gender.person_id = person.person_id
+    LEFT JOIN attribute bornyear ON bornyear.attribute_type_id = 3 AND bornyear.person_id = person.person_id
+    LEFT JOIN attribute eyecolor ON eyecolor.attribute_type_id = 4 AND eyecolor.person_id = person.person_id
+WHERE 1
+    AND location.attribute_value BETWEEN 3000 AND 7000
+    AND gender.attribute_value = 1
+    AND bornyear.attribute_value BETWEEN 1980 AND 2000
+    AND eyecolor.attribute_value IN (2,3)
+LIMIT 100000;
+Result:
+
++-----------+
+| person_id |
++-----------+
+|       233 |
+|       605 |
+|       ... |
+|   8702599 |
+|   8703617 |
++-----------+
+100000 rows in set (3 min 42.77 sec)
+Explain extended:
+
++----+-------------+----------+--------+---------------------------------------------+-----------------+---------+--------------------------+---------+----------+--------------------------+
+| id | select_type | table    | type   | possible_keys                               | key             | key_len | ref                      | rows    | filtered | Extra                    |
++----+-------------+----------+--------+---------------------------------------------+-----------------+---------+--------------------------+---------+----------+--------------------------+
+|  1 | SIMPLE      | bornyear | range  | attribute_type_id,attribute_value,person_id | attribute_value | 5       | NULL                     | 1265229 |   100.00 | Using where              |
+|  1 | SIMPLE      | location | ref    | attribute_type_id,attribute_value,person_id | person_id       | 5       | test1.bornyear.person_id |       4 |   100.00 | Using where              |
+|  1 | SIMPLE      | eyecolor | ref    | attribute_type_id,attribute_value,person_id | person_id       | 5       | test1.bornyear.person_id |       4 |   100.00 | Using where              |
+|  1 | SIMPLE      | gender   | ref    | attribute_type_id,attribute_value,person_id | person_id       | 5       | test1.eyecolor.person_id |       4 |   100.00 | Using where              |
+|  1 | SIMPLE      | person   | eq_ref | PRIMARY                                     | PRIMARY         | 4       | test1.location.person_id |       1 |   100.00 | Using where; Using index |
++----+-------------+----------+--------+---------------------------------------------+-----------------+---------+--------------------------+---------+----------+--------------------------+
+5 rows in set, 1 warning (0.02 sec)
+Profiling:
+
++------------------------------+-----------+
+| Status                       | Duration  |
++------------------------------+-----------+
+| Sending data                 |  3.069452 |
+| Waiting for query cache lock |  0.000017 |
+| Sending data                 |  2.968915 |
+| Waiting for query cache lock |  0.000019 |
+| Sending data                 |  3.042468 |
+| Waiting for query cache lock |  0.000043 |
+| Sending data                 |  3.264984 |
+| Waiting for query cache lock |  0.000017 |
+| Sending data                 |  2.823919 |
+| Waiting for query cache lock |  0.000038 |
+| Sending data                 |  2.863903 |
+| Waiting for query cache lock |  0.000014 |
+| Sending data                 |  2.971079 |
+| Waiting for query cache lock |  0.000020 |
+| Sending data                 |  3.053197 |
+| Waiting for query cache lock |  0.000087 |
+| Sending data                 |  3.099053 |
+| Waiting for query cache lock |  0.000035 |
+| Sending data                 |  3.064186 |
+| Waiting for query cache lock |  0.000017 |
+| Sending data                 |  2.939404 |
+| Waiting for query cache lock |  0.000018 |
+| Sending data                 |  3.440288 |
+| Waiting for query cache lock |  0.000086 |
+| Sending data                 |  3.115798 |
+| Waiting for query cache lock |  0.000068 |
+| Sending data                 |  3.075427 |
+| Waiting for query cache lock |  0.000072 |
+| Sending data                 |  3.658319 |
+| Waiting for query cache lock |  0.000061 |
+| Sending data                 |  3.335427 |
+| Waiting for query cache lock |  0.000049 |
+| Sending data                 |  3.319430 |
+| Waiting for query cache lock |  0.000061 |
+| Sending data                 |  3.496563 |
+| Waiting for query cache lock |  0.000029 |
+| Sending data                 |  3.017041 |
+| Waiting for query cache lock |  0.000032 |
+| Sending data                 |  3.132841 |
+| Waiting for query cache lock |  0.000050 |
+| Sending data                 |  2.901310 |
+| Waiting for query cache lock |  0.000016 |
+| Sending data                 |  3.107269 |
+| Waiting for query cache lock |  0.000062 |
+| Sending data                 |  2.937373 |
+| Waiting for query cache lock |  0.000016 |
+| Sending data                 |  3.097082 |
+| Waiting for query cache lock |  0.000261 |
+| Sending data                 |  3.026108 |
+| Waiting for query cache lock |  0.000026 |
+| Sending data                 |  3.089760 |
+| Waiting for query cache lock |  0.000041 |
+| Sending data                 |  3.012763 |
+| Waiting for query cache lock |  0.000021 |
+| Sending data                 |  3.069694 |
+| Waiting for query cache lock |  0.000046 |
+| Sending data                 |  3.591908 |
+| Waiting for query cache lock |  0.000060 |
+| Sending data                 |  3.526693 |
+| Waiting for query cache lock |  0.000076 |
+| Sending data                 |  3.772659 |
+| Waiting for query cache lock |  0.000069 |
+| Sending data                 |  3.346089 |
+| Waiting for query cache lock |  0.000245 |
+| Sending data                 |  3.300460 |
+| Waiting for query cache lock |  0.000019 |
+| Sending data                 |  3.135361 |
+| Waiting for query cache lock |  0.000021 |
+| Sending data                 |  2.909447 |
+| Waiting for query cache lock |  0.000039 |
+| Sending data                 |  3.337561 |
+| Waiting for query cache lock |  0.000140 |
+| Sending data                 |  3.138180 |
+| Waiting for query cache lock |  0.000090 |
+| Sending data                 |  3.060687 |
+| Waiting for query cache lock |  0.000085 |
+| Sending data                 |  2.938677 |
+| Waiting for query cache lock |  0.000041 |
+| Sending data                 |  2.977974 |
+| Waiting for query cache lock |  0.000872 |
+| Sending data                 |  2.918640 |
+| Waiting for query cache lock |  0.000036 |
+| Sending data                 |  2.975842 |
+| Waiting for query cache lock |  0.000051 |
+| Sending data                 |  2.918988 |
+| Waiting for query cache lock |  0.000021 |
+| Sending data                 |  2.943810 |
+| Waiting for query cache lock |  0.000061 |
+| Sending data                 |  3.330211 |
+| Waiting for query cache lock |  0.000025 |
+| Sending data                 |  3.411236 |
+| Waiting for query cache lock |  0.000023 |
+| Sending data                 | 23.339035 |
+| end                          |  0.000807 |
+| query end                    |  0.000023 |
+| closing tables               |  0.000325 |
+| freeing items                |  0.001217 |
+| logging slow query           |  0.000007 |
+| logging slow query           |  0.000011 |
+| cleaning up                  |  0.000104 |
++------------------------------+-----------+
+100 rows in set (0.00 sec)
+Tables structures:
+
+CREATE TABLE `attribute` (
+  `attribute_id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `attribute_type_id` int(11) unsigned DEFAULT NULL,
+  `attribute_value` int(6) DEFAULT NULL,
+  `person_id` int(11) unsigned DEFAULT NULL,
+  PRIMARY KEY (`attribute_id`),
+  KEY `attribute_type_id` (`attribute_type_id`),
+  KEY `attribute_value` (`attribute_value`),
+  KEY `person_id` (`person_id`)
+) ENGINE=MyISAM AUTO_INCREMENT=40000001 DEFAULT CHARSET=utf8;
+
+CREATE TABLE `person` (
+  `person_id` int(11) unsigned NOT NULL AUTO_INCREMENT,
+  `person_name` text CHARACTER SET latin1,
+  PRIMARY KEY (`person_id`)
+) ENGINE=MyISAM AUTO_INCREMENT=20000001 DEFAULT CHARSET=utf8;
+Query had been performed on DigitalOcean virtual server with SSD and 1GB RAM.
+
+I assume there may be problem with database design. Do you have any suggestions to design this situation better please? Or just to adjust the select above?
+
+mysqlperformanceoptimizationeavquery-performance
+Share
+Improve this question
+Follow
+edited Jan 7, 2020 at 22:23
+Community's user avatar
+CommunityBot
+1
+asked Oct 16, 2015 at 18:28
+Martin's user avatar
+Martin
+43111 gold badge55 silver badges1111 bronze badges
+4
+That's the price you pay for EAV design. You may want to try a composite index on attribute (person_id, attribute_type_id, attribute_value) – 
+mustaccio
+ CommentedOct 16, 2015 at 18:47
+1
+I would try adding these indexes: (attribute_type_id, attribute_value, person_id) and (attribute_type_id, person_id, attribute_value) – 
+ypercubeᵀᴹ
+ CommentedOct 16, 2015 at 19:16
+6
+And use InnoDB, throw away MyISAM. This is 2015, MyiSAM is long dead. – 
+ypercubeᵀᴹ
+ CommentedOct 16, 2015 at 19:17
+3
+First thing - get rid of the LEFT join, it has no effect as you use all the tables in your WHERE condition, effectively turning all the joins to INNER joins (optimizer should be able to understand and optimize that but better not to make it harder). Second thing - disable the query cache unless you have a strong reason to use it (=you tested it and measured that it helps you) – 
+jkavalik
+ CommentedOct 16, 2015 at 21:00
+2
+OT: isn't it strange that you use LIMIT withour ORDER BY? This will return some random 100000 rows? – 
+ibre5041
+ CommentedOct 21, 2015 at 17:22
+Show 6 more comments
+5 Answers
+Sorted by:
+
+Highest score (default)
+13
+
++25
+Pick a few attributes to include in person. Index them in a few combinations -- use composite indexes, not single-column indexes.
+
+That is essentially the only way out of EAV-sucks-at-performance, which is where you are.
+
+Here is more discussion: http://mysql.rjweb.org/doc.php/eav including a suggestion of using JSON instead of the key-value table.
+
+Share
+Improve this answer
+Follow
+answered Oct 21, 2015 at 16:20
+Rick James's user avatar
+Rick James
+81k55 gold badges5353 silver badges120120 bronze badges
+PS: MySQL 8.0 is beginning to have some useful indexing features in JSON. I have not evaluated their utility in the context of EAV. You will have to switch to InnoDB to get them. – 
+Rick James
+ CommentedSep 16, 2020 at 23:18 
+Add a comment
+5
+
+I hope I found a sufficient solution. It's inspired by this article.
+
+Short answer:
+I've created 1 table with all the attributes. One column for one attribute. Plus primary key column.
+Attribute values are stored in text cells (for full-text searching) in CSV-like format.
+Created full-text indexes. Before that it's important to set ft_min_word_len=1 (for MyISAM) in [mysqld] section and innodb_ft_min_token_size=1 (for InnoDb) in my.cnf file, restart mysql service.
+Searching example: SELECT * FROM person_index WHERE MATCH(attribute_1) AGAINST("123 456 789" IN BOOLEAN MODE) LIMIT 1000 where 123, 456 a 789 are IDs which persons should have associated in attribute_1. This query took under 1 sec.
+Detailed answer:
+Step 1. Creating table with fulltext indexes. InnoDb supports fulltext indexes from MySQL 5.7 so if you use 5.5 or 5.6, you should use MyISAM. It's sometimes even faster for FT searching than InnoDb.
+
+CREATE TABLE `person_attribute_ft` (
+  `person_id` int(11) NOT NULL,
+  `attr_1` text,
+  `attr_2` text,
+  `attr_3` text,
+  `attr_4` text,
+  PRIMARY KEY (`person_id`),
+  FULLTEXT KEY `attr_1` (`attr_1`),
+  FULLTEXT KEY `attr_2` (`attr_2`),
+  FULLTEXT KEY `attr_3` (`attr_3`),
+  FULLTEXT KEY `attr_4` (`attr_4`),
+  FULLTEXT KEY `attr_12` (`attr_1`,`attr_2`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8
+Step 2. Insert data from EAV (entity-attribute-value) table. For example stated in question it can be done with 1 simple SQL:
+
+INSERT IGNORE INTO `person_attribute_ft`
+SELECT
+    p.person_id,
+    (SELECT GROUP_CONCAT(a.attribute_value SEPARATOR ' ') FROM attribute a WHERE a.attribute_type_id = 1 AND a.person_id = p.person_id LIMIT 10) attr_1,
+    (SELECT GROUP_CONCAT(a.attribute_value SEPARATOR ' ') FROM attribute a WHERE a.attribute_type_id = 2 AND a.person_id = p.person_id LIMIT 10) attr_2,
+    (SELECT GROUP_CONCAT(a.attribute_value SEPARATOR ' ') FROM attribute a WHERE a.attribute_type_id = 3 AND a.person_id = p.person_id LIMIT 10) attr_3,
+    (SELECT GROUP_CONCAT(a.attribute_value SEPARATOR ' ') FROM attribute a WHERE a.attribute_type_id = 4 AND a.person_id = p.person_id LIMIT 10) attr_4
+FROM person p
+Result should be something like this:
+
+mysql> select * from person_attribute_ft limit 10;
++-----------+--------+--------+--------+--------+
+| person_id | attr_1 | attr_2 | attr_3 | attr_4 |
++-----------+--------+--------+--------+--------+
+|         1 | 541    | 2      | 1927   | 3      |
+|         2 | 2862   | 2      | 1939   | 4      |
+|         3 | 6573   | 2      | 1904   | 2      |
+|         4 | 2432   | 1      | 2005   | 2      |
+|         5 | 2208   | 1      | 1995   | 4      |
+|         6 | 8388   | 2      | 1973   | 1      |
+|         7 | 107    | 2      | 1909   | 4      |
+|         8 | 5161   | 1      | 2005   | 1      |
+|         9 | 8022   | 2      | 1953   | 4      |
+|        10 | 4801   | 2      | 1900   | 3      |
++-----------+--------+--------+--------+--------+
+10 rows in set (0.00 sec)
+Step 3. Select from table with query like this:
+
+mysql> SELECT SQL_NO_CACHE *
+    -> FROM `person_attribute_ft`
+    -> WHERE 1 AND MATCH(attr_1) AGAINST ("3000 3001 3002 3003 3004 3005 3006 3007" IN BOOLEAN MODE)
+    -> AND MATCH(attr_2) AGAINST ("1" IN BOOLEAN MODE)
+    -> AND MATCH(attr_3) AGAINST ("1980 1981 1982 1983 1984" IN BOOLEAN MODE)
+    -> AND MATCH(attr_4) AGAINST ("2,3" IN BOOLEAN MODE)
+    -> LIMIT 10000;
++-----------+--------+--------+--------+--------+
+| person_id | attr_1 | attr_2 | attr_3 | attr_4 |
++-----------+--------+--------+--------+--------+
+|     12131 | 3002   | 1      | 1982   | 2      |
+|     51315 | 3007   | 1      | 1984   | 2      |
+|    147283 | 3001   | 1      | 1984   | 2      |
+|    350086 | 3005   | 1      | 1982   | 3      |
+|    423907 | 3004   | 1      | 1982   | 3      |
+... many rows ...
+|   9423907 | 3004   | 1      | 1982   | 3      |
+|   9461892 | 3007   | 1      | 1982   | 2      |
+|   9516361 | 3006   | 1      | 1980   | 2      |
+|   9813933 | 3005   | 1      | 1982   | 2      |
+|   9986892 | 3003   | 1      | 1981   | 2      |
++-----------+--------+--------+--------+--------+
+90 rows in set (0.17 sec)
+The query selects all the rows:
+
+matching at least one of these IDs in attr_1: 3000, 3001, 3002, 3003, 3004, 3005, 3006 or 3007
+AND at the same time matching 1 in attr_2 (this column represents gender so if this solution were customized, it should be smallint(1) with simple index, etc...)
+AND at the same time matching at least one of 1980, 1981, 1982, 1983 or 1984 in attr_3
+AND at the same time matching 2 or 3 in attr_4
+Conclusion:
+
+I know this solution is not perfect and ideal for many situations but can be used as good alternative for EAV table design.
+
+I hope it'll help someone.
+
+Share
+Improve this answer
+Follow
+edited Oct 27, 2015 at 6:40
+answered Oct 25, 2015 at 15:48
+Martin's user avatar
+Martin
+43111 gold badge55 silver badges1111 bronze badges
+1
+I find it very unlikely that this design will perform better than your original design with composite indexes. What tests did you do to compare them? – 
+ypercubeᵀᴹ
+ CommentedFeb 7, 2019 at 9:33
+Add a comment
+4
+
+I assume there may be problem with database design.
+
+You are using a so called Entity-Attribute-Value design, which often performs poorly, well, by design.
+
+Do you have any suggestions to design this situation better please?
+
+The classic relational way to design this would be creating a separate table for each attribute. In general, you can have these separate tables: location, gender, bornyear, eyecolor.
+
+The following depends on whether certain attributes are always defined for a person, or not. And, whether a person can have only one value of an attribute. For example, usually the person has only one gender. In your current design nothing stops you from adding three rows for the same person with different values for gender in them. You can also set a gender value not to 1 or 2, but to some number that doesn't make sense, like 987 and there is no constraint in the database that would prevent it. But, this is another separate issue of maintaining data integrity with EAV design.
+
+If you always know the person's gender, then it makes little sense to put it in a separate table and it is way better to have a non-null column GenderID in the person table, which would be a foreign key to the lookup table with the list of all possible genders and their names. If you know the person's gender most of the time, but not always, you can make this column nullable and set it to NULL when information is not available. If most of the time the person's gender is not known, then it may better to have a separate table gender that links to person 1:1 and has rows only for those people who have a known gender.
+
+Similar considerations apply to eyecolor and bornyear - the person is unlikely to have two values for an eyecolor or bornyear.
+
+If it is possible for a person to have several values for an attribute, then you'd definitely put it in a separate table. For example, it is not uncommon for a person to have several addresses (home, work, postal, holiday, etc.), so you would list them all in a table location. Tables person and location would be linked 1:M.
+
+Or just to adjust the select above?
+
+If using the EAV design, then I'd at least do the following.
+
+Set columns attribute_type_id, attribute_value, person_id to NOT NULL.
+Set up foreign key that links attribute.person_id with person.person_id.
+Create one index on three columns (attribute_type_id, attribute_value, person_id). The order of columns is important here.
+As far as I know, MyISAM doesn't honour foreign keys, so don't use it, use InnoDB instead.
+I'd write the query like this. Use INNER instead of LEFT joins and explicitly write subquery for each attribute to give optimizer all chances to use the index.
+
+SELECT person.person_id
+FROM
+    person
+    INNER JOIN
+    (
+        SELECT attribute.person_id
+        FROM attribute
+        WHERE attribute_type_id = 1
+            AND location.attribute_value BETWEEN 3000 AND 7000
+    ) AS location ON location.person_id = person.person_id
+    INNER JOIN
+    (
+        SELECT attribute.person_id
+        FROM attribute
+        WHERE attribute_type_id = 2
+            AND location.attribute_value = 1
+    ) AS gender ON gender.person_id = person.person_id
+    INNER JOIN
+    (
+        SELECT attribute.person_id
+        FROM attribute
+        WHERE attribute_type_id = 3
+            AND location.attribute_value BETWEEN 1980 AND 2000
+    ) AS bornyear ON bornyear.person_id = person.person_id
+    INNER JOIN
+    (
+        SELECT attribute.person_id
+        FROM attribute
+        WHERE attribute_type_id = 4
+            AND location.attribute_value IN (2, 3)
+    ) AS eyecolor ON eyecolor.person_id = person.person_id
+LIMIT 100000;
+Also, it may be worth partitioning the attribute table by attribute_type_id.
+
+Share
+Improve this answer
+Follow
+answered Oct 22, 2015 at 0:51
+Vladimir Baranov's user avatar
+Vladimir Baranov
+4,71044 gold badges2828 silver badges4444 bronze badges
+Performance caution: JOIN ( SELECT ... ) does not optimize well. JOINing directly to the table works better (but is still problematical). – 
+Rick James
+ CommentedOct 30, 2015 at 15:39
+Pretty sure he uses LEFT JOIN and not INNER JOIN, because the row in the opposite table may not exist. – 
+Martin Zvarík
+ CommentedAug 15, 2023 at 21:53
+Add a comment
+3
+
+Add indeces to attribute for:
+
+(person_id, attribute_type_id, attribute_value) and
+(attribute_type_id, attribute_value, person_id)
+Explanation
+
+With your current design EXPLAIN expects your query to examine 1,265,229 * 4 * 4 * 4 = 80,974,656 rows in attribute. You can reduce this number by adding a composite index on attribute for (person_id, attribute_type_id). Using this index your query will only examine 1 instead of 4 rows for each of location, eyecolor and gender.
+
+You could extend that index to include attribute_type_value as well: (person_id, attribute_type_id, attribute_value). This would turn this index into a covering index for this query, which should improve performance as well.
+
+Furthermore adding an index on (attribute_type_id, attribute_value, person_id) (again a covering index by including person_id) should improve performance over just using an index on attribute_value where more rows would have to be examined. In this case it will fasten the first step in your explain: selecting a range from bornyear.
+
+Using those two indeces lowered the execution time of your query on my system from ~2.0 s to ~0.2 s with the explain output looking like this:
+
++----+-------------+----------+--------+-------------------------------------+-------------------+---------+--------------------------------+---------+----------+--------------------------+
+| id | select_type | table    | type   | possible_keys                       | key               | key_len | ref                            |    rows | filtered | Extra                    |
++----+-------------+----------+--------+-------------------------------------+-------------------+---------+--------------------------------+---------+----------+--------------------------+
+|  1 | SIMPLE      | bornyear | range  | person_type_value,type_value_person | type_value_person |       9 |                                | 1861881 |   100.00 | Using where; Using index |
+|  1 | SIMPLE      | location | ref    | person_type_value,type_value_person | person_type_value |       8 | bornyear.person_id,const       |       1 |   100.00 | Using where; Using index |
+|  1 | SIMPLE      | eyecolor | ref    | person_type_value,type_value_person | person_type_value |       8 | bornyear.person_id,const       |       1 |   100.00 | Using where; Using index |
+|  1 | SIMPLE      | gender   | ref    | person_type_value,type_value_person | person_type_value |      13 | bornyear.person_id,const,const |       1 |   100.00 | Using index              |
+|  1 | SIMPLE      | person   | eq_ref | PRIMARY                             | PRIMARY           |       4 | bornyear.person_id             |       1 |   100.00 | Using index              |
++----+-------------+----------+--------+-------------------------------------+-------------------+---------+--------------------------------+---------+----------+--------------------------+
+Share
+Improve this answer
+Follow
+answered Oct 18, 2015 at 12:39
+wolfgangwalther's user avatar
+wolfgangwalther
+23711 silver badge55 bronze badges
+1
+Thanks for extensive answer & explanation. I did all you mentioned but the query still take ~2 min. Please, what table type (innodb,myisam) are you using and what exact query performed? – 
+Martin
+ CommentedOct 19, 2015 at 11:57
+1
+Other than adding the indeces I used the exact same data and definitions you did, so I did use MyISAM. I changed the first line of your query to SELECT person.person_id because otherwise it wouldn't run, obviously. Did you do ANALYZE TABLE attribute after adding the indeces? You might want to add your new EXPLAIN output (after adding indeces) to your question as well. – 
+wolfgangwalther
+ CommentedOct 24, 2015 at 14:20
+Add a comment
+0
+
+Try using query index hints thats look appropriate
+
+Mysql Index Hints
+
+Share
+Improve this answer
+Follow
+answered Oct 19, 2015 at 1:50
+Muhammad Muazzam's user avatar
+Muhammad Muazzam
+14599 bronze badges
+1
+Hints may help one version of the query, but then hurt another. Note that the Optimizer picked bornyear as the best first table, probably because if filtered out the most undesirable rows. – 
+Rick James
+ CommentedOct 21, 2015 at 16:15

@@ -1,0 +1,68 @@
+{
+  "database": "post_retry_resource_limitation_220486_slow_r297191_a3",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS workload_table (id INT PRIMARY KEY, category VARCHAR(64), payload NVARCHAR(MAX), created_at DATETIME)",
+    "CREATE TABLE IF NOT EXISTS reference_table (id INT PRIMARY KEY, status INT, description NVARCHAR(255))"
+  ],
+  "generation_sql": [
+    "INSERT INTO reference_table (id, status, description) SELECT n, n % 5, CONCAT('Description_', n) FROM (SELECT TOP 1000 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers",
+    "INSERT INTO workload_table (id, category, payload, created_at) SELECT n, CASE WHEN n % 100 = 0 THEN 'high_memory' ELSE 'normal' END, REPLICATE('X', 1000), GETDATE() FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers"
+  ],
+  "tables": [
+    {
+      "name": "workload_table",
+      "purpose": "Primary table to simulate high memory grants and parallelism.",
+      "target_rows": 100000,
+      "distribution_notes": "Skewed distribution with a small percentage of rows requiring high memory."
+    },
+    {
+      "name": "reference_table",
+      "purpose": "Reference table for joins and filters.",
+      "target_rows": 1000,
+      "distribution_notes": "Uniform distribution of status values."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "workload_table": 100000,
+      "reference_table": 1000
+    },
+    "value_skew": {
+      "workload_table.category": "Small percentage of rows with 'high_memory' category."
+    },
+    "predicate_selectivity": {
+      "workload_table.category = 'high_memory'": 0.01
+    },
+    "join_selectivity": {
+      "workload_table.id = reference_table.id": "one-to-one"
+    }
+  },
+  "analyze_tables": [
+    "workload_table",
+    "reference_table"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT TOP 10 * FROM workload_table WHERE category = 'high_memory' ORDER BY created_at DESC",
+      "objective": "Verify that the data distribution and indexes support the intended query behavior.",
+      "expected_evidence": [
+        "The query plan shows a scan or seek operation on the workload_table.",
+        "The predicate on category is applied efficiently."
+      ]
+    },
+    {
+      "sql": "SELECT w.* FROM workload_table w JOIN reference_table r ON w.id = r.id WHERE w.category = 'high_memory'",
+      "objective": "Verify join behavior and memory grant requirements.",
+      "expected_evidence": [
+        "The query plan shows a join operation with memory grants.",
+        "The join behavior reflects the intended one-to-one relationship."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

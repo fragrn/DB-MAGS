@@ -1,0 +1,22 @@
+{
+  "decision": "accept",
+  "reasoning": "The observed plan supports the query's objective of verifying the presence of the single row required for contention reproduction. The plan uses a sequential scan on the table and applies the filter condition `scan_uuid = '00000000-0000-0000-0000-000000000001'`, which matches the expected evidence. The plan confirms that only one row is retrieved, and no additional rows are present.",
+  "query_assessments": [
+    {
+      "query_id": "calibration_query_1",
+      "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = '00000000-0000-0000-0000-000000000001'",
+      "matched": true,
+      "observed_plan_summary": "Sequential scan on host_scan_complete_log_counts with filter (scan_uuid = '00000000-0000-0000-0000-000000000001').",
+      "supporting_evidence": [
+        "The plan retrieves the single row with scan_uuid = '00000000-0000-0000-0000-000000000001'.",
+        "Sequential scan confirms no additional rows are present."
+      ],
+      "discrepancies": []
+    }
+  ],
+  "concerns": [],
+  "recommended_changes": [],
+  "missing_information": [],
+  "round": 1,
+  "matched": true
+}

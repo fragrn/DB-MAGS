@@ -1,0 +1,148 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/284397/concurrent-update-statements-of-single-row-in-small-table-takes-minutes
+Canonical URL: https://dba.stackexchange.com/questions/284397/concurrent-update-statements-of-single-row-in-small-table-takes-minutes
+Title: Concurrent UPDATE statements of single row in small table takes minutes
+Question ID: 284397
+License: CC BY-SA 4.0; author: deed02392
+
+# Question
+
+I have a very simple table with no indexes (although scan_uuid could have a UNIQUE index if that helps):```
+create table public.host_scan_complete_log_counts
+(
+    scan_uuid uuid not null,
+    num_shards_completed numeric default 0 not null
+);
+
+```I then have a few hundred nodes each with their own direct connection to the database. As they work, they perform an update on this table like so:```
+UPDATE host_scan_complete_log_counts 
+SET num_shards_completed = num_shards_completed + $2
+WHERE scan_uuid = $1
+
+```Although there is never a deadlock, these UPDATE statements can take several minutes to complete.
+
+Since the table of scan counts is so small, I expected the UPDATE statements to take very small fractions of a second and therefore no queue of UPDATEs to build up. But it seems that isn't the case, possibly due to some locking clashes. Is there some way to improve this situation perhaps with more sophisticated UPDATE SQL?
+
+Here's the output of a query showing the age of the locks that get generated, in case that is useful.```
+SELECT   l.relation::regclass,
+         l.transactionid,
+         l.mode,
+         l.GRANTED,
+         a.query,
+         a.query_start,
+         age(now(), a.query_start) AS "age",
+         a.pid
+FROM pg_stat_activity a
+JOIN pg_locks l ON l.pid = a.pid
+ORDER BY a.query_start;
+
+```relation
+transactionid
+mode
+granted
+query
+query_start
+age
+pid
+
+ExclusiveLock
+t
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:17:20.921768+00
+00:02:24.465192
+15624
+
+6826571
+ExclusiveLock
+t
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:17:20.921768+00
+00:02:24.465192
+15624
+
+host_scan_complete_log_counts
+
+ExclusiveLock
+f
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:17:20.921768+00
+00:02:24.465192
+15624
+
+host_scan_complete_log_counts
+
+RowExclusiveLock
+t
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:17:20.921768+00
+00:02:24.465192
+15624
+
+host_scan_complete_log_counts
+
+ExclusiveLock
+f
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:18:03.688236+00
+00:01:41.698724
+22147
+
+6826937
+ExclusiveLock
+t
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:18:03.688236+00
+00:01:41.698724
+22147
+
+host_scan_complete_log_counts
+
+RowExclusiveLock
+t
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:18:03.688236+00
+00:01:41.698724
+22147
+
+ExclusiveLock
+t
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:18:03.688236+00
+00:01:41.698724
+22147
+
+6827769
+ShareLock
+f
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:18:12.969814+00
+00:01:32.417146
+22179
+
+host_scan_complete_log_counts
+
+RowExclusiveLock
+t
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:18:12.969814+00
+00:01:32.417146
+22179
+
+ExclusiveLock
+t
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:18:12.969814+00
+00:01:32.417146
+22179
+
+6827071
+ExclusiveLock
+t
+UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1
+2021-01-31 22:18:12.969814+00
+00:01:32.417146
+22179
+
+# Answers
+
+[Batch planner note: the original full post is saved as source_post.txt. This planning input was compacted to remove linked-page snapshots or excessive length.]

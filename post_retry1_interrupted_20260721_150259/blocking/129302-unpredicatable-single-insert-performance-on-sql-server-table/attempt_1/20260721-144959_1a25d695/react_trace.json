@@ -1,0 +1,62 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_blocking_129302_unpredicatable_r599630_a1"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_blocking_129302_unpredicatable_r599630_a1'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"dbms_version\": null,\n    \"summary\": \"Unpredictable single insert performance due to blocking and excessive indexes.\",\n    \"symptoms\": [\n      \"Single insert operations occasionally take several minutes to complete.\",\n      \"Blocking sessions appear in `sys.dm_exec_requests` but do not correspond to active queries.\",\n      \"Blocked requests show `LCK_M_S` wait type.\"\n    ],\n    \"mechanism\": \"Excessive indexes combined with blocking due to uncommitted transactions or other locking issues.\",\n    \"facts\": [\n      {\n        \"key\": \"Table has 34 non-clustered indexes.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post explicitly mentions the table has 34 indexes.\"\n      },\n      {\n        \"key\": \"Blocking sessions appear in sys.dm_exec_requests.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post describes blocked sessions with `LCK_M_S` wait type.\"\n      },\n      {\n        \"key\": \"Blocking sessions are sometimes 'sleeping' with no active requests.\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post mentions sessions with blocking session IDs that are 'sleeping' and have no active requests.\"\n      }\n    ],\n    \"assumptions\": [\n      \"The database uses default isolation levels (likely READ COMMITTED).\",\n      \"The blocking is caused by uncommitted transactions or lock escalation.\"\n    ],\n    \"unknowns\": [\n      \"Exact schema of the table and indexes.\",\n      \"Whether lock escalation or deadlocks are contributing to the issue.\"\n    ],\n    \"confidence\": 0.85\n  },\n  \"feasibility\": {\n    \"level\": \"mechanism\",\n    \"rationale\": \"The reproduction is feasible at the mechanism level by simulating excessive indexes and blocking behavior. However, the exact schema and workload are unknown.\",\n    \"missing_capabilities\": [],\n    \"unmatched_conditions\": [\"Exact schema of the table and indexes.\"],\n    \"confidence\": 0.8\n  },\n  \"environment_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"database\": \"post_retry_blocking_129302_unpredicatable_r599630_a1\",\n    \"requirements\": [\"Dedicated SQL Server-compatible environment.\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_blocking_129302_unpredicatable_r599630_a1\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS Communication (id INT IDENTITY PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX));\",\n      \"CREATE NONCLUSTERED INDEX IF NOT EXISTS idx_comm_action ON Communication(comm_action);\",\n      \"CREATE NONCLUSTERED INDEX IF NOT EXISTS idx_comm_channelid ON Communication(comm_channelid);\"\n    ],\n    \"generation_sql\": [\n      \"INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT 'Action' + CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS NVARCHAR), ABS(CHECKSUM(NEWID()) % 100), REPLICATE('A', 100) FROM master.dbo.spt_values WHERE type = 'P' AND number <= {row_count};\"\n    ],\n    \"tables\": [\n      {\n        \"name\": \"Communication\",\n        \"purpose\": \"Primary table to simulate the insert performance issue.\",\n        \"target_rows\": 8000000,\n        \"distribution_notes\": \"Simulates a large table with multiple indexes.\"\n      }\n    ],\n    \"constraints\": {\n      \"cardinality\": {\"Communication\": 8000000},\n      \"value_skew\": {},\n      \"predicate_selectivity\": {},\n      \"join_selectivity\": {}\n    },\n    \"analyze_tables\": [\"Communication\"],\n    \"calibration_queries\": [\n      {\n        \"sql\": \"INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, 'TestPayload');\",\n        \"objective\": \"Simulate the insert operation and observe locking or blocking behavior.\",\n        \"expected_evidence\": [\n          \"Blocking or locking behavior is observed during the insert operation.\",\n          \"The `LCK_M_S` wait type is visible in the execution plan or system views.\"\n        ]\n      }\n    ],\n    \"scale_strategy\": {\n      \"initial_rows\": 10"
+  },
+  {
+    "step": "final_validation",
+    "event": "canonicalized_blueprint",
+    "changes": [
+      "removed non-read-only data_spec.calibration_queries[0]"
+    ]
+  }
+]

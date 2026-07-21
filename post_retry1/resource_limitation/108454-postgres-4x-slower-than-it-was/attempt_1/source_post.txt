@@ -1,0 +1,333 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/108454/postgres-4x-slower-than-it-was
+Canonical URL: https://dba.stackexchange.com/questions/108454/postgres-4x-slower-than-it-was
+Title: Postgres 4x Slower Than It Was
+Question ID: 108454
+License: CC BY-SA 4.0; author: user1517922
+
+# Question
+
+Our Postgres performance has gone down to 1/4 of what it was, and we can't figure out why.
+
+We have two machines with identical hardware (let's call them A and B):```
+Intel(R) Xeon(R) CPU E5-4640 0 @ 2.40GHz (64 cores)
+384 GB RAM
+15k SAS, 16 disk RAID 10 array
+
+```Each machine has essentially identical Postgres clusters with about 100 GB databases, with the following settings:```
+version:   PostgreSQL 9.4.4 on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 4.4.7 20120313 (Red Hat 4.4.7-11), 64-bit
+bytea_output:   escape
+checkpoint_completion_target:   0.7
+checkpoint_segments:   256
+checkpoint_timeout:   30min
+client_encoding:   UTF8
+cpu_index_tuple_cost:   0.001
+cpu_operator_cost:   0.0005
+cpu_tuple_cost:   0.003
+DateStyle:   ISO, MDY
+default_text_search_config:   pg_catalog.english
+dynamic_shared_memory_type:   posix
+effective_cache_size:   128GB
+from_collapse_limit:   4
+hot_standby:   on
+join_collapse_limit:   4
+lc_messages:   en_US.UTF-8
+lc_monetary:   en_US.UTF-8
+lc_numeric:   en_US.UTF-8
+lc_time:   en_US.UTF-8
+listen_addresses:   *
+log_destination:   stderr
+log_directory:   pg_log
+log_filename:   postgresql-%Y-%m-%d_%H%M%S.log
+log_line_prefix:   < %m >
+log_rotation_age:   1d
+log_rotation_size:   0
+log_timezone:   US/Eastern
+log_truncate_on_rotation:   on
+logging_collector:   on
+maintenance_work_mem:   1GB
+max_connections:   256
+max_replication_slots:   3
+max_stack_depth:   2MB
+max_standby_streaming_delay:   350min
+max_wal_senders:   5
+shared_buffers:   24GB
+temp_buffers:   8MB
+TimeZone:   US/Eastern
+wal_buffers:   4MB
+wal_keep_segments:   5000
+wal_level:   hot_standby
+work_mem:   96MB
+
+```Linux settings:```
+CentOS 6.6
+/sys/kernel/mm/redhat_transparent_hugepage/enabled:   Always
+/sys/kernel/mm/redhat_transparent_hugepage/enabled:   Always
+/sys/kernel/mm/redhat_transparent_hugepage/defrag:   Always
+/proc/sys/vm/dirty_background_ratio:   10
+/sys/block/sda/queue/scheduler:   cfq
+/sys/block/sda/queue/read_ahead_kb:   128
+
+blockdev --report:
+RO    RA   SSZ   BSZ   StartSec            Size   Device
+rw   256   512  4096          0   2395518009344   /dev/sda
+rw   256   512  4096       2048      1048576000   /dev/sda1
+rw   256   512  4096    2050048   1792509214720   /dev/sda2
+rw   256   512  4096 3503044608    314572800000   /dev/sda3
+rw   256   512  4096 4117444608    149946368000   /dev/sda4
+rw   256   512  4096 4410308608    137438953472   /dev/sda5
+
+```I don't claim to understand all that.
+
+We have streaming replication that keeps a hot copy of A on B. That puts B under heavier load, especially in the memory department, and it goes into swap (so clearly we're doing something wrong, since we have 384 GB of RAM).```
+free -g (on A):
+             total       used       free     shared    buffers     cached
+Mem:           378        347         30         24          2        301
+-/+ buffers/cache:         44        334
+Swap:          127          1        126
+
+free -g (on B):
+             total       used       free     shared    buffers     cached
+Mem:           378        366         11         49          2        340
+-/+ buffers/cache:         23        354
+Swap:          127          1        126
+
+```The load is usually 5 or 10, but at times will go to 30 - 60 for a few hours when intensive reporting or database operations are done.
+
+Backing up the entire database used to take ~1 hour, now it takes ~4.
+
+Syncing the database on A to B (B is used for development and we refresh the live data to from A to B) used to take ~1 hour, now it takes ~4.
+
+Queries that used to take 30 seconds (for years) started hanging for days without returning (increasing the work_mem for that query solved that problem: Postgres 9.4.4 query takes forever (https://dba.stackexchange.com/questions/106126/postgres-9-4-4-query-takes-forever)).
+
+We have Tomcat websites and processes that run, using C3P0 for pooling, and Apache / PHP sites and processes that run, using pgBouncer for pooling. We've considered having Tomcat use pgBouncer as well.
+
+We've considered trying to lower our max connections from 256 to 64 (256 is from before we were using connection pooling).
+
+Our current settings come from a combination of pgtune and research, but my confidence in our current configuration isn't high, and our the performance drop doesn't help that confidence.
+
+Any recommendations? Any additional info needed?
+
+Update
+
+Output of iostat:```
+Server A
+Linux 2.6.32-504.23.4.el6.x86_64 (openlink1.radyn.com)  08/05/2015  _x86_64_    (64 CPU)
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          27.09    0.03    1.15    0.06    0.00   71.67
+
+Device:            tps   Blk_read/s   Blk_wrtn/s   Blk_read   Blk_wrtn
+sda             258.93      2136.65     20871.52 4370455736 42692153072
+
+Server B
+Linux 2.6.32-504.23.4.el6.x86_64 (openlink2.radyn.com)  08/05/2015  _x86_64_    (64 CPU)
+
+avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+          26.90    0.00    1.58    0.17    0.00   71.35
+
+Device:            tps   Blk_read/s   Blk_wrtn/s   Blk_read   Blk_wrtn
+sda             459.18     12641.47     17765.60 28973539688 40717751832
+
+```Output of vmstat:```
+Server A
+procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu-----
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+ 7  0 1297844 8265380 2688960 333189664    0    0    17   163    0    0 27  1 72  0  0
+
+Server B
+procs -----------memory---------- ---swap-- -----io---- --system-- -----cpu-----
+ r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st
+ 9  0 3321548 16228276 2221908 349418368    0    0    99   139    0    0 27  2 71  0  0
+
+```Output of sar:```
+Server A
+Linux 2.6.32-504.23.4.el6.x86_64 (openlink1.radyn.com)  08/05/2015  _x86_64_    (64 CPU)
+
+12:00:01 AM     CPU     %user     %nice   %system   %iowait    %steal     %idle
+12:10:01 AM     all     13.25      0.00      1.05      0.04      0.00     85.66
+12:20:01 AM     all     11.98      0.00      0.53      0.03      0.00     87.46
+12:30:01 AM     all     11.86      0.00      0.67      0.03      0.00     87.43
+12:40:01 AM     all     12.33      0.00      0.94      0.04      0.00     86.68
+12:50:01 AM     all     11.39      0.00      0.52      0.06      0.00     88.03
+01:00:01 AM     all     13.58      0.00      1.28      0.03      0.00     85.11
+01:10:01 AM     all     13.37      0.00      0.82      0.02      0.00     85.79
+01:20:01 AM     all     11.74      0.00      0.54      0.01      0.00     87.70
+01:30:01 AM     all     12.00      0.00      0.70      0.02      0.00     87.28
+01:40:01 AM     all     13.10      0.00      0.80      0.02      0.00     86.08
+01:50:01 AM     all     13.19      0.00      1.06      0.02      0.00     85.73
+02:00:02 AM     all     15.62      0.00      1.55      0.03      0.00     82.80
+02:10:01 AM     all     18.72      0.00      2.98      0.03      0.00     78.27
+02:20:02 AM     all     15.95      0.12      2.33      0.05      0.00     81.55
+02:30:01 AM     all     13.58      0.01      0.89      0.01      0.00     85.51
+02:40:01 AM     all     19.23      0.00      1.91      0.05      0.00     78.80
+02:50:02 AM     all     23.95      0.00      0.92      0.05      0.00     75.08
+03:00:01 AM     all     13.69      0.00      0.59      0.01      0.00     85.72
+03:10:01 AM     all     12.87      0.00      0.49      0.01      0.00     86.64
+03:20:01 AM     all     12.18      0.00      0.69      0.02      0.00     87.11
+03:30:01 AM     all     11.82      0.74      0.70      0.05      0.00     86.69
+03:40:01 AM     all     62.02      0.00      2.18      0.01      0.00     35.79
+03:50:01 AM     all     72.96      0.00      0.71      0.00      0.00     26.32
+04:00:01 AM     all     71.97      0.00      0.72      0.00      0.00     27.30
+04:10:01 AM     all     71.71      0.00      0.71      0.00      0.00     27.57
+04:20:01 AM     all     72.40      0.00      0.80      0.01      0.00     26.80
+04:30:01 AM     all     68.69      0.00      1.24      0.00      0.00     30.07
+04:40:01 AM     all     68.68      0.00      1.12      0.02      0.00     30.18
+04:50:01 AM     all     72.59      0.00      0.79      0.00      0.00     26.62
+05:00:01 AM     all     72.09      0.00      0.81      0.00      0.00     27.10
+05:10:01 AM     all     72.61      0.00      0.79      0.00      0.00     26.59
+05:20:01 AM     all     72.19      0.00      0.83      0.00      0.00     26.98
+05:30:01 AM     all     75.98      0.00      1.14      0.00      0.00     22.87
+05:40:02 AM     all     73.85      0.00      1.19      0.00      0.00     24.96
+05:50:02 AM     all     73.47      0.00      1.21      0.00      0.00     25.32
+06:00:01 AM     all     75.27      0.00      1.24      0.00      0.00     23.49
+06:10:01 AM     all     76.56      0.00      1.18      0.00      0.00     22.25
+06:20:01 AM     all     77.06      0.20      1.24      0.00      0.00     21.50
+06:30:01 AM     all     76.44      0.00      1.29      0.00      0.00     22.27
+06:40:01 AM     all     77.16      0.00      1.44      0.00      0.00     21.39
+06:50:01 AM     all     76.88      0.00      1.18      0.00      0.00     21.94
+07:00:01 AM     all     76.28      0.00      1.12      0.00      0.00     22.60
+07:10:01 AM     all     49.72      0.00      1.49      0.11      0.00     48.67
+07:20:01 AM     all     12.78      0.00      1.01      0.00      0.00     86.21
+07:30:01 AM     all     14.26      0.00      1.04      0.00      0.00     84.70
+07:40:01 AM     all     15.19      0.00      1.11      0.00      0.00     83.70
+07:50:01 AM     all     12.85      0.00      0.98      0.00      0.00     86.17
+08:00:01 AM     all     14.24      0.00      0.94      0.00      0.00     84.82
+08:10:01 AM     all     13.09      0.00      0.98      0.00      0.00     85.93
+08:20:01 AM     all     13.16      0.00      0.88      0.00      0.00     85.96
+08:30:01 AM     all      9.87      0.00      0.53      0.00      0.00     89.60
+08:40:01 AM     all      8.41      0.00      0.66      0.00      0.00     90.92
+08:50:01 AM     all     10.09      0.00      0.75      0.00      0.00     89.16
+09:00:01 AM     all      7.66      0.00      0.52      0.00      0.00     91.82
+09:10:01 AM     all      6.68      0.00      0.43      0.00      0.00     92.89
+
+09:10:01 AM     CPU     %user     %nice   %system   %iowait    %steal     %idle
+09:20:01 AM     all      7.20      0.00      0.41      0.00      0.00     92.39
+09:30:01 AM     all      6.74      0.00      0.44      0.00      0.00     92.82
+09:40:01 AM     all      6.70      0.00      0.43      0.00      0.00     92.87
+09:50:01 AM     all      8.12      0.00      0.54      0.04      0.00     91.30
+10:00:01 AM     all     10.44      0.00      0.60      0.02      0.00     88.93
+10:10:01 AM     all     10.86      0.00      0.60      0.01      0.00     88.53
+10:20:01 AM     all     14.46      0.00      0.77      0.06      0.00     84.72
+10:30:01 AM     all      9.31      0.13      0.84      0.10      0.00     89.63
+10:40:02 AM     all     10.45      0.00      0.81      0.11      0.00     88.63
+Average:        all     32.89      0.02      0.96      0.02      0.00     66.11
+
+Server B
+Linux 2.6.32-504.23.4.el6.x86_64 (openlink2.radyn.com)  08/05/2015  _x86_64_    (64 CPU)
+
+12:00:01 AM     CPU     %user     %nice   %system   %iowait    %steal     %idle
+12:10:01 AM     all     12.29      0.00      2.65      0.30      0.00     84.76
+12:20:01 AM     all     16.31      0.00      1.38      0.15      0.00     82.16
+12:30:01 AM     all     13.46      0.00      1.59      0.07      0.00     84.88
+12:40:01 AM     all     13.05      0.00      1.16      0.17      0.00     85.61
+12:50:01 AM     all     11.72      0.00      1.39      0.11      0.00     86.79
+01:00:01 AM     all     11.96      0.00      1.77      0.06      0.00     86.21
+01:10:01 AM     all     13.21      0.00      1.69      0.06      0.00     85.04
+01:20:01 AM     all     13.19      0.00      2.14      0.05      0.00     84.62
+01:30:03 AM     all     19.11      0.00      4.31      0.06      0.00     76.52
+01:40:02 AM     all      9.29      0.00      4.75      0.04      0.00     85.91
+01:50:02 AM     all      7.16      0.00      4.81      0.04      0.00     87.99
+02:00:03 AM     all      6.56      0.00      5.26      0.06      0.00     88.12
+02:10:02 AM     all      8.05      0.00      7.09      0.06      0.00     84.80
+02:20:03 AM     all      8.54      0.00      7.75      0.08      0.00     83.62
+02:30:03 AM     all      2.99      0.00      6.20      0.09      0.00     90.72
+02:40:03 AM     all     10.79      0.00      7.79      0.21      0.00     81.21
+02:50:03 AM     all      5.88      0.00      4.97      0.16      0.00     88.99
+03:00:02 AM     all     14.17      0.00      4.99      0.47      0.00     80.37
+03:10:01 AM     all     17.17      0.00      4.18      0.26      0.00     78.40
+03:20:01 AM     all     29.50      0.00      3.36      0.11      0.00     67.03
+03:30:01 AM     all     25.16      0.00      3.05      0.15      0.00     71.64
+03:40:01 AM     all     19.70      0.00      2.29      0.15      0.00     77.86
+03:50:01 AM     all     28.69      0.00      3.01      0.09      0.00     68.21
+04:00:01 AM     all     17.61      0.00      2.73      0.08      0.00     79.58
+04:10:01 AM     all     16.72      0.00      2.95      0.09      0.00     80.25
+04:20:01 AM     all     13.50      0.00      2.47      0.05      0.00     83.98
+04:30:03 AM     all     14.88      0.00      5.20      0.08      0.00     79.84
+04:40:02 AM     all     12.05      0.01      6.05      0.10      0.00     81.79
+04:50:01 AM     all      9.92      0.00      6.89      0.03      0.00     83.16
+05:00:03 AM     all      5.89      0.00      6.89      0.02      0.00     87.20
+05:10:02 AM     all      5.22      0.00      5.55      0.05      0.00     89.18
+05:20:02 AM     all      6.02      0.00      5.01      0.04      0.00     88.94
+05:30:03 AM     all      8.11      0.00      6.05      0.02      0.00     85.82
+05:40:02 AM     all     13.53      0.00      3.94      0.01      0.00     82.52
+05:50:01 AM     all     18.90      0.00      2.48      0.02      0.00     78.60
+06:00:01 AM     all     19.09      0.00      1.64      0.01      0.00     79.26
+06:10:01 AM     all     18.63      0.00      1.84      0.06      0.00     79.47
+06:20:01 AM     all     19.13      0.00      1.72      0.05      0.00     79.11
+06:30:01 AM     all     17.73      0.00      1.94      0.02      0.00     80.31
+06:40:01 AM     all     17.97      0.00      1.58      0.02      0.00     80.42
+06:50:02 AM     all     12.25      0.00      2.00      0.02      0.00     85.72
+07:00:01 AM     all     10.04      0.00      1.31      0.00      0.00     88.64
+07:10:01 AM     all     13.39      0.00      1.59      0.00      0.00     85.02
+07:20:01 AM     all     14.84      0.00      1.49      0.00      0.00     83.67
+07:30:01 AM     all     12.36      0.00      0.80      0.01      0.00     86.84
+07:40:01 AM     all     12.07      0.00      0.71      0.01      0.00     87.21
+07:50:01 AM     all     12.98      0.00      1.14      0.00      0.00     85.88
+08:00:01 AM     all     12.62      0.00      0.93      0.00      0.00     86.44
+08:10:01 AM     all     11.77      0.00      0.87      0.00      0.00     87.36
+08:20:01 AM     all     11.79      0.00      1.61      0.00      0.00     86.60
+08:30:01 AM     all     10.80      0.00      0.79      0.00      0.00     88.40
+08:40:02 AM     all     13.49      0.00      1.78      0.00      0.00     84.72
+08:50:01 AM     all     12.46      0.00      1.39      0.00      0.00     86.15
+09:00:02 AM     all     12.28      0.00      0.83      0.00      0.00     86.89
+09:10:01 AM     all     12.65      0.00      0.77      0.01      0.00     86.57
+
+09:10:01 AM     CPU     %user     %nice   %system   %iowait    %steal     %idle
+09:20:01 AM     all     12.44      0.00      0.78      0.00      0.00     86.78
+09:30:01 AM     all     12.96      0.00      1.01      0.00      0.00     86.03
+09:40:01 AM     all     11.71      0.00      0.80      0.00      0.00     87.49
+09:50:01 AM     all     15.23      0.00      2.04      0.06      0.00     82.67
+10:00:01 AM     all     14.60      0.00      1.66      0.02      0.00     83.72
+10:10:01 AM     all     13.97      0.00      2.76      0.01      0.00     83.26
+10:20:01 AM     all     15.34      0.00      1.51      0.01      0.00     83.14
+10:30:01 AM     all     12.84      0.00      1.34      0.80      0.00     85.03
+10:40:01 AM     all     12.96      0.00      1.43      0.81      0.00     84.80
+10:50:01 AM     all     14.48      0.00      1.47      0.85      0.00     83.20
+Average:        all     13.46      0.00      2.85      0.10      0.00     83.59
+
+```
+
+# Answers
+
+## Answer 1
+Author: Kassandry
+Accepted: yes
+Score: 2
+License: CC BY-SA 4.0
+
+Based on your configurations and output, the only suggestions I can make for you to try are the following.
+
+-
+Disable Transparent Huge Pages. Evidence from the PostgreSQL mailing lists (http://www.postgresql.org/message-id/CANQNgOrD02f8mR3Y8Pi=zFsoL14RqNQA8hwz1r4rSnDLr1b2Cw@mail.gmail.com), and Red Hat themselves recommend disabling THP for database workloads here (https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Performance_Tuning_Guide/s-memory-transhuge.html)
+
+-
+Set `vm.zone_reclaim_mode=0`. Discussion here (http://rhaas.blogspot.com/2014/06/linux-disables-vmzonereclaimmode-by.html)
+
+-
+Set your elevator to deadline from cfq. Red Hat recommends deadline for enterprise storage, which it sounds like you have. Discussion here (https://access.redhat.com/solutions/54164)
+
+-
+Change from setting `vm.dirty_background_ratio` to `vm.dirty_background_bytes` and `vm.dirty_bytes`.
+
+The defaults are 10% which given your 384GB of RAM is 38.4 GB of RAM that needs to be dirty before the kernel starts writing it out in the background. I would set the values to 64MB and 50% of the controller RAM, respectively, though that's based on my own anecdotal experience.
+
+Hopefully some of these suggestions work out for you.
+
+# Linked Page Snapshots
+
+- URL: http://www.postgresql.org/message-id/CANQNgOrD02f8mR3Y8Pi=zFsoL14RqNQA8hwz1r4rSnDLr1b2Cw@mail.gmail.com
+  Title: PostgreSQL: Re: Poor performance after update from SLES11 SP1 to SP2
+  Description/Error: 
+
+- URL: https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux/6/html/Performance_Tuning_Guide/s-memory-transhuge.html
+  Title: 
+  Description/Error: HTTP Error 403: Forbidden
+
+- URL: http://rhaas.blogspot.com/2014/06/linux-disables-vmzonereclaimmode-by.html
+  Title: Robert Haas: Linux disables vm.zone_reclaim_mode by default
+  Description/Error: 
+
+- URL: https://access.redhat.com/solutions/54164
+  Title: What is the recommended I/O scheduler for a database workload in Red Hat Enterprise Linux? - Red Hat Customer Portal
+  Description/Error:

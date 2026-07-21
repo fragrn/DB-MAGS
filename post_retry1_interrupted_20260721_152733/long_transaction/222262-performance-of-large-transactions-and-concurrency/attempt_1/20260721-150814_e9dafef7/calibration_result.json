@@ -1,0 +1,32 @@
+{
+  "status": "accepted",
+  "matched": true,
+  "decision": "accept",
+  "weak_match": false,
+  "concerns": [],
+  "recommended_changes": [],
+  "rounds": [
+    {
+      "decision": "accept",
+      "reasoning": "The observed plan supports the intended mechanism well enough to proceed with execution. The query uses an Index Scan on the primary key index (`tools_pkey`) to retrieve the row with `id = 1`. This ensures that the query efficiently accesses the specific row, which aligns with the expected behavior of PostgreSQL's MVCC model. The plan confirms that the query will return the old value of the row until the transaction commits, as required by the calibration objective.",
+      "query_assessments": [
+        {
+          "query_id": "calibration_query_1",
+          "sql": "SELECT * FROM tools WHERE id = 1;",
+          "matched": true,
+          "observed_plan_summary": "Index Scan on tools using tools_pkey with condition (id = 1).",
+          "supporting_evidence": [
+            "The plan uses an Index Scan on the primary key index, ensuring efficient access to the specific row.",
+            "The query behavior aligns with PostgreSQL's MVCC model, where reads are not blocked by updates."
+          ],
+          "discrepancies": []
+        }
+      ],
+      "concerns": [],
+      "recommended_changes": [],
+      "missing_information": [],
+      "round": 1,
+      "matched": true
+    }
+  ]
+}

@@ -1,0 +1,228 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Slow query execution with RESOURCE_SEMAPHORE waits and parallelism issues.",
+    "symptoms": [
+      "RESOURCE_SEMAPHORE waits observed during high user connection counts.",
+      "CXCONSUMER waits indicating parallel query execution.",
+      "Slow query execution under memory pressure."
+    ],
+    "mechanism": "Excessive parallelism and memory grants leading to RESOURCE_SEMAPHORE waits.",
+    "facts": [
+      {
+        "key": "RESOURCE_SEMAPHORE waits observed",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions RESOURCE_SEMAPHORE waits during sp_whoisactive.",
+        "confidence": 0.9
+      },
+      {
+        "key": "CXCONSUMER waits due to parallelism",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions CXCONSUMER waits linked to parallel query execution.",
+        "confidence": 0.9
+      },
+      {
+        "key": "MAXDOP set to 0",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions MAXDOP set to 0 causing queries to utilize all CPU cores.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Memory pressure affecting queries",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions memory pressure affecting query runtimes.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The database environment matches the described SQL Server configuration.",
+      "Parallelism and memory grant issues are the primary contributors to RESOURCE_SEMAPHORE waits."
+    ],
+    "unknowns": [
+      "Exact query patterns causing RESOURCE_SEMAPHORE waits.",
+      "Impact of other server configurations on query performance."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The SQL Server-compatible environment supports parallelism and memory grant mechanisms, but exact reproduction of RESOURCE_SEMAPHORE waits may depend on workload and memory pressure simulation.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.85
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_220486_slow_r803267_a2",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_220486_slow_r803267_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "main_table",
+        "purpose": "Primary synthetic table to simulate parallelism and memory grant behavior.",
+        "target_rows": 100000,
+        "distribution_notes": "Simulates skewed category distribution and many-to-one join fanout."
+      },
+      {
+        "name": "ref_table",
+        "purpose": "Reference table for join operations.",
+        "target_rows": 100,
+        "distribution_notes": "Simulates a small reference table with uniform distribution."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "main_table": 100000,
+        "ref_table": 100
+      },
+      "value_skew": {
+        "main_table.category": "rare values are sparse and intentionally positioned by the agent"
+      },
+      "predicate_selectivity": {
+        "main_table.category = 'rare'": 0.001
+      },
+      "join_selectivity": {
+        "main_table.ref_id = ref_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "main_table",
+      "ref_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan examines the table or index range relevant to the suspected mechanism.",
+          "The predicate or join behavior needed by the reproduction is visible in EXPLAIN.",
+          "The plan evidence distinguishes this mechanism from a trivial point lookup."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+      "SELECT COUNT(*) FROM main_table WHERE category = 'common'",
+      "SELECT r.name, COUNT(m.id) FROM main_table m JOIN ref_table r ON r.id = m.ref_id GROUP BY r.name"
+    ],
+    "concurrency": 10,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "RESOURCE_SEMAPHORE waits observed during workload execution.",
+      "Query execution plans show parallelism and memory grant behavior."
+    ],
+    "symptom_evidence": [
+      "RESOURCE_SEMAPHORE waits visible in wait stats.",
+      "CXCONSUMER waits observed during query execution."
+    ],
+    "mechanism_evidence": [
+      "Parallel query execution leading to memory grants.",
+      "High concurrency causing memory pressure."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "RESOURCE_SEMAPHORE waits and parallelism issues.",
+    "target_database": "post_retry_resource_limitation_220486_slow_r803267_a2",
+    "dba_description": "Simulate RESOURCE_SEMAPHORE waits caused by parallel query execution and memory grants under high concurrency.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r803267_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET MAXDOP 0"
+                },
+                {
+                  "sql": "SET QUERY_STORE = OFF"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Parallelism and memory grants causing RESOURCE_SEMAPHORE waits."
+      }
+    },
+    {
+      "task_id": "execute_workload",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+          "concurrency": 10,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Parallelism and memory grants causing RESOURCE_SEMAPHORE waits."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "execute_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction plan focuses on simulating RESOURCE_SEMAPHORE waits caused by parallel query execution and memory grants under high concurrency. Synthetic data and workload specifications align with the described symptoms and mechanisms."
+}

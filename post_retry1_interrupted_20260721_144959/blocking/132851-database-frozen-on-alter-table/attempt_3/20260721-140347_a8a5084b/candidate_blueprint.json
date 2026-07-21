@@ -1,0 +1,219 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": "9.4.5",
+    "summary": "ALTER TABLE operation caused database freeze due to lock contention.",
+    "symptoms": [
+      "Database freeze",
+      "Login operations blocked",
+      "ALTER TABLE queued indefinitely"
+    ],
+    "mechanism": "Lock contention during ALTER TABLE due to an ACCESS EXCLUSIVE lock request being blocked by long-lived weak locks.",
+    "facts": [
+      {
+        "key": "ALTER TABLE operation",
+        "value": {
+          "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+        },
+        "source": "explicit_post",
+        "evidence": "Offending SQL provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "ACCESS EXCLUSIVE lock",
+        "value": {
+          "lock_type": "ACCESS EXCLUSIVE"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Post mentions lock contention and PostgreSQL documentation confirms this lock type for ALTER TABLE.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Idle transaction blocking",
+        "value": {
+          "state": "idle in transaction"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Post suggests idle transactions holding weak locks as a likely cause.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "Idle transactions are present during the reproduction.",
+      "No other DDL operations are performed concurrently."
+    ],
+    "unknowns": [
+      "Exact lock queue behavior in PostgreSQL 9.4.5 under synthetic conditions.",
+      "Impact of concurrent read operations during reproduction."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "Synthetic reproduction of lock contention is feasible by simulating idle transactions and executing the ALTER TABLE statement.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact production environment state during the incident."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_132851_database_frozen_on_al_a3",
+    "requirements": [
+      "PostgreSQL 9.4 or compatible environment"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_132851_database_frozen_on_al_a3",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) NOT NULL, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL NOT NULL, PRIMARY KEY (rut));"
+    ],
+    "generation_sql": [
+      "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo) SELECT 'rut_' || n, 'nombre_' || n, 'razon_' || n, 'direccion_' || n, 'comuna_' || n, 'ciudad_' || n, 'CL', true FROM generate_series(1, {row_count}) n;"
+    ],
+    "tables": [
+      {
+        "name": "cliente",
+        "purpose": "Simulate the table structure and data distribution relevant to the incident.",
+        "target_rows": 1000,
+        "distribution_notes": "Uniform distribution of rows with unique primary keys."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "cliente": 1000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "cliente"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM cliente WHERE rut = 'rut_1';",
+        "objective": "Verify basic table access and lock behavior.",
+        "expected_evidence": [
+          "Query executes successfully without contention."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 10000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "BEGIN; SELECT * FROM cliente WHERE rut = 'rut_1'; -- Simulate idle transaction",
+      "ALTER TABLE cliente ADD COLUMN topicos VARCHAR(20)[];"
+    ],
+    "concurrency": 2,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database freeze observed during ALTER TABLE.",
+      "Idle transaction blocks ALTER TABLE indefinitely."
+    ],
+    "symptom_evidence": [
+      "ALTER TABLE queued behind idle transaction.",
+      "Login operations blocked during reproduction."
+    ],
+    "mechanism_evidence": [
+      "ACCESS EXCLUSIVE lock contention observed.",
+      "Idle transaction holds weak lock indefinitely."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "lock_contention",
+    "target_database": "post_retry_blocking_132851_database_frozen_on_al_a3",
+    "dba_description": "Simulate lock contention during ALTER TABLE due to idle transactions.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_132851_database_frozen_on_al_a3;"
+                },
+                {
+                  "sql": "CREATE TABLE cliente (rut VARCHAR(30) NOT NULL, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL NOT NULL, PRIMARY KEY (rut));"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "lock_contention"
+      }
+    },
+    {
+      "task_id": "simulate_lock_contention",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "BEGIN; SELECT * FROM cliente WHERE rut = 'rut_1'; ALTER TABLE cliente ADD COLUMN topicos VARCHAR(20)[];",
+          "concurrency": 2,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention_observed": true
+      },
+      "success_criteria": {
+        "symptoms_reproduced": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "lock_contention"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "simulate_lock_contention"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident mechanism involves lock contention during ALTER TABLE due to idle transactions holding weak locks. Synthetic reproduction is feasible by simulating idle transactions and executing the ALTER TABLE statement concurrently."
+}

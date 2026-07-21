@@ -1,0 +1,176 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Concurrent UPDATE statements on a single row in a small table take minutes to complete.",
+    "symptoms": [
+      "Long execution times for concurrent UPDATE statements.",
+      "Exclusive locks observed on the table.",
+      "No deadlocks, but significant contention."
+    ],
+    "mechanism": "Row-level locking contention due to multiple concurrent updates on the same row.",
+    "facts": [
+      {
+        "key": "table_schema",
+        "value": {
+          "table_name": "host_scan_complete_log_counts",
+          "columns": [
+            {
+              "name": "scan_uuid",
+              "type": "uuid",
+              "constraints": [
+                "not null"
+              ]
+            },
+            {
+              "name": "num_shards_completed",
+              "type": "numeric",
+              "constraints": [
+                "not null",
+                "default 0"
+              ]
+            }
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Schema provided in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "update_pattern",
+        "value": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1",
+        "source": "explicit_post",
+        "evidence": "SQL provided in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "lock_analysis",
+        "value": "Exclusive locks observed on the table during concurrent updates.",
+        "source": "explicit_post",
+        "evidence": "Lock analysis query output provided in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "concurrent_nodes",
+        "value": "A few hundred nodes perform updates concurrently.",
+        "source": "explicit_post",
+        "evidence": "Description of workload in the DBA post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The database uses default isolation levels (likely READ COMMITTED or REPEATABLE READ).",
+      "The workload involves frequent updates to the same row identified by scan_uuid."
+    ],
+    "unknowns": [
+      "Exact PostgreSQL version and configuration.",
+      "Whether any connection pooling or retry logic is in place."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database 'post_retry_blocking_284397_concurrent_upda_r450040_a3' does not exist, preventing schema creation and reproduction.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database environment is unavailable."
+    ],
+    "confidence": 1.0
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_284397_concurrent_upda_r450040_a3",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_284397_concurrent_upda_r450040_a3",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+    ],
+    "generation_sql": [
+      "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) SELECT gen_random_uuid(), 0 FROM generate_series(1, 1)"
+    ],
+    "tables": [
+      {
+        "name": "host_scan_complete_log_counts",
+        "purpose": "Primary table for reproducing row-level locking contention.",
+        "target_rows": 1,
+        "distribution_notes": "Single-row table to simulate contention."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "host_scan_complete_log_counts": 1
+      },
+      "value_skew": {},
+      "predicate_selectivity": {
+        "scan_uuid = <value>": 1.0
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "host_scan_complete_log_counts"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = gen_random_uuid()",
+        "objective": "Verify that the table and data are correctly set up for contention testing.",
+        "expected_evidence": [
+          "Query returns the single row in the table.",
+          "Query plan shows a sequential scan due to the lack of an index."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1,
+      "max_rows": 1,
+      "growth_factor": 2.0,
+      "max_rounds": 1
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Reproduced contention on the single row.",
+      "Observed exclusive locks and long query durations."
+    ],
+    "symptom_evidence": [
+      "Long query durations for concurrent updates.",
+      "Exclusive locks observed in pg_locks."
+    ],
+    "mechanism_evidence": [
+      "Row-level locking contention due to concurrent updates on the same row."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Row-level locking contention",
+    "target_database": "post_retry_blocking_284397_concurrent_upda_r450040_a3",
+    "dba_description": "Concurrent UPDATE statements of single row in small table take minutes.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "What is the exact PostgreSQL version and configuration?",
+    "Is there any connection pooling or retry logic in place?"
+  ],
+  "rationale": "The incident involves row-level locking contention due to concurrent updates on the same row in a small table. The target database does not exist, which blocks the ability to reproduce the issue. The schema and data generation plan are designed to simulate the described contention scenario, but the reproduction cannot proceed without a valid database environment."
+}

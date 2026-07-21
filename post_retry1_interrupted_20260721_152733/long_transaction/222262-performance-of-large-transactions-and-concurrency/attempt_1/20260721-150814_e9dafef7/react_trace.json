@@ -1,0 +1,62 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_long_transaction_222262_perform_r694580_a1"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_long_transaction_222262_perform_r694580_a1'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"postgresql\",\n    \"dbms_version\": null,\n    \"summary\": \"Investigating performance implications and concurrency behavior of large transactions in PostgreSQL.\",\n    \"symptoms\": [\n      \"Blocked transactions due to row-level locks.\",\n      \"Potential serialization errors in higher isolation levels.\"\n    ],\n    \"mechanism\": \"PostgreSQL's MVCC model and transaction isolation levels dictate how reads and writes interact during large transactions.\",\n    \"facts\": [\n      {\n        \"key\": \"MVCC model\",\n        \"value\": {\n          \"description\": \"PostgreSQL uses Multiversion Concurrency Control (MVCC) to ensure data consistency.\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"PostgreSQL documentation cited in the DBA post.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"Transaction isolation levels\",\n        \"value\": {\n          \"description\": \"Higher isolation levels may lead to serialization errors.\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"PostgreSQL documentation cited in the DBA post.\",\n        \"confidence\": 1.0\n      },\n      {\n        \"key\": \"Blocked transactions\",\n        \"value\": {\n          \"description\": \"Transactions attempting to update rows locked by another transaction are blocked until the lock is released.\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Example provided in the DBA post.\",\n        \"confidence\": 1.0\n      }\n    ],\n    \"assumptions\": [\n      \"The target database uses PostgreSQL 9.3 or a compatible version.\",\n      \"The synthetic data will mimic the row-level locking behavior observed in the example.\"\n    ],\n    \"unknowns\": [\n      \"Exact schema and data distribution of the production environment.\",\n      \"Specific workload patterns that trigger blocking or serialization errors.\"\n    ],\n    \"confidence\": 0.9\n  },\n  \"feasibility\": {\n    \"level\": \"mechanism\",\n    \"rationale\": \"PostgreSQL adapter is available, and the incident mechanism can be reproduced using synthetic data. However, the target database does not exist, requiring setup.\",\n    \"missing_capabilities\": [],\n    \"unmatched_conditions\": [\"Target database does not exist.\"],\n    \"confidence\": 0.8\n  },\n  \"environment_spec\": {\n    \"dbms\": \"postgresql\",\n    \"database\": \"post_retry_long_transaction_222262_perform_r694580_a1\",\n    \"requirements\": [\"Dedicated test database setup\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_long_transaction_222262_perform_r694580_a1\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);\"\n    ],\n    \"generation_sql\": [\n      \"INSERT INTO tools (description) SELECT CONCAT('tool_', n) FROM generate_series(1, {row_count}) AS n;\"\n    ],\n    \"tables\": [\n      {\n        \"name\": \"tools\",\n        \"purpose\": \"Primary table for simulating row-level locking and transaction behavior.\",\n        \"target_rows\": 100000,\n        \"distribution_notes\": \"Uniform distribution of rows with unique descriptions.\"\n      }\n    ],\n    \"constraints\": {\n      \"cardinality\": {\"tools\": 100000},\n      \"value_skew\": {},\n      \"predicate_selectivity\": {},\n      \"join_selectivity\": {}\n    },\n    \"analyze_tables\": [\"tools\"],\n    \"calibration_queries\": [\n      {\n        \"sql\": \"UPDATE tools SET description = 'updated_tool' WHERE id = 1;\",\n        \"objective\": \"Simulate a transaction that updates a single row and observe locking behavior.\",\n        \"expected_evidence\": [\n          \"Transaction acquires a row-level lock on the updated row.\",\n          \"Concurrent transactions attempting to update the same row are blocked.\"\n        ]\n      },\n      {\n        \"sql\": \"SELECT * FROM tools WHERE id = 1;\",\n        \"objective\": \"Verify that reads are not blocked by the update transaction.\",\n        \"expected_evidence\": [\n          \"Query returns the old value of the row until the transaction commits.\"\n        ]\n      }\n    ],\n    \"scale_strategy\": {\n      \"in"
+  },
+  {
+    "step": "final_validation",
+    "event": "canonicalized_blueprint",
+    "changes": [
+      "removed non-read-only data_spec.calibration_queries[0]"
+    ]
+  }
+]

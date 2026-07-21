@@ -1,0 +1,37 @@
+{
+  "database": "post_retry_blocking_129302_unpredicatable_r599630_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS Communication (id INT IDENTITY PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX));",
+    "CREATE NONCLUSTERED INDEX IF NOT EXISTS idx_comm_action ON Communication(comm_action);",
+    "CREATE NONCLUSTERED INDEX IF NOT EXISTS idx_comm_channelid ON Communication(comm_channelid);"
+  ],
+  "generation_sql": [
+    "INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT 'Action' + CAST(ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS NVARCHAR), ABS(CHECKSUM(NEWID()) % 100), REPLICATE('A', 100) FROM master.dbo.spt_values WHERE type = 'P' AND number <= {row_count};"
+  ],
+  "tables": [
+    {
+      "name": "Communication",
+      "purpose": "Primary table to simulate the insert performance issue.",
+      "target_rows": 8000000,
+      "distribution_notes": "Simulates a large table with multiple indexes."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "Communication": 8000000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "Communication"
+  ],
+  "calibration_queries": [],
+  "scale_strategy": {
+    "initial_rows": 1000000,
+    "max_rows": 8000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

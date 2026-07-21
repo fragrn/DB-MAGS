@@ -1,0 +1,133 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "High CPU usage in MySQL database during benchmarking due to inefficient queries, lack of indexes, and potential contention.",
+    "symptoms": [
+      "High CPU usage",
+      "Low query cache efficiency",
+      "High number of joins performed without indexes",
+      "High connection usage"
+    ],
+    "mechanism": "Inefficient query execution due to missing indexes, suboptimal query cache configuration, and potential contention points.",
+    "facts": [
+      {
+        "key": "High CPU usage observed during benchmarking",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The DBA reported high CPU usage during benchmarking with 5 vCPUs and 4GB of memory.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Joins performed without indexes",
+        "value": {
+          "count": 6782
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output indicates 6782 joins performed without indexes.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Query cache efficiency is low",
+        "value": {
+          "efficiency": "7.8%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output shows query cache efficiency at 7.8%.",
+        "confidence": 0.5
+      },
+      {
+        "key": "High connection usage",
+        "value": {
+          "usage": "100% (152/151)"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output indicates 100% connection usage.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database schema and workload involve complex joins and read-heavy operations.",
+      "The benchmarking workload is representative of real-world usage.",
+      "The reported configuration and MySQLTuner output are accurate and complete."
+    ],
+    "unknowns": [
+      "Exact schema and workload details.",
+      "Specific queries causing high CPU usage.",
+      "Whether contention issues are present."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database 'post_retry_resource_limitation_130884_mysq_r122329_a4' does not exist, preventing further inspection and reproduction.",
+    "missing_capabilities": [
+      "Target database does not exist."
+    ],
+    "unmatched_conditions": [],
+    "confidence": 1.0
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_130884_mysq_r122329_a4",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_130884_mysq_r122329_a4",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High CPU usage due to inefficient queries and contention",
+    "target_database": "post_retry_resource_limitation_130884_mysq_r122329_a4",
+    "dba_description": "High CPU usage during benchmarking due to inefficient queries, lack of indexes, and potential contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "What is the exact schema and workload?",
+    "What are the specific queries causing high CPU usage?",
+    "Are there contention issues present?"
+  ],
+  "rationale": "The target database does not exist, blocking further progress. The incident involves high CPU usage likely caused by inefficient queries, lack of indexes, and potential contention. Synthetic reproduction would require schema and workload details, which are currently unavailable."
+}

@@ -1,0 +1,43 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance in SQL Server due to blocking behavior and excessive indexes.",
+  "symptoms": [
+    "Single record insert takes several minutes.",
+    "Blocking session IDs appear in sys.dm_exec_requests but the blocker session is not active.",
+    "Wait type observed is LCK_M_S (shared lock)."
+  ],
+  "mechanism": "Blocking caused by uncommitted transactions holding locks, exacerbated by excessive indexes.",
+  "facts": [
+    {
+      "key": "blocking_session_id observed in sys.dm_exec_requests",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions blocked sessions with session IDs that appear inactive.",
+      "confidence": 0.5
+    },
+    {
+      "key": "LCK_M_S wait type observed",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions LCK_M_S as the wait type.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Table has 34 indexes",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions the table has 34 indexes despite being in an OLTP system.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The blocking behavior is caused by uncommitted transactions holding locks.",
+    "Excessive indexes contribute to the poor insert performance."
+  ],
+  "unknowns": [
+    "Exact schema of the table and indexes.",
+    "Whether the blocking sessions are caused by application behavior or SQL Server configuration."
+  ],
+  "confidence": 0.85
+}

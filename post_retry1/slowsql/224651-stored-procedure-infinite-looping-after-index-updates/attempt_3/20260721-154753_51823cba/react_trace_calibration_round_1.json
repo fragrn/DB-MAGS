@@ -1,0 +1,33 @@
+[
+  {
+    "step": 1,
+    "tool": "explain_sql",
+    "arguments": {
+      "database": "post_retry_slowsql_224651_stored_procedure_r73811_a3",
+      "query_id": "calibration_query_1",
+      "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY'"
+    },
+    "result": {
+      "dbms": "sqlserver",
+      "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY'",
+      "plan": [
+        "StmtText                                            ",
+        "----------------------------------------------------",
+        "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY'  ",
+        "",
+        "(1 rows affected)",
+        "StmtText                                                                                                                                                                                                                                            ",
+        "----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------",
+        "  |--Clustered Index Scan(OBJECT:([post_retry_slowsql_224651_stored_procedure_r73811_a3].[dbo].[EDI_PSI_HDR].[PK__EDI_PSI___224C8BEF105D377C]), WHERE:([post_retry_slowsql_224651_stored_procedure_r73811_a3].[dbo].[EDI_PSI_HDR].[V_STATUS]=[@1])) ",
+        "",
+        "(1 rows affected)"
+      ],
+      "raw": "StmtText                                            \n----------------------------------------------------\nSELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY'  \n\n(1 rows affected)\nStmtText                                                                                                                                                                                                                                            \n----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n  |--Clustered Index Scan(OBJECT:([post_retry_slowsql_224651_stored_procedure_r73811_a3].[dbo].[EDI_PSI_HDR].[PK__EDI_PSI___224C8BEF105D377C]), WHERE:([post_retry_slowsql_224651_stored_procedure_r73811_a3].[dbo].[EDI_PSI_HDR].[V_STATUS]=[@1])) \n\n(1 rows affected)\n"
+    }
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"decision\": \"accept\",\n  \"reasoning\": \"The observed plan supports the query's objective of verifying that the data generation produces rows with the expected status. The plan shows a Clustered Index Scan on the `EDI_PSI_HDR` table with a filter on `V_STATUS = 'READY'`, which aligns with the expected evidence. The scan ensures that all rows with the specified status are retrieved, and the use of the clustered index indicates that the table's primary key structure is being utilized.\",\n  \"query_assessments\": [\n    {\n      \"query_id\": \"calibration_query_1\",\n      \"sql\": \"SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY'\",\n      \"matched\": true,\n      \"observed_plan_summary\": \"Clustered Index Scan on EDI_PSI_HDR with a filter on V_STATUS = 'READY'.\",\n      \"supporting_evidence\": [\n        \"The plan examines the table and applies the filter on V_STATUS = 'READY'.\",\n        \"The Clustered Index Scan ensures all relevant rows are retrieved.\",\n        \"The plan aligns with the expected behavior of verifying the data generation.\"\n      ],\n      \"discrepancies\": []\n    }\n  ],\n  \"concerns\": [],\n  \"recommended_changes\": [],\n  \"missing_information\": []\n}"
+  }
+]

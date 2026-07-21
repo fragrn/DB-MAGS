@@ -1,0 +1,124 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "High percentage of temporary tables created on disk in MySQL.",
+    "symptoms": [
+      "30% of temporary tables created on disk.",
+      "Observed reduction in disk-based temporary tables after increasing `tmp_table_size` and `max_heap_table_size`.",
+      "Another system with the same database shows only 1% disk-based temporary tables."
+    ],
+    "mechanism": "MySQL creates temporary tables on disk when certain conditions are met, such as the presence of TEXT/BLOB fields, exceeding memory limits for temporary tables, or using large columns with GROUP BY, UNION, or ORDER BY.",
+    "facts": [
+      {
+        "key": "tmp_table_size and max_heap_table_size increased to 200M",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The DBA explicitly mentioned increasing these settings to reduce disk-based temporary tables.",
+        "confidence": 1.0
+      },
+      {
+        "key": "30% of temporary tables created on disk",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The DBA reported this statistic from MySQL Tuner.",
+        "confidence": 1.0
+      },
+      {
+        "key": "TEXT/BLOB fields lead to disk-based temporary tables",
+        "value": {},
+        "source": "post_hypothesis",
+        "evidence": "The answer mentions that TEXT/BLOB fields cannot be handled by MEMORY tables.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Another system with the same database shows 1% disk-based temporary tables",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The DBA compared the problematic system with another system.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The problematic queries involve GROUP BY, UNION, or ORDER BY with large columns or TEXT/BLOB fields.",
+      "The database schema includes TEXT/BLOB fields or large VARCHAR columns."
+    ],
+    "unknowns": [
+      "The exact schema of the database.",
+      "The specific queries causing the issue.",
+      "Whether the workload differs between the two systems."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema inspection or synthetic data generation.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database 'post_retry_resource_limitation_17677_why_i_r711090_a1' not found."
+    ],
+    "confidence": 1.0
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_i_r711090_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_i_r711090_a1",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High percentage of temporary tables created on disk",
+    "target_database": "post_retry_resource_limitation_17677_why_i_r711090_a1",
+    "dba_description": "30% of temporary tables are created on disk despite increasing `tmp_table_size` and `max_heap_table_size`. Another system with the same database shows only 1%.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "What is the schema of the database?",
+    "What queries are causing the creation of disk-based temporary tables?"
+  ],
+  "rationale": "The database does not exist, blocking further steps. Synthetic data generation and calibration queries cannot proceed without schema details."
+}

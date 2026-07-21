@@ -1,0 +1,74 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Slow SELECT query on sys.databases with OBJECT_ID checks and filtering.",
+  "symptoms": [
+    "Query execution takes 9 seconds on a local dev machine with 4 databases.",
+    "Execution plan shows clustered index seeks consuming significant resources."
+  ],
+  "mechanism": "Potential blocking due to long-running DDL transactions or inefficiencies in querying OBJECT_ID across databases.",
+  "facts": [
+    {
+      "key": "query_execution_time",
+      "value": {
+        "before_filter": "21 seconds",
+        "after_filter": "9 seconds"
+      },
+      "source": "explicit_post",
+      "evidence": "Query execution time reported in the post.",
+      "confidence": 0.5
+    },
+    {
+      "key": "execution_plan",
+      "value": {
+        "clustered_index_seek_percentages": [
+          22,
+          24,
+          48
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Execution plan details provided in the post.",
+      "confidence": 0.5
+    },
+    {
+      "key": "query_structure",
+      "value": {
+        "uses_OBJECT_ID": true,
+        "filters_on_state_desc": true,
+        "filters_on_name": true
+      },
+      "source": "explicit_post",
+      "evidence": "Query structure described in the post.",
+      "confidence": 0.5
+    },
+    {
+      "key": "environment",
+      "value": {
+        "local_dev_machine": true,
+        "4_databases": true
+      },
+      "source": "explicit_post",
+      "evidence": "Environment details provided in the post.",
+      "confidence": 0.5
+    },
+    {
+      "key": "index_control",
+      "value": {
+        "no_control_over_indexes": true
+      },
+      "source": "explicit_post",
+      "evidence": "DBA explicitly states no control over indexes.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The issue is reproducible in a synthetic environment.",
+    "The database contains at least one table named '_LOOK_UP_TABLE' in one of the user databases."
+  ],
+  "unknowns": [
+    "Exact schema of the databases.",
+    "Whether there are long-running DDL transactions in the environment."
+  ],
+  "confidence": 0.8
+}

@@ -1,0 +1,51 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "Investigating the performance and concurrency behavior of large transactions in PostgreSQL.",
+  "symptoms": [
+    "Blocked transactions when two sessions attempt to update the same row.",
+    "Potential deadlocks or serialization errors depending on isolation levels."
+  ],
+  "mechanism": "PostgreSQL's MVCC (Multiversion Concurrency Control) ensures that reads do not block writes and vice versa, but concurrent writes to the same rows can lead to blocking or errors.",
+  "facts": [
+    {
+      "key": "MVCC behavior",
+      "value": {
+        "reads_do_not_block_writes": true,
+        "writes_do_not_block_reads": true
+      },
+      "source": "explicit_post",
+      "evidence": "PostgreSQL documentation and user-provided examples.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Blocking behavior",
+      "value": {
+        "concurrent_writes_to_same_row": "blocked until the first transaction commits or rolls back"
+      },
+      "source": "explicit_post",
+      "evidence": "User-provided example with two sessions attempting to update the same row.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Transaction isolation levels",
+      "value": {
+        "read_committed": "second transaction waits for the first to finish",
+        "serializable": "may result in serialization errors"
+      },
+      "source": "explicit_post",
+      "evidence": "PostgreSQL documentation and user-provided examples.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The database is configured with the default isolation level (Read Committed).",
+    "The table has appropriate indexes to support the update operation efficiently."
+  ],
+  "unknowns": [
+    "The exact schema of the table being updated.",
+    "The distribution of data within the table.",
+    "The specific isolation level configured in the database."
+  ],
+  "confidence": 0.9
+}

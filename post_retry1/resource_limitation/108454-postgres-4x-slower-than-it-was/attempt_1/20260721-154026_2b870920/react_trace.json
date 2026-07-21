@@ -1,0 +1,55 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 1,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_resource_limitation_108454_post_r626589_a1"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_resource_limitation_108454_post_r626589_a1'\")"
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"postgresql\",\n    \"dbms_version\": null,\n    \"summary\": \"PostgreSQL performance degradation observed, with operations taking 4x longer than before.\",\n    \"symptoms\": [\n      \"Database backup duration increased from ~1 hour to ~4 hours.\",\n      \"Replication sync duration increased from ~1 hour to ~4 hours.\",\n      \"Queries that previously took seconds now hang for days unless work_mem is increased.\",\n      \"High memory usage and swapping observed on server B.\"\n    ],\n    \"mechanism\": \"Potential misconfiguration or resource contention affecting PostgreSQL performance.\",\n    \"facts\": [\n      {\n        \"key\": \"PostgreSQL version and settings\",\n        \"value\": {\n          \"version\": \"PostgreSQL 9.4.4\",\n          \"settings\": {\n            \"shared_buffers\": \"24GB\",\n            \"work_mem\": \"96MB\",\n            \"effective_cache_size\": \"128GB\",\n            \"checkpoint_segments\": \"256\",\n            \"checkpoint_timeout\": \"30min\"\n          }\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Post includes PostgreSQL version and configuration details.\",\n        \"confidence\": 0.9\n      },\n      {\n        \"key\": \"Linux settings\",\n        \"value\": {\n          \"transparent_hugepages\": \"enabled\",\n          \"vm.dirty_background_ratio\": \"10\",\n          \"scheduler\": \"cfq\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Post includes Linux kernel settings and disk scheduler configuration.\",\n        \"confidence\": 0.8\n      },\n      {\n        \"key\": \"Performance degradation\",\n        \"value\": {\n          \"backup_duration\": \"4x increase\",\n          \"query_duration\": \"days instead of seconds\",\n          \"replication sync\": \"4x increase\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Post describes observed performance issues.\",\n        \"confidence\": 0.9\n      },\n      {\n        \"key\": \"Server B memory usage\",\n        \"value\": {\n          \"swap_usage\": \"high\",\n          \"free_memory\": \"low\"\n        },\n        \"source\": \"explicit_post\",\n        \"evidence\": \"Post includes memory usage statistics for server B.\",\n        \"confidence\": 0.8\n      }\n    ],\n    \"assumptions\": [\n      \"The performance degradation is related to PostgreSQL configuration or Linux kernel settings.\",\n      \"Transparent Huge Pages and cfq scheduler may be contributing factors.\"\n    ],\n    \"unknowns\": [\n      \"Exact root cause of the performance degradation.\",\n      \"Impact of other workloads on the database performance.\"\n    ],\n    \"confidence\": 0.7\n  },\n  \"feasibility\": {\n    \"level\": \"blocked\",\n    \"rationale\": \"The target database 'post_retry_resource_limitation_108454_post_r626589_a1' does not exist, preventing setup and reproduction.\",\n    \"missing_capabilities\": [\"Database environment for reproduction\"],\n    \"unmatched_conditions\": [\"Database existence\"],\n    \"confidence\": 0.9\n  },\n  \"environment_spec\": {\n    \"dbms\": \"postgresql\",\n    \"database\": \"post_retry_resource_limitation_108454_post_r626589_a1\",\n    \"requirements\": [\"Dedicated test database for reproduction\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_resource_limitation_108454_post_r626589_a1\",\n    \"schema_sql\": [],\n    \"generation_sql\": [],\n    \"tables\": [],\n    \"constraints\": {\n      \"cardinality\": {},\n      \"value_skew\": {},\n      \"predicate_selectivity\": {},\n      \"join_selectivity\": {}\n    },\n    \"analyze_tables\": [],\n    \"calibration_queries\": [],\n    \"scale_strategy\": {\n      \"initial_rows\": 10000,\n      \"max_rows\": 1000000,\n      \"growth_factor\": 2.0,\n      \"max_rounds\": 3\n    }\n  },\n  \"workload_spec\": {\n    \"enabled\": false,\n    \"method\": \"none\",\n    \"queries\": [],\n    \"concurrency\": 1,\n    \"duration_sec\": 30\n  },\n  \"evaluation_spec\": {\n    \"validation_criteria\": [\"Database exists and is accessible.\"],\n    \"symptom_evidence\": [],\n    \"mechanism_evidence\": [],\n    \"minimum_plan_similarity\": 0.6\n  },\n  \"experiment_request\": {\n    \"target_anomaly\": \"PostgreSQL performance degrad"
+  }
+]

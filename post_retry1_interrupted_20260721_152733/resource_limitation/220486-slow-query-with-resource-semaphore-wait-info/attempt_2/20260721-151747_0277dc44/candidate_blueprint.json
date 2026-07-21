@@ -1,0 +1,237 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Slow query execution with RESOURCE_SEMAPHORE waits due to memory pressure and parallelism.",
+    "symptoms": [
+      "RESOURCE_SEMAPHORE waits observed during high user connection counts.",
+      "Slow query execution exacerbated by parallel query execution.",
+      "Memory grants affecting query runtimes."
+    ],
+    "mechanism": "RESOURCE_SEMAPHORE waits occur when queries request memory grants that exceed available resources, often exacerbated by parallelism and high concurrency.",
+    "facts": [
+      {
+        "key": "RESOURCE_SEMAPHORE waits observed",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions RESOURCE_SEMAPHORE waits during sp_whoisactive.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Parallel query execution contributing to waits",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions CXCONSUMER waits and MAXDOP set to 0.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Memory grants affecting query runtimes",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions forced grants in sys.dm_exec_query_resource_semaphores.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "Parallelism is a significant contributor to RESOURCE_SEMAPHORE waits.",
+      "Memory pressure is caused by high concurrency and large memory grants."
+    ],
+    "unknowns": [
+      "Exact workload characteristics causing memory pressure.",
+      "Impact of NUMA configuration on memory grants and waits."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction focuses on the mechanism of RESOURCE_SEMAPHORE waits due to memory pressure and parallelism, which can be simulated using synthetic data and workload.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_220486_slow_r267920_a2",
+    "requirements": [
+      "Dedicated SQL Server test database"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_220486_slow_r267920_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "main_table",
+        "purpose": "Primary synthetic table to simulate memory grants and parallelism.",
+        "target_rows": 100000,
+        "distribution_notes": "Skewed data distribution to simulate memory pressure and parallelism."
+      },
+      {
+        "name": "ref_table",
+        "purpose": "Reference table for joins and filters.",
+        "target_rows": 100,
+        "distribution_notes": "Small table to simulate many-to-one join behavior."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "main_table": 100000,
+        "ref_table": 100
+      },
+      "value_skew": {
+        "main_table.category": "rare values are sparse and intentionally positioned by the agent"
+      },
+      "predicate_selectivity": {
+        "main_table.category = 'rare'": 0.001
+      },
+      "join_selectivity": {
+        "main_table.ref_id = ref_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "main_table",
+      "ref_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan examines the table or index range relevant to the suspected mechanism.",
+          "The predicate or join behavior needed by the reproduction is visible in EXPLAIN.",
+          "The plan evidence distinguishes this mechanism from a trivial point lookup."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10"
+    ],
+    "concurrency": 20,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "RESOURCE_SEMAPHORE waits observed during workload execution.",
+      "Query execution times increase with higher concurrency.",
+      "Memory grants visible in sys.dm_exec_query_resource_semaphores."
+    ],
+    "symptom_evidence": [
+      "RESOURCE_SEMAPHORE waits observed in SQL Server wait stats.",
+      "Slow query execution under high concurrency."
+    ],
+    "mechanism_evidence": [
+      "Memory grants causing RESOURCE_SEMAPHORE waits.",
+      "Parallel query execution contributing to memory pressure."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "RESOURCE_SEMAPHORE waits due to memory pressure and parallelism.",
+    "target_database": "post_retry_resource_limitation_220486_slow_r267920_a2",
+    "dba_description": "Simulate RESOURCE_SEMAPHORE waits caused by memory pressure and parallel query execution.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r267920_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_220486_slow_r267920_a2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial database setup."
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r267920_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema creation for synthetic data."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "populate_data"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating RESOURCE_SEMAPHORE waits caused by memory pressure and parallelism using synthetic data and workload in a dedicated SQL Server test database."
+}

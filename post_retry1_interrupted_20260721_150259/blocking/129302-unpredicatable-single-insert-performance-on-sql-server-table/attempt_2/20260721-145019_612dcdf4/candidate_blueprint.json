@@ -1,0 +1,206 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Unpredictable single insert performance in SQL Server due to blocking behavior and excessive indexes.",
+    "symptoms": [
+      "Single record insert takes several minutes.",
+      "Blocking session IDs appear in sys.dm_exec_requests but the blocker session is not active.",
+      "Wait type observed is LCK_M_S (shared lock)."
+    ],
+    "mechanism": "Blocking caused by uncommitted transactions holding locks, exacerbated by excessive indexes.",
+    "facts": [
+      {
+        "key": "blocking_session_id observed in sys.dm_exec_requests",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post mentions blocked sessions with session IDs that appear inactive.",
+        "confidence": 0.5
+      },
+      {
+        "key": "LCK_M_S wait type observed",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post explicitly mentions LCK_M_S as the wait type.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Table has 34 indexes",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "The post mentions the table has 34 indexes despite being in an OLTP system.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The blocking behavior is caused by uncommitted transactions holding locks.",
+      "Excessive indexes contribute to the poor insert performance."
+    ],
+    "unknowns": [
+      "Exact schema of the table and indexes.",
+      "Whether the blocking sessions are caused by application behavior or SQL Server configuration."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction of blocking behavior and excessive index impact is feasible using synthetic data and controlled experiments.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and index definitions are unknown."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_blocking_129302_unpredicatable_r619598_a2",
+    "requirements": [
+      "Dedicated test database",
+      "SQL Server-compatible environment"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_129302_unpredicatable_r619598_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS Communication (id INT IDENTITY PRIMARY KEY, comm_action NVARCHAR(255), comm_channelid INT, payload NVARCHAR(MAX))",
+      "CREATE INDEX IF NOT EXISTS idx_comm_action ON Communication(comm_action)",
+      "CREATE INDEX IF NOT EXISTS idx_comm_channelid ON Communication(comm_channelid)",
+      "CREATE INDEX IF NOT EXISTS idx_payload ON Communication(payload)"
+    ],
+    "generation_sql": [
+      "INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT CONCAT('Action_', n), n % 10, CONCAT('Payload_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers"
+    ],
+    "tables": [
+      {
+        "name": "Communication",
+        "purpose": "Primary table to reproduce blocking and index-related performance issues.",
+        "target_rows": 8000000,
+        "distribution_notes": "Simulates a large OLTP table with excessive indexes and varied data distribution."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "Communication": 8000000
+      },
+      "value_skew": {
+        "Communication.comm_channelid": "Uniform distribution across 10 values."
+      },
+      "predicate_selectivity": {
+        "Communication.comm_channelid = 5": 0.1
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "Communication"
+    ],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 8000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Blocking session ID is observed during insert.",
+      "Insert performance degradation is measurable."
+    ],
+    "symptom_evidence": [
+      "Insert takes several minutes.",
+      "Blocking session ID appears in sys.dm_exec_requests."
+    ],
+    "mechanism_evidence": [
+      "Excessive indexes contribute to degraded insert performance.",
+      "Uncommitted transactions hold locks causing blocking."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocking and degraded insert performance due to excessive indexes and uncommitted transactions.",
+    "target_database": "post_retry_blocking_129302_unpredicatable_r619598_a2",
+    "dba_description": "Reproduce blocking and degraded insert performance in SQL Server due to excessive indexes and uncommitted transactions.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_129302_unpredicatable_r619598_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_129302_unpredicatable_r619598_a2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup"
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO Communication (comm_action, comm_channelid, payload) SELECT CONCAT('Action_', n), n % 10, CONCAT('Payload_', n) FROM (SELECT TOP 100000 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "rows_inserted": 100000
+      },
+      "success_criteria": {
+        "rows_inserted": 100000
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data population"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "populate_data"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on blocking behavior and excessive index impact, which are feasible with synthetic data and controlled experiments."
+}

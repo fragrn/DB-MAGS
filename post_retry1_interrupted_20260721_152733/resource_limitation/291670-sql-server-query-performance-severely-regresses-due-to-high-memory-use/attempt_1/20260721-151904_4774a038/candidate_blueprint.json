@@ -1,0 +1,275 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Query performance degradation due to high memory usage and parameter sniffing in SQL Server.",
+    "symptoms": [
+      "Queries timeout for large accounts when SQL Server memory is full.",
+      "Restarting SQL Server resolves the issue temporarily.",
+      "SSMS executes the same query faster than the application.",
+      "High memory consumption and large disk reads during query execution."
+    ],
+    "mechanism": "Parameter sniffing and memory pressure lead to suboptimal query plans and resource contention.",
+    "facts": [
+      {
+        "key": "Memory pressure",
+        "value": {
+          "description": "Memory fills up, causing disk reads at low throughput."
+        },
+        "source": "explicit_post",
+        "evidence": "The post describes memory filling up and disk reads slowing down to 20MB/s.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Parameter sniffing",
+        "value": {
+          "description": "SSMS and application use different execution plans due to ARITHABORT setting."
+        },
+        "source": "explicit_post",
+        "evidence": "The post identifies ARITHABORT as a cause of different execution plans.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Query timeout",
+        "value": {
+          "description": "Large accounts timeout in the application but not in SSMS."
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions that large accounts timeout in the application but work in SSMS.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Execution plan differences",
+        "value": {
+          "description": "Execution plans differ between SSMS and application."
+        },
+        "source": "explicit_post",
+        "evidence": "The post describes execution plan differences due to ARITHABORT.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database schema and workload can be approximated using synthetic data.",
+      "The SQL Server instance is configured similarly to the one described in the post.",
+      "The issue can be reproduced in a local Azure SQL Edge environment."
+    ],
+    "unknowns": [
+      "Exact schema and data distribution of the original database.",
+      "Details of the stored procedure and its execution plan.",
+      "Specific indexes and their configurations."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The issue involves SQL Server-specific features like parameter sniffing and memory management, which can be approximated in the Azure SQL Edge environment. However, exact reproduction is not feasible due to the lack of the original schema and data.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and data distribution are unknown."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_resource_limitation_291670_sql_r344223_a1",
+    "requirements": [
+      "Azure SQL Edge compatibility for SQL Server 2019 features"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_291670_sql_r344223_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS Accounts (id INT PRIMARY KEY, name NVARCHAR(255), data_size INT, last_accessed DATETIME);",
+      "CREATE TABLE IF NOT EXISTS Notifications (id INT PRIMARY KEY, account_id INT, message NVARCHAR(MAX), created_at DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));",
+      "CREATE TABLE IF NOT EXISTS Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));"
+    ],
+    "generation_sql": [
+      "INSERT INTO Accounts (id, name, data_size, last_accessed) SELECT n, CONCAT('Account_', n), FLOOR(RAND() * 10000), DATEADD(DAY, -n % 365, GETDATE()) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+      "INSERT INTO Notifications (id, account_id, message, created_at) SELECT n, FLOOR(RAND() * {row_count}), CONCAT('Notification_', n), DATEADD(MINUTE, -n % 10000, GETDATE()) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+      "INSERT INTO Reports (id, account_id, received_at_utc) SELECT n, FLOOR(RAND() * {row_count}), DATEADD(MINUTE, -n % 10000, GETDATE()) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;"
+    ],
+    "tables": [
+      {
+        "name": "Accounts",
+        "purpose": "Represents customer accounts with varying data sizes.",
+        "target_rows": 1000,
+        "distribution_notes": "Simulates skewed access patterns and large accounts."
+      },
+      {
+        "name": "Notifications",
+        "purpose": "Stores notifications for accounts, with high cardinality.",
+        "target_rows": 100000,
+        "distribution_notes": "High cardinality with some accounts having many notifications."
+      },
+      {
+        "name": "Reports",
+        "purpose": "Stores reports associated with accounts, used in joins.",
+        "target_rows": 50000,
+        "distribution_notes": "Moderate cardinality with temporal sorting."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "Accounts": 1000,
+        "Notifications": 100000,
+        "Reports": 50000
+      },
+      "value_skew": {
+        "Accounts.data_size": "Some accounts have significantly larger data sizes."
+      },
+      "predicate_selectivity": {
+        "Accounts.id = ?": "Highly selective for specific accounts."
+      },
+      "join_selectivity": {
+        "Notifications.account_id = Accounts.id": "Many-to-one relationship."
+      }
+    },
+    "analyze_tables": [
+      "Accounts",
+      "Notifications",
+      "Reports"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT TOP 10 * FROM Notifications WHERE account_id = 1 ORDER BY created_at DESC;",
+        "objective": "Verify that the query plan uses the appropriate index and avoids full table scans.",
+        "expected_evidence": [
+          "The plan uses an index seek on Notifications.account_id.",
+          "The ORDER BY clause is supported by an index to avoid sorting in tempdb."
+        ]
+      },
+      {
+        "sql": "SELECT TOP 10 * FROM Reports WHERE account_id = 1 ORDER BY received_at_utc DESC;",
+        "objective": "Ensure the query plan uses an index for sorting and filtering.",
+        "expected_evidence": [
+          "The plan uses an index seek on Reports.account_id.",
+          "The ORDER BY clause is supported by an index to avoid sorting in tempdb."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query performance degrades as memory usage increases.",
+      "Restarting SQL Server temporarily resolves the issue.",
+      "Execution plans differ between SSMS and the application."
+    ],
+    "symptom_evidence": [
+      "Queries timeout for large accounts when memory is full.",
+      "SSMS executes the same query faster than the application."
+    ],
+    "mechanism_evidence": [
+      "Execution plans differ due to parameter sniffing.",
+      "Memory pressure leads to suboptimal query performance."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance degradation due to memory pressure and parameter sniffing.",
+    "target_database": "post_retry_resource_limitation_291670_sql_r344223_a1",
+    "dba_description": "Reproduce query performance regression caused by memory pressure and parameter sniffing in SQL Server.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r344223_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_291670_sql_r344223_a1;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Setup environment for reproduction"
+      }
+    },
+    {
+      "task_id": "populate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r344223_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS Accounts (id INT PRIMARY KEY, name NVARCHAR(255), data_size INT, last_accessed DATETIME);"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS Notifications (id INT PRIMARY KEY, account_id INT, message NVARCHAR(MAX), created_at DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Populate schema and data"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "populate_data"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident involves SQL Server-specific features like parameter sniffing and memory pressure. The synthetic data and schema are designed to approximate the described workload and reproduce the mechanism."
+}

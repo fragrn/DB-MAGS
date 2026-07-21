@@ -1,0 +1,238 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Excessive creation of on-disk temporary tables in MySQL.",
+    "symptoms": [
+      "High percentage of temporary tables created on disk.",
+      "Performance concerns due to disk I/O for temporary tables."
+    ],
+    "mechanism": "MySQL creates on-disk temporary tables when certain conditions are met, such as the presence of TEXT/BLOB fields, exceeding memory limits for temporary tables, or operations like GROUP BY and ORDER BY involving large columns.",
+    "facts": [
+      {
+        "key": "Temporary table creation conditions",
+        "value": {
+          "TEXT/BLOB fields": true,
+          "tmp_table_size and max_heap_table_size limits": true,
+          "Large columns in GROUP BY or ORDER BY": true
+        },
+        "source": "explicit_post",
+        "evidence": "MySQL documentation and DBA post explanation."
+      },
+      {
+        "key": "Configuration impact",
+        "value": {
+          "tmp_table_size": "200M",
+          "max_heap_table_size": "200M",
+          "table_open_cache": 125,
+          "table_definition_cache": 256
+        },
+        "source": "explicit_post",
+        "evidence": "DBA post configuration details."
+      },
+      {
+        "key": "Observed behavior",
+        "value": {
+          "30% of temporary tables created on disk": true,
+          "Reduction from 38% after increasing memory limits": true
+        },
+        "source": "explicit_post",
+        "evidence": "DBA post statistics."
+      }
+    ],
+    "assumptions": [
+      "The workload involves queries with GROUP BY, ORDER BY, or UNION operations.",
+      "Some tables may include TEXT/BLOB fields or large columns."
+    ],
+    "unknowns": [
+      "Exact schema of the database.",
+      "Specific queries causing the creation of on-disk temporary tables."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of on-disk temporary table creation can be reproduced by designing a schema and workload that meets the conditions described in the post.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_i_r346367_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_i_r346367_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS large_text_table (id INT PRIMARY KEY, large_text TEXT, ref_id INT, payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO large_text_table (id, large_text, ref_id, payload) SELECT n, REPEAT('A', 1000), 1 + MOD(n, 100), CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "large_text_table",
+        "purpose": "Primary table with TEXT fields to trigger on-disk temporary table creation.",
+        "target_rows": 100000,
+        "distribution_notes": "Contains TEXT fields and large columns to simulate the mechanism."
+      },
+      {
+        "name": "ref_table",
+        "purpose": "Reference table used for joins or filters in the workload.",
+        "target_rows": 100,
+        "distribution_notes": "Small table for many-to-one relationships."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "large_text_table": 100000,
+        "ref_table": 100
+      },
+      "value_skew": {
+        "large_text_table.large_text": "Uniform distribution of large text values."
+      },
+      "predicate_selectivity": {
+        "large_text_table.large_text LIKE 'A%'": 0.1
+      },
+      "join_selectivity": {
+        "large_text_table.ref_id = ref_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "large_text_table",
+      "ref_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT l.* FROM large_text_table l JOIN ref_table r ON r.id = l.ref_id WHERE l.large_text LIKE 'A%' ORDER BY l.id DESC LIMIT 10",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan examines the table or index range relevant to the suspected mechanism.",
+          "The predicate or join behavior needed by the reproduction is visible in EXPLAIN.",
+          "The plan evidence distinguishes this mechanism from a trivial point lookup."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "The percentage of on-disk temporary tables aligns with the expected mechanism.",
+      "EXPLAIN plans show the use of on-disk temporary tables under the described conditions."
+    ],
+    "symptom_evidence": [
+      "High percentage of on-disk temporary tables in EXPLAIN output."
+    ],
+    "mechanism_evidence": [
+      "TEXT/BLOB fields or large columns trigger on-disk temporary table creation.",
+      "Queries with GROUP BY, ORDER BY, or UNION operations contribute to the behavior."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Excessive on-disk temporary table creation",
+    "target_database": "post_retry_resource_limitation_17677_why_i_r346367_a1",
+    "dba_description": "Reproduce and analyze the conditions leading to a high percentage of on-disk temporary table creation in MySQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_i_r346367_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL tmp_table_size = 209715200"
+                },
+                {
+                  "sql": "SET GLOBAL max_heap_table_size = 209715200"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Configuration changes to simulate the mechanism."
+      }
+    },
+    {
+      "task_id": "create_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_i_r346367_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS large_text_table (id INT PRIMARY KEY, large_text TEXT, ref_id INT, payload VARCHAR(255))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema design to reproduce the mechanism."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "create_schema"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The mechanism of on-disk temporary table creation is well-documented and can be reproduced by designing a schema and workload that meets the described conditions. The experiment focuses on validating the mechanism and its impact on query plans."
+}

@@ -1,0 +1,135 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Excessive creation of temporary tables on disk in MySQL due to query patterns and configuration limits.",
+    "symptoms": [
+      "High percentage of temporary tables created on disk",
+      "Performance degradation for certain queries"
+    ],
+    "mechanism": "MySQL creates temporary tables on disk when memory-based limits (`tmp_table_size` and `max_heap_table_size`) are exceeded or when certain data types (e.g., TEXT/BLOB) are used.",
+    "facts": [
+      {
+        "key": "tmp_table_size",
+        "value": {
+          "current": "200M"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions tmp_table_size set to 200M.",
+        "confidence": 0.9
+      },
+      {
+        "key": "max_heap_table_size",
+        "value": {
+          "current": "200M"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions max_heap_table_size set to 200M.",
+        "confidence": 0.9
+      },
+      {
+        "key": "temporary table creation rate",
+        "value": {
+          "disk_percentage": 30
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions 30% of temporary tables created on disk.",
+        "confidence": 0.8
+      },
+      {
+        "key": "TEXT/BLOB fields",
+        "value": {
+          "impact": "forces disk-based temporary tables"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Answer explains TEXT/BLOB fields lead to disk-based temporary tables.",
+        "confidence": 0.7
+      }
+    ],
+    "assumptions": [
+      "Queries involve GROUP BY or ORDER BY operations with large result sets.",
+      "TEXT/BLOB fields are present in the schema."
+    ],
+    "unknowns": [
+      "Exact schema of the database",
+      "Query patterns causing temporary table creation"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema inspection or reproduction setup.",
+    "missing_capabilities": [
+      "Target database environment"
+    ],
+    "unmatched_conditions": [
+      "Database inspection failed due to missing database."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_i_r367780_a2",
+    "requirements": [
+      "Dedicated test database must exist"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_i_r367780_a2",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database must exist for reproduction setup."
+    ],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Excessive disk-based temporary table creation",
+    "target_database": "post_retry_resource_limitation_17677_why_i_r367780_a2",
+    "dba_description": "Investigate and reproduce excessive disk-based temporary table creation in MySQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Why does the target database not exist?"
+  ],
+  "rationale": "The target database is missing, blocking schema inspection and reproduction setup. Without the database, synthetic data generation and calibration cannot proceed."
+}

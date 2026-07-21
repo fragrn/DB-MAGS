@@ -1,0 +1,137 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Lock wait timeout exceeded during DELETE query due to long-running transactions and contention.",
+  "symptoms": [
+    "Lock wait timeout exceeded error",
+    "Long-running transactions blocking DELETE operations",
+    "High row lock contention"
+  ],
+  "mechanism": "Row-level locking and contention caused by long-running transactions and frequent concurrent operations on the table.",
+  "facts": [
+    {
+      "key": "lock_wait_timeout",
+      "value": {
+        "default": 50
+      },
+      "source": "explicit_post",
+      "evidence": "The post mentions the default lock wait timeout of 50 seconds.",
+      "confidence": 1.0
+    },
+    {
+      "key": "table_schema",
+      "value": {
+        "name": "EVENT_DETAILS",
+        "columns": [
+          {
+            "name": "ORG_ID",
+            "type": "CHAR(32)",
+            "nullable": false
+          },
+          {
+            "name": "CONFIG_KEY",
+            "type": "CHAR(32)",
+            "nullable": false
+          },
+          {
+            "name": "COMPONENT_NAME",
+            "type": "VARCHAR(512)",
+            "nullable": false
+          },
+          {
+            "name": "REQUEST_ID",
+            "type": "CHAR(32)",
+            "nullable": false
+          },
+          {
+            "name": "UPDATE_DATE",
+            "type": "INT",
+            "nullable": false
+          },
+          {
+            "name": "UPDATE_TIME",
+            "type": "INT",
+            "nullable": false
+          },
+          {
+            "name": "CLIENT",
+            "type": "CHAR(16)",
+            "nullable": false
+          },
+          {
+            "name": "STATUS",
+            "type": "INT",
+            "nullable": false
+          },
+          {
+            "name": "EVENT_DATA",
+            "type": "VARCHAR(1024)",
+            "nullable": true
+          },
+          {
+            "name": "MESSAGE",
+            "type": "VARCHAR(512)",
+            "nullable": true
+          },
+          {
+            "name": "INSERTED_TIME",
+            "type": "TIMESTAMP",
+            "nullable": false,
+            "default": "CURRENT_TIMESTAMP"
+          }
+        ],
+        "indexes": [
+          {
+            "name": "STATE_INDEX",
+            "columns": [
+              "UPDATE_DATE",
+              "UPDATE_TIME",
+              "ORG_ID",
+              "CONFIG_KEY",
+              "COMPONENT_NAME",
+              "STATUS",
+              "CLIENT"
+            ],
+            "unique": false
+          }
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Table schema provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "transaction_isolation_level",
+      "value": "REPEATABLE READ",
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions the default isolation level REPEATABLE READ.",
+      "confidence": 1.0
+    },
+    {
+      "key": "autocommit",
+      "value": true,
+      "source": "explicit_post",
+      "evidence": "The post states that autocommit is enabled.",
+      "confidence": 1.0
+    },
+    {
+      "key": "blocking_transactions",
+      "value": {
+        "duration": "17 hours",
+        "row_locks": 116083
+      },
+      "source": "explicit_post",
+      "evidence": "Innodb status shows transactions active for long durations and high row locks.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The DELETE query is blocked due to row-level locks held by long-running transactions.",
+    "The contention is exacerbated by frequent concurrent inserts and selects on the table."
+  ],
+  "unknowns": [
+    "Exact workload patterns causing contention",
+    "Specific queries blocking the DELETE operation"
+  ],
+  "confidence": 0.9
+}

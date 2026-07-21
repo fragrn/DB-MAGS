@@ -1,0 +1,239 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Too many connections error caused by high concurrent connection usage and potential resource exhaustion.",
+    "symptoms": [
+      "Fatal Error: Sorry, the server is currently too busy, please try again later.",
+      "PHP Warning: mysqli_connect(): (HY000/1040): Too many connections",
+      "phpMyAdmin error #1040: Too many connections",
+      "High CPU usage by mysqld (100-130%)"
+    ],
+    "mechanism": "Concurrent connection limit exceeded due to high connection usage by PHP scripts and PHPlist application.",
+    "facts": [
+      {
+        "key": "max_connections",
+        "value": {
+          "current_value": 200
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA mentioned increasing max_connections to 200 from the default 100.",
+        "confidence": 0.9
+      },
+      {
+        "key": "open_table_cache",
+        "value": {
+          "current_value": 512
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA mentioned increasing open_table_cache to 512 from the default 400.",
+        "confidence": 0.9
+      },
+      {
+        "key": "PHP scripts",
+        "value": {
+          "count": 12
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA mentioned running 12 PHP scripts simultaneously.",
+        "confidence": 0.9
+      },
+      {
+        "key": "PHPlist application",
+        "value": {
+          "usage": "sending emails"
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA mentioned PHPlist application usage for sending emails.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The PHP scripts and PHPlist application are using non-persistent connections.",
+      "The server has sufficient RAM to handle increased max_connections."
+    ],
+    "unknowns": [
+      "Exact memory usage per connection.",
+      "Whether persistent connections are being used improperly."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction can simulate high concurrent connections and resource exhaustion without exact production data.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_20479_how_t_r822433_a2",
+    "requirements": [
+      "Dedicated test database for synthetic reproduction."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_20479_how_t_r822433_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS user_table (id INT PRIMARY KEY, username VARCHAR(64), email VARCHAR(128))",
+      "CREATE TABLE IF NOT EXISTS email_queue (id INT PRIMARY KEY, user_id INT, status VARCHAR(32), FOREIGN KEY (user_id) REFERENCES user_table(id))"
+    ],
+    "generation_sql": [
+      "INSERT INTO user_table (id, username, email) SELECT n, CONCAT('user_', n), CONCAT('user_', n, '@example.com') FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO email_queue (id, user_id, status) SELECT n, MOD(n, {row_count}), 'pending' FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "user_table",
+        "purpose": "Simulates user data for PHPlist application and PHP scripts.",
+        "target_rows": 10000,
+        "distribution_notes": "Uniform distribution of user data."
+      },
+      {
+        "name": "email_queue",
+        "purpose": "Simulates email queue for PHPlist application.",
+        "target_rows": 10000,
+        "distribution_notes": "Uniform distribution with pending status."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "user_table": 10000,
+        "email_queue": 10000
+      },
+      "value_skew": {
+        "email_queue.status": "Uniform distribution of 'pending' status."
+      },
+      "predicate_selectivity": {
+        "email_queue.status = 'pending'": 1.0
+      },
+      "join_selectivity": {
+        "email_queue.user_id = user_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "user_table",
+      "email_queue"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM email_queue WHERE status = 'pending'",
+        "objective": "Verify that the synthetic data matches the expected distribution of pending emails.",
+        "expected_evidence": [
+          "The query should return the total number of rows in the email_queue table.",
+          "Predicate selectivity should match the synthetic data constraints."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT COUNT(*) FROM email_queue WHERE status = 'pending'",
+      "SELECT * FROM user_table WHERE id = 1",
+      "UPDATE email_queue SET status = 'processed' WHERE id = 1"
+    ],
+    "concurrency": 12,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Connection limit errors should be observed under high concurrency.",
+      "CPU usage should increase significantly during workload execution."
+    ],
+    "symptom_evidence": [
+      "Error messages indicating too many connections.",
+      "High CPU usage observed in the MySQL process."
+    ],
+    "mechanism_evidence": [
+      "Connection limit exceeded due to high concurrent connections.",
+      "Resource exhaustion observed in MySQL process."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "too_many_connections",
+    "target_database": "post_retry_too_many_connection_20479_how_t_r822433_a2",
+    "dba_description": "Simulate high concurrent connections and resource exhaustion to reproduce too many connections error.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "configure_max_connections",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_20479_how_t_r822433_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "SET GLOBAL max_connections = 300"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "max_connections_updated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Connection limit exceeded"
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT COUNT(*) FROM email_queue WHERE status = 'pending'",
+          "concurrency": 12,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "connection_errors_observed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "High concurrent connections"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "configure_max_connections",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating high concurrent connections and resource exhaustion to observe the too many connections error."
+}

@@ -1,0 +1,72 @@
+{
+  "task_specs": [
+    {
+      "task_id": "configure_memory_settings",
+      "task_type": "configuration",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_291670_sql_r927761_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "EXEC sp_configure 'max server memory', 8192; RECONFIGURE;"
+                },
+                {
+                  "sql": "EXEC sp_configure 'min server memory', 1024; RECONFIGURE;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "configuration_applied": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Memory pressure causing query timeouts."
+      }
+    },
+    {
+      "task_id": "test_arithabort_impact",
+      "task_type": "query_execution",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SET ARITHABORT ON; SELECT n.* FROM Notifications n WHERE n.account_id = 1;",
+          "concurrency": 1,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SET ARITHABORT OFF; SELECT n.* FROM Notifications n WHERE n.account_id = 1;",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "execution_plan_differences": true
+      },
+      "success_criteria": {
+        "execution_plan_differences": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Parameter sniffing affecting execution plans."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "configure_memory_settings",
+      "test_arithabort_impact"
+    ]
+  ]
+}

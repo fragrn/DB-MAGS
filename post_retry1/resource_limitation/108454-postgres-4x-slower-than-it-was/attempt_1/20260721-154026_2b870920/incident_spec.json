@@ -1,0 +1,71 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "PostgreSQL performance degradation observed, with operations taking 4x longer than before.",
+  "symptoms": [
+    "Database backup duration increased from ~1 hour to ~4 hours.",
+    "Replication sync duration increased from ~1 hour to ~4 hours.",
+    "Queries that previously took seconds now hang for days unless work_mem is increased.",
+    "High memory usage and swapping observed on server B."
+  ],
+  "mechanism": "Potential misconfiguration or resource contention affecting PostgreSQL performance.",
+  "facts": [
+    {
+      "key": "PostgreSQL version and settings",
+      "value": {
+        "version": "PostgreSQL 9.4.4",
+        "settings": {
+          "shared_buffers": "24GB",
+          "work_mem": "96MB",
+          "effective_cache_size": "128GB",
+          "checkpoint_segments": "256",
+          "checkpoint_timeout": "30min"
+        }
+      },
+      "source": "explicit_post",
+      "evidence": "Post includes PostgreSQL version and configuration details.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Linux settings",
+      "value": {
+        "transparent_hugepages": "enabled",
+        "vm.dirty_background_ratio": "10",
+        "scheduler": "cfq"
+      },
+      "source": "explicit_post",
+      "evidence": "Post includes Linux kernel settings and disk scheduler configuration.",
+      "confidence": 0.8
+    },
+    {
+      "key": "Performance degradation",
+      "value": {
+        "backup_duration": "4x increase",
+        "query_duration": "days instead of seconds",
+        "replication sync": "4x increase"
+      },
+      "source": "explicit_post",
+      "evidence": "Post describes observed performance issues.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Server B memory usage",
+      "value": {
+        "swap_usage": "high",
+        "free_memory": "low"
+      },
+      "source": "explicit_post",
+      "evidence": "Post includes memory usage statistics for server B.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The performance degradation is related to PostgreSQL configuration or Linux kernel settings.",
+    "Transparent Huge Pages and cfq scheduler may be contributing factors."
+  ],
+  "unknowns": [
+    "Exact root cause of the performance degradation.",
+    "Impact of other workloads on the database performance."
+  ],
+  "confidence": 0.7
+}

@@ -1,0 +1,63 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Too many connections error in MySQL caused by high concurrent connections and resource constraints.",
+  "symptoms": [
+    "MySQL error #1040: Too many connections",
+    "High CPU usage by MySQL (100-130%)",
+    "Application errors indicating server is too busy"
+  ],
+  "mechanism": "Exceeding the `max_connections` limit due to concurrent PHP scripts and application usage, potentially exacerbated by inefficient connection handling or resource misconfiguration.",
+  "facts": [
+    {
+      "key": "max_connections",
+      "value": {
+        "current_value": 200
+      },
+      "source": "explicit_post",
+      "evidence": "The post mentions increasing `max_connections` to 200 from the default of 100.",
+      "confidence": 0.9
+    },
+    {
+      "key": "PHP scripts",
+      "value": {
+        "count": 12,
+        "connection_behavior": "each script opens a MySQL connection"
+      },
+      "source": "explicit_post",
+      "evidence": "The post states that 12 PHP scripts are running, each opening a MySQL connection.",
+      "confidence": 0.9
+    },
+    {
+      "key": "CPU usage",
+      "value": {
+        "range": "100-130%"
+      },
+      "source": "explicit_post",
+      "evidence": "The post mentions `mysqld` using 100-130% CPU.",
+      "confidence": 0.8
+    },
+    {
+      "key": "Error messages",
+      "value": {
+        "application_error": "Fatal Error: Sorry, the server is currently too busy, please try again later.",
+        "phpmyadmin_error": "#1040: Too many connections",
+        "php_warning": "mysqli_connect(): (HY000/1040): Too many connections"
+      },
+      "source": "explicit_post",
+      "evidence": "The post lists these error messages as symptoms.",
+      "confidence": 0.9
+    }
+  ],
+  "assumptions": [
+    "The PHP scripts are not optimized for short-lived connections.",
+    "Persistent connections may be improperly used.",
+    "The server has sufficient RAM to handle an increase in `max_connections`."
+  ],
+  "unknowns": [
+    "Exact memory usage per connection",
+    "Whether persistent connections are being used",
+    "The total number of concurrent connections at peak usage"
+  ],
+  "confidence": 0.85
+}

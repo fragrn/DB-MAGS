@@ -1,0 +1,49 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "Investigating the performance and concurrency behavior of large transactions in PostgreSQL, focusing on row locking, read/write interactions, and transaction conflicts.",
+  "symptoms": [
+    "Blocked transactions due to row-level locks",
+    "Potential deadlocks or serialization errors in concurrent transactions",
+    "Performance degradation during large updates"
+  ],
+  "mechanism": "PostgreSQL's MVCC (Multiversion Concurrency Control) and transaction isolation levels determine how rows are locked and accessed during transactions.",
+  "facts": [
+    {
+      "key": "MVCC behavior",
+      "value": {
+        "description": "Reads do not block writes, and writes do not block reads."
+      },
+      "source": "explicit_post",
+      "evidence": "PostgreSQL documentation and forum answers",
+      "confidence": 0.9
+    },
+    {
+      "key": "Transaction isolation levels",
+      "value": {
+        "description": "Higher isolation levels may lead to serialization errors or blocking."
+      },
+      "source": "explicit_post",
+      "evidence": "PostgreSQL documentation and forum answers",
+      "confidence": 0.8
+    },
+    {
+      "key": "Blocked transactions",
+      "value": {
+        "description": "Concurrent transactions attempting to update the same rows are blocked until the first transaction commits."
+      },
+      "source": "explicit_post",
+      "evidence": "Forum answers and example scenarios",
+      "confidence": 0.85
+    }
+  ],
+  "assumptions": [
+    "The database schema and workload involve multi-million row tables with indexed columns.",
+    "The transaction updates approximately 50k rows in a single operation."
+  ],
+  "unknowns": [
+    "Exact schema details and workload distribution",
+    "Impact of specific isolation levels on performance and concurrency"
+  ],
+  "confidence": 0.75
+}

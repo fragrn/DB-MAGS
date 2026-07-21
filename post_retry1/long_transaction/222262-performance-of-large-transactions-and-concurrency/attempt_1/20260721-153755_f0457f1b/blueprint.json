@@ -1,0 +1,147 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Investigating the performance and concurrency behavior of large transactions in PostgreSQL, focusing on row locking, read/write interactions, and transaction conflicts.",
+    "symptoms": [
+      "Blocked transactions due to row-level locks",
+      "Potential deadlocks or serialization errors in concurrent transactions",
+      "Performance degradation during large updates"
+    ],
+    "mechanism": "PostgreSQL's MVCC (Multiversion Concurrency Control) and transaction isolation levels determine how rows are locked and accessed during transactions.",
+    "facts": [
+      {
+        "key": "MVCC behavior",
+        "value": {
+          "description": "Reads do not block writes, and writes do not block reads."
+        },
+        "source": "explicit_post",
+        "evidence": "PostgreSQL documentation and forum answers",
+        "confidence": 0.9
+      },
+      {
+        "key": "Transaction isolation levels",
+        "value": {
+          "description": "Higher isolation levels may lead to serialization errors or blocking."
+        },
+        "source": "explicit_post",
+        "evidence": "PostgreSQL documentation and forum answers",
+        "confidence": 0.8
+      },
+      {
+        "key": "Blocked transactions",
+        "value": {
+          "description": "Concurrent transactions attempting to update the same rows are blocked until the first transaction commits."
+        },
+        "source": "explicit_post",
+        "evidence": "Forum answers and example scenarios",
+        "confidence": 0.85
+      }
+    ],
+    "assumptions": [
+      "The database schema and workload involve multi-million row tables with indexed columns.",
+      "The transaction updates approximately 50k rows in a single operation."
+    ],
+    "unknowns": [
+      "Exact schema details and workload distribution",
+      "Impact of specific isolation levels on performance and concurrency"
+    ],
+    "confidence": 0.75
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema setup and reproduction.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database environment unavailable"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_long_transaction_222262_perform_r475152_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_222262_perform_r475152_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+    ],
+    "generation_sql": [
+      "INSERT INTO tools (description) SELECT 'tool_' || g FROM generate_series(1, {row_count}) g;"
+    ],
+    "tables": [
+      {
+        "name": "tools",
+        "purpose": "Primary table for transaction and concurrency testing",
+        "target_rows": 1000000,
+        "distribution_notes": "Uniform distribution of rows with unique IDs"
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "tools": 1000000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "tools"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM tools WHERE id = 1;",
+        "objective": "Verify basic row access and indexing behavior.",
+        "expected_evidence": [
+          "Index scan or sequential scan depending on table size and index presence."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Transaction blocking behavior matches expectations",
+      "Performance metrics align with MVCC and isolation level characteristics"
+    ],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Transaction blocking and performance degradation",
+    "target_database": "post_retry_long_transaction_222262_perform_r475152_a1",
+    "dba_description": "Investigating performance and concurrency behavior of large transactions in PostgreSQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to proceed given the missing target database environment?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database environment. Further steps require either creating the database or resolving the environment issue."
+}

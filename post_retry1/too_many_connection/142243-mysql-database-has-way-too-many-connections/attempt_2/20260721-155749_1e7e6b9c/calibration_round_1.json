@@ -1,0 +1,22 @@
+{
+  "decision": "accept",
+  "reasoning": "The observed plan supports the query's objective of verifying the row count for the 'pending' status in the jobs table. The plan includes a table scan with a filter on the 'status' column, which matches the expected mechanism for counting rows based on a specific condition.",
+  "query_assessments": [
+    {
+      "query_id": "calibration_query_1",
+      "sql": "SELECT COUNT(*) FROM jobs WHERE status = 'pending'",
+      "matched": true,
+      "observed_plan_summary": "Aggregate count operation with a filter on 'status = pending', followed by a table scan on jobs.",
+      "supporting_evidence": [
+        "The plan includes a filter on the 'status' column, which is required to count rows with 'pending' status.",
+        "The table scan mechanism ensures all rows are considered for the count."
+      ],
+      "discrepancies": []
+    }
+  ],
+  "concerns": [],
+  "recommended_changes": [],
+  "missing_information": [],
+  "round": 1,
+  "matched": true
+}

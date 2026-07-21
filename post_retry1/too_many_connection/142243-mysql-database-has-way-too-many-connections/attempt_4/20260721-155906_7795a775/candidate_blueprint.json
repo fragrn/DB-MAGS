@@ -1,0 +1,132 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": "5.7.12",
+    "summary": "Excessive connection errors and failures due to high concurrency from Sidekiq background jobs and Rails applications.",
+    "symptoms": [
+      "Connection errors max_connections reaching high values (e.g., 19102, 39587).",
+      "Max_used_connections hitting the configured limit of 500.",
+      "Background jobs failing due to connection exhaustion."
+    ],
+    "mechanism": "High concurrency from Sidekiq processes (800 potential connections) exceeds the configured max_connections limit, leading to connection errors and job failures.",
+    "facts": [
+      {
+        "key": "max_connections",
+        "value": 500,
+        "source": "explicit_post",
+        "evidence": "Post mentions max_connections set to 500.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Sidekiq concurrency",
+        "value": {
+          "processes": 4,
+          "jobs_per_process": 200
+        },
+        "source": "explicit_post",
+        "evidence": "Post describes Sidekiq setup with 4 processes and 200 jobs per process.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Connection_errors_max_connections",
+        "value": [
+          19102,
+          39587
+        ],
+        "source": "explicit_post",
+        "evidence": "Post shows Connection_errors_max_connections values during failures.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Max_used_connections",
+        "value": 501,
+        "source": "explicit_post",
+        "evidence": "Post shows Max_used_connections reaching 501.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "Sidekiq processes are configured to use a connection pool of 200 connections per process.",
+      "Rails applications may hold connections open longer than necessary."
+    ],
+    "unknowns": [
+      "Exact workload characteristics of the Rails applications.",
+      "Database schema and query patterns used by the applications."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing setup and reproduction.",
+    "missing_capabilities": [
+      "Target database environment"
+    ],
+    "unmatched_conditions": [
+      "Database 'post_retry_too_many_connection_142243_mysq_r746406_a4' not found"
+    ],
+    "confidence": 1.0
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_142243_mysq_r746406_a4",
+    "requirements": [
+      "Database must exist for reproduction"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_142243_mysq_r746406_a4",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Excessive connection errors due to high concurrency",
+    "target_database": "post_retry_too_many_connection_142243_mysq_r746406_a4",
+    "dba_description": "Reproduce connection exhaustion caused by Sidekiq concurrency exceeding max_connections.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to proceed without the target database?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the specified target database. Synthetic data constraints and workload cannot be designed without a valid environment."
+}

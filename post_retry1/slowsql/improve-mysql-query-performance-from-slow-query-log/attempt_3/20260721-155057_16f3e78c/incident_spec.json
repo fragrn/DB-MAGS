@@ -1,0 +1,57 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Slow query involving correlated subqueries and aggregate functions in MySQL.",
+  "symptoms": [
+    "Slow query execution time (8.794 seconds)",
+    "High rows examined (4,742,825)",
+    "Dependent subqueries in EXPLAIN plan"
+  ],
+  "mechanism": "The query uses correlated subqueries for each row in the outer query, resulting in repeated scans of the `customer_payment_options` table. This leads to high rows examined and slow performance.",
+  "facts": [
+    {
+      "key": "query_time",
+      "value": {
+        "seconds": 8.794
+      },
+      "source": "explicit_post",
+      "evidence": "Query_time: 8.794170 in the slow query log",
+      "confidence": 1.0
+    },
+    {
+      "key": "rows_examined",
+      "value": 4742825,
+      "source": "explicit_post",
+      "evidence": "Rows_examined: 4742825 in the slow query log",
+      "confidence": 1.0
+    },
+    {
+      "key": "dependent_subqueries",
+      "value": true,
+      "source": "explicit_post",
+      "evidence": "EXPLAIN plan shows DEPENDENT SUBQUERY for `customer_payment_options`",
+      "confidence": 1.0
+    },
+    {
+      "key": "indexes",
+      "value": [
+        "company_id",
+        "tran_id",
+        "ce_id",
+        "wallet_id"
+      ],
+      "source": "explicit_post",
+      "evidence": "Indexes listed in the post for `customer_payment_options`",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The schema provided in the post is accurate.",
+    "The slow query log configuration matches the described environment."
+  ],
+  "unknowns": [
+    "Exact data distribution in the tables",
+    "Whether additional indexes are present beyond those listed in the post"
+  ],
+  "confidence": 0.9
+}

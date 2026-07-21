@@ -1,0 +1,272 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": "5.7.12",
+    "summary": "Excessive MySQL connection errors due to high concurrency in background job processing.",
+    "symptoms": [
+      "Connection_errors_max_connections is high (e.g., 19,102).",
+      "Max_used_connections reaches the limit of 500.",
+      "Background jobs fail due to connection exhaustion.",
+      "High Connections count (e.g., 3,068) despite max_connections being 500."
+    ],
+    "mechanism": "High concurrency from background job pools (e.g., Sidekiq with 4 processes and 200 jobs each) exceeds the max_connections limit, leading to connection errors and job failures.",
+    "facts": [
+      {
+        "key": "max_connections",
+        "value": 500,
+        "source": "explicit_post",
+        "evidence": "The DBA explicitly mentioned max_connections is set to 500.",
+        "confidence": 0.5
+      },
+      {
+        "key": "background_job_concurrency",
+        "value": {
+          "processes": 4,
+          "jobs_per_process": 200
+        },
+        "source": "explicit_post",
+        "evidence": "The post describes Sidekiq running 4 processes with 200 jobs each.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Connection_errors_max_connections",
+        "value": 19102,
+        "source": "explicit_post",
+        "evidence": "The DBA provided the output of 'show status like '%onn%'' showing Connection_errors_max_connections = 19102.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Max_used_connections",
+        "value": 501,
+        "source": "explicit_post",
+        "evidence": "The DBA provided the output of 'show status like '%onn%'' showing Max_used_connections = 501.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Connections",
+        "value": 3068,
+        "source": "explicit_post",
+        "evidence": "The DBA provided the output of 'show status like '%onn%'' showing Connections = 3068.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database is configured with default connection timeout settings (e.g., wait_timeout).",
+      "The background jobs do not explicitly close connections after use.",
+      "The workload involves a high number of short-lived connections."
+    ],
+    "unknowns": [
+      "The exact queries executed by the background jobs.",
+      "The database schema and indexes used by the applications.",
+      "The specific workload characteristics (e.g., read/write ratio, query complexity)."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of connection exhaustion due to high concurrency can be reproduced by simulating a high number of concurrent connections. However, the exact workload and schema are not provided, so the reproduction will focus on the connection behavior rather than specific query patterns.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and workload details are unavailable."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_142243_mysq_r669841_a2",
+    "requirements": [
+      "MySQL 5.7 or compatible environment"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_142243_mysq_r669841_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, job_type VARCHAR(64), status VARCHAR(32), created_at DATETIME, updated_at DATETIME)"
+    ],
+    "generation_sql": [
+      "INSERT INTO jobs (job_type, status, created_at, updated_at) SELECT CONCAT('type_', FLOOR(RAND() * 10)), 'pending', NOW(), NOW() FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS tmp"
+    ],
+    "tables": [
+      {
+        "name": "jobs",
+        "purpose": "Simulates the jobs table used by background processes.",
+        "target_rows": 1000,
+        "distribution_notes": "Uniform distribution of job types and statuses."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "jobs": 1000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "jobs"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM jobs WHERE status = 'pending'",
+        "objective": "Verify that the jobs table is populated with the expected number of rows.",
+        "expected_evidence": [
+          "The row count matches the target_rows specified in the data_spec."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT * FROM jobs WHERE status = 'pending' LIMIT 10"
+    ],
+    "concurrency": 800,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Connection_errors_max_connections increases during the workload.",
+      "Max_used_connections reaches the configured max_connections limit.",
+      "Connections count increases significantly during the workload."
+    ],
+    "symptom_evidence": [
+      "Connection_errors_max_connections is high.",
+      "Max_used_connections reaches the limit.",
+      "Connections count exceeds max_connections."
+    ],
+    "mechanism_evidence": [
+      "High concurrency from background jobs leads to connection exhaustion."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "connection_exhaustion",
+    "target_database": "post_retry_too_many_connection_142243_mysq_r669841_a2",
+    "dba_description": "Simulate high concurrency from background jobs to reproduce connection exhaustion.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r669841_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_142243_mysq_r669841_a2"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_142243_mysq_r669841_a2"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, job_type VARCHAR(64), status VARCHAR(32), created_at DATETIME, updated_at DATETIME)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "type": "database_exists",
+        "database": "post_retry_too_many_connection_142243_mysq_r669841_a2"
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "High concurrency from background jobs."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r669841_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO jobs (job_type, status, created_at, updated_at) SELECT CONCAT('type_', FLOOR(RAND() * 10)), 'pending', NOW(), NOW() FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS tmp"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "type": "row_count",
+        "table": "jobs",
+        "min_rows": 1000
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "High concurrency from background jobs."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM jobs WHERE status = 'pending' LIMIT 10",
+          "concurrency": 800,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "type": "connection_errors",
+        "threshold": 10
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "High concurrency from background jobs."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident is caused by high concurrency from background jobs exceeding the max_connections limit. The reproduction focuses on simulating this high concurrency to observe connection errors and validate the mechanism."
+}

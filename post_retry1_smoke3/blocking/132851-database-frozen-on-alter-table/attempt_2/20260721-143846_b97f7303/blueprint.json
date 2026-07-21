@@ -1,0 +1,480 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": "9.4.5",
+    "summary": "ALTER TABLE operation caused database freeze due to lock contention.",
+    "symptoms": [
+      "Database freeze during ALTER TABLE operation",
+      "Inability to log in due to blocked SELECT queries"
+    ],
+    "mechanism": "The ALTER TABLE operation required an ACCESS EXCLUSIVE lock, which was blocked by a long-lived weak lock (e.g., ACCESS SHARE lock). This caused all subsequent lock requests to queue behind the pending ACCESS EXCLUSIVE lock, leading to a system-wide freeze.",
+    "facts": [
+      {
+        "key": "ALTER TABLE operation",
+        "value": {
+          "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA explicitly mentioned the offending SQL statement.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Table structure",
+        "value": {
+          "table_name": "cliente",
+          "columns": [
+            {
+              "name": "rut",
+              "type": "character varying(30)",
+              "constraints": [
+                "NOT NULL",
+                "PRIMARY KEY"
+              ]
+            },
+            {
+              "name": "nombre",
+              "type": "character varying(150)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "razon_social",
+              "type": "character varying(150)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "direccion",
+              "type": "character varying(200)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "comuna",
+              "type": "character varying(100)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "ciudad",
+              "type": "character varying(100)",
+              "constraints": [
+                "NOT NULL"
+              ]
+            },
+            {
+              "name": "codigo_pais",
+              "type": "character varying(3)",
+              "constraints": [
+                "NOT NULL",
+                "FOREIGN KEY"
+              ]
+            },
+            {
+              "name": "activo",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT true"
+              ]
+            },
+            {
+              "name": "id",
+              "type": "serial",
+              "constraints": [
+                "NOT NULL",
+                "UNIQUE"
+              ]
+            },
+            {
+              "name": "stock",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "vigente",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT true"
+              ]
+            },
+            {
+              "name": "clase",
+              "type": "integer",
+              "constraints": [
+                "DEFAULT 1"
+              ]
+            },
+            {
+              "name": "plan",
+              "type": "integer",
+              "constraints": [
+                "DEFAULT 1"
+              ]
+            },
+            {
+              "name": "plantilla",
+              "type": "character varying(15)",
+              "constraints": [
+                "DEFAULT 'WAYPOINT'"
+              ]
+            },
+            {
+              "name": "facturable",
+              "type": "integer",
+              "constraints": [
+                "DEFAULT 1"
+              ]
+            },
+            {
+              "name": "toolkit",
+              "type": "integer",
+              "constraints": [
+                "DEFAULT 0"
+              ]
+            },
+            {
+              "name": "propietario",
+              "type": "integer",
+              "constraints": [
+                "DEFAULT 0"
+              ]
+            },
+            {
+              "name": "creacion",
+              "type": "timestamp without time zone",
+              "constraints": [
+                "DEFAULT now()"
+              ]
+            },
+            {
+              "name": "codelco",
+              "type": "boolean",
+              "constraints": [
+                "NOT NULL",
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "familia",
+              "type": "integer",
+              "constraints": [
+                "DEFAULT 0",
+                "FOREIGN KEY"
+              ]
+            },
+            {
+              "name": "enabled_machines",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "enabled_canbus",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "enabled_horometro",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "enabled_comap",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "enabled_frio",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "enabled_panico",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "enabled_puerta",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "enabled_rpm",
+              "type": "boolean",
+              "constraints": [
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "enabled_supervisor",
+              "type": "integer",
+              "constraints": [
+                "DEFAULT 0"
+              ]
+            },
+            {
+              "name": "demo",
+              "type": "boolean",
+              "constraints": []
+            },
+            {
+              "name": "interno",
+              "type": "boolean",
+              "constraints": []
+            },
+            {
+              "name": "mqtt_enable",
+              "type": "boolean",
+              "constraints": [
+                "NOT NULL",
+                "DEFAULT false"
+              ]
+            },
+            {
+              "name": "topicos",
+              "type": "character varying(20)[]",
+              "constraints": []
+            }
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "The full table structure was provided in the post.",
+        "confidence": 0.5
+      },
+      {
+        "key": "PostgreSQL version",
+        "value": "9.4.5",
+        "source": "explicit_post",
+        "evidence": "The DBA explicitly mentioned the PostgreSQL version.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Lock contention mechanism",
+        "value": {
+          "lock_type": "ACCESS EXCLUSIVE",
+          "blocking_lock_type": "ACCESS SHARE",
+          "queue_behavior": "FIFO"
+        },
+        "source": "post_hypothesis",
+        "evidence": "The answer by jjanes describes the lock contention mechanism in detail.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database environment is similar to the one described in the post.",
+      "The table structure and workload are representative of the production system."
+    ],
+    "unknowns": [
+      "The exact workload on the 'cliente' table during the ALTER TABLE operation.",
+      "Whether there were any long-running transactions or idle connections holding locks."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction requires simulating lock contention during an ALTER TABLE operation, which is feasible in a synthetic environment. However, exact reproduction of the production workload and lock state is not possible without additional information.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+    "requirements": [
+      "PostgreSQL 9.4 or compatible version"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL UNIQUE NOT NULL, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false NOT NULL, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false NOT NULL, CONSTRAINT fk_cliente_familiaid FOREIGN KEY (familia) REFERENCES cliente_familia (id), CONSTRAINT pk_pais FOREIGN KEY (codigo_pais) REFERENCES pais (codigo));",
+      "CREATE INDEX IF NOT EXISTS index_cliente ON cliente (rut);",
+      "CREATE INDEX IF NOT EXISTS index_cliente_activo ON cliente (activo);",
+      "CREATE INDEX IF NOT EXISTS index_cliente_id_activo ON cliente (id, activo);",
+      "CREATE INDEX IF NOT EXISTS index_cliente_rut_activo ON cliente (rut, activo);"
+    ],
+    "generation_sql": [
+      "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo, stock, vigente, clase, plan, plantilla, facturable, toolkit, propietario, creacion, codelco, familia, enabled_machines, enabled_canbus, enabled_horometro, enabled_comap, enabled_frio, enabled_panico, enabled_puerta, enabled_rpm, enabled_supervisor, demo, interno, mqtt_enable) SELECT md5(i::text), 'Name_' || i, 'Razon_' || i, 'Direccion_' || i, 'Comuna_' || i, 'Ciudad_' || i, 'CL', true, false, true, 1, 1, 'WAYPOINT', 1, 0, 0, now(), false, 0, false, false, false, false, false, false, false, false, 0, false, false, false FROM generate_series(1, {row_count}) AS i;"
+    ],
+    "tables": [
+      {
+        "name": "cliente",
+        "purpose": "Primary table to simulate the lock contention during ALTER TABLE.",
+        "target_rows": 100000,
+        "distribution_notes": "Uniform distribution of rows with unique primary keys and some default values."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "cliente": 100000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "cliente"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM cliente WHERE rut = 'some_rut';",
+        "objective": "Verify that SELECT queries on the 'cliente' table are blocked during the ALTER TABLE operation.",
+        "expected_evidence": [
+          "The SELECT query is blocked during the ALTER TABLE operation.",
+          "The EXPLAIN plan shows a simple index scan on the 'rut' column."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT * FROM cliente WHERE rut = 'some_rut';"
+    ],
+    "concurrency": 10,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "ALTER TABLE operation should cause lock contention.",
+      "SELECT queries should be blocked during the ALTER TABLE operation."
+    ],
+    "symptom_evidence": [
+      "Database freeze during ALTER TABLE operation.",
+      "Blocked SELECT queries on the 'cliente' table."
+    ],
+    "mechanism_evidence": [
+      "ACCESS EXCLUSIVE lock held by ALTER TABLE operation.",
+      "Subsequent lock requests queue behind the ACCESS EXCLUSIVE lock."
+    ],
+    "minimum_plan_similarity": 0.8
+  },
+  "experiment_request": {
+    "target_anomaly": "lock_contention",
+    "target_database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+    "dba_description": "Database freeze during ALTER TABLE operation due to lock contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CREATE DATABASE post_retry_blocking_132851_database_frozen_on_al_a2;",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL UNIQUE NOT NULL, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false NOT NULL, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false NOT NULL, CONSTRAINT fk_cliente_familiaid FOREIGN KEY (familia) REFERENCES cliente_familia (id), CONSTRAINT pk_pais FOREIGN KEY (codigo_pais) REFERENCES pais (codigo));",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+          "concurrency": 1,
+          "duration_sec": 1
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "lock_contention"
+      }
+    },
+    {
+      "task_id": "simulate_lock_contention",
+      "task_type": "experiment",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": false,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "BEGIN;"
+                },
+                {
+                  "sql": "SELECT * FROM cliente WHERE rut = 'some_rut';"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "lock_contention"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "simulate_lock_contention"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident involves lock contention during an ALTER TABLE operation. The reproduction plan simulates this by creating a similar table, generating synthetic data, and introducing a long-lived lock before executing the ALTER TABLE statement. The feasibility is rated as 'mechanism' because the exact production workload and lock state cannot be replicated without additional information."
+}

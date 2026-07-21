@@ -120,6 +120,8 @@ def _run_one_post(
         result = _run_attempt_with_timeout(runtime, post_path, attempt_root, database, attempt_no, attempt_timeout_sec)
         attempts.append(result)
         _write_json(post_dir / "post_result.json", _finalize(post_path, category, slug, attempts).to_dict())
+        if _no_progress_planning_timeouts(attempts) >= 2:
+            break
         if result.status in {"success", "blocked", "abandoned"}:
             break
     final = _finalize(post_path, category, slug, attempts)
@@ -152,9 +154,23 @@ def _run_attempt_with_timeout(
     except BatchAttemptTimeout as exc:
         run_dir = _latest_run_dir(attempt_root)
         if run_dir:
+            if (run_dir / "state.json").exists():
+                state = load_state(run_dir)
+                state.status = "failed"
+                state.last_error = str(exc)
+                save_state(run_dir, state)
             _write_json(
                 run_dir / "batch_attempt_timeout.json",
                 {"status": "failed", "reason": str(exc), "timeout_sec": timeout_sec, "timestamp": time.time()},
+            )
+            _write_json(
+                run_dir / "failure.json",
+                {
+                    "phase": "planning",
+                    "error": str(exc),
+                    "exception_type": "BatchAttemptTimeout",
+                    "timestamp": time.time(),
+                },
             )
         return AttemptResult(attempt_no, str(run_dir) if run_dir else None, "failed", str(exc))
     finally:
@@ -426,12 +442,49 @@ def repair_blueprint_payload(payload: dict[str, Any], database: str) -> tuple[di
         if before != after:
             changes.append({"path": path, "before": before, "after": after, "reason": reason})
 
+    def normalize_confidence(item: Any, path: str = "") -> None:
+        if isinstance(item, dict):
+            for key, child in list(item.items()):
+                child_path = f"{path}.{key}" if path else key
+                if key == "confidence" and child is None:
+                    item[key] = 0.5
+                    record(child_path, None, 0.5, "Default missing confidence.")
+                else:
+                    normalize_confidence(child, child_path)
+        elif isinstance(item, list):
+            for index, child in enumerate(item):
+                normalize_confidence(child, f"{path}[{index}]")
+
+    normalize_confidence(value)
     for root, key in (("environment_spec", "database"), ("data_spec", "database"), ("experiment_request", "target_database")):
         obj = value.setdefault(root, {})
         before = obj.get(key)
         obj[key] = database
         record(f"{root}.{key}", before, database, "Use per-post attempt database.")
     data = value.setdefault("data_spec", {})
+    calibrations = data.get("calibration_queries")
+    if isinstance(calibrations, list):
+        before = json.loads(json.dumps(calibrations))
+        data["calibration_queries"] = [
+            item for item in calibrations
+            if isinstance(item, dict) and re.match(r"^\s*(SELECT|WITH)\b", str(item.get("sql") or ""), re.I)
+        ]
+        record(
+            "data_spec.calibration_queries",
+            before,
+            data["calibration_queries"],
+            "Remove calibration queries that cannot be EXPLAINed as read-only SELECT/WITH.",
+        )
+        before_placeholders = json.loads(json.dumps(data["calibration_queries"]))
+        for item in data["calibration_queries"]:
+            if isinstance(item, dict) and isinstance(item.get("sql"), str):
+                item["sql"] = _replace_unbound_placeholders(item["sql"])
+        record(
+            "data_spec.calibration_queries",
+            before_placeholders,
+            data["calibration_queries"],
+            "Replace unresolved SQL placeholders with synthetic literals for executable calibration.",
+        )
     if isinstance(data.get("tables"), list) and all(isinstance(item, str) for item in data["tables"]):
         before = data["tables"]
         data["tables"] = [{"name": item, "purpose": "synthetic reproduction table", "target_rows": 1000, "distribution_notes": ""} for item in before]
@@ -458,6 +511,48 @@ def repair_blueprint_payload(payload: dict[str, Any], database: str) -> tuple[di
         before = list(data["analyze_tables"])
         data["analyze_tables"] = [str(item).split(".")[-1].strip("`") for item in before if str(item).strip()]
         record("data_spec.analyze_tables", before, data["analyze_tables"], "Use unqualified table names.")
+    tasks = value.get("task_specs")
+    if isinstance(tasks, list):
+        before_tasks = json.loads(json.dumps(tasks))
+        removed_task_ids: set[str] = set()
+        kept_tasks: list[dict[str, Any]] = []
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            task_id = str(task.get("task_id") or "")
+            actions = task.get("actions") or []
+            kinds = {str(action.get("kind") or "").lower() for action in actions if isinstance(action, dict)}
+            task_type = str(task.get("task_type") or "").lower()
+            if kinds and kinds <= _SETUP_ONLY_ACTION_KINDS:
+                if task_id:
+                    removed_task_ids.add(task_id)
+                continue
+            if task_type in _SETUP_ONLY_TASK_TYPES and not actions:
+                if task_id:
+                    removed_task_ids.add(task_id)
+                continue
+            kept_tasks.append(task)
+        if removed_task_ids:
+            value["task_specs"] = kept_tasks
+            record(
+                "task_specs",
+                before_tasks,
+                kept_tasks,
+                "Remove database/schema setup TaskSpecs; runtime prepares the dedicated database from DataSpec.",
+            )
+            deps = value.get("dependencies")
+            if isinstance(deps, list):
+                before_deps = json.loads(json.dumps(deps))
+                value["dependencies"] = [
+                    dep for dep in deps
+                    if not _dependency_mentions_removed_task(dep, removed_task_ids)
+                ]
+                record(
+                    "dependencies",
+                    before_deps,
+                    value["dependencies"],
+                    "Remove dependencies attached to setup-only TaskSpecs.",
+                )
     workload = value.setdefault("workload_spec", {})
     queries = workload.get("queries")
     if isinstance(queries, list) and any(isinstance(item, dict) for item in queries):
@@ -465,6 +560,18 @@ def repair_blueprint_payload(payload: dict[str, Any], database: str) -> tuple[di
         workload["queries"] = [str(item.get("sql") or "").strip() if isinstance(item, dict) else str(item) for item in queries]
         workload["queries"] = [query for query in workload["queries"] if query]
         record("workload_spec.queries", before, workload["queries"], "Runtime SQL background workload expects query strings.")
+    if isinstance(workload.get("queries"), list):
+        before = list(workload["queries"])
+        workload["queries"] = [_replace_unbound_placeholders(str(query)) for query in workload["queries"]]
+        record("workload_spec.queries", before, workload["queries"], "Replace unresolved SQL placeholders with synthetic literals.")
+    request = value.setdefault("experiment_request", {})
+    try:
+        max_duration = float(request.get("max_duration_sec") or 60)
+    except (TypeError, ValueError):
+        max_duration = 60.0
+        before = request.get("max_duration_sec")
+        request["max_duration_sec"] = max_duration
+        record("experiment_request.max_duration_sec", before, max_duration, "Normalize invalid request duration.")
     for task_index, task in enumerate(value.get("task_specs") or []):
         for action_key in ("actions", "cleanup_actions"):
             for action_index, action in enumerate(task.get(action_key) or []):
@@ -478,7 +585,79 @@ def repair_blueprint_payload(payload: dict[str, Any], database: str) -> tuple[di
                     before = action["database"]
                     action["database"] = database
                     record(f"task_specs[{task_index}].{action_key}[{action_index}].database", before, database, "Use per-post attempt database.")
+                for sql_key in ("sql",):
+                    if isinstance(action.get(sql_key), str):
+                        before = action[sql_key]
+                        action[sql_key] = _replace_unbound_placeholders(before)
+                        record(f"task_specs[{task_index}].{action_key}[{action_index}].{sql_key}", before, action[sql_key], "Replace unresolved SQL placeholders with synthetic literals.")
+                for script_index, script in enumerate(action.get("scripts") or []):
+                    if not isinstance(script, dict):
+                        continue
+                    for step_index, step in enumerate(script.get("steps") or []):
+                        if isinstance(step, dict) and isinstance(step.get("sql"), str):
+                            before = step["sql"]
+                            step["sql"] = _replace_unbound_placeholders(before)
+                            record(
+                                f"task_specs[{task_index}].{action_key}[{action_index}].scripts[{script_index}].steps[{step_index}].sql",
+                                before,
+                                step["sql"],
+                                "Replace unresolved SQL placeholders with synthetic literals.",
+                            )
+                duration = action.get("duration_sec")
+                try:
+                    duration_value = float(duration)
+                except (TypeError, ValueError):
+                    duration_value = 1.0
+                    before = duration
+                    action["duration_sec"] = duration_value
+                    record(f"task_specs[{task_index}].{action_key}[{action_index}].duration_sec", before, duration_value, "Normalize missing action duration.")
+                    continue
+                if duration_value > max_duration and action_key == "actions":
+                    before = duration
+                    action["duration_sec"] = max_duration
+                    record(
+                        f"task_specs[{task_index}].{action_key}[{action_index}].duration_sec",
+                        before,
+                        max_duration,
+                        "Cap action duration to experiment_request.max_duration_sec.",
+                    )
     return value, changes
+
+
+_SETUP_ONLY_ACTION_KINDS = {
+    "create_database",
+    "create_schema",
+    "setup_database",
+    "prepare_database",
+    "data_prep",
+}
+_SETUP_ONLY_TASK_TYPES = {
+    "create_database",
+    "create_schema",
+    "setup_database",
+    "prepare_database",
+    "data_prep",
+}
+
+
+def _dependency_mentions_removed_task(dep: Any, removed_task_ids: set[str]) -> bool:
+    if isinstance(dep, (list, tuple)):
+        return any(str(item) in removed_task_ids for item in dep)
+    if isinstance(dep, dict):
+        return any(str(dep.get(key) or "") in removed_task_ids for key in ("source", "target", "from", "to", "depends_on", "task_id"))
+    return str(dep) in removed_task_ids
+
+
+def _replace_unbound_placeholders(sql: str) -> str:
+    value = str(sql)
+    value = re.sub(r"\$\d+\b", "'repro_value'", value)
+    value = re.sub(r"<\s*(?:specific_)?[A-Za-z0-9_]*uuid[A-Za-z0-9_]*\s*>", "'repro_value'", value, flags=re.I)
+    value = re.sub(r"<\s*[A-Za-z0-9_]*placeholder[A-Za-z0-9_]*\s*>", "'repro_value'", value, flags=re.I)
+    value = re.sub(r"(?<!:):[A-Za-z_][A-Za-z0-9_]*\b", "'repro_value'", value)
+    value = re.sub(r"(?<!\w)@[A-Za-z_][A-Za-z0-9_]*\b", "'repro_value'", value)
+    value = re.sub(r"=\s*\?", "= 'repro_value'", value)
+    value = re.sub(r"\bIN\s*\(\s*\?\s*\)", "IN ('repro_value')", value, flags=re.I)
+    return value
 
 
 def _completed_attempt(attempt_no: int, run_dir: Path, repairs: list[dict[str, Any]]) -> AttemptResult:
@@ -535,6 +714,15 @@ def _latest_run_dir(root: Path) -> Path | None:
 
 
 def _finalize(post_path: Path, category: str, slug: str, attempts: list[AttemptResult]) -> PostResult:
+    if _no_progress_planning_timeouts(attempts) >= 2:
+        return PostResult(
+            str(post_path),
+            category,
+            slug,
+            "abandoned",
+            "Stopped after two planning timeouts with no candidate blueprint; no meaningful progress.",
+            attempts,
+        )
     for status in ("success", "blocked", "abandoned"):
         for attempt in attempts:
             if attempt.status == status:
@@ -570,6 +758,20 @@ def _write_summary(output_root: Path, results: list[PostResult], unsupported: li
     return summary
 
 
+def _no_progress_planning_timeouts(attempts: list[AttemptResult]) -> int:
+    count = 0
+    for attempt in attempts:
+        if "timed out" not in attempt.reason:
+            continue
+        if not attempt.run_dir:
+            continue
+        run_dir = Path(attempt.run_dir)
+        state = _read_json(run_dir / "state.json") if (run_dir / "state.json").exists() else {}
+        if state.get("phase") == "planning" and not (run_dir / "candidate_blueprint.json").exists():
+            count += 1
+    return count
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text())
     if not isinstance(value, dict):
@@ -587,5 +789,6 @@ def _slug(value: str) -> str:
 
 
 def _database_name(category: str, slug: str, attempt: int) -> str:
-    base = re.sub(r"[^A-Za-z0-9_]+", "_", f"post_retry_{category}_{slug}")[:48].strip("_")
-    return f"{base}_a{attempt}"
+    base = re.sub(r"[^A-Za-z0-9_]+", "_", f"post_retry_{category}_{slug}")[:42].strip("_")
+    nonce = int(time.time() * 1000) % 1_000_000
+    return f"{base}_r{nonce}_a{attempt}"

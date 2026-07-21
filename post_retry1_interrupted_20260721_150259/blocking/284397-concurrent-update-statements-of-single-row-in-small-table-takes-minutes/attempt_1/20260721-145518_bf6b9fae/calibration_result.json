@@ -1,0 +1,46 @@
+{
+  "status": "overridden",
+  "matched": true,
+  "decision": "weak_match",
+  "weak_match": true,
+  "concerns": [
+    "The calibration query may fail to verify the setup due to the use of `gen_random_uuid()` in the filter condition."
+  ],
+  "recommended_changes": [
+    "Modify the calibration query to use a fixed UUID value that matches the single row in the table."
+  ],
+  "rounds": [
+    {
+      "decision": "weak_match",
+      "reasoning": "The observed plan uses a sequential scan on the table `host_scan_complete_log_counts` with a filter condition on `scan_uuid`. While this matches the query's intent to retrieve a row based on a UUID, the use of `gen_random_uuid()` as the filter condition does not guarantee that the single row in the table will be returned, as the UUID generated may not match the existing row. This introduces uncertainty in the calibration query's ability to verify the setup. Additionally, the sequential scan is expected given the lack of indexes, but it does not provide strong evidence for the intended mechanism.",
+      "query_assessments": [
+        {
+          "query_id": "calibration_query_1",
+          "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = gen_random_uuid()",
+          "matched": false,
+          "observed_plan_summary": "Sequential scan on `host_scan_complete_log_counts` with a filter condition `(scan_uuid = gen_random_uuid())`.",
+          "supporting_evidence": [
+            "Sequential scan is performed on the table.",
+            "Filter condition is applied on `scan_uuid`."
+          ],
+          "discrepancies": [
+            "The filter condition uses `gen_random_uuid()`, which does not guarantee matching the single row in the table."
+          ]
+        }
+      ],
+      "concerns": [
+        "The calibration query may fail to verify the setup due to the use of `gen_random_uuid()` in the filter condition."
+      ],
+      "recommended_changes": [
+        "Modify the calibration query to use a fixed UUID value that matches the single row in the table."
+      ],
+      "missing_information": [
+        "The actual UUID value of the single row in the table."
+      ],
+      "round": 1,
+      "matched": false
+    }
+  ],
+  "observed_matched": false,
+  "overridden": true
+}

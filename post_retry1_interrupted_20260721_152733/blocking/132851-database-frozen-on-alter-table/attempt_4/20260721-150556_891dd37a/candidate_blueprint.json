@@ -1,0 +1,154 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "ALTER TABLE operation caused blocking due to lock contention.",
+    "symptoms": [
+      "Database froze during ALTER TABLE operation",
+      "Login system was blocked due to SELECT dependency on the locked table"
+    ],
+    "mechanism": "ALTER TABLE requires an ACCESS EXCLUSIVE lock, and lock contention occurred due to long-lived weak locks.",
+    "facts": [
+      {
+        "key": "ALTER TABLE statement",
+        "value": {
+          "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+        },
+        "source": "explicit_post",
+        "evidence": "Post content includes the exact SQL statement.",
+        "confidence": 1.0
+      },
+      {
+        "key": "ACCESS EXCLUSIVE lock",
+        "value": {
+          "impact": "Blocks all other access to the table"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Post mentions lock contention and blocking behavior.",
+        "confidence": 0.9
+      },
+      {
+        "key": "PostgreSQL version",
+        "value": {
+          "version": "9.4.5"
+        },
+        "source": "explicit_post",
+        "evidence": "Post explicitly states the PostgreSQL version.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The table structure and indexes are as described in the post.",
+      "The blocking behavior is reproducible under synthetic conditions."
+    ],
+    "unknowns": [
+      "Exact workload during the incident",
+      "Presence of idle-in-transaction connections"
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing setup and reproduction.",
+    "missing_capabilities": [
+      "Target database environment"
+    ],
+    "unmatched_conditions": [
+      "Database 'post_retry_blocking_132851_database_frozen_r556929_a4' not found"
+    ],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_132851_database_frozen_r556929_a4",
+    "requirements": [
+      "Dedicated test database must exist"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_132851_database_frozen_r556929_a4",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS cliente (rut character varying(30) NOT NULL, nombre character varying(150) NOT NULL, razon_social character varying(150) NOT NULL, direccion character varying(200) NOT NULL, comuna character varying(100) NOT NULL, ciudad character varying(100) NOT NULL, codigo_pais character varying(3) NOT NULL, activo boolean DEFAULT true, id serial NOT NULL, stock boolean DEFAULT false, vigente boolean DEFAULT true, clase integer DEFAULT 1, plan integer DEFAULT 1, plantilla character varying(15) DEFAULT 'WAYPOINT', facturable integer DEFAULT 1, toolkit integer DEFAULT 0, propietario integer DEFAULT 0, creacion timestamp without time zone DEFAULT now(), codelco boolean NOT NULL DEFAULT false, familia integer DEFAULT 0, enabled_machines boolean DEFAULT false, enabled_canbus boolean DEFAULT false, enabled_horometro boolean DEFAULT false, enabled_comap boolean DEFAULT false, enabled_frio boolean DEFAULT false, enabled_panico boolean DEFAULT false, enabled_puerta boolean DEFAULT false, enabled_rpm boolean DEFAULT false, enabled_supervisor integer DEFAULT 0, demo boolean, interno boolean, mqtt_enable boolean NOT NULL DEFAULT false, CONSTRAINT pk_cliente PRIMARY KEY (rut))"
+    ],
+    "generation_sql": [
+      "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo, id, stock, vigente, clase, plan, plantilla, facturable, toolkit, propietario, creacion, codelco, familia, enabled_machines, enabled_canbus, enabled_horometro, enabled_comap, enabled_frio, enabled_panico, enabled_puerta, enabled_rpm, enabled_supervisor, demo, interno, mqtt_enable) SELECT CONCAT('rut_', n), CONCAT('nombre_', n), CONCAT('razon_', n), CONCAT('direccion_', n), CONCAT('comuna_', n), CONCAT('ciudad_', n), 'CL', true, n, false, true, 1, 1, 'WAYPOINT', 1, 0, 0, now(), false, 0, false, false, false, false, false, false, false, false, 0, false, false, false FROM generate_series(1, {row_count}) n"
+    ],
+    "tables": [
+      {
+        "name": "cliente",
+        "purpose": "Reproduce lock contention during ALTER TABLE operation",
+        "target_rows": 10000,
+        "distribution_notes": "Simulate realistic workload with SELECT queries and idle transactions."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "cliente": 10000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "cliente"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM cliente WHERE rut = 'rut_1';",
+        "objective": "Verify SELECT query performance and lock behavior.",
+        "expected_evidence": [
+          "Query execution plan shows index usage.",
+          "No blocking behavior under normal conditions."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Reproduce lock contention during ALTER TABLE."
+    ],
+    "symptom_evidence": [
+      "Blocking behavior observed during ALTER TABLE."
+    ],
+    "mechanism_evidence": [
+      "ACCESS EXCLUSIVE lock contention verified."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Blocking behavior during ALTER TABLE",
+    "target_database": "post_retry_blocking_132851_database_frozen_r556929_a4",
+    "dba_description": "Reproduce lock contention during ALTER TABLE operation.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Why does the target database not exist?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database. Further investigation is needed to ensure the environment is correctly set up."
+}

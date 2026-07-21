@@ -1,0 +1,48 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": null,
+  "summary": "ALTER TABLE operation caused blocking due to lock contention.",
+  "symptoms": [
+    "Database froze during ALTER TABLE operation",
+    "Login system was blocked due to SELECT dependency on the locked table"
+  ],
+  "mechanism": "ALTER TABLE requires an ACCESS EXCLUSIVE lock, and lock contention occurred due to long-lived weak locks.",
+  "facts": [
+    {
+      "key": "ALTER TABLE statement",
+      "value": {
+        "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+      },
+      "source": "explicit_post",
+      "evidence": "Post content includes the exact SQL statement.",
+      "confidence": 1.0
+    },
+    {
+      "key": "ACCESS EXCLUSIVE lock",
+      "value": {
+        "impact": "Blocks all other access to the table"
+      },
+      "source": "post_hypothesis",
+      "evidence": "Post mentions lock contention and blocking behavior.",
+      "confidence": 0.9
+    },
+    {
+      "key": "PostgreSQL version",
+      "value": {
+        "version": "9.4.5"
+      },
+      "source": "explicit_post",
+      "evidence": "Post explicitly states the PostgreSQL version.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The table structure and indexes are as described in the post.",
+    "The blocking behavior is reproducible under synthetic conditions."
+  ],
+  "unknowns": [
+    "Exact workload during the incident",
+    "Presence of idle-in-transaction connections"
+  ],
+  "confidence": 0.85
+}

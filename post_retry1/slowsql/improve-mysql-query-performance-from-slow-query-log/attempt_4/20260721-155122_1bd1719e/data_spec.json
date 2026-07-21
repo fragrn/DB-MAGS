@@ -1,0 +1,60 @@
+{
+  "database": "post_retry_slowsql_improve_mysql_query_per_r282748_a4",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS customer_payment_options (id INT AUTO_INCREMENT PRIMARY KEY, company_id INT NOT NULL, local_branch_id INT NOT NULL, tran_id BIGINT DEFAULT NULL, ce_id INT DEFAULT NULL, wallet_id INT DEFAULT NULL, reward_credit_id INT DEFAULT NULL, ce_invoice_id VARCHAR(32) DEFAULT NULL, ce_type ENUM('IN','OUT') DEFAULT NULL, payment_type ENUM('CASH','DEBIT','CREDIT','CHEQUE','DRAFT','BANK_DEPOSIT','EWIRE','WALLET','LOAN','REWARD_CREDIT') NOT NULL, payment_amount DECIMAL(10,2) NOT NULL, payment_type_number VARCHAR(100) DEFAULT NULL, source_country_id INT NOT NULL, real_account_id INT DEFAULT NULL, real_account_type ENUM('LOCAL','HQ') DEFAULT NULL, date_added DATETIME NOT NULL, event_type ENUM('MONEY_TRANSFER','CURRENCY_EXCHANGE','WALLET') DEFAULT NULL, KEY company_id (company_id), KEY real_account_type (real_account_type), KEY tran_id (tran_id), KEY ce_id (ce_id), KEY wallet_id (wallet_id))",
+    "CREATE TABLE IF NOT EXISTS customer_wallet (id INT AUTO_INCREMENT PRIMARY KEY, wallet_unique_id VARCHAR(100) DEFAULT NULL, company_id INT NOT NULL, branch_admin_id INT DEFAULT NULL, emp_id INT DEFAULT NULL, emp_type ENUM('SUPER_ADMIN','ADMIN','AGENT_ADMIN','AGENT','OVER_AGENT_ADMIN','OVER_AGENT') DEFAULT NULL, cus_id BIGINT NOT NULL, tran_id BIGINT DEFAULT NULL, beehive_id INT DEFAULT NULL, type ENUM('DEPOSIT','WITHDRAW','TRANSACTION') NOT NULL, sub_type ENUM('MONEY_TRANSFER','BEEHIVE_DEPOSIT') DEFAULT NULL, credit_in DECIMAL(10,2) DEFAULT NULL, credit_out DECIMAL(10,2) DEFAULT NULL, currency VARCHAR(20) NOT NULL, date_added DATETIME NOT NULL, note VARCHAR(255) DEFAULT NULL, location ENUM('DIRECT') DEFAULT NULL, is_approved ENUM('0','1') NOT NULL DEFAULT '1', idebit_issconf VARCHAR(50) DEFAULT NULL, idebit_issname VARCHAR(50) DEFAULT NULL, idebit_isstrack2 VARCHAR(100) DEFAULT NULL, KEY company_id (company_id), KEY branch_admin_id (branch_admin_id), KEY emp_id (emp_id), KEY tran_id (tran_id), KEY beehive_id (beehive_id))"
+  ],
+  "generation_sql": [
+    "INSERT INTO customer_wallet (id, company_id, currency, is_approved, date_added) SELECT n, 1, '40', '1', DATE_SUB(NOW(), INTERVAL n DAY) FROM generated_numbers WHERE n <= {row_count}",
+    "INSERT INTO customer_payment_options (id, wallet_id, payment_amount, real_account_type, source_country_id, ce_type) SELECT n, 1 + MOD(n, 100), ROUND(RAND() * 1000, 2), 'HQ', 40, CASE WHEN MOD(n, 2) = 0 THEN 'IN' ELSE 'OUT' END FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "customer_wallet",
+      "purpose": "Primary table for wallet data",
+      "target_rows": 10000,
+      "distribution_notes": "Uniform distribution of wallet IDs and approval status."
+    },
+    {
+      "name": "customer_payment_options",
+      "purpose": "Table for payment options linked to wallets",
+      "target_rows": 100000,
+      "distribution_notes": "Skewed distribution with alternating 'IN' and 'OUT' types."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "customer_wallet": 10000,
+      "customer_payment_options": 100000
+    },
+    "value_skew": {
+      "customer_payment_options.ce_type": "Alternating 'IN' and 'OUT' values"
+    },
+    "predicate_selectivity": {
+      "customer_wallet.is_approved = '1'": 0.9
+    },
+    "join_selectivity": {
+      "customer_payment_options.wallet_id = customer_wallet.id": "many-to-one"
+    }
+  },
+  "analyze_tables": [
+    "customer_wallet",
+    "customer_payment_options"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT cw.id, (SELECT SUM(payment_amount) FROM customer_payment_options cpo WHERE cpo.wallet_id = cw.id AND cpo.real_account_type = 'HQ' AND cpo.source_country_id = '40' AND cpo.ce_type = 'IN') AS debit, (SELECT SUM(payment_amount) FROM customer_payment_options cpo WHERE cpo.wallet_id = cw.id AND cpo.real_account_type = 'HQ' AND cpo.source_country_id = '40' AND cpo.tran_id IS NOT NULL AND cpo.ce_type = 'OUT') AS credit FROM customer_wallet cw WHERE cw.company_id = '1' AND cw.currency = '40' AND cw.is_approved = '1' AND DATE(cw.date_added) < '2023-10-01'",
+      "objective": "Verify correlated subquery behavior and dependent joins.",
+      "expected_evidence": [
+        "EXPLAIN shows dependent subqueries with wallet_id join conditions.",
+        "Rows examined align with synthetic data constraints."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

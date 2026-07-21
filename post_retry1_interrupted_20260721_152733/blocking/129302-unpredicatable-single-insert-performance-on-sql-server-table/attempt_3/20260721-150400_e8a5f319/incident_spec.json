@@ -1,0 +1,53 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to blocking and excessive indexes.",
+  "symptoms": [
+    "Single insert operations occasionally take several minutes to complete.",
+    "Blocking sessions appear in sys.dm_exec_requests with no active queries.",
+    "Blocking sessions are marked as 'sleeping' but hold locks on resources.",
+    "Wait type observed is LCK_M_S (lock mode shared)."
+  ],
+  "mechanism": "Blocking caused by uncommitted transactions holding locks on resources, exacerbated by a high number of indexes on the table.",
+  "facts": [
+    {
+      "key": "Table has 34 indexes.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly states that the table has 34 indexes.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Blocking sessions appear in sys.dm_exec_requests.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post describes blocking sessions with no active queries.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Wait type is LCK_M_S.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions the wait type observed is LCK_M_S.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Table size is approximately 8 million rows.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions the table size explicitly.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The blocking is caused by uncommitted transactions holding locks.",
+    "The high number of indexes contributes to the poor insert performance.",
+    "The database environment supports the reproduction of the described behavior."
+  ],
+  "unknowns": [
+    "The exact schema of the table and its indexes.",
+    "The workload pattern that leads to the blocking.",
+    "Whether there are any background processes or triggers affecting the table."
+  ],
+  "confidence": 0.8
+}

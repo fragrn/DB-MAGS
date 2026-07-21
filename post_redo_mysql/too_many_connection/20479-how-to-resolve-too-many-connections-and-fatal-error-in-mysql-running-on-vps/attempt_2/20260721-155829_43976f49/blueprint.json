@@ -1,0 +1,207 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Too many connections error in MySQL caused by high concurrent connections and resource constraints.",
+    "symptoms": [
+      "MySQL error #1040: Too many connections",
+      "High CPU usage by MySQL (100-130%)",
+      "Application errors indicating server is too busy"
+    ],
+    "mechanism": "Exceeding the `max_connections` limit due to concurrent PHP scripts and application usage, potentially exacerbated by inefficient connection handling or resource misconfiguration.",
+    "facts": [
+      {
+        "key": "max_connections",
+        "value": {
+          "current_value": 200
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions increasing `max_connections` to 200 from the default of 100.",
+        "confidence": 0.9
+      },
+      {
+        "key": "PHP scripts",
+        "value": {
+          "count": 12,
+          "connection_behavior": "each script opens a MySQL connection"
+        },
+        "source": "explicit_post",
+        "evidence": "The post states that 12 PHP scripts are running, each opening a MySQL connection.",
+        "confidence": 0.9
+      },
+      {
+        "key": "CPU usage",
+        "value": {
+          "range": "100-130%"
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions `mysqld` using 100-130% CPU.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Error messages",
+        "value": {
+          "application_error": "Fatal Error: Sorry, the server is currently too busy, please try again later.",
+          "phpmyadmin_error": "#1040: Too many connections",
+          "php_warning": "mysqli_connect(): (HY000/1040): Too many connections"
+        },
+        "source": "explicit_post",
+        "evidence": "The post lists these error messages as symptoms.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The PHP scripts are not optimized for short-lived connections.",
+      "Persistent connections may be improperly used.",
+      "The server has sufficient RAM to handle an increase in `max_connections`."
+    ],
+    "unknowns": [
+      "Exact memory usage per connection",
+      "Whether persistent connections are being used",
+      "The total number of concurrent connections at peak usage"
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The incident can be reproduced by simulating high concurrent connections and observing the impact on `max_connections`. However, exact reproduction of the original environment's resource constraints and PHP script behavior is not possible.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_20479_how_t_r709228_a2",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_20479_how_t_r709228_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS user_sessions (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, session_start DATETIME, session_end DATETIME, status VARCHAR(20))",
+      "CREATE TABLE IF NOT EXISTS php_scripts (id INT AUTO_INCREMENT PRIMARY KEY, script_name VARCHAR(255), connection_opened BOOLEAN, execution_time INT)"
+    ],
+    "generation_sql": [
+      "INSERT INTO user_sessions (user_id, session_start, session_end, status) SELECT FLOOR(RAND() * 1000), NOW() - INTERVAL FLOOR(RAND() * 100) MINUTE, NOW(), 'active' FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO php_scripts (script_name, connection_opened, execution_time) SELECT CONCAT('script_', n), TRUE, FLOOR(RAND() * 10) FROM generated_numbers WHERE n <= 12"
+    ],
+    "tables": [
+      {
+        "name": "user_sessions",
+        "purpose": "Simulate user sessions to create concurrent database connections.",
+        "target_rows": 1000,
+        "distribution_notes": "Randomized session start and end times to simulate active and inactive sessions."
+      },
+      {
+        "name": "php_scripts",
+        "purpose": "Simulate PHP scripts opening connections.",
+        "target_rows": 12,
+        "distribution_notes": "Each script opens a connection and has a random execution time."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "user_sessions": 1000,
+        "php_scripts": 12
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "user_sessions",
+      "php_scripts"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM user_sessions WHERE status = 'active'",
+        "objective": "Verify the number of active sessions matches expectations.",
+        "expected_evidence": [
+          "The count of active sessions aligns with the generated data."
+        ]
+      },
+      {
+        "sql": "SELECT COUNT(*) FROM php_scripts WHERE connection_opened = TRUE",
+        "objective": "Ensure all PHP scripts are simulated as opening connections.",
+        "expected_evidence": [
+          "The count of scripts with open connections matches the expected number."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT * FROM user_sessions WHERE status = 'active' LIMIT 10",
+      "SELECT * FROM php_scripts WHERE connection_opened = TRUE LIMIT 10"
+    ],
+    "concurrency": 12,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database reaches max_connections limit under simulated load.",
+      "Error #1040 is observed in logs or application output."
+    ],
+    "symptom_evidence": [
+      "Error #1040: Too many connections",
+      "High CPU usage by MySQL"
+    ],
+    "mechanism_evidence": [
+      "Reaching the max_connections limit due to concurrent connections."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Too many connections",
+    "target_database": "post_retry_too_many_connection_20479_how_t_r709228_a2",
+    "dba_description": "Simulate high concurrent connections to reproduce the 'too many connections' error.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "simulate_high_connections",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM user_sessions WHERE status = 'active' LIMIT 10",
+          "concurrency": 12,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "max_connections_reached": true,
+        "error_1040_observed": true
+      },
+      "success_criteria": {
+        "max_connections_reached": true,
+        "error_1040_observed": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Concurrent connections exceeding max_connections limit."
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating high concurrent connections to trigger the 'too many connections' error, aligning with the described symptoms and mechanism."
+}

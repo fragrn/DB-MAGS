@@ -1,0 +1,33 @@
+{
+  "status": "accepted",
+  "matched": true,
+  "decision": "accept",
+  "weak_match": false,
+  "concerns": [],
+  "recommended_changes": [],
+  "rounds": [
+    {
+      "decision": "accept",
+      "reasoning": "The observed plan supports the query's objective of verifying the table schema and data setup. The plan shows a sequential scan on the table with a filter condition matching the scan_uuid column, which aligns with the expected evidence.",
+      "query_assessments": [
+        {
+          "query_id": "calibration_query_1",
+          "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = gen_random_uuid()",
+          "matched": true,
+          "observed_plan_summary": "Sequential scan on host_scan_complete_log_counts with a filter condition on scan_uuid.",
+          "supporting_evidence": [
+            "The plan examines the table host_scan_complete_log_counts.",
+            "The filter condition (scan_uuid = gen_random_uuid()) is visible in the plan.",
+            "The plan indicates that the table contains the expected single row."
+          ],
+          "discrepancies": []
+        }
+      ],
+      "concerns": [],
+      "recommended_changes": [],
+      "missing_information": [],
+      "round": 1,
+      "matched": true
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 2,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_resource_limitation_220486_slow_r848989_a4"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_resource_limitation_220486_slow_r848989_a4'\")"
+  },
+  {
+    "step": 3,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"dbms_version\": null,\n    \"summary\": \"Slow query execution with RESOURCE_SEMAPHORE waits and CXCONSUMER waits due to parallelism and memory pressure.\",\n    \"symptoms\": [\n      \"RESOURCE_SEMAPHORE waits observed during query execution.\",\n      \"CXCONSUMER waits indicating parallel query execution.\",\n      \"Slow query performance under high user connection load.\"\n    ],\n    \"mechanism\": \"Excessive parallelism and memory grants causing RESOURCE_SEMAPHORE waits.\",\n    \"facts\": [\n      {\n        \"key\": \"RESOURCE_SEMAPHORE waits\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"RESOURCE_SEMAPHORE waits observed in sp_whoisactive and sp_BlitzCache results.\",\n        \"confidence\": 0.9\n      },\n      {\n        \"key\": \"CXCONSUMER waits\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"CXCONSUMER waits observed in sp_whoisactive results.\",\n        \"confidence\": 0.9\n      },\n      {\n        \"key\": \"MAXDOP set to 0\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"DBA noted MAXDOP set to 0 causing queries to utilize all CPU cores.\",\n        \"confidence\": 0.8\n      },\n      {\n        \"key\": \"Memory pressure affecting queries\",\n        \"value\": {},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"11 forced grants reported in sys.dm_exec_query_resource_semaphores.\",\n        \"confidence\": 0.8\n      }\n    ],\n    \"assumptions\": [\n      \"Parallelism is contributing to memory pressure and RESOURCE_SEMAPHORE waits.\",\n      \"Query execution plans involve high memory grants.\"\n    ],\n    \"unknowns\": [\n      \"Exact query patterns causing RESOURCE_SEMAPHORE waits.\",\n      \"Impact of other server configurations on memory pressure.\"\n    ],\n    \"confidence\": 0.85\n  },\n  \"feasibility\": {\n    \"level\": \"mechanism\",\n    \"rationale\": \"The reproduction can simulate RESOURCE_SEMAPHORE waits by creating synthetic queries with high memory grants and parallelism. Exact reproduction of the production environment is not possible due to lack of access to original data and configurations.\",\n    \"missing_capabilities\": [],\n    \"unmatched_conditions\": [],\n    \"confidence\": 0.8\n  },\n  \"environment_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"database\": \"post_retry_resource_limitation_220486_slow_r848989_a4\",\n    \"requirements\": [\"Dedicated SQL Server test database\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_resource_limitation_220486_slow_r848989_a4\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS synthetic_queries (id INT PRIMARY KEY, query_pattern NVARCHAR(MAX), memory_grant INT, parallelism INT)\",\n      \"CREATE TABLE IF NOT EXISTS query_execution_logs (id INT PRIMARY KEY, query_id INT, execution_time_ms INT, wait_type NVARCHAR(64))\"\n    ],\n    \"generation_sql\": [\n      \"INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = ?', 100, 8)\",\n      \"INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (2, 'SELECT COUNT(*) FROM large_table GROUP BY col2', 200, 16)\"\n    ],\n    \"tables\": [\n      {\n        \"name\": \"synthetic_queries\",\n        \"purpose\": \"Simulate queries with high memory grants and parallelism to reproduce RESOURCE_SEMAPHORE waits.\",\n        \"target_rows\": 2,\n        \"distribution_notes\": \"Queries designed to simulate high memory pressure and parallel execution.\"\n      },\n      {\n        \"name\": \"query_execution_logs\",\n        \"purpose\": \"Log execution metrics and wait types for synthetic queries.\",\n        \"target_rows\": 100,\n        \"distribution_notes\": \"Logs capturing execution time and wait types for analysis.\"\n      }\n    ],\n    \"constraints\": {\n      \"cardinality\": {\"synthetic_queries\": 2, \"query_execution_logs\": 100},\n      \"value_skew\": {\"synthetic_queries.memory_grant\": \"High memory grants skewed towards specific queries.\"},\n      \"predicate_selectivity\":"
+  }
+]

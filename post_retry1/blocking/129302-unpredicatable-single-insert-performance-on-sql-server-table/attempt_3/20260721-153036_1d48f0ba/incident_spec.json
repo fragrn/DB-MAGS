@@ -1,0 +1,59 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance in a SQL Server table with excessive indexes and potential blocking issues.",
+  "symptoms": [
+    "Single record insert performance is extremely poor, taking several minutes.",
+    "Blocking session IDs appear in `sys.dm_exec_requests`, but the blocker session is inactive or sleeping.",
+    "Wait type `LCK_M_S` observed during blocking incidents."
+  ],
+  "mechanism": "Excessive indexes on the table combined with blocking caused by uncommitted transactions or lock contention.",
+  "facts": [
+    {
+      "key": "table_row_count",
+      "value": {
+        "approximate_rows": 8000000
+      },
+      "source": "explicit_post",
+      "evidence": "The table is described as having 8 million rows.",
+      "confidence": 0.9
+    },
+    {
+      "key": "index_count",
+      "value": {
+        "count": 34
+      },
+      "source": "explicit_post",
+      "evidence": "The table has 34 indexes despite being an OLTP system.",
+      "confidence": 0.9
+    },
+    {
+      "key": "blocking_session_behavior",
+      "value": {
+        "session_state": "sleeping",
+        "blocking_duration": "prolonged"
+      },
+      "source": "explicit_post",
+      "evidence": "Blocking sessions are reported as sleeping but still causing prolonged blocking.",
+      "confidence": 0.8
+    },
+    {
+      "key": "wait_type",
+      "value": {
+        "type": "LCK_M_S"
+      },
+      "source": "explicit_post",
+      "evidence": "The wait type `LCK_M_S` is observed during blocking incidents.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The blocking is related to lock contention caused by uncommitted transactions.",
+    "The excessive number of indexes contributes to the poor insert performance."
+  ],
+  "unknowns": [
+    "Exact schema of the table and indexes.",
+    "Whether the blocking is caused by specific application behavior or database configuration."
+  ],
+  "confidence": 0.8
+}

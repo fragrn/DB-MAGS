@@ -1,0 +1,182 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/132851/database-frozen-on-alter-table/132868#132868
+Canonical URL: https://dba.stackexchange.com/questions/132851/database-frozen-on-alter-table
+Title: Database "frozen" on ALTER TABLE
+Question ID: 132851
+License: CC BY-SA 3.0; author: Gonzalo Vasquez
+
+# Question
+
+Our production environment just froze* this morning for a while when altering a table, adding a column actually.
+
+Offending SQL:`ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];`
+
+* Login into our system requires a select from that very same table, so no one could login during the alter table. We actually had to kill the process to allow the system resume normal operations.
+
+Table Structure:```
+CREATE TABLE cliente
+(
+  rut character varying(30) NOT NULL,
+  nombre character varying(150) NOT NULL,
+  razon_social character varying(150) NOT NULL,
+  direccion character varying(200) NOT NULL,
+  comuna character varying(100) NOT NULL,
+  ciudad character varying(100) NOT NULL,
+  codigo_pais character varying(3) NOT NULL,
+  activo boolean DEFAULT true,
+  id serial NOT NULL,
+  stock boolean DEFAULT false,
+  vigente boolean DEFAULT true,
+  clase integer DEFAULT 1,
+  plan integer DEFAULT 1,
+  plantilla character varying(15) DEFAULT 'WAYPOINT'::character varying,
+  facturable integer DEFAULT 1,
+  toolkit integer DEFAULT 0,
+  propietario integer DEFAULT 0,
+  creacion timestamp without time zone DEFAULT now(),
+  codelco boolean NOT NULL DEFAULT false,
+  familia integer DEFAULT 0,
+  enabled_machines boolean DEFAULT false,
+  enabled_canbus boolean DEFAULT false,
+  enabled_horometro boolean DEFAULT false,
+  enabled_comap boolean DEFAULT false,
+  enabled_frio boolean DEFAULT false,
+  enabled_panico boolean DEFAULT false,
+  enabled_puerta boolean DEFAULT false,
+  enabled_rpm boolean DEFAULT false,
+  enabled_supervisor integer DEFAULT 0,
+  demo boolean,
+  interno boolean,
+  mqtt_enable boolean NOT NULL DEFAULT false,
+  topicos character varying(20)[],
+  CONSTRAINT pk_cliente PRIMARY KEY (rut),
+  CONSTRAINT fk_cliente_familiaid FOREIGN KEY (familia)
+      REFERENCES cliente_familia (id) MATCH SIMPLE
+      ON UPDATE NO ACTION ON DELETE NO ACTION,
+  CONSTRAINT pk_pais FOREIGN KEY (codigo_pais)
+      REFERENCES pais (codigo) MATCH SIMPLE
+      ON UPDATE NO ACTION ON DELETE NO ACTION,
+  CONSTRAINT unique_id_cliente UNIQUE (id)
+)
+WITH (
+  OIDS=FALSE
+);
+ALTER TABLE cliente
+  OWNER TO waypoint;
+GRANT ALL ON TABLE cliente TO waypoint;
+GRANT ALL ON TABLE cliente TO waypointtx;
+GRANT SELECT, UPDATE, INSERT, DELETE ON TABLE cliente TO waypointtomcat;
+GRANT SELECT ON TABLE cliente TO waypointphp;
+GRANT SELECT ON TABLE cliente TO waypointpphppublic;
+GRANT ALL ON TABLE cliente TO waypointsoporte;
+GRANT SELECT, INSERT ON TABLE cliente TO waypointsalesforce;
+GRANT SELECT ON TABLE cliente TO waypointadminuser;
+GRANT SELECT ON TABLE cliente TO waypointagenda;
+GRANT SELECT ON TABLE cliente TO waypointmachines;
+GRANT SELECT ON TABLE cliente TO waypointreports;
+GRANT SELECT ON TABLE cliente TO readonly;
+
+CREATE INDEX index_cliente
+  ON cliente
+  USING btree
+  (rut COLLATE pg_catalog."default");
+
+CREATE INDEX index_cliente_activo
+  ON cliente
+  USING btree
+  (activo);
+
+CREATE INDEX index_cliente_id_activo
+  ON cliente
+  USING btree
+  (id, activo);
+
+CREATE INDEX index_cliente_rut_activo
+  ON cliente
+  USING btree
+  (rut COLLATE pg_catalog."default", activo);
+
+
+CREATE TRIGGER trigger_default_admin
+  AFTER INSERT
+  ON cliente
+  FOR EACH ROW
+  EXECUTE PROCEDURE crea_default_admin();
+
+CREATE TRIGGER trigger_default_grupo
+  AFTER INSERT
+  ON cliente
+  FOR EACH ROW
+  EXECUTE PROCEDURE crea_default_clientegrupo();  
+
+```Should I disable CONSTRAINTS, TRIGGERS, or something else?
+
+Perhaps any DB Tuning?
+
+What else should I provide for further analysis?
+
+Version: PostgreSQL 9.4.5 on x86_64-unknown-linux-gnu, compiled by gcc (Debian 4.9.2-10) 4.9.2, 64-bit
+
+# Answers
+
+## Answer 1
+Author: David Spillett
+Accepted: yes
+Score: 14
+License: CC BY-SA 3.0
+
+DDL operations usually lock the object they are acting upon, so should not be performed outside planned maintenance windows (when your users are expecting disruption or the system to be completely offline for up to a planned amount of time) - there is nothing you can do about this easily1.
+
+Some operations only keep a write lock, so your application can keep serving requests that only read the affected objects.
+
+The documentation seems pretty good at listing what locks are likely to be held by DDL operations.
+
+This blog entry (https://www.braintreepayments.com/blog/safe-operations-for-high-volume-postgresql/) has a summary which suggests adding a column can be an online operation if the column is nullable and does not have a default value or unique constraint, though that implies that the statement you state should have been run without locks (as IIRC postgres defaults columns to being NULLable unless you explicitly state otherwise). Did you run any other operations after the add column? Perhaps creating an index upon it (which would take a write lock on the table by default)?
+
+1 Some replication/clustering/mirroring arrangements would allow you to update a mirror (pausing updates to it during the change and replaying them after), switch over to using that copy as the live one, and so on until each copy is updated, so the downtime is limited to the time is takes to replay the changes made during the DDL operation. Live operations like that are not without risk though, so unless you absolutely can't it is recommended you instead arrange a proper maintenance window to perform and verify structural updates in.
+
+## Answer 2
+Author: jjanes
+Accepted: no
+Score: 70
+License: CC BY-SA 3.0
+
+The command you wish to run does take an ACCESS EXCLUSIVE lock on the table, preventing all other access to that table. But the duration of this lock should be just a few milliseconds, as adding a column like the one you want to add does not require the table to be re-written, it just requires metadata to be updated.
+
+Where the problem can come in, and I bet you dollars to donuts that it is the problem you are seeing, is in lock priorities. Someone has a weak lock, like ACCESS SHARE lock, on that table, and they are camping on it indefinitely (maybe an idle-in-transaction connection which has been leaked? Someone who opened psql, started a query in a repeatable read mode, and then went on vacation?).
+
+The ADD COLUMN tries to take the ACCESS EXCLUSIVE it needs, and it queues up behind the first lock.
+
+Now all future lock requests queue up behind the waiting ACCESS EXCLUSIVE request.
+
+Conceptually, incoming lock requests which are compatible with the already-granted lock could jump over the waiting ACCESS EXCLUSIVE and be granted out of turn, but that is not how PostgreSQL does it.
+
+You need to find the process which is holding the long-lived weak lock.
+
+You can do this by querying the pg_locks table.```
+select * from pg_locks where 
+    granted and relation = 'cliente'::regclass \x\g\x
+
+```If you do this while everything is locked up, you should get only one answer (unless there are multiple long-lived culprits). If you do this after you already killed the ADD COLUMN, then you might see lots of granted locks, but if you repeat it a few times there should one or a few which are staying around each time.
+
+You can then take the PID that you got from pg_lock, and query with that into pg_stat_activity to see what the offender is doing:```
+select * from pg_stat_activity where pid=28731 \x\g\x
+
+```...```
+backend_start    | 2016-03-22 13:08:30.849405-07
+xact_start       | 2016-03-22 13:08:36.797703-07
+query_start      | 2016-03-22 13:08:36.799021-07
+state_change     | 2016-03-22 13:08:36.824369-07
+waiting          | f
+state            | idle in transaction
+backend_xid      |
+backend_xmin     |
+query            | select * from cliente limit 4;
+
+```So, it ran a query, inside a transaction, and then went idle without ever closing the transaction. It is now 13:13, so they have been idle for 5 minutes.
+
+# Linked Page Snapshots
+
+- URL: https://www.braintreepayments.com/blog/safe-operations-for-high-volume-postgresql/
+  Title: 
+  Description/Error:

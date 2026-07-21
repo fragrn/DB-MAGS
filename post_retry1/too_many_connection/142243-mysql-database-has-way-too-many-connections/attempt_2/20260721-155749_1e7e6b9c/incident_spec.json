@@ -1,0 +1,63 @@
+{
+  "dbms": "mysql",
+  "dbms_version": "5.7.12",
+  "summary": "Excessive MySQL connection errors due to high concurrency in background job processing.",
+  "symptoms": [
+    "Connection_errors_max_connections is high (e.g., 19,102).",
+    "Max_used_connections reaches the limit of 500.",
+    "Background jobs fail due to connection exhaustion.",
+    "High Connections count (e.g., 3,068) despite max_connections being 500."
+  ],
+  "mechanism": "High concurrency from background job pools (e.g., Sidekiq with 4 processes and 200 jobs each) exceeds the max_connections limit, leading to connection errors and job failures.",
+  "facts": [
+    {
+      "key": "max_connections",
+      "value": 500,
+      "source": "explicit_post",
+      "evidence": "The DBA explicitly mentioned max_connections is set to 500.",
+      "confidence": 0.5
+    },
+    {
+      "key": "background_job_concurrency",
+      "value": {
+        "processes": 4,
+        "jobs_per_process": 200
+      },
+      "source": "explicit_post",
+      "evidence": "The post describes Sidekiq running 4 processes with 200 jobs each.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Connection_errors_max_connections",
+      "value": 19102,
+      "source": "explicit_post",
+      "evidence": "The DBA provided the output of 'show status like '%onn%'' showing Connection_errors_max_connections = 19102.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Max_used_connections",
+      "value": 501,
+      "source": "explicit_post",
+      "evidence": "The DBA provided the output of 'show status like '%onn%'' showing Max_used_connections = 501.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Connections",
+      "value": 3068,
+      "source": "explicit_post",
+      "evidence": "The DBA provided the output of 'show status like '%onn%'' showing Connections = 3068.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The database is configured with default connection timeout settings (e.g., wait_timeout).",
+    "The background jobs do not explicitly close connections after use.",
+    "The workload involves a high number of short-lived connections."
+  ],
+  "unknowns": [
+    "The exact queries executed by the background jobs.",
+    "The database schema and indexes used by the applications.",
+    "The specific workload characteristics (e.g., read/write ratio, query complexity)."
+  ],
+  "confidence": 0.9
+}

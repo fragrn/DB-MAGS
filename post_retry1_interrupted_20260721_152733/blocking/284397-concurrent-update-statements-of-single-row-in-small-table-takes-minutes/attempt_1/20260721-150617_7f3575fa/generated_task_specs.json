@@ -1,0 +1,60 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES ('00000000-0000-0000-0000-000000000001', 0)",
+          "concurrency": 1,
+          "duration_sec": 1
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "table_exists": true,
+        "row_count": 1
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial setup for reproduction"
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + 1 WHERE scan_uuid = '00000000-0000-0000-0000-000000000001'",
+          "concurrency": 100,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "lock_contention": true,
+        "update_delays": true
+      },
+      "success_criteria": {
+        "symptom_reproduced": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Concurrent updates causing lock contention"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "run_workload"
+    ]
+  ]
+}

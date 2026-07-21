@@ -1,0 +1,43 @@
+{
+  "database": "post_retry_too_many_connection_142243_mysq_r669841_a2",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, job_type VARCHAR(64), status VARCHAR(32), created_at DATETIME, updated_at DATETIME)"
+  ],
+  "generation_sql": [
+    "INSERT INTO jobs (job_type, status, created_at, updated_at) SELECT CONCAT('type_', FLOOR(RAND() * 10)), 'pending', NOW(), NOW() FROM (SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) AS tmp"
+  ],
+  "tables": [
+    {
+      "name": "jobs",
+      "purpose": "Simulates the jobs table used by background processes.",
+      "target_rows": 1000,
+      "distribution_notes": "Uniform distribution of job types and statuses."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "jobs": 1000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "jobs"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT COUNT(*) FROM jobs WHERE status = 'pending'",
+      "objective": "Verify that the jobs table is populated with the expected number of rows.",
+      "expected_evidence": [
+        "The row count matches the target_rows specified in the data_spec."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

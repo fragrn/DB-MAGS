@@ -1,0 +1,70 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Nested loops join in a query involving multiple joins and a large table causes performance issues.",
+  "symptoms": [
+    "High query execution time",
+    "Nested loops join consuming 90% of query cost"
+  ],
+  "mechanism": "Inefficient join condition with OR clause in a nested loops join, causing high computational cost.",
+  "facts": [
+    {
+      "key": "query_structure",
+      "value": {
+        "joins": [
+          "INNER JOIN",
+          "LEFT OUTER JOIN"
+        ],
+        "tables": [
+          "category",
+          "category_voc",
+          "category_link"
+        ],
+        "temp_table": "#Ids with 10,000 IDs"
+      },
+      "source": "explicit_post",
+      "evidence": "Query structure and explanation provided in the DBA post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "performance_issue",
+      "value": {
+        "nested_loops_cost": 89,
+        "actual_rows": 28863,
+        "estimated_rows": 114621
+      },
+      "source": "explicit_post",
+      "evidence": "Execution plan details provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "indexes",
+      "value": {
+        "category": [
+          "category_id",
+          "parent_category_id"
+        ],
+        "category_voc": [
+          "category_id",
+          "language_code"
+        ],
+        "category_link": [
+          "sku_id",
+          "category_id"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Index details provided in the post.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The database schema and indexes are as described in the post.",
+    "The query execution plan is representative of the described issue."
+  ],
+  "unknowns": [
+    "Exact data distribution and cardinality in the tables.",
+    "Whether the suggested optimizations (e.g., COALESCE, splitting joins) were tested in the same environment."
+  ],
+  "confidence": 0.9
+}

@@ -1,0 +1,82 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Performance degradation when adding TOP 1 to a query with ORDER BY.",
+  "symptoms": [
+    "Query with TOP 1 and ORDER BY performs significantly worse than without TOP 1.",
+    "Query plan changes from Hash Match to Nested Loops with Table Spool."
+  ],
+  "mechanism": "Row goal optimization leads to suboptimal plan with Nested Loops and Table Spool.",
+  "facts": [
+    {
+      "key": "query_with_top_1",
+      "value": {
+        "sql": "SELECT TOP 1 dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+      },
+      "source": "explicit_post",
+      "evidence": "Query provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "query_without_top_1",
+      "value": {
+        "sql": "SELECT dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER"
+      },
+      "source": "explicit_post",
+      "evidence": "Query provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "nested_loops_with_table_spool",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Query plan described in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "hash_match_plan",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Query plan described in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "document_queue_cardinality",
+      "value": {
+        "rows": 5000
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions Document_Queue has ~5k rows.",
+      "confidence": 1.0
+    },
+    {
+      "key": "correspondence_journal_cardinality",
+      "value": {
+        "rows": 1400000
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions Correspondence_Journal has ~1.4 mil rows.",
+      "confidence": 1.0
+    },
+    {
+      "key": "indexes",
+      "value": {
+        "Correspondence_Journal": [
+          "Document_Id, File_Number"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions added index on Correspondence_Journal.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "Azure SQL Edge compatibility suffices for SQL Server reproduction.",
+    "Synthetic data can mimic cardinality and distribution of production data."
+  ],
+  "unknowns": [
+    "Exact optimizer behavior in Azure SQL Edge vs full SQL Server.",
+    "Impact of TEMPDB performance on Table Spool."
+  ],
+  "confidence": 0.9
+}

@@ -1,0 +1,24 @@
+{
+  "changes": [
+    {
+      "path": "workload_spec.queries",
+      "before": [
+        {
+          "sql": "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, REPLICATE('B', 100))",
+          "frequency": 1
+        }
+      ],
+      "after": [
+        "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES ('Deskwork', 11, REPLICATE('B', 100))"
+      ],
+      "reason": "Runtime SQL background workload expects query strings."
+    },
+    {
+      "path": "task_specs[1].actions[0].duration_sec",
+      "before": 300,
+      "after": 60.0,
+      "reason": "Cap action duration to experiment_request.max_duration_sec."
+    }
+  ],
+  "timestamp": 1784617403.274036
+}

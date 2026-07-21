@@ -1,0 +1,146 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r297191_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_resource_limitation_220486_slow_r297191_a3"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial database setup for reproduction."
+      }
+    },
+    {
+      "task_id": "prepare_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r297191_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE workload_table (id INT PRIMARY KEY, category VARCHAR(64), payload NVARCHAR(MAX), created_at DATETIME)"
+                },
+                {
+                  "sql": "CREATE TABLE reference_table (id INT PRIMARY KEY, status INT, description NVARCHAR(255))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema preparation for reproduction."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_220486_slow_r297191_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO reference_table (id, status, description) SELECT n, n % 5, CONCAT('Description_', n) FROM (SELECT TOP 1000 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers"
+                },
+                {
+                  "sql": "INSERT INTO workload_table (id, category, payload, created_at) SELECT n, CASE WHEN n % 100 = 0 THEN 'high_memory' ELSE 'normal' END, REPLICATE('X', 1000), GETDATE() FROM (SELECT TOP 100000 ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data generation for reproduction."
+      }
+    },
+    {
+      "task_id": "execute_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT TOP 10 * FROM workload_table WHERE category = 'high_memory' ORDER BY created_at DESC",
+          "concurrency": 10,
+          "duration_sec": 60
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT w.* FROM workload_table w JOIN reference_table r ON w.id = r.id WHERE w.category = 'high_memory'",
+          "concurrency": 10,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "RESOURCE_SEMAPHORE_waits": "increase",
+        "query_execution_time": "increase"
+      },
+      "success_criteria": {
+        "symptoms_observed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Workload execution to reproduce RESOURCE_SEMAPHORE waits."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "prepare_data"
+    ],
+    [
+      "prepare_data",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "execute_workload"
+    ]
+  ]
+}

@@ -1,0 +1,121 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_252749_lock_wa_r525975_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_long_transaction_252749_lock_wa_r525975_a2"
+                },
+                {
+                  "sql": "USE post_retry_long_transaction_252749_lock_wa_r525975_a2"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS EVENT_DETAILS (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "validation": "Database and table created successfully."
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup"
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT UUID(), UUID(), CASE WHEN MOD(n, 100)=0 THEN 'health' ELSE 'other' END, UUID(), 20231001 + MOD(n, 30), MOD(n, 86400), UUID(), MOD(n, 5), CONCAT('event_', n), CONCAT('message_', n) FROM generated_numbers WHERE n <= 10000",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "validation": "Data generated successfully."
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data generation"
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM EVENT_DETAILS WHERE COMPONENT_NAME = 'health' AND UPDATE_DATE = 20231001",
+          "concurrency": 10,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) VALUES (UUID(), UUID(), 'health', UUID(), 20231001, 3600, UUID(), 1, 'event_data', 'message')",
+          "concurrency": 10,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "validation": "Workload simulated successfully."
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Workload simulation"
+      }
+    },
+    {
+      "task_id": "execute_delete",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "DELETE FROM EVENT_DETAILS WHERE UPDATE_DATE < 20231015 AND COMPONENT_NAME = 'health'",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "validation": "Lock contention observed during DELETE."
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "DELETE query execution"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "simulate_workload"
+    ],
+    [
+      "simulate_workload",
+      "execute_delete"
+    ]
+  ]
+}

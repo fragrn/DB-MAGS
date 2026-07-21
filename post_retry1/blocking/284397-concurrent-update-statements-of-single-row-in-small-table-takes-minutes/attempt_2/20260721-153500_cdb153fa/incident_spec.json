@@ -1,0 +1,52 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": "PostgreSQL 18.4 (Homebrew) on aarch64-apple-darwin24.6.0",
+  "summary": "Concurrent UPDATE statements on a single row in a small table cause significant delays due to locking contention.",
+  "symptoms": [
+    "UPDATE statements take minutes to complete despite the small table size.",
+    "Locks are observed with significant age values."
+  ],
+  "mechanism": "Row-level locking contention due to concurrent updates targeting the same row.",
+  "facts": [
+    {
+      "key": "table_structure",
+      "value": {
+        "columns": [
+          "scan_uuid",
+          "num_shards_completed"
+        ],
+        "no_indexes": true
+      },
+      "source": "explicit_post",
+      "evidence": "Table schema provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "update_pattern",
+      "value": {
+        "sql": "UPDATE host_scan_complete_log_counts SET num_shards_completed = num_shards_completed + $2 WHERE scan_uuid = $1"
+      },
+      "source": "explicit_post",
+      "evidence": "SQL query provided in the post.",
+      "confidence": 1.0
+    },
+    {
+      "key": "locking_behavior",
+      "value": {
+        "exclusive_locks observed": true
+      },
+      "source": "explicit_post",
+      "evidence": "Lock age and type details provided in the post.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The issue is caused by row-level locking contention due to concurrent updates.",
+    "The table has no indexes, which may exacerbate contention."
+  ],
+  "unknowns": [
+    "Exact DBMS version.",
+    "Whether adding indexes or changing the update pattern would mitigate the issue."
+  ],
+  "confidence": 0.9
+}

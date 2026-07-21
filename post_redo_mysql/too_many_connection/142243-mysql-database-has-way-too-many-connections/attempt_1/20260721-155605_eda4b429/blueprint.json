@@ -1,0 +1,274 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": "5.7.12",
+    "summary": "Excessive connection errors due to insufficient max_connections and inefficient connection handling in background jobs.",
+    "symptoms": [
+      "Connection_errors_max_connections is extremely high (e.g., 19,102).",
+      "Max_used_connections reaches the configured limit (501).",
+      "Background jobs fail due to connection exhaustion."
+    ],
+    "mechanism": "Background job processes (e.g., Sidekiq) create excessive concurrent connections, exceeding max_connections and causing failures.",
+    "facts": [
+      {
+        "key": "max_connections",
+        "value": {
+          "configured": 500
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions max_connections set to 500.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Connection_errors_max_connections",
+        "value": {
+          "count": 19102
+        },
+        "source": "explicit_post",
+        "evidence": "Post includes SHOW STATUS output showing Connection_errors_max_connections = 19102.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Sidekiq job pool size",
+        "value": {
+          "processes": 4,
+          "jobs_per_process": 200
+        },
+        "source": "explicit_post",
+        "evidence": "Post describes Sidekiq configuration with 4 processes and 200 jobs per process.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Threads_connected",
+        "value": {
+          "count": 501
+        },
+        "source": "explicit_post",
+        "evidence": "Post includes SHOW STATUS output showing Threads_connected = 501 during job execution.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "Background jobs are not efficiently releasing connections.",
+      "Sidekiq pool size is unnecessarily high for the workload.",
+      "Connection pooling or wait_timeout settings may be suboptimal."
+    ],
+    "unknowns": [
+      "Exact workload characteristics of the background jobs.",
+      "Whether connection pooling is implemented in the Rails applications."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of connection exhaustion due to excessive concurrent connections can be reproduced using synthetic data and workload simulation.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_142243_mysq_r565857_a1",
+    "requirements": [
+      "Dedicated test database for reproduction."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_142243_mysq_r565857_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, process_id INT, job_id INT, status VARCHAR(64), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)",
+      "CREATE TABLE IF NOT EXISTS connections_log (id INT AUTO_INCREMENT PRIMARY KEY, connection_id INT, process_id INT, job_id INT, status VARCHAR(64), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+    ],
+    "generation_sql": [
+      "INSERT INTO jobs (process_id, job_id, status) SELECT MOD(n, 4) + 1, n, 'pending' FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "jobs",
+        "purpose": "Simulates background jobs with process and job identifiers.",
+        "target_rows": 10000,
+        "distribution_notes": "Uniform distribution of jobs across processes."
+      },
+      {
+        "name": "connections_log",
+        "purpose": "Tracks connection attempts and statuses during reproduction.",
+        "target_rows": 0,
+        "distribution_notes": "Populated dynamically during workload execution."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "jobs": 10000,
+        "connections_log": "dynamic"
+      },
+      "value_skew": {
+        "jobs.process_id": "Uniform distribution across 4 processes."
+      },
+      "predicate_selectivity": {
+        "jobs.status = 'pending'": 1.0
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "jobs",
+      "connections_log"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM jobs WHERE status = 'pending'",
+        "objective": "Verify that the jobs table is populated correctly with pending jobs.",
+        "expected_evidence": [
+          "The count matches the expected number of rows.",
+          "The status column has the intended distribution."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "UPDATE jobs SET status = 'running' WHERE id = (SELECT MIN(id) FROM jobs WHERE status = 'pending')",
+      "INSERT INTO connections_log (connection_id, process_id, job_id, status) VALUES (CONNECTION_ID(), MOD(RAND()*4, 4)+1, MOD(RAND()*10000, 10000)+1, 'attempted')"
+    ],
+    "concurrency": 200,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Connection_errors_max_connections increases during workload execution.",
+      "Threads_connected approaches or exceeds max_connections.",
+      "Connections_log table reflects connection attempts and statuses."
+    ],
+    "symptom_evidence": [
+      "Connection_errors_max_connections increases significantly.",
+      "Threads_connected reaches max_connections during workload execution."
+    ],
+    "mechanism_evidence": [
+      "Workload queries simulate excessive concurrent connections.",
+      "Connection_logs reflect connection attempts and failures."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Connection exhaustion due to excessive concurrent connections.",
+    "target_database": "post_retry_too_many_connection_142243_mysq_r565857_a1",
+    "dba_description": "Simulate connection exhaustion caused by background job processes exceeding max_connections.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_142243_mysq_r565857_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS jobs (id INT AUTO_INCREMENT PRIMARY KEY, process_id INT, job_id INT, status VARCHAR(64), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS connections_log (id INT AUTO_INCREMENT PRIMARY KEY, connection_id INT, process_id INT, job_id INT, status VARCHAR(64), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema preparation for reproduction."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO jobs (process_id, job_id, status) SELECT MOD(n, 4) + 1, n, 'pending' FROM generated_numbers WHERE n <= 10000",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {
+        "rows_inserted": 10000
+      },
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Data generation for workload simulation."
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "UPDATE jobs SET status = 'running' WHERE id = (SELECT MIN(id) FROM jobs WHERE status = 'pending')",
+          "concurrency": 200,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO connections_log (connection_id, process_id, job_id, status) VALUES (CONNECTION_ID(), MOD(RAND()*4, 4)+1, MOD(RAND()*10000, 10000)+1, 'attempted')",
+          "concurrency": 200,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "connections_attempted": "dynamic"
+      },
+      "success_criteria": {
+        "workload_simulated": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Simulating excessive concurrent connections."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_schema",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "simulate_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating the mechanism of connection exhaustion caused by excessive concurrent connections from background job processes. Synthetic data and workload queries are designed to mimic the described behavior, ensuring a controlled environment for analysis."
+}

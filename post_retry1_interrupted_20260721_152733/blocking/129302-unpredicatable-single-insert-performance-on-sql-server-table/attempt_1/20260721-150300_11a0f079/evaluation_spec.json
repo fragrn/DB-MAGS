@@ -1,0 +1,16 @@
+{
+  "validation_criteria": [
+    "Blocking sessions are observed in sys.dm_exec_requests.",
+    "The wait type LCK_M_S is observed for the blocked session.",
+    "The blocking session is identified as 'sleeping' in sys.dm_exec_sessions."
+  ],
+  "symptom_evidence": [
+    "Insert performance degrades significantly due to blocking.",
+    "Blocking sessions appear to be 'sleeping' and holding locks."
+  ],
+  "mechanism_evidence": [
+    "Excessive indexes contribute to the locking and blocking behavior.",
+    "Uncommitted transactions hold locks and block other sessions."
+  ],
+  "minimum_plan_similarity": 0.7
+}

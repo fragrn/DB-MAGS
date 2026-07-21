@@ -1,0 +1,299 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": "9.4.4",
+    "summary": "PostgreSQL performance degraded to 1/4 of its original speed, with slower backups, replication, and query execution.",
+    "symptoms": [
+      "Backups taking 4x longer than before.",
+      "Replication syncs taking 4x longer.",
+      "Queries that used to take seconds now hang indefinitely unless work_mem is increased.",
+      "High memory usage and swapping on one server."
+    ],
+    "mechanism": "Potential misconfiguration of Linux kernel settings (e.g., Transparent Huge Pages, I/O scheduler, dirty memory thresholds) and PostgreSQL parameters.",
+    "facts": [
+      {
+        "key": "PostgreSQL version",
+        "value": {
+          "version": "9.4.4"
+        },
+        "source": "explicit_post",
+        "evidence": "PostgreSQL 9.4.4 on x86_64-unknown-linux-gnu, compiled by gcc (GCC) 4.4.7 20120313 (Red Hat 4.4.7-11), 64-bit",
+        "confidence": 1.0
+      },
+      {
+        "key": "Linux kernel settings",
+        "value": {
+          "transparent_hugepages": "always",
+          "io_scheduler": "cfq",
+          "dirty_background_ratio": 10
+        },
+        "source": "explicit_post",
+        "evidence": "Linux settings: Transparent Huge Pages enabled, I/O scheduler set to cfq, dirty_background_ratio set to 10.",
+        "confidence": 1.0
+      },
+      {
+        "key": "System memory and swap usage",
+        "value": {
+          "server_a": {
+            "total_mem_gb": 378,
+            "used_mem_gb": 347,
+            "swap_used_gb": 1
+          },
+          "server_b": {
+            "total_mem_gb": 378,
+            "used_mem_gb": 366,
+            "swap_used_gb": 1
+          }
+        },
+        "source": "explicit_post",
+        "evidence": "Memory usage statistics from 'free -g' output.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Performance degradation",
+        "value": {
+          "backup_time": "4x slower",
+          "replication_sync_time": "4x slower",
+          "query_execution_time": "indefinitely hanging without work_mem adjustment"
+        },
+        "source": "explicit_post",
+        "evidence": "Reported backup, replication, and query performance issues.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The performance degradation is related to kernel settings or PostgreSQL configuration.",
+      "The workload characteristics (e.g., query patterns, data size) have not significantly changed.",
+      "The hardware is functioning correctly and is not the root cause."
+    ],
+    "unknowns": [
+      "Whether Transparent Huge Pages (THP) is the primary cause of the degradation.",
+      "The exact impact of the I/O scheduler (cfq) on the workload.",
+      "Whether the dirty memory thresholds are causing excessive I/O latency."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The suspected mechanism involves kernel-level settings and PostgreSQL configuration, which can be reproduced in a synthetic environment. However, exact reproduction of the performance degradation may require hardware-specific characteristics.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_resource_limitation_108454_post_r4029_a1",
+    "requirements": [
+      "PostgreSQL 9.4 or compatible version",
+      "Ability to modify kernel parameters"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_108454_post_r4029_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS test_table (id SERIAL PRIMARY KEY, data TEXT, created_at TIMESTAMP DEFAULT NOW())"
+    ],
+    "generation_sql": [
+      "INSERT INTO test_table (data) SELECT md5(random()::text) FROM generate_series(1, {row_count})"
+    ],
+    "tables": [
+      {
+        "name": "test_table",
+        "purpose": "Synthetic table to simulate workload and test performance impact.",
+        "target_rows": 1000000,
+        "distribution_notes": "Uniform distribution of random text data."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "test_table": 1000000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "test_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM test_table WHERE id % 1000 = 0",
+        "objective": "Verify table cardinality and query performance.",
+        "expected_evidence": [
+          "Query execution time aligns with expected performance.",
+          "No unexpected I/O or memory bottlenecks are observed."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT COUNT(*) FROM test_table WHERE id % 1000 = 0",
+      "SELECT * FROM test_table ORDER BY created_at DESC LIMIT 100"
+    ],
+    "concurrency": 10,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Performance metrics (e.g., query execution time, I/O latency) match expected degradation.",
+      "Kernel parameter changes result in measurable performance improvements."
+    ],
+    "symptom_evidence": [
+      "Increased query execution time.",
+      "Higher I/O wait times."
+    ],
+    "mechanism_evidence": [
+      "Disabling Transparent Huge Pages improves performance.",
+      "Changing I/O scheduler to deadline reduces I/O latency."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "PostgreSQL performance degradation",
+    "target_database": "post_retry_resource_limitation_108454_post_r4029_a1",
+    "dba_description": "PostgreSQL performance degraded to 1/4 of its original speed, potentially due to kernel settings or configuration.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 120,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "disable_thp",
+      "task_type": "raw_command",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "echo",
+            "never",
+            ">",
+            "/sys/kernel/mm/transparent_hugepage/enabled"
+          ],
+          "duration_sec": 1,
+          "cleanup_command": [
+            "echo",
+            "always",
+            ">",
+            "/sys/kernel/mm/transparent_hugepage/enabled"
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "type": "performance_improvement",
+        "threshold": "10%"
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Transparent Huge Pages"
+      }
+    },
+    {
+      "task_id": "change_io_scheduler",
+      "task_type": "raw_command",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "echo",
+            "deadline",
+            ">",
+            "/sys/block/sda/queue/scheduler"
+          ],
+          "duration_sec": 1,
+          "cleanup_command": [
+            "echo",
+            "cfq",
+            ">",
+            "/sys/block/sda/queue/scheduler"
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "type": "performance_improvement",
+        "threshold": "10%"
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "I/O scheduler"
+      }
+    },
+    {
+      "task_id": "adjust_dirty_memory",
+      "task_type": "raw_command",
+      "actions": [
+        {
+          "kind": "raw_command",
+          "command": [
+            "sysctl",
+            "-w",
+            "vm.dirty_background_bytes=67108864"
+          ],
+          "duration_sec": 1,
+          "cleanup_command": [
+            "sysctl",
+            "-w",
+            "vm.dirty_background_ratio=10"
+          ]
+        },
+        {
+          "kind": "raw_command",
+          "command": [
+            "sysctl",
+            "-w",
+            "vm.dirty_bytes=134217728"
+          ],
+          "duration_sec": 1,
+          "cleanup_command": [
+            "sysctl",
+            "-w",
+            "vm.dirty_ratio=20"
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "type": "performance_improvement",
+        "threshold": "10%"
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Dirty memory thresholds"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "disable_thp",
+      "change_io_scheduler"
+    ],
+    [
+      "change_io_scheduler",
+      "adjust_dirty_memory"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "What is the exact impact of Transparent Huge Pages on the workload?",
+    "How does the I/O scheduler affect PostgreSQL performance in this environment?"
+  ],
+  "rationale": "The incident involves a complex interplay of kernel settings and database configuration. The tasks are designed to isolate and address potential root causes, with a focus on measurable performance improvements."
+}

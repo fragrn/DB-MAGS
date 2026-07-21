@@ -1,0 +1,23 @@
+{
+  "changes": [
+    {
+      "path": "workload_spec.queries",
+      "before": [
+        {
+          "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+          "description": "Simulate a large transaction updating 50k rows."
+        },
+        {
+          "sql": "BEGIN; UPDATE tools SET description = 'conflicting_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+          "description": "Simulate a conflicting transaction attempting to update the same rows."
+        }
+      ],
+      "after": [
+        "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+        "BEGIN; UPDATE tools SET description = 'conflicting_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;"
+      ],
+      "reason": "Runtime SQL background workload expects query strings."
+    }
+  ],
+  "timestamp": 1784617743.578638
+}

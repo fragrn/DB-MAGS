@@ -1,0 +1,51 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "High CPU usage in MySQL database during benchmarking",
+  "symptoms": [
+    "High CPU usage",
+    "Inefficient queries",
+    "Potential locking issues",
+    "High connection usage"
+  ],
+  "mechanism": "Potential causes include inefficient queries, lack of proper indexing, contention due to query cache, and high simultaneous connections.",
+  "facts": [
+    {
+      "key": "high_cpu_usage",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The database is reported to have high CPU usage during benchmarking.",
+      "confidence": 1.0
+    },
+    {
+      "key": "inefficient_queries",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "MySQLTuner output indicates joins performed without indexes and low query cache efficiency.",
+      "confidence": 1.0
+    },
+    {
+      "key": "query_cache_contention",
+      "value": {},
+      "source": "post_hypothesis",
+      "evidence": "Query cache prunes per day are high, and multiple answers suggest disabling the query cache.",
+      "confidence": 0.8
+    },
+    {
+      "key": "high_connection_usage",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "MySQLTuner output shows 100% connection usage.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The database schema and workload are representative of the described scenario.",
+    "The benchmarking workload is read-intensive as stated."
+  ],
+  "unknowns": [
+    "Exact schema and query patterns causing high CPU usage.",
+    "Details of the benchmarking workload."
+  ],
+  "confidence": 0.9
+}

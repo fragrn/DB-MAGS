@@ -109,6 +109,9 @@ raw_transaction_script, raw_command, logical_backup_command, or benchbase_burst_
 For raw_sql_workload, sql must be one SQL string (never an array/object), concurrency must be a
 positive integer, and duration_sec must be positive. To run multiple SQL statements, use separate
 actions or raw_transaction_script; each transaction step.sql must also be one string.
+All SQL must be immediately executable against the synthetic database. Never use unresolved
+parameter placeholders such as ?, $1, :name, or @p1 in schema_sql, generation_sql,
+calibration_queries, workload queries, TaskSpec SQL, or transaction script SQL.
 raw_transaction_script must use this exact shape:
 {"kind":"raw_transaction_script","database":"...","duration_sec":1,
  "scripts":[{"role":"configure","autocommit":true,"concurrency":1,
@@ -336,7 +339,7 @@ def _validate_calibration_result(
             raise ReproductionPlanningError(f"query_assessments[{index}] must be an object", trace)
         if not isinstance(assessment.get("matched"), bool):
             raise ReproductionPlanningError(f"query_assessments[{index}].matched must be boolean", trace)
-        if not str(assessment.get("observed_plan_summary") or "").strip():
+        if decision != "reject" and not str(assessment.get("observed_plan_summary") or "").strip():
             raise ReproductionPlanningError(
                 f"query_assessments[{index}].observed_plan_summary is required",
                 trace,
@@ -364,7 +367,26 @@ def canonicalize_blueprint_payload(payload: dict[str, Any]) -> tuple[dict[str, A
     """Normalize lossless LLM shorthand without making reproduction decisions."""
     candidate = copy.deepcopy(payload)
     changes: list[str] = []
+    _normalize_confidence_fields(candidate, changes)
+    _normalize_fact_sources(candidate, changes)
     data_spec = candidate.get("data_spec") or {}
+    scale = data_spec.get("scale_strategy")
+    if not isinstance(scale, dict):
+        data_spec["scale_strategy"] = {"initial_rows": 1000, "max_rows": 10000, "growth_factor": 2.0, "max_rounds": 2}
+        changes.append("added default data_spec.scale_strategy")
+    else:
+        before = copy.deepcopy(scale)
+        try:
+            scale["initial_rows"] = max(1, int(scale.get("initial_rows") or 1000))
+            scale["max_rows"] = max(scale["initial_rows"], int(scale.get("max_rows") or scale["initial_rows"]))
+            scale["growth_factor"] = float(scale.get("growth_factor") or 2.0)
+            if scale["growth_factor"] <= 1:
+                scale["growth_factor"] = 2.0
+            scale["max_rounds"] = max(1, int(scale.get("max_rounds") or 1))
+        except (TypeError, ValueError):
+            data_spec["scale_strategy"] = {"initial_rows": 1000, "max_rows": 10000, "growth_factor": 2.0, "max_rounds": 2}
+        if before != data_spec.get("scale_strategy"):
+            changes.append("normalized data_spec.scale_strategy")
     generation_sql = data_spec.get("generation_sql")
     if isinstance(generation_sql, list):
         filtered = [
@@ -374,6 +396,21 @@ def canonicalize_blueprint_payload(payload: dict[str, Any]) -> tuple[dict[str, A
         if len(filtered) != len(generation_sql):
             data_spec["generation_sql"] = filtered
             changes.append("removed comment-only generation_sql entries")
+    calibration_queries = data_spec.get("calibration_queries") or []
+    if isinstance(calibration_queries, list):
+        filtered_calibrations = []
+        for index, item in enumerate(calibration_queries):
+            if isinstance(item, dict) and isinstance(item.get("sql"), str):
+                normalized_sql = re.sub(r"^\s*EXPLAIN(?:\s+FORMAT\s*=\s*JSON)?\s+", "", item["sql"], flags=re.I)
+                if normalized_sql != item["sql"]:
+                    item["sql"] = normalized_sql
+                    changes.append(f"stripped EXPLAIN prefix from data_spec.calibration_queries[{index}].sql")
+                if not re.match(r"^\s*(SELECT|WITH)\b", item["sql"], re.I):
+                    changes.append(f"removed non-read-only data_spec.calibration_queries[{index}]")
+                    continue
+            filtered_calibrations.append(item)
+        if len(filtered_calibrations) != len(calibration_queries):
+            data_spec["calibration_queries"] = filtered_calibrations
     for index, item in enumerate(data_spec.get("calibration_queries") or []):
         if isinstance(item, dict) and isinstance(item.get("sql"), str):
             normalized = re.sub(r"^\s*EXPLAIN(?:\s+FORMAT\s*=\s*JSON)?\s+", "", item["sql"], flags=re.I)
@@ -400,6 +437,38 @@ def canonicalize_blueprint_payload(payload: dict[str, Any]) -> tuple[dict[str, A
                         f"wrapped task_specs[{task_index}].{section}[{action_index}].steps in scripts[]"
                     )
     return candidate, changes
+
+
+def _normalize_confidence_fields(value: Any, changes: list[str], path: str = "") -> None:
+    if isinstance(value, dict):
+        for key, child in list(value.items()):
+            child_path = f"{path}.{key}" if path else key
+            if key == "confidence" and child is None:
+                value[key] = 0.5
+                changes.append(f"defaulted missing {child_path} to 0.5")
+            else:
+                _normalize_confidence_fields(child, changes, child_path)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            _normalize_confidence_fields(child, changes, f"{path}[{index}]")
+
+
+def _normalize_fact_sources(value: Any, changes: list[str], path: str = "") -> None:
+    valid_sources = {"explicit_post", "post_hypothesis", "agent_inference", "human_input"}
+    if isinstance(value, dict):
+        for key, child in list(value.items()):
+            child_path = f"{path}.{key}" if path else key
+            if key == "source" and path.endswith("facts[]"):
+                source = str(child or "").strip()
+                if source not in valid_sources:
+                    value[key] = "agent_inference"
+                    changes.append(f"normalized invalid {child_path}={source!r} to agent_inference")
+            else:
+                _normalize_fact_sources(child, changes, child_path)
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            child_path = f"{path}[]" if path.endswith("facts") else f"{path}[{index}]"
+            _normalize_fact_sources(child, changes, child_path)
 
 
 def evaluate_reproduction(
@@ -476,6 +545,7 @@ def _tool_loop(
         }
         if not config.openai_model.startswith("gpt-5"):
             payload["temperature"] = config.planner_temperature
+            payload["response_format"] = {"type": "json_object"}
         request = urllib.request.Request(
             f"{config.openai_base_url.rstrip('/')}/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
@@ -513,7 +583,7 @@ def _tool_loop(
                     trace.append({"step": step, "tool": name, "arguments": arguments, "result": _truncate(result)})
                 except Exception as exc:
                     observation = {"error": str(exc)}
-                    trace.append({"step": step, "tool": name, "arguments": raw_arguments, "error": str(exc)})
+                    trace.append({"step": step, "tool": name, "arguments": arguments if "arguments" in locals() else raw_arguments, "error": str(exc)})
                 messages.append({
                     "role": "tool",
                     "tool_call_id": call.get("id", ""),
@@ -523,10 +593,54 @@ def _tool_loop(
         text = str(message.get("content") or "")
         trace.append({"step": step, "tool": "final_answer", "content": text[:4000]})
         try:
-            return {"json_payload": json.loads(text), "trace": trace}
+            return {"json_payload": _parse_json_object_from_text(text), "trace": trace}
         except json.JSONDecodeError as exc:
             return {"error": f"final JSON parse failed: {exc}", "trace": trace}
     return {"error": f"tool calling exceeded max_steps={max_steps}", "trace": trace}
+
+
+def _parse_json_object_from_text(text: str) -> dict[str, Any]:
+    stripped = str(text or "").strip()
+    if not stripped:
+        raise json.JSONDecodeError("empty response", stripped, 0)
+    try:
+        payload = json.loads(stripped)
+    except json.JSONDecodeError:
+        payload = json.loads(_extract_json_object(stripped))
+    if not isinstance(payload, dict):
+        raise json.JSONDecodeError("expected JSON object", stripped, 0)
+    return payload
+
+
+def _extract_json_object(text: str) -> str:
+    fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.S | re.I)
+    if fence:
+        return fence.group(1)
+    start = text.find("{")
+    if start < 0:
+        raise json.JSONDecodeError("no JSON object found", text, 0)
+    depth = 0
+    in_string = False
+    escape = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if in_string:
+            if escape:
+                escape = False
+            elif char == "\\":
+                escape = True
+            elif char == '"':
+                in_string = False
+            continue
+        if char == '"':
+            in_string = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    raise json.JSONDecodeError("unterminated JSON object", text, start)
 
 
 def _request_with_retry(

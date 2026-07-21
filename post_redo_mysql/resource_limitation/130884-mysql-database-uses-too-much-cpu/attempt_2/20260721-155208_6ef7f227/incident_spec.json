@@ -1,0 +1,72 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "High CPU usage in MySQL database during benchmarking with read-heavy workload.",
+  "symptoms": [
+    "High CPU usage (500% utilization across 5 vCPUs).",
+    "Inefficient queries with joins performed without indexes.",
+    "Low query cache efficiency (7.8%).",
+    "High query cache prunes per day (39,159,937).",
+    "High connection usage (100%)."
+  ],
+  "mechanism": "Inefficient query execution due to missing indexes, contention on query cache, and excessive simultaneous connections.",
+  "facts": [
+    {
+      "key": "CPU utilization",
+      "value": {
+        "utilization": "500% across 5 vCPUs"
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions high CPU usage during benchmarking.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Query cache efficiency",
+      "value": {
+        "efficiency": "7.8%"
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner output shows low query cache efficiency.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Joins without indexes",
+      "value": {
+        "count": 6782
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner output highlights joins performed without indexes.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Query cache prunes",
+      "value": {
+        "count": 39159937
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner output shows high query cache prunes per day.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Connection usage",
+      "value": {
+        "usage": "100% (152/151)"
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner output indicates highest connection usage exceeded the limit.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The workload is read-heavy, as indicated by the benchmarking scenario.",
+    "The database schema and workload involve joins that lack proper indexing.",
+    "Query cache contention is a significant contributor to CPU usage.",
+    "The database is configured with default or suboptimal settings for the observed workload."
+  ],
+  "unknowns": [
+    "Exact schema and query patterns causing the joins without indexes.",
+    "Whether the query cache contention is the primary bottleneck or a secondary issue.",
+    "The impact of increasing table_open_cache and join_buffer_size on performance."
+  ],
+  "confidence": 0.9
+}

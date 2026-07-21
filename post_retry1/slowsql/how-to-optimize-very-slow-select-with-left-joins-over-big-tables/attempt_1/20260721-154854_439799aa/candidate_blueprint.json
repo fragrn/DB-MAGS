@@ -1,0 +1,191 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Slow SELECT query with multiple LEFT JOINs over large tables.",
+    "symptoms": [
+      "Query execution time exceeds 3 minutes.",
+      "High row examination count in EXPLAIN output.",
+      "Query cache lock delays observed in profiling."
+    ],
+    "mechanism": "Inefficient join order and lack of optimized indexes for filtering and joining.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "time": "3 minutes 42 seconds"
+        },
+        "source": "explicit_post",
+        "evidence": "Query profiling and execution time shared in the post.",
+        "confidence": 0.9
+      },
+      {
+        "key": "table_sizes",
+        "value": {
+          "persons": "10M rows",
+          "attributes": "40M rows"
+        },
+        "source": "explicit_post",
+        "evidence": "Table size details provided in the post.",
+        "confidence": 0.9
+      },
+      {
+        "key": "query_structure",
+        "value": {
+          "joins": "LEFT JOINs",
+          "filters": "multiple attribute_value conditions"
+        },
+        "source": "explicit_post",
+        "evidence": "Query structure explicitly shared in the post.",
+        "confidence": 0.9
+      },
+      {
+        "key": "indexes",
+        "value": {
+          "existing_indexes": [
+            "attribute_type_id",
+            "attribute_value",
+            "person_id"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Table schema provided in the post.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The database uses MyISAM storage engine as stated in the post.",
+      "Query optimization requires composite indexes and possibly query restructuring."
+    ],
+    "unknowns": [
+      "Exact MySQL version used.",
+      "Whether the query cache is enabled and its configuration.",
+      "Impact of hardware constraints (1GB RAM)."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database 'post_retry_slowsql_how_to_optimize_very_sl_r134334_a1' does not exist, preventing schema setup and reproduction.",
+    "missing_capabilities": [
+      "Target database existence"
+    ],
+    "unmatched_conditions": [
+      "Database environment inspection failed due to missing database."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_how_to_optimize_very_sl_r134334_a1",
+    "requirements": [
+      "Dedicated test database must exist."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_how_to_optimize_very_sl_r134334_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS persons (person_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, person_name TEXT CHARACTER SET latin1)",
+      "CREATE TABLE IF NOT EXISTS attributes (attribute_id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY, attribute_type_id INT UNSIGNED, attribute_value INT, person_id INT UNSIGNED, KEY(attribute_type_id), KEY(attribute_value), KEY(person_id))"
+    ],
+    "generation_sql": [
+      "INSERT INTO persons (person_id, person_name) SELECT n, CONCAT('Person_', n) FROM generated_numbers WHERE n <= {row_count}",
+      "INSERT INTO attributes (attribute_id, attribute_type_id, attribute_value, person_id) SELECT n, MOD(n, 4) + 1, MOD(n, 10000), MOD(n, 100000) + 1 FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "persons",
+        "purpose": "Primary table containing person data.",
+        "target_rows": 10000000,
+        "distribution_notes": "Uniform distribution of person IDs."
+      },
+      {
+        "name": "attributes",
+        "purpose": "EAV table storing attributes for persons.",
+        "target_rows": 40000000,
+        "distribution_notes": "Uniform distribution of attribute values and types."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "persons": 10000000,
+        "attributes": 40000000
+      },
+      "value_skew": {
+        "attributes.attribute_value": "Uniform distribution assumed."
+      },
+      "predicate_selectivity": {
+        "attribute_value BETWEEN 3000 AND 7000": 0.0005
+      },
+      "join_selectivity": {
+        "attributes.person_id = persons.person_id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "persons",
+      "attributes"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT person_id FROM persons LEFT JOIN attributes location ON location.attribute_type_id = 1 AND location.person_id = persons.person_id LEFT JOIN attributes gender ON gender.attribute_type_id = 2 AND gender.person_id = persons.person_id LEFT JOIN attributes bornyear ON bornyear.attribute_type_id = 3 AND bornyear.person_id = persons.person_id LEFT JOIN attributes eyecolor ON eyecolor.attribute_type_id = 4 AND eyecolor.person_id = persons.person_id WHERE location.attribute_value BETWEEN 3000 AND 7000 AND gender.attribute_value = 1 AND bornyear.attribute_value BETWEEN 1980 AND 2000 AND eyecolor.attribute_value IN (2,3) LIMIT 100000",
+        "objective": "Verify query execution plan and row filtering behavior.",
+        "expected_evidence": [
+          "EXPLAIN shows efficient use of indexes for filtering and joining.",
+          "Row examination count is reduced compared to the original query."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 10000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query execution time improvement.",
+      "Reduced row examination count in EXPLAIN.",
+      "Efficient index utilization."
+    ],
+    "symptom_evidence": [
+      "Query execution time exceeds 3 minutes.",
+      "High row examination count in EXPLAIN output."
+    ],
+    "mechanism_evidence": [
+      "Indexes improve filtering and joining efficiency.",
+      "Query restructuring reduces row examination count."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Slow SELECT query with multiple LEFT JOINs over large tables.",
+    "target_database": "post_retry_slowsql_how_to_optimize_very_sl_r134334_a1",
+    "dba_description": "Optimize query performance by restructuring and adding composite indexes.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to proceed given the missing target database?"
+  ],
+  "rationale": "The reproduction is blocked due to the missing target database. Synthetic data and schema design are prepared but cannot be applied without the database environment."
+}

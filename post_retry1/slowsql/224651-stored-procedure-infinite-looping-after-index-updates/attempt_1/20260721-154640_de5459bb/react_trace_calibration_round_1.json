@@ -1,0 +1,33 @@
+[
+  {
+    "step": 1,
+    "tool": "explain_sql",
+    "arguments": {
+      "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY' AND TRANSACTION_SET = '830'",
+      "database": "post_retry_slowsql_224651_stored_procedure_r59_a1",
+      "query_id": "calibration_query_1"
+    },
+    "result": {
+      "dbms": "sqlserver",
+      "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY' AND TRANSACTION_SET = '830'",
+      "plan": [
+        "StmtText                                                                        ",
+        "--------------------------------------------------------------------------------",
+        "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY' AND TRANSACTION_SET = '830'  ",
+        "",
+        "(1 rows affected)",
+        "StmtText                                                                                                                                                                                                                                                                                                                                         ",
+        "-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------",
+        "  |--Clustered Index Scan(OBJECT:([post_retry_slowsql_224651_stored_procedure_r59_a1].[dbo].[EDI_PSI_HDR].[PK__EDI_PSI___224C8BEFD5AB2A93]), WHERE:([post_retry_slowsql_224651_stored_procedure_r59_a1].[dbo].[EDI_PSI_HDR].[V_STATUS]=[@1] AND [post_retry_slowsql_224651_stored_procedure_r59_a1].[dbo].[EDI_PSI_HDR].[TRANSACTION_SET]=[@2])) ",
+        "",
+        "(1 rows affected)"
+      ],
+      "raw": "StmtText                                                                        \n--------------------------------------------------------------------------------\nSELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY' AND TRANSACTION_SET = '830'  \n\n(1 rows affected)\nStmtText                                                                                                                                                                                                                                                                                                                                         \n-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n  |--Clustered Index Scan(OBJECT:([post_retry_slowsql_224651_stored_procedure_r59_a1].[dbo].[EDI_PSI_HDR].[PK__EDI_PSI___224C8BEFD5AB2A93]), WHERE:([post_retry_slowsql_224651_stored_procedure_r59_a1].[dbo].[EDI_PSI_HDR].[V_STATUS]=[@1] AND [post_retry_slowsql_224651_stored_procedure_r59_a1].[dbo].[EDI_PSI_HDR].[TRANSACTION_SET]=[@2])) \n\n(1 rows affected)\n"
+    }
+  },
+  {
+    "step": 2,
+    "tool": "final_answer",
+    "content": "{\n  \"decision\": \"accept\",\n  \"reasoning\": \"The observed execution plan for the calibration query aligns with the expected behavior. The query performs a clustered index scan on the `EDI_PSI_HDR` table, applying the specified filters (`V_STATUS = 'READY'` and `TRANSACTION_SET = '830'`). This confirms that the data generation and indexing are functioning as intended to support the query's objective.\",\n  \"query_assessments\": [\n    {\n      \"query_id\": \"calibration_query_1\",\n      \"sql\": \"SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY' AND TRANSACTION_SET = '830'\",\n      \"matched\": true,\n      \"observed_plan_summary\": \"Clustered Index Scan on EDI_PSI_HDR with filters V_STATUS = 'READY' and TRANSACTION_SET = '830'.\",\n      \"supporting_evidence\": [\n        \"The plan shows a clustered index scan on the EDI_PSI_HDR table.\",\n        \"The WHERE clause filters on V_STATUS = 'READY' and TRANSACTION_SET = '830', as expected.\"\n      ],\n      \"discrepancies\": []\n    }\n  ],\n  \"concerns\": [],\n  \"recommended_changes\": [],\n  \"missing_information\": []\n}"
+  }
+]

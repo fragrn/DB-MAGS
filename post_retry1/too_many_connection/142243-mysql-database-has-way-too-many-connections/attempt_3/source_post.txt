@@ -1,0 +1,148 @@
+Source: DBA Stack Exchange
+URL: https://dba.stackexchange.com/questions/142243/mysql-database-has-way-too-many-connections
+Canonical URL: https://dba.stackexchange.com/questions/142243/mysql-database-has-way-too-many-connections
+Title: MySQL database has way too many connections
+Question ID: 142243
+License: CC BY-SA 3.0; author: RubyRedGrapefruit
+
+# Question
+
+I have a MySQL version `5.7.12` database that has 4 applications running against them. Two of these applications are single webservers running Rails apps. The other two applications are also Rails applications, but they run background jobs on a utility server.
+
+One of those applications runs jobs in parallel using a technology called Sidekiq. It runs 4 processes, each containing a pool of 200 jobs.
+
+I am getting tens of thousands of job failures due to having run out of connections in MySQL. I have `max_connections` set to 500.
+
+The result of this command:```
+show status like '%onn%';
+
+```yields:```
++-----------------------------------------------+---------------------+
+| Variable_name                                 | Value               |
++-----------------------------------------------+---------------------+
+| Aborted_connects                              | 18                  |
+| Connection_errors_accept                      | 0                   |
+| Connection_errors_internal                    | 0                   |
+| Connection_errors_max_connections             | 19102               |
+| Connection_errors_peer_address                | 0                   |
+| Connection_errors_select                      | 0                   |
+| Connection_errors_tcpwrap                     | 0                   |
+| Connections                                   | 2568                |
+| Locked_connects                               | 0                   |
+| Max_used_connections                          | 501                 |
+| Max_used_connections_time                     | 2016-06-25 11:48:14 |
+| Performance_schema_session_connect_attrs_lost | 0                   |
+| Ssl_client_connects                           | 0                   |
+| Ssl_connect_renegotiates                      | 0                   |
+| Ssl_finished_connects                         | 0                   |
+| Threads_connected                             | 3                   |
++-----------------------------------------------+---------------------+
+
+```Is that thing saying that there are currently 2,568 connections? If so, how can that be if I've specified a max of 500?```
+show processlist;
+
+```only shows:```
++------+--------+--------------+---------------------+---------+------+----------+------------------+
+| Id   | User   | Host         | db                  | Command | Time | State    | Info             |
++------+--------+--------------+---------------------+---------+------+----------+------------------+
+|  217 | myuser | mac1:55571   | myapp_production    | Sleep   | 1334 |          | NULL             |
+| 1569 | myuser | mac2:37394   | c1234               | Sleep   | 1681 |          | NULL             |
+| 2567 | root   | localhost    | NULL                | Query   |    0 | starting | show processlist |
++------+--------+--------------+---------------------+---------+------+----------+------------------+
+
+```That's without the 4 processes running. If I run them, the output looks like:```
++------+--------+--------------+---------------------+---------+------+----------+------------------+
+| Id   | User   | Host         | db                  | Command | Time | State    | Info             |
++------+--------+--------------+---------------------+---------+------+----------+------------------+
+|  217 | myuser | mac1:55571   | myapp_production    | Sleep   | 1334 |          | NULL             |
+| 1569 | myuser | mac2:37394   | c1234               | Sleep   | 1681 |          | NULL             |
+| 2567 | root   | localhost    | NULL                | Query   |    0 | starting | show processlist |
+| 2568 | deploy | mac3:57632   | uploader_production | Sleep   |    9 |          | NULL             |
+| 2569 | deploy | mac3:57636   | uploader_production | Sleep   |    8 |          | NULL             |
+| 2570 | deploy | mac3:57686   | uploader_production | Sleep   |    8 |          | NULL             |
+| 2571 | deploy | mac3:57739   | uploader_production | Sleep   |    7 |          | NULL             |
+
+```and now `show status like '%onn%';` shows:```
++-----------------------------------------------+---------------------+
+| Variable_name                                 | Value               |
++-----------------------------------------------+---------------------+
+| Aborted_connects                              | 18                  |
+| Connection_errors_accept                      | 0                   |
+| Connection_errors_internal                    | 0                   |
+| Connection_errors_max_connections             | 19102               |
+| Connection_errors_peer_address                | 0                   |
+| Connection_errors_select                      | 0                   |
+| Connection_errors_tcpwrap                     | 0                   |
+| Connections                                   | 2572                |
+| Locked_connects                               | 0                   |
+| Max_used_connections                          | 501                 |
+| Max_used_connections_time                     | 2016-06-25 11:48:14 |
+| Performance_schema_session_connect_attrs_lost | 0                   |
+| Ssl_client_connects                           | 0                   |
+| Ssl_connect_renegotiates                      | 0                   |
+| Ssl_finished_connects                         | 0                   |
+| Threads_connected                             | 7                   |
++-----------------------------------------------+---------------------+
+
+```Note that `Connections` only increased by 4.
+
+Running backgrounds jobs (that all fail) makes the connections jump up to `3,068`:```
+mysql> show status like '%onn%';
++-----------------------------------------------+---------------------+
+| Variable_name                                 | Value               |
++-----------------------------------------------+---------------------+
+| Aborted_connects                              | 18                  |
+| Connection_errors_accept                      | 0                   |
+| Connection_errors_internal                    | 0                   |
+| Connection_errors_max_connections             | 39587               |
+| Connection_errors_peer_address                | 0                   |
+| Connection_errors_select                      | 0                   |
+| Connection_errors_tcpwrap                     | 0                   |
+| Connections                                   | 3068                |
+| Locked_connects                               | 0                   |
+| Max_used_connections                          | 501                 |
+| Max_used_connections_time                     | 2016-06-25 11:48:14 |
+| Performance_schema_session_connect_attrs_lost | 0                   |
+| Ssl_client_connects                           | 0                   |
+| Ssl_connect_renegotiates                      | 0                   |
+| Ssl_finished_connects                         | 0                   |
+| Threads_connected                             | 501                 |
++-----------------------------------------------+---------------------+
+
+```It is as if bad connections are not being relinquished. What can I do to keep the connection count down?
+
+# Answers
+
+## Answer 1
+Author: Bill Croft
+Accepted: yes
+Score: 1
+License: CC BY-SA 3.0
+
+That is not the number of active connections you have but rather the number of connect atempts. see this answer (https://stackoverflow.com/questions/7432241/mysql-show-status-active-or-total-connections).
+
+There are a few ways to deal with this. The first and most obvious to increase the max connections - configure your server to deal with the growing demand whatever this means in your environment (ulimits, memory, CPU, my.cnf, etc..).
+
+Another way to deal with this is to find out what connections the jobs and applications demand and see if you can reduce the number of concurrent jobs running simultaneously as the applications are in use.
+
+Another solution is to discuss this with the developers. Ask them if the applications or jobs are creating any unnecessary connections or are holding connections open longer than necessary.
+
+It's not uncommon to see a 5 minute job open a DB connection, check some information and then leave that DB connection open until the job ends just so it doesn't need to reconnect before it writes status info back to a queue.
+
+## Answer 2
+Author: Rick James
+Accepted: no
+Score: 0
+License: CC BY-SA 3.0
+
+4 apps times 200 in the pool? That's 800, which is more than 500.
+
+But... Do you really every need 200? I doubt it. Look at the clients. Make sure they run fast and disconnect when finished. Then set the pool to a lower number. A much lower number, say 20.
+
+Also look at `wait_timeout`. You can lower it to kick of clients that are sitting there doing nothing (such as the pools).
+
+2568 Connections? Divide that by `Uptime` to get connections/second. What do you get? A value of less than 10 is pretty typical. More than 100 is probably stressing the system.
+
+The processlist show very few threads connected, but clearly (`Max_used_connections = 501`) it did hit the roof at some time.
+
+If you have more than, say, a dozen connections running, not just connected and `Sleeping`, then you need to look at the queries to see what can be improved.

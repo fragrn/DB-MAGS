@@ -1,0 +1,48 @@
+{
+  "database": "post_retry_blocking_284397_concurrent_update_sta_a3",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+  ],
+  "generation_sql": [
+    "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) VALUES (gen_random_uuid(), 0)"
+  ],
+  "tables": [
+    {
+      "name": "host_scan_complete_log_counts",
+      "purpose": "To simulate contention on a single row due to concurrent updates.",
+      "target_rows": 1,
+      "distribution_notes": "Single row to simulate contention."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "host_scan_complete_log_counts": 1
+    },
+    "value_skew": {
+      "host_scan_complete_log_counts.num_shards_completed": "Uniform distribution starting at 0."
+    },
+    "predicate_selectivity": {
+      "scan_uuid = $1": 1.0
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "host_scan_complete_log_counts"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = $1",
+      "objective": "Verify that the table and row exist and are accessible.",
+      "expected_evidence": [
+        "The query returns the single row in the table.",
+        "The query plan shows a sequential or index scan, depending on the presence of an index."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1,
+    "max_rows": 1,
+    "growth_factor": 2.0,
+    "max_rounds": 1
+  }
+}

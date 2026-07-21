@@ -1,0 +1,67 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Infinite looping in a stored procedure after index updates and trigger interactions.",
+  "symptoms": [
+    "Stored procedure enters infinite loop after index updates.",
+    "Deadlocks observed on tables during execution.",
+    "Stored procedure fails to insert data.",
+    "Infinite looping occurs when an update statement is executed inside an insert trigger."
+  ],
+  "mechanism": "The issue is likely caused by a combination of index changes and triggers that result in unexpected locking behavior or infinite loops during stored procedure execution.",
+  "facts": [
+    {
+      "key": "Stored procedure uses nested cursors and fetch statements.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The stored procedure code provided in the post shows nested cursors and fetch statements.",
+      "confidence": 0.5
+    },
+    {
+      "key": "The database contains multiple triggers on tables.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions that the database has multiple triggers on almost every table.",
+      "confidence": 0.5
+    },
+    {
+      "key": "The issue started after index updates.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post states that the process was working fine until updates were made to indexes.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Reverting the indexes did not resolve the infinite loop issue.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions that reverting the indexes did not stop the inner fetch from staying in an infinite loop.",
+      "confidence": 0.5
+    },
+    {
+      "key": "The infinite loop occurs when an update statement is executed inside an insert trigger.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The user explicitly states that the looping occurs when an update statement is executed inside an insert trigger.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Deleting a specific index resolved the issue.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The user resolved the issue by deleting a single index and suspects it was causing page locking.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The issue is reproducible in a SQL Server-compatible environment.",
+    "The infinite loop is caused by a combination of index locking and trigger behavior.",
+    "The stored procedure and triggers are representative of the production environment."
+  ],
+  "unknowns": [
+    "The exact index that caused the issue.",
+    "The specific triggers involved in the infinite loop.",
+    "The detailed locking behavior leading to the infinite loop."
+  ],
+  "confidence": 0.8
+}

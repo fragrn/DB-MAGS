@@ -1,0 +1,60 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Slow query execution with RESOURCE_SEMAPHORE and CXCONSUMER waits observed in SQL Server.",
+  "symptoms": [
+    "RESOURCE_SEMAPHORE waits indicating memory pressure.",
+    "CXCONSUMER waits due to parallel query execution.",
+    "Slow query execution when user connections increase.",
+    "High memory grants for queries."
+  ],
+  "mechanism": "Excessive parallelism and memory grants causing RESOURCE_SEMAPHORE waits.",
+  "facts": [
+    {
+      "key": "RESOURCE_SEMAPHORE waits",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "RESOURCE_SEMAPHORE waits were observed in sp_whoisactive and sp_Blitz reports.",
+      "confidence": 0.5
+    },
+    {
+      "key": "CXCONSUMER waits",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "CXCONSUMER waits were reported, indicating parallel query execution.",
+      "confidence": 0.5
+    },
+    {
+      "key": "MAXDOP set to 0",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions MAXDOP is set to 0, allowing queries to utilize all CPU cores.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Memory pressure affecting queries",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The sp_Blitz report indicates memory pressure with 11 forced grants in sys.dm_exec_query_resource_semaphores.",
+      "confidence": 0.5
+    },
+    {
+      "key": "High memory grants",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "sp_BlitzCache report sorted by memory grant shows high memory usage by queries.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The database environment is configured with a high number of CPU cores and NUMA nodes.",
+    "The workload involves complex queries with high memory requirements.",
+    "The observed waits are caused by excessive parallelism and memory grants."
+  ],
+  "unknowns": [
+    "The exact schema and data distributions of the database.",
+    "The specific queries causing the RESOURCE_SEMAPHORE waits.",
+    "The impact of other configuration settings on the observed behavior."
+  ],
+  "confidence": 0.85
+}

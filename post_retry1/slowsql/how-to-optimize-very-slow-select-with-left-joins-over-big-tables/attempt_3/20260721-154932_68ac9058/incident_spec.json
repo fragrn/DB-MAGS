@@ -1,0 +1,75 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "Slow SELECT query with multiple LEFT JOINs over large tables.",
+  "symptoms": [
+    "Query execution time exceeds 3 minutes.",
+    "High row examination count in EXPLAIN plan.",
+    "Query cache lock delays."
+  ],
+  "mechanism": "Inefficient query plan due to suboptimal indexing and large table sizes.",
+  "facts": [
+    {
+      "key": "query_execution_time",
+      "value": {
+        "duration_sec": 222
+      },
+      "source": "explicit_post",
+      "evidence": "Query took 3 min 42.77 sec.",
+      "confidence": 0.5
+    },
+    {
+      "key": "row_examination_count",
+      "value": 80974656,
+      "source": "explicit_post",
+      "evidence": "EXPLAIN shows 1,265,229 * 4 * 4 * 4 rows examined.",
+      "confidence": 0.5
+    },
+    {
+      "key": "query_cache_lock",
+      "value": true,
+      "source": "explicit_post",
+      "evidence": "Profiling shows repeated 'Waiting for query cache lock'.",
+      "confidence": 0.5
+    },
+    {
+      "key": "table_sizes",
+      "value": {
+        "persons": 10000000.0,
+        "attributes": 40000000.0
+      },
+      "source": "explicit_post",
+      "evidence": "Post mentions ~10M rows in persons and ~40M rows in attributes.",
+      "confidence": 0.5
+    },
+    {
+      "key": "indexes",
+      "value": [
+        "attribute_type_id",
+        "attribute_value",
+        "person_id"
+      ],
+      "source": "explicit_post",
+      "evidence": "Post lists existing indexes on attribute table.",
+      "confidence": 0.5
+    },
+    {
+      "key": "query_structure",
+      "value": "LEFT JOINs with filters on multiple attributes.",
+      "source": "explicit_post",
+      "evidence": "Query provided in the post.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The database schema and query structure are as described in the post.",
+    "The target database will be created from scratch for this reproduction.",
+    "The query cache lock delays are due to contention in the query cache."
+  ],
+  "unknowns": [
+    "Exact MySQL version used in the original environment.",
+    "Whether the query cache was enabled during the original execution.",
+    "The hardware specifications of the original environment."
+  ],
+  "confidence": 0.9
+}

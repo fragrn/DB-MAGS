@@ -1,0 +1,177 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Slow query execution when filtering databases based on table existence and state.",
+    "symptoms": [
+      "Query execution takes 9 seconds on a local dev machine with 4 databases.",
+      "Execution plan shows high cost for clustered index seeks."
+    ],
+    "mechanism": "Potential blocking due to long-running transactions or inefficiencies in metadata function calls like OBJECT_ID.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "before_where_clause": "21 seconds",
+          "after_where_clause": "9 seconds"
+        },
+        "source": "explicit_post",
+        "evidence": "DBA post mentions execution times before and after adding the WHERE clause.",
+        "confidence": 0.9
+      },
+      {
+        "key": "execution_plan",
+        "value": {
+          "clustered_index_seeks": [
+            22,
+            24,
+            48
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "DBA post mentions percentages of clustered index seeks in the execution plan.",
+        "confidence": 0.8
+      },
+      {
+        "key": "OBJECT_ID_behavior",
+        "value": {
+          "ignores_transaction_isolation": true
+        },
+        "source": "post_hypothesis",
+        "evidence": "Answer 1 suggests OBJECT_ID does not respect transaction isolation levels.",
+        "confidence": 0.7
+      }
+    ],
+    "assumptions": [
+      "The database environment is SQL Server or compatible with Azure SQL Edge.",
+      "The issue is reproducible with synthetic data and does not depend on specific production data.",
+      "The suspected mechanism involves blocking due to long-running transactions or inefficiencies in metadata function calls."
+    ],
+    "unknowns": [
+      "The exact schema and data distribution of the databases involved.",
+      "Whether long-running transactions are present in the environment."
+    ],
+    "confidence": 0.7
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The suspected mechanism can be reproduced using synthetic data and a compatible SQL Server environment. However, the exact schema and data distribution are unknown, and the presence of long-running transactions cannot be directly simulated without additional information.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and data distribution of the databases.",
+      "Presence of long-running transactions."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_long_transaction_72191_why_is_m_r952760_a2",
+    "requirements": [
+      "Azure SQL Edge compatibility"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_72191_why_is_m_r952760_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS sys.databases (name NVARCHAR(128), state_desc NVARCHAR(60), database_id INT PRIMARY KEY)",
+      "CREATE TABLE IF NOT EXISTS sys.tables (object_id INT PRIMARY KEY, name NVARCHAR(128), schema_id INT, parent_object_id INT)"
+    ],
+    "generation_sql": [
+      "INSERT INTO sys.databases (name, state_desc, database_id) VALUES ('master', 'ONLINE', 1), ('model', 'ONLINE', 2), ('msdb', 'ONLINE', 3), ('tempdb', 'ONLINE', 4), ('ReportServer', 'ONLINE', 5), ('ReportServerTempDB', 'ONLINE', 6), ('1303VISBOC', 'ONLINE', 7), ('UserDB1', 'ONLINE', 8), ('UserDB2', 'ONLINE', 9), ('UserDB3', 'ONLINE', 10), ('UserDB4', 'ONLINE', 11)",
+      "INSERT INTO sys.tables (object_id, name, schema_id, parent_object_id) VALUES (1, '_LOOK_UP_TABLE', 1, NULL), (2, 'OtherTable', 1, NULL)"
+    ],
+    "tables": [
+      {
+        "name": "sys.databases",
+        "purpose": "Simulates the system databases table for the test environment.",
+        "target_rows": 10,
+        "distribution_notes": "Includes system and user databases with varying states."
+      },
+      {
+        "name": "sys.tables",
+        "purpose": "Simulates the system tables table for the test environment.",
+        "target_rows": 2,
+        "distribution_notes": "Includes a lookup table and another unrelated table."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "sys.databases": 10,
+        "sys.tables": 2
+      },
+      "value_skew": {
+        "sys.databases.state_desc": "Most databases are ONLINE."
+      },
+      "predicate_selectivity": {
+        "sys.databases.state_desc = 'ONLINE'": 0.9
+      },
+      "join_selectivity": {
+        "sys.databases.name = sys.tables.name": "one-to-many"
+      }
+    },
+    "analyze_tables": [
+      "databases",
+      "tables"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT name FROM sys.databases WHERE name NOT IN ('master','model','msdb','tempdb','ReportServer','ReportServerTempDB','1303VISBOC') AND state_desc = 'ONLINE' AND OBJECT_ID(QUOTENAME(name) + '.[dbo].[_LOOK_UP_TABLE]', 'U') IS NOT NULL",
+        "objective": "Verify that the query execution plan matches the described behavior with clustered index seeks.",
+        "expected_evidence": [
+          "The plan includes clustered index seeks on sys.databases and sys.tables.",
+          "The OBJECT_ID function is evaluated for each database."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10,
+      "max_rows": 100,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query execution time is within acceptable limits.",
+      "Execution plan matches the described behavior."
+    ],
+    "symptom_evidence": [
+      "Query execution time is slow.",
+      "Execution plan shows high cost for clustered index seeks."
+    ],
+    "mechanism_evidence": [
+      "OBJECT_ID function behavior and potential blocking due to long-running transactions."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Slow query execution due to OBJECT_ID behavior and potential blocking.",
+    "target_database": "post_retry_long_transaction_72191_why_is_m_r952760_a2",
+    "dba_description": "Reproducing slow query execution when filtering databases based on table existence and state.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to simulate long-running transactions in the test environment?"
+  ],
+  "rationale": "The reproduction focuses on the suspected mechanism involving OBJECT_ID behavior and potential blocking. Synthetic data and schema are designed to mimic the described environment, but the absence of the exact database schema and data distribution limits the precision of the reproduction."
+}

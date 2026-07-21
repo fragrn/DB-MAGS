@@ -1,0 +1,212 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MATLAB feeding MySQL database results in 'too many connections' error due to rapid connection opening and closing.",
+    "symptoms": [
+      "Too many connections error",
+      "Connection threads reaching MySQL's max_connections limit"
+    ],
+    "mechanism": "Rapid connection opening and closing by MATLAB threads exhausts MySQL's connection pool.",
+    "facts": [
+      {
+        "key": "MATLAB opens and closes connections rapidly",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "MATLAB output logs show repeated connection open and close cycles.",
+        "confidence": 0.9
+      },
+      {
+        "key": "MySQL default max_connections is 151",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Referenced MySQL documentation and MATLAB logs showing threads reaching 149-150.",
+        "confidence": 0.9
+      },
+      {
+        "key": "MATLAB feeding database with high frequency",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "MATLAB logs show high queries per second average (1858.135).",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "MATLAB does not use connection pooling",
+      "Connection threads are not reused efficiently"
+    ],
+    "unknowns": [
+      "Exact MATLAB configuration for database connections",
+      "Whether MATLAB uses persistent connections or pooling"
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of rapid connection opening and closing can be reproduced with synthetic data and simulated workload.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact MATLAB behavior cannot be simulated without MATLAB integration."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_4717_too_ma_r921642_a2",
+    "requirements": [
+      "Dedicated test database",
+      "Ability to simulate connection threads"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_4717_too_ma_r921642_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS synthetic_table (id INT PRIMARY KEY AUTO_INCREMENT, data VARCHAR(255))"
+    ],
+    "generation_sql": [
+      "INSERT INTO synthetic_table (data) SELECT CONCAT('data_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "synthetic_table",
+        "purpose": "Simulates the target table for MATLAB feeding workload",
+        "target_rows": 10000,
+        "distribution_notes": "Uniform distribution of rows to simulate high-frequency inserts."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "synthetic_table": 10000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "synthetic_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM synthetic_table",
+        "objective": "Verify that the synthetic table is populated correctly.",
+        "expected_evidence": [
+          "The table contains the expected number of rows."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 100000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "INSERT INTO synthetic_table (data) VALUES ('test_data')"
+    ],
+    "concurrency": 150,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Connection threads should reach the max_connections limit."
+    ],
+    "symptom_evidence": [
+      "Too many connections error observed in MySQL logs."
+    ],
+    "mechanism_evidence": [
+      "Rapid connection opening and closing behavior visible in MySQL process list."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "too_many_connections",
+    "target_database": "post_retry_too_many_connection_4717_too_ma_r921642_a2",
+    "dba_description": "Reproduce 'too many connections' error caused by MATLAB feeding MySQL database.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_synthetic_database",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_4717_too_ma_r921642_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_4717_too_ma_r921642_a2"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_4717_too_ma_r921642_a2"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS synthetic_table (id INT PRIMARY KEY AUTO_INCREMENT, data VARCHAR(255))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "table_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database setup for reproduction"
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO synthetic_table (data) VALUES ('test_data')",
+          "concurrency": 150,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "connections_used": 150
+      },
+      "success_criteria": {
+        "too_many_connections_error": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Simulated workload causing connection exhaustion"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_synthetic_database",
+      "simulate_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating the mechanism of rapid connection opening and closing, which is feasible with synthetic data and workload."
+}

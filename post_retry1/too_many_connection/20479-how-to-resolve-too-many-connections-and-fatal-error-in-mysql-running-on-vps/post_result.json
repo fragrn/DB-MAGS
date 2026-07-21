@@ -1,0 +1,60 @@
+{
+  "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps.txt",
+  "category": "too_many_connection",
+  "slug": "20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps",
+  "status": "abandoned",
+  "reason": "Stopped after 4 attempt(s): unsafe blueprint TaskSpecs: DAG has no tasks",
+  "attempts": [
+    {
+      "attempt": 1,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps/attempt_1/20260721-155923_98bdb461",
+      "status": "failed",
+      "reason": "invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+      "evaluation": null,
+      "repairs": [
+        {
+          "path": "workload_spec.queries",
+          "before": [
+            "SELECT * FROM email_queue WHERE status = 'pending' LIMIT 10",
+            "UPDATE email_queue SET status = 'sent' WHERE id = ?",
+            "INSERT INTO email_queue (user_id, email_content, status) VALUES (?, ?, 'pending')"
+          ],
+          "after": [
+            "SELECT * FROM email_queue WHERE status = 'pending' LIMIT 10",
+            "UPDATE email_queue SET status = 'sent' WHERE id = 'repro_value'",
+            "INSERT INTO email_queue (user_id, email_content, status) VALUES (?, ?, 'pending')"
+          ],
+          "reason": "Replace unresolved SQL placeholders with synthetic literals."
+        }
+      ],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 2,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps/attempt_2/20260721-160022_cbe3d30e",
+      "status": "failed",
+      "reason": "invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 3,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps/attempt_3/20260721-160053_a94d64d1",
+      "status": "failed",
+      "reason": "invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    },
+    {
+      "attempt": 4,
+      "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps/attempt_4/20260721-160120_2d5d0735",
+      "status": "failed",
+      "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+      "evaluation": null,
+      "repairs": [],
+      "missing_capabilities": []
+    }
+  ]
+}

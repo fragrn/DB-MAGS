@@ -1,0 +1,58 @@
+{
+  "database": "post_retry_resource_limitation_220486_slow_r848989_a4",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS synthetic_queries (id INT PRIMARY KEY, query_pattern NVARCHAR(MAX), memory_grant INT, parallelism INT)",
+    "CREATE TABLE IF NOT EXISTS query_execution_logs (id INT PRIMARY KEY, query_id INT, execution_time_ms INT, wait_type NVARCHAR(64))"
+  ],
+  "generation_sql": [
+    "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = ?', 100, 8)",
+    "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (2, 'SELECT COUNT(*) FROM large_table GROUP BY col2', 200, 16)"
+  ],
+  "tables": [
+    {
+      "name": "synthetic_queries",
+      "purpose": "Simulate queries with high memory grants and parallelism to reproduce RESOURCE_SEMAPHORE waits.",
+      "target_rows": 2,
+      "distribution_notes": "Queries designed to simulate high memory pressure and parallel execution."
+    },
+    {
+      "name": "query_execution_logs",
+      "purpose": "Log execution metrics and wait types for synthetic queries.",
+      "target_rows": 100,
+      "distribution_notes": "Logs capturing execution time and wait types for analysis."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "synthetic_queries": 2,
+      "query_execution_logs": 100
+    },
+    "value_skew": {
+      "synthetic_queries.memory_grant": "High memory grants skewed towards specific queries."
+    },
+    "predicate_selectivity": {
+      "synthetic_queries.parallelism > 8": 0.5
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "synthetic_queries",
+    "query_execution_logs"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM synthetic_queries WHERE memory_grant > 50 AND parallelism > 8",
+      "objective": "Verify that the synthetic data triggers RESOURCE_SEMAPHORE waits under high parallelism and memory grants.",
+      "expected_evidence": [
+        "Execution plan shows high memory grants and parallelism.",
+        "RESOURCE_SEMAPHORE waits are visible in execution logs."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10,
+    "max_rows": 1000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

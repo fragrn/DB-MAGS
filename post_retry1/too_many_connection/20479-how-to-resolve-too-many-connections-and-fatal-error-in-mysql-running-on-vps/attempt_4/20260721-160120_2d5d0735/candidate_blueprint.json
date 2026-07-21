@@ -1,0 +1,131 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Too many connections error in MySQL due to high concurrent PHP scripts and insufficient connection limits.",
+    "symptoms": [
+      "MySQL error #1040: Too many connections",
+      "High CPU usage by mysqld (100-130%)",
+      "Application errors indicating server is too busy"
+    ],
+    "mechanism": "Exceeding the `max_connections` limit in MySQL due to concurrent PHP scripts and application usage.",
+    "facts": [
+      {
+        "key": "max_connections",
+        "value": {
+          "current_value": 200
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA post explicitly mentions increasing `max_connections` to 200.",
+        "confidence": 0.5
+      },
+      {
+        "key": "PHP scripts",
+        "value": {
+          "count": 12
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions 12 PHP scripts running concurrently.",
+        "confidence": 0.5
+      },
+      {
+        "key": "CPU usage",
+        "value": {
+          "range": "100-130%"
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions `mysqld` using 100-130% CPU.",
+        "confidence": 0.5
+      },
+      {
+        "key": "Error code",
+        "value": {
+          "code": 1040,
+          "message": "Too many connections"
+        },
+        "source": "explicit_post",
+        "evidence": "The post explicitly mentions error code 1040.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The application uses non-persistent MySQL connections.",
+      "The server has sufficient memory to handle an increased `max_connections` limit."
+    ],
+    "unknowns": [
+      "Exact memory configuration of the server",
+      "Whether persistent connections (e.g., `mysql_pconnect`) are being used improperly"
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema creation and data generation.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database 'post_retry_too_many_connection_20479_how_t_r880072_a4' is missing."
+    ],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_20479_how_t_r880072_a4",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_20479_how_t_r880072_a4",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000,
+      "growth_factor": 2.0,
+      "max_rounds": 1
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Too many connections",
+    "target_database": "post_retry_too_many_connection_20479_how_t_r880072_a4",
+    "dba_description": "Reproduce and analyze the 'too many connections' error in MySQL caused by high concurrent PHP scripts.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to proceed without the target database?"
+  ],
+  "rationale": "The target database does not exist, blocking further steps. The incident is well-defined, but reproduction is infeasible without resolving the missing database issue."
+}

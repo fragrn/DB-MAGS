@@ -1,0 +1,139 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "High CPU usage observed in MySQL database during benchmarking, likely due to inefficient queries, lack of indexes, and contention points.",
+    "symptoms": [
+      "High CPU usage",
+      "Low query cache efficiency",
+      "Joins performed without indexes",
+      "High connection usage"
+    ],
+    "mechanism": "Inefficient queries and lack of adequate indexing lead to high CPU usage. Query cache contention and mutex spins may exacerbate the issue.",
+    "facts": [
+      {
+        "key": "High CPU usage",
+        "value": {
+          "vmstat": "CPU utilization in user space is high"
+        },
+        "source": "explicit_post",
+        "evidence": "vmstat output shows high CPU usage in user space.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Joins performed without indexes",
+        "value": {
+          "count": 6782
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output indicates joins performed without indexes.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Query cache efficiency",
+        "value": {
+          "efficiency": 7.8
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output shows low query cache efficiency.",
+        "confidence": 0.8
+      },
+      {
+        "key": "High connection usage",
+        "value": {
+          "usage": "100%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner output indicates highest connection usage at 100%.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The database schema and workload involve complex joins and read-heavy queries.",
+      "Query cache contention is a significant factor in CPU usage."
+    ],
+    "unknowns": [
+      "Exact schema and workload details",
+      "Mutex contention specifics",
+      "Impact of query cache adjustments"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema inspection and calibration queries.",
+    "missing_capabilities": [
+      "Database existence for inspection and reproduction"
+    ],
+    "unmatched_conditions": [
+      "Database environment unavailable"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_130884_mysq_r642927_a1",
+    "requirements": [
+      "Database existence and schema inspection"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_130884_mysq_r642927_a1",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Database existence",
+      "Schema inspection"
+    ],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High CPU usage due to inefficient queries and contention",
+    "target_database": "post_retry_resource_limitation_130884_mysq_r642927_a1",
+    "dba_description": "MySQL database uses too much CPU during benchmarking.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to proceed without the target database?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database. Schema inspection and calibration queries cannot proceed."
+}

@@ -1,0 +1,295 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": "5.6 (Aurora RDS)",
+    "summary": "Lock wait timeout exceeded during DELETE query due to long-running transactions and contention.",
+    "symptoms": [
+      "Lock wait timeout exceeded error",
+      "Long-running transactions blocking DELETE query",
+      "High row lock contention"
+    ],
+    "mechanism": "Row-level locking contention caused by long-running transactions and lack of primary key/index optimization.",
+    "facts": [
+      {
+        "key": "dbms_version",
+        "value": {
+          "version": "5.6",
+          "platform": "Aurora RDS"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions Aurora RDS MySQL 5.6.",
+        "confidence": 1.0
+      },
+      {
+        "key": "lock_wait_timeout",
+        "value": {
+          "default": 50
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions default timeout of 50 seconds.",
+        "confidence": 1.0
+      },
+      {
+        "key": "table_schema",
+        "value": {
+          "schema": "EVENT_DETAILS without primary key"
+        },
+        "source": "explicit_post",
+        "evidence": "Post provides table schema without primary key.",
+        "confidence": 1.0
+      },
+      {
+        "key": "transaction_isolation",
+        "value": {
+          "level": "REPEATABLE READ"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions default isolation level REPEATABLE READ.",
+        "confidence": 1.0
+      },
+      {
+        "key": "blocking_transactions",
+        "value": {
+          "duration": "up to 17 hours"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions transactions active for up to 17 hours.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The DELETE query operates on a significant number of rows, causing undo log growth.",
+      "Long-running transactions are caused by connection pooling or application behavior.",
+      "Row-level locks are exacerbated by the lack of a primary key and optimized indexes."
+    ],
+    "unknowns": [
+      "Exact workload pattern causing contention.",
+      "Specific blocking queries or SELECT patterns.",
+      "Impact of Aurora-specific optimizations or configurations."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "Synthetic data can reproduce row-level locking contention and long-running transactions, but Aurora-specific behaviors may not be fully replicated.",
+    "missing_capabilities": [
+      "Aurora-specific transaction diagnostics"
+    ],
+    "unmatched_conditions": [
+      "Exact workload pattern causing contention"
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_long_transaction_252749_lock_wa_r525975_a2",
+    "requirements": [
+      "Dedicated test database",
+      "MySQL-compatible environment"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_252749_lock_wa_r525975_a2",
+    "schema_sql": [
+      "CREATE DATABASE IF NOT EXISTS post_retry_long_transaction_252749_lock_wa_r525975_a2",
+      "USE post_retry_long_transaction_252749_lock_wa_r525975_a2",
+      "CREATE TABLE IF NOT EXISTS EVENT_DETAILS (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT))"
+    ],
+    "generation_sql": [
+      "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT UUID(), UUID(), CASE WHEN MOD(n, 100)=0 THEN 'health' ELSE 'other' END, UUID(), 20231001 + MOD(n, 30), MOD(n, 86400), UUID(), MOD(n, 5), CONCAT('event_', n), CONCAT('message_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "EVENT_DETAILS",
+        "purpose": "Primary table to simulate contention and locking behavior.",
+        "target_rows": 100000,
+        "distribution_notes": "Simulate skewed distribution with frequent 'health' component and varying update times."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "EVENT_DETAILS": 100000
+      },
+      "value_skew": {
+        "EVENT_DETAILS.COMPONENT_NAME": "Skewed towards 'health' for contention simulation."
+      },
+      "predicate_selectivity": {
+        "EVENT_DETAILS.COMPONENT_NAME = 'health'": 0.01
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "EVENT_DETAILS"
+    ],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT * FROM EVENT_DETAILS WHERE COMPONENT_NAME = 'health' AND UPDATE_DATE = 20231001",
+      "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) VALUES (UUID(), UUID(), 'health', UUID(), 20231001, 3600, UUID(), 1, 'event_data', 'message')"
+    ],
+    "concurrency": 10,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Lock contention visible in SHOW ENGINE INNODB STATUS",
+      "Blocking transactions observed in process list"
+    ],
+    "symptom_evidence": [
+      "Lock wait timeout exceeded during DELETE query"
+    ],
+    "mechanism_evidence": [
+      "Row-level locking contention due to long-running transactions"
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "Lock wait timeout exceeded during DELETE query",
+    "target_database": "post_retry_long_transaction_252749_lock_wa_r525975_a2",
+    "dba_description": "Reproduce lock wait timeout during DELETE query caused by long-running transactions and contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_long_transaction_252749_lock_wa_r525975_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_long_transaction_252749_lock_wa_r525975_a2"
+                },
+                {
+                  "sql": "USE post_retry_long_transaction_252749_lock_wa_r525975_a2"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS EVENT_DETAILS (ORG_ID CHAR(32) NOT NULL, CONFIG_KEY CHAR(32) NOT NULL, COMPONENT_NAME VARCHAR(512) NOT NULL, REQUEST_ID CHAR(32) NOT NULL, UPDATE_DATE INT NOT NULL, UPDATE_TIME INT NOT NULL, CLIENT CHAR(16) NOT NULL, STATUS INT NOT NULL, EVENT_DATA VARCHAR(1024), MESSAGE VARCHAR(512), INSERTED_TIME TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL, INDEX STATE_INDEX (UPDATE_DATE, UPDATE_TIME, ORG_ID, CONFIG_KEY, COMPONENT_NAME, STATUS, CLIENT))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "validation": "Database and table created successfully."
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup"
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) SELECT UUID(), UUID(), CASE WHEN MOD(n, 100)=0 THEN 'health' ELSE 'other' END, UUID(), 20231001 + MOD(n, 30), MOD(n, 86400), UUID(), MOD(n, 5), CONCAT('event_', n), CONCAT('message_', n) FROM generated_numbers WHERE n <= 10000",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "validation": "Data generated successfully."
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data generation"
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT * FROM EVENT_DETAILS WHERE COMPONENT_NAME = 'health' AND UPDATE_DATE = 20231001",
+          "concurrency": 10,
+          "duration_sec": 30
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO EVENT_DETAILS (ORG_ID, CONFIG_KEY, COMPONENT_NAME, REQUEST_ID, UPDATE_DATE, UPDATE_TIME, CLIENT, STATUS, EVENT_DATA, MESSAGE) VALUES (UUID(), UUID(), 'health', UUID(), 20231001, 3600, UUID(), 1, 'event_data', 'message')",
+          "concurrency": 10,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "validation": "Workload simulated successfully."
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Workload simulation"
+      }
+    },
+    {
+      "task_id": "execute_delete",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "DELETE FROM EVENT_DETAILS WHERE UPDATE_DATE < 20231015 AND COMPONENT_NAME = 'health'",
+          "concurrency": 1,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "validation": "Lock contention observed during DELETE."
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "DELETE query execution"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "simulate_workload"
+    ],
+    [
+      "simulate_workload",
+      "execute_delete"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": true,
+  "unresolved_critical_questions": [
+    "Exact Aurora-specific behaviors during contention"
+  ],
+  "rationale": "The reproduction plan aims to simulate row-level locking contention and long-running transactions based on the provided schema and workload patterns. Aurora-specific behaviors may not be fully replicated."
+}

@@ -1,0 +1,146 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Nested loops join in a query involving multiple joins and a large table causes performance issues.",
+    "symptoms": [
+      "High query execution time",
+      "Nested loops join consuming 90% of query cost"
+    ],
+    "mechanism": "Inefficient join condition with OR clause in a nested loops join, causing high computational cost.",
+    "facts": [
+      {
+        "key": "query_structure",
+        "value": {
+          "joins": [
+            "INNER JOIN",
+            "LEFT OUTER JOIN"
+          ],
+          "tables": [
+            "category",
+            "category_voc",
+            "category_link"
+          ],
+          "temp_table": "#Ids with 10,000 IDs"
+        },
+        "source": "explicit_post",
+        "evidence": "Query structure and explanation provided in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "performance_issue",
+        "value": {
+          "nested_loops_cost": 89,
+          "actual_rows": 28863,
+          "estimated_rows": 114621
+        },
+        "source": "explicit_post",
+        "evidence": "Execution plan details provided in the post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "indexes",
+        "value": {
+          "category": [
+            "category_id",
+            "parent_category_id"
+          ],
+          "category_voc": [
+            "category_id",
+            "language_code"
+          ],
+          "category_link": [
+            "sku_id",
+            "category_id"
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "Index details provided in the post.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The database schema and indexes are as described in the post.",
+      "The query execution plan is representative of the described issue."
+    ],
+    "unknowns": [
+      "Exact data distribution and cardinality in the tables.",
+      "Whether the suggested optimizations (e.g., COALESCE, splitting joins) were tested in the same environment."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database 'post_retry_slowsql_optimize_a_query_thats_r428808_a2' does not exist, preventing schema creation and reproduction.",
+    "missing_capabilities": [
+      "Database creation or access to the specified database"
+    ],
+    "unmatched_conditions": [
+      "Database environment setup"
+    ],
+    "confidence": 1.0
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_slowsql_optimize_a_query_thats_r428808_a2",
+    "requirements": [
+      "Dedicated test database must exist"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_optimize_a_query_thats_r428808_a2",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Nested loops join inefficiency",
+    "target_database": "post_retry_slowsql_optimize_a_query_thats_r428808_a2",
+    "dba_description": "Optimize a query that's running slow with nested loops inner join.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to proceed given the missing database environment?"
+  ],
+  "rationale": "The database environment required for reproduction does not exist, blocking further steps."
+}

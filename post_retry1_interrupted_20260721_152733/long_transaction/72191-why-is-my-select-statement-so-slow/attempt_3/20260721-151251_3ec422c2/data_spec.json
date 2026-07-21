@@ -1,0 +1,68 @@
+{
+  "database": "post_retry_long_transaction_72191_why_is_m_r971452_a3",
+  "schema_sql": [
+    "CREATE DATABASE IF NOT EXISTS db1;",
+    "CREATE DATABASE IF NOT EXISTS db2;",
+    "CREATE DATABASE IF NOT EXISTS db3;",
+    "CREATE DATABASE IF NOT EXISTS db4;",
+    "USE db1; CREATE SCHEMA IF NOT EXISTS dbo; CREATE TABLE dbo._LOOK_UP_TABLE (id INT PRIMARY KEY, value NVARCHAR(255));",
+    "USE db2; CREATE SCHEMA IF NOT EXISTS dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));",
+    "USE db3; CREATE SCHEMA IF NOT EXISTS dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));",
+    "USE db4; CREATE SCHEMA IF NOT EXISTS dbo; CREATE TABLE dbo.other_table (id INT PRIMARY KEY, value NVARCHAR(255));"
+  ],
+  "generation_sql": [
+    "USE db1; INSERT INTO dbo._LOOK_UP_TABLE (id, value) SELECT n, CONCAT('Value_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+    "USE db2; INSERT INTO dbo.other_table (id, value) SELECT n, CONCAT('Value_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+    "USE db3; INSERT INTO dbo.other_table (id, value) SELECT n, CONCAT('Value_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;",
+    "USE db4; INSERT INTO dbo.other_table (id, value) SELECT n, CONCAT('Value_', n) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;"
+  ],
+  "tables": [
+    {
+      "name": "dbo._LOOK_UP_TABLE",
+      "purpose": "Target table for OBJECT_ID checks in db1.",
+      "target_rows": 1000,
+      "distribution_notes": "Uniform distribution of values."
+    },
+    {
+      "name": "dbo.other_table",
+      "purpose": "Placeholder tables in other databases.",
+      "target_rows": 1000,
+      "distribution_notes": "Uniform distribution of values."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "db1.dbo._LOOK_UP_TABLE": 1000,
+      "db2.dbo.other_table": 1000,
+      "db3.dbo.other_table": 1000,
+      "db4.dbo.other_table": 1000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {
+      "OBJECT_ID check": 0.25
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "_LOOK_UP_TABLE",
+    "other_table",
+    "other_table",
+    "other_table"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT name FROM sys.databases WHERE name NOT IN ('master','model','msdb','tempdb','ReportServer','ReportServerTempDB','1303VISBOC') AND state_desc = 'ONLINE' AND OBJECT_ID(QUOTENAME(name) + '.[dbo].[_LOOK_UP_TABLE]', 'U') IS NOT NULL;",
+      "objective": "Verify that the query identifies only databases containing the '_LOOK_UP_TABLE'.",
+      "expected_evidence": [
+        "Execution plan shows OBJECT_ID checks.",
+        "Query filters out system databases and non-online databases."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 10000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

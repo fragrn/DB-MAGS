@@ -1,0 +1,259 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MySQL creates excessive temporary tables on disk, influenced by query patterns and configuration settings.",
+    "symptoms": [
+      "High percentage of temporary tables created on disk",
+      "Performance concerns due to disk-based temp tables"
+    ],
+    "mechanism": "Implicit temporary tables exceed memory limits or involve unsupported data types (e.g., TEXT/BLOB), triggering MyISAM disk-based storage.",
+    "facts": [
+      {
+        "key": "tmp_table_size",
+        "value": {
+          "current": "200M"
+        },
+        "source": "explicit_post",
+        "evidence": "Post configuration details",
+        "confidence": 1.0
+      },
+      {
+        "key": "max_heap_table_size",
+        "value": {
+          "current": "200M"
+        },
+        "source": "explicit_post",
+        "evidence": "Post configuration details",
+        "confidence": 1.0
+      },
+      {
+        "key": "temporary table creation",
+        "value": {
+          "disk_percentage": 30
+        },
+        "source": "explicit_post",
+        "evidence": "Post statistics",
+        "confidence": 1.0
+      },
+      {
+        "key": "TEXT/BLOB fields",
+        "value": {
+          "impact": "disk-based temp tables"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Answer 1 explanation",
+        "confidence": 0.9
+      },
+      {
+        "key": "query patterns",
+        "value": {
+          "GROUP BY, UNION, ORDER BY with large columns": "disk-based temp tables"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Answer 1 explanation",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "Queries involve TEXT/BLOB fields or large columns",
+      "Implicit temporary tables exceed memory limits"
+    ],
+    "unknowns": [
+      "Exact query patterns causing temp table creation",
+      "Schema details of the database"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "Synthetic data can reproduce the mechanism of disk-based temp table creation, but exact reproduction of the original workload is blocked due to missing schema and production data.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Original database schema unavailable"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_i_r211127_a4",
+    "requirements": [
+      "Dedicated test database",
+      "MySQL environment"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_i_r211127_a4",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS large_table (id INT PRIMARY KEY, group_col VARCHAR(512), text_col TEXT, payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS small_table (id INT PRIMARY KEY, ref_col VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO small_table (id, ref_col) SELECT n, CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO large_table (id, group_col, text_col, payload) SELECT n, CONCAT('group_', MOD(n, 10)), REPEAT('text_', MOD(n, 5)), CONCAT('payload_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "large_table",
+        "purpose": "Primary table to simulate temp table creation with large columns and TEXT fields",
+        "target_rows": 100000,
+        "distribution_notes": "Simulates skewed data with large columns and TEXT fields for temp table creation."
+      },
+      {
+        "name": "small_table",
+        "purpose": "Reference table for joins or filters in the reproduction queries",
+        "target_rows": 100,
+        "distribution_notes": "Used for simulating join fanout and selectivity."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "large_table": 100000,
+        "small_table": 100
+      },
+      "value_skew": {
+        "large_table.group_col": "Skewed distribution with repetitive patterns"
+      },
+      "predicate_selectivity": {
+        "large_table.group_col = 'group_1'": 0.1
+      },
+      "join_selectivity": {
+        "large_table.id = small_table.id": "one-to-one"
+      }
+    },
+    "analyze_tables": [
+      "large_table",
+      "small_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT l.* FROM large_table l JOIN small_table s ON s.id = l.id WHERE l.group_col = 'group_1' ORDER BY l.id DESC LIMIT 10",
+        "objective": "Verify temp table creation mechanism and disk-based behavior.",
+        "expected_evidence": [
+          "EXPLAIN shows temp table creation due to large columns or TEXT fields.",
+          "Disk-based temp table behavior is visible in the plan."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Temp table creation mechanism matches expectations",
+      "Disk-based temp table behavior is reproduced"
+    ],
+    "symptom_evidence": [
+      "High percentage of disk-based temp tables"
+    ],
+    "mechanism_evidence": [
+      "EXPLAIN shows temp table creation due to large columns or TEXT fields"
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Excessive disk-based temp table creation",
+    "target_database": "post_retry_resource_limitation_17677_why_i_r211127_a4",
+    "dba_description": "Investigate and reproduce excessive disk-based temp table creation in MySQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_i_r211127_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_resource_limitation_17677_why_i_r211127_a4"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Initial environment setup"
+      }
+    },
+    {
+      "task_id": "prepare_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_17677_why_i_r211127_a4",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS large_table (id INT PRIMARY KEY, group_col VARCHAR(512), text_col TEXT, payload VARCHAR(255))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS small_table (id INT PRIMARY KEY, ref_col VARCHAR(64))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "tables_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema preparation"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "prepare_data"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Exact query patterns causing temp table creation"
+  ],
+  "rationale": "The incident involves excessive disk-based temp table creation due to query patterns and configuration limits. Synthetic data and calibration queries can reproduce the mechanism, but exact reproduction of the original workload is blocked due to missing schema and production data."
+}

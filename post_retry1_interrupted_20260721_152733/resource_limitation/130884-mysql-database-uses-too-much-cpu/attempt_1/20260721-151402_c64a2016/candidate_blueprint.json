@@ -1,0 +1,291 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "High CPU usage in MySQL database during benchmarking with read-only workload.",
+    "symptoms": [
+      "High CPU utilization (close to 100%)",
+      "Low query cache efficiency",
+      "Joins performed without indexes",
+      "High connection usage (100%)"
+    ],
+    "mechanism": "Inefficient queries and lack of proper indexing leading to high CPU usage.",
+    "facts": [
+      {
+        "key": "CPU utilization is high",
+        "value": {
+          "cpu_usage": "close to 100%"
+        },
+        "source": "explicit_post",
+        "evidence": "vmstat output and MySQLTuner report showing high user-space CPU usage.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Joins performed without indexes",
+        "value": {
+          "joins_without_indexes": 6782
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner report indicating a high number of unindexed joins.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Query cache efficiency is low",
+        "value": {
+          "query_cache_efficiency": "7.8%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner report showing low query cache efficiency.",
+        "confidence": 0.8
+      },
+      {
+        "key": "High connection usage",
+        "value": {
+          "connection_usage": "100%"
+        },
+        "source": "explicit_post",
+        "evidence": "MySQLTuner report indicating maximum connection usage.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The workload is read-only as stated in the post.",
+      "The database schema includes tables with joins that lack proper indexing.",
+      "The query cache is enabled and contributes to contention."
+    ],
+    "unknowns": [
+      "Exact schema and query patterns causing the issue.",
+      "Whether the query cache is actively used or can be disabled without side effects.",
+      "Impact of VM CPU performance on the observed behavior."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction requires synthetic data and workload to simulate the high CPU usage caused by unindexed joins and query cache contention. The exact schema and queries are not provided in the post, but the mechanism can be approximated.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact schema and queries are not provided."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_130884_mysq_r42449_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_130884_mysq_r42449_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "main_table",
+        "purpose": "Primary table to simulate high CPU usage due to unindexed joins.",
+        "target_rows": 100000,
+        "distribution_notes": "Skewed distribution with rare and common categories."
+      },
+      {
+        "name": "ref_table",
+        "purpose": "Reference table for joins.",
+        "target_rows": 100,
+        "distribution_notes": "Small table to simulate many-to-one join relationships."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "main_table": 100000,
+        "ref_table": 100
+      },
+      "value_skew": {
+        "main_table.category": "rare values are sparse and intentionally positioned by the agent"
+      },
+      "predicate_selectivity": {
+        "main_table.category = 'rare'": 0.001
+      },
+      "join_selectivity": {
+        "main_table.ref_id = ref_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "main_table",
+      "ref_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan examines the table or index range relevant to the suspected mechanism.",
+          "The predicate or join behavior needed by the reproduction is visible in EXPLAIN.",
+          "The plan evidence distinguishes this mechanism from a trivial point lookup."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10"
+    ],
+    "concurrency": 50,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "High CPU utilization is observed during the workload.",
+      "Query execution plans show unindexed joins.",
+      "Query cache contention is visible if enabled."
+    ],
+    "symptom_evidence": [
+      "CPU utilization metrics during workload execution.",
+      "Query execution plans showing table scans or unindexed joins."
+    ],
+    "mechanism_evidence": [
+      "High CPU usage caused by unindexed joins.",
+      "Query cache contention if enabled."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High CPU usage due to unindexed joins and query cache contention.",
+    "target_database": "post_retry_resource_limitation_130884_mysq_r42449_a1",
+    "dba_description": "Reproduce high CPU usage in MySQL database caused by unindexed joins and query cache contention.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_130884_mysq_r42449_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_resource_limitation_130884_mysq_r42449_a1"
+                },
+                {
+                  "sql": "USE post_retry_resource_limitation_130884_mysq_r42449_a1"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "High CPU usage due to unindexed joins and query cache contention."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_resource_limitation_130884_mysq_r42449_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM (SELECT @row := @row + 1 AS n FROM (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t1, (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t2, (SELECT @row := 0) t3 LIMIT 100) numbers"
+                },
+                {
+                  "sql": "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM (SELECT @row := @row + 1 AS n FROM (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t1, (SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0 UNION ALL SELECT 0) t2, (SELECT @row := 0) t3 LIMIT 100000) numbers"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "High CPU usage due to unindexed joins and query cache contention."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+          "concurrency": 50,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {
+        "cpu_usage": "high"
+      },
+      "success_criteria": {
+        "cpu_usage_observed": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "High CPU usage due to unindexed joins and query cache contention."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The incident involves high CPU usage caused by unindexed joins and query cache contention. The reproduction plan includes creating a synthetic schema, generating data with skewed distributions, and running a workload to simulate the observed behavior. The tasks are designed to isolate the mechanism and validate the symptoms."
+}

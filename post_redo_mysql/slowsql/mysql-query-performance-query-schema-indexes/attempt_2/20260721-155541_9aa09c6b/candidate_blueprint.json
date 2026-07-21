@@ -1,0 +1,240 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Performance issues with a query on a large 'calls' table, involving multiple joins and subqueries.",
+    "symptoms": [
+      "Query execution time exceeds 7 minutes for 1.3M rows.",
+      "Simplified query with range conditions takes 4.5 seconds."
+    ],
+    "mechanism": "Inefficient index usage due to range conditions and IN clause, leading to high row scans.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "simplified_query": "4.5 seconds",
+          "full_query": "over 7 minutes"
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions simplified query taking 4.5 seconds and full query being stopped after 7 minutes.",
+        "confidence": 0.9
+      },
+      {
+        "key": "table_cardinality",
+        "value": {
+          "calls_table": 30000000.0
+        },
+        "source": "explicit_post",
+        "evidence": "Post mentions 'calls' table has around 30 million rows.",
+        "confidence": 0.9
+      },
+      {
+        "key": "index_usage",
+        "value": {
+          "idx_CustID_DateStart": "used with range scan"
+        },
+        "source": "explicit_post",
+        "evidence": "EXPLAIN output shows idx_CustID_DateStart being used with range scan.",
+        "confidence": 0.8
+      },
+      {
+        "key": "query_conditions",
+        "value": {
+          "fields": [
+            "DateStart",
+            "CallLength",
+            "Direction",
+            "CustID"
+          ],
+          "range_conditions": [
+            "DateStart",
+            "CallLength"
+          ],
+          "IN_clause": "CustID"
+        },
+        "source": "explicit_post",
+        "evidence": "Post describes query conditions explicitly.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The database schema and indexes will be recreated synthetically.",
+      "The IN clause with CustID is representative of real-world usage."
+    ],
+    "unknowns": [
+      "Exact data distribution in the 'calls' table.",
+      "Impact of other subqueries and joins in the full query."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The database does not exist, but the schema and query details are sufficient to reproduce the mechanism with synthetic data.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Exact data distribution and skew in the original 'calls' table."
+    ],
+    "confidence": 0.8
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_mysql_query_performance_r541792_a2",
+    "requirements": [
+      "Dedicated test database for synthetic reproduction."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_mysql_query_performance_r541792_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS calls (ID INT AUTO_INCREMENT PRIMARY KEY, CustID INT NOT NULL, DateStart DATE NOT NULL, CallLength TIME NOT NULL, Direction INT NOT NULL, OrigNumber VARCHAR(16), EffectiveFlag SMALLINT, INDEX idx_CustID_DateStart (CustID, DateStart))"
+    ],
+    "generation_sql": [
+      "INSERT INTO calls (CustID, DateStart, CallLength, Direction, OrigNumber, EffectiveFlag) SELECT MOD(n, 1000), DATE_ADD('2013-01-01', INTERVAL MOD(n, 365) DAY), SEC_TO_TIME(MOD(n, 86400)), MOD(n, 2), CONCAT('Orig_', n), MOD(n, 2) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "calls",
+        "purpose": "Primary table to reproduce query performance issues.",
+        "target_rows": 30000000,
+        "distribution_notes": "Synthetic data will simulate range conditions and IN clause selectivity."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "calls": 30000000
+      },
+      "value_skew": {
+        "calls.Direction": "low cardinality (2 distinct values)"
+      },
+      "predicate_selectivity": {
+        "DateStart range": 0.1,
+        "CustID IN clause": 0.01
+      },
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "calls"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT DateStart, ID, NumbID, EffectiveFlag, OrigNumber FROM calls WHERE DateStart <= '2013-12-31' AND DateStart >= '2013-01-01' AND CallLength >= '00:00:00' AND Direction = '1' AND CustID IN (474,482,250,268,197,604,132,359,279,441,118,448,152,133,380,162,249,679,226,259,2450,2408,2451,2453,2439,2454,2444,2445,2452)",
+        "objective": "Verify that the query uses the idx_CustID_DateStart index and reproduces the range scan behavior.",
+        "expected_evidence": [
+          "EXPLAIN shows idx_CustID_DateStart being used.",
+          "Query execution time aligns with synthetic data size and selectivity."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000000,
+      "max_rows": 30000000,
+      "growth_factor": 3.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Query execution time for synthetic data matches expected range.",
+      "EXPLAIN output confirms index usage and range scan behavior."
+    ],
+    "symptom_evidence": [
+      "Query execution time exceeds expected threshold for synthetic data."
+    ],
+    "mechanism_evidence": [
+      "Index usage and range scan behavior observed in EXPLAIN."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Slow query performance due to inefficient index usage.",
+    "target_database": "post_retry_slowsql_mysql_query_performance_r541792_a2",
+    "dba_description": "Reproducing slow query performance on a large 'calls' table with range conditions and IN clause.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_mysql_query_performance_r541792_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_slowsql_mysql_query_performance_r541792_a2"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Environment setup"
+      }
+    },
+    {
+      "task_id": "create_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_mysql_query_performance_r541792_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS calls (ID INT AUTO_INCREMENT PRIMARY KEY, CustID INT NOT NULL, DateStart DATE NOT NULL, CallLength TIME NOT NULL, Direction INT NOT NULL, OrigNumber VARCHAR(16), EffectiveFlag SMALLINT, INDEX idx_CustID_DateStart (CustID, DateStart))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema creation"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "create_schema"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The synthetic reproduction focuses on the mechanism of inefficient index usage due to range conditions and IN clause. The schema and query details from the post provide sufficient information to simulate the issue."
+}

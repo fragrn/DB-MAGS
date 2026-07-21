@@ -1,0 +1,45 @@
+{
+  "database": "post_retry_blocking_284397_concurrent_upda_r997400_a2",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS host_scan_complete_log_counts (scan_uuid UUID NOT NULL, num_shards_completed NUMERIC DEFAULT 0 NOT NULL)"
+  ],
+  "generation_sql": [
+    "INSERT INTO host_scan_complete_log_counts (scan_uuid, num_shards_completed) SELECT gen_random_uuid(), 0 FROM generate_series(1, {row_count})"
+  ],
+  "tables": [
+    {
+      "name": "host_scan_complete_log_counts",
+      "purpose": "Reproduce locking contention during concurrent updates.",
+      "target_rows": 1,
+      "distribution_notes": "Single-row table to simulate contention."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "host_scan_complete_log_counts": 1
+    },
+    "value_skew": {},
+    "predicate_selectivity": {
+      "scan_uuid = $1": 1.0
+    },
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "host_scan_complete_log_counts"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT * FROM host_scan_complete_log_counts WHERE scan_uuid = gen_random_uuid()",
+      "objective": "Verify table structure and data generation.",
+      "expected_evidence": [
+        "Table contains the expected single row."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1,
+    "max_rows": 1,
+    "growth_factor": 2.0,
+    "max_rounds": 1
+  }
+}

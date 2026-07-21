@@ -1,0 +1,50 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Query performance regression due to high memory usage and parameter sniffing in SQL Server.",
+  "symptoms": [
+    "Query timeouts for large accounts when SQL Server memory is filled.",
+    "Queries run fast in SSMS but timeout in the application.",
+    "Performance improves after restarting SQL Server."
+  ],
+  "mechanism": "Parameter sniffing and memory pressure leading to suboptimal execution plans and excessive disk I/O.",
+  "facts": [
+    {
+      "key": "Query timeouts occur for large accounts when memory is filled.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post describes timeouts for large accounts when SQL Server memory is filled.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Performance improves after restarting SQL Server.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post mentions that restarting SQL Server resolves the issue temporarily.",
+      "confidence": 0.5
+    },
+    {
+      "key": "SSMS queries perform better than application queries.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post highlights that queries run faster in SSMS compared to the application.",
+      "confidence": 0.5
+    },
+    {
+      "key": "Parameter sniffing identified as a root cause.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "The post explicitly mentions parameter sniffing as a root cause after investigation.",
+      "confidence": 0.5
+    }
+  ],
+  "assumptions": [
+    "The database schema and workload can be approximated based on the post.",
+    "The SQL Server environment is compatible with Azure SQL Edge for reproduction."
+  ],
+  "unknowns": [
+    "Exact schema details for the affected tables.",
+    "Specific execution plans and query patterns causing the issue."
+  ],
+  "confidence": 0.9
+}

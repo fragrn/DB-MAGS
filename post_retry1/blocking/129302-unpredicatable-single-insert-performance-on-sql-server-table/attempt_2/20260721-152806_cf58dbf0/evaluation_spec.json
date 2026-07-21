@@ -1,0 +1,16 @@
+{
+  "validation_criteria": [
+    "Blocking behavior is observed during the workload.",
+    "Blocked requests show `LCK_M_S` wait type in `sys.dm_exec_requests`.",
+    "Blocking session IDs do not correspond to active queries in `sys.dm_exec_requests`."
+  ],
+  "symptom_evidence": [
+    "Blocked insert operations with `LCK_M_S` wait type.",
+    "Blocking session IDs that are not active queries."
+  ],
+  "mechanism_evidence": [
+    "Excessive number of indexes causing contention during insert operations.",
+    "Uncommitted transactions holding locks and causing blocking."
+  ],
+  "minimum_plan_similarity": 0.6
+}

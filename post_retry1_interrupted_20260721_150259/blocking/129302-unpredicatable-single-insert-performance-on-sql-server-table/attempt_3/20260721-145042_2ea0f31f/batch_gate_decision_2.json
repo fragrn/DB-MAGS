@@ -1,0 +1,56 @@
+{
+  "gate": {
+    "status": "waiting_human",
+    "phase": "calibration",
+    "reasons": [
+      "domain_judgment_required",
+      "unresolved_critical_questions",
+      "calibration_rejected_by_llm"
+    ],
+    "summary": "Calibration was rejected by the LLM; DBA judgment is required",
+    "allowed_decisions": [
+      "approve",
+      "reject",
+      "revise",
+      "feedback"
+    ],
+    "editable_roots": [
+      "data_spec.calibration_queries",
+      "data_spec.constraints",
+      "data_spec.scale_strategy",
+      "data_spec.tables",
+      "dependencies",
+      "evaluation_spec",
+      "experiment_request",
+      "incident_spec.assumptions",
+      "incident_spec.unknowns",
+      "risk_assessment",
+      "task_specs",
+      "workload_spec"
+    ],
+    "timestamp": 1784616674.423362,
+    "details": {
+      "calibration": {
+        "status": "rejected_by_llm",
+        "decision": "reject",
+        "concerns": [
+          "The index `idx_comm_channelid` may not be properly optimized or utilized by the query.",
+          "The query optimizer might have chosen the clustered index scan due to statistics or other factors."
+        ],
+        "recommended_changes": [
+          "Verify that the index `idx_comm_channelid` is correctly created and includes the necessary columns.",
+          "Update statistics on the `Communication` table to ensure the query optimizer has accurate information.",
+          "Consider forcing the use of the index `idx_comm_channelid` with an index hint to validate its effectiveness."
+        ]
+      }
+    }
+  },
+  "decision": {
+    "decision": "feedback",
+    "patch": null,
+    "feedback": "Regenerate a simpler executable reproduction using bounded synthetic data, valid executor action schema, clear EXPLAIN calibration, and no unsupported DBMS-specific tools.",
+    "actor": "batch",
+    "timestamp": 1784616674.425337
+  },
+  "repairs": []
+}

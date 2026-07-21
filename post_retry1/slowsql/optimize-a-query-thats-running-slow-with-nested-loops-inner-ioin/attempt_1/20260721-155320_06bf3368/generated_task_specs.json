@@ -1,0 +1,81 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_optimize_a_query_thats_r400772_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_slowsql_optimize_a_query_thats_r400772_a1"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database environment setup for reproduction."
+      }
+    },
+    {
+      "task_id": "create_schema",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_slowsql_optimize_a_query_thats_r400772_a1",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS category (category_id INT PRIMARY KEY, parent_category_id INT, level INT, version_id INT)"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS category_voc (category_id INT, language_code VARCHAR(10), category_name VARCHAR(255), PRIMARY KEY (category_id, language_code))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS category_link (sku_id INT, category_id INT, is_primary BIT, PRIMARY KEY (sku_id, category_id))"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS temp_ids (value INT PRIMARY KEY)"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema creation for synthetic reproduction."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "create_schema"
+    ]
+  ]
+}

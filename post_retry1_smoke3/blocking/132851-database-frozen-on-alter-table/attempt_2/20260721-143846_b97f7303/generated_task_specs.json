@@ -1,0 +1,85 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CREATE DATABASE post_retry_blocking_132851_database_frozen_on_al_a2;",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+          "concurrency": 1,
+          "duration_sec": 1
+        },
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) PRIMARY KEY, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL UNIQUE NOT NULL, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false NOT NULL, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false NOT NULL, CONSTRAINT fk_cliente_familiaid FOREIGN KEY (familia) REFERENCES cliente_familia (id), CONSTRAINT pk_pais FOREIGN KEY (codigo_pais) REFERENCES pais (codigo));",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+          "concurrency": 1,
+          "duration_sec": 1
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "lock_contention"
+      }
+    },
+    {
+      "task_id": "simulate_lock_contention",
+      "task_type": "experiment",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": false,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "BEGIN;"
+                },
+                {
+                  "sql": "SELECT * FROM cliente WHERE rut = 'some_rut';"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_on_al_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {},
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "lock_contention"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_environment",
+      "simulate_lock_contention"
+    ]
+  ]
+}

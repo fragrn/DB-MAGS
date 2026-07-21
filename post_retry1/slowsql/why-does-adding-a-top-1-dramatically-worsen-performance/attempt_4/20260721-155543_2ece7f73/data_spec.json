@@ -1,0 +1,64 @@
+{
+  "database": "post_retry_slowsql_why_does_adding_a_top_1_r543218_a4",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS DOCUMENT_QUEUE (D_ID INT PRIMARY KEY, DOCUMENT_ID INT, COPIES INT, REQUESTOR NVARCHAR(255), QUEUE_DATE DATETIME, PRINT_LOCATION INT)",
+    "CREATE TABLE IF NOT EXISTS CORRESPONDENCE_JOURNAL (FILE_NUMBER NVARCHAR(255) PRIMARY KEY, CORRESPONDENCE_ID INT, DOCUMENT_ID INT, INDEX ix_DOCUMENT_ID_FILE_NUMBER (DOCUMENT_ID, FILE_NUMBER))"
+  ],
+  "generation_sql": [
+    "INSERT INTO DOCUMENT_QUEUE (D_ID, DOCUMENT_ID, COPIES, REQUESTOR, QUEUE_DATE, PRINT_LOCATION) SELECT n, n * 10, n % 5, CONCAT('Requestor_', n), DATEADD(DAY, -n % 30, GETDATE()), n % 3 FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM master.dbo.spt_values) AS numbers",
+    "INSERT INTO CORRESPONDENCE_JOURNAL (FILE_NUMBER, CORRESPONDENCE_ID, DOCUMENT_ID) SELECT CONCAT('File_', n), n, n * 10 FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM master.dbo.spt_values) AS numbers"
+  ],
+  "tables": [
+    {
+      "name": "DOCUMENT_QUEUE",
+      "purpose": "Primary table for the query, representing the smaller dataset.",
+      "target_rows": 5000,
+      "distribution_notes": "Uniform distribution of rows with varying PRINT_LOCATION and QUEUE_DATE values."
+    },
+    {
+      "name": "CORRESPONDENCE_JOURNAL",
+      "purpose": "Larger table for the query, representing the larger dataset.",
+      "target_rows": 1400000,
+      "distribution_notes": "Uniform distribution of rows with DOCUMENT_ID values matching those in DOCUMENT_QUEUE."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "DOCUMENT_QUEUE": 5000,
+      "CORRESPONDENCE_JOURNAL": 1400000
+    },
+    "value_skew": {},
+    "predicate_selectivity": {
+      "dc.PRINT_LOCATION = 2": 0.33
+    },
+    "join_selectivity": {
+      "dc.DOCUMENT_ID = cj.DOCUMENT_ID": "one-to-one"
+    }
+  },
+  "analyze_tables": [
+    "DOCUMENT_QUEUE",
+    "CORRESPONDENCE_JOURNAL"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT TOP 1 dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER",
+      "objective": "Verify that the query plan exhibits row goal optimization behavior.",
+      "expected_evidence": [
+        "Nested Loops join with Table Spool operator."
+      ]
+    },
+    {
+      "sql": "SELECT dc.DOCUMENT_ID, dc.COPIES, dc.REQUESTOR, dc.D_ID, cj.FILE_NUMBER FROM DOCUMENT_QUEUE dc JOIN CORRESPONDENCE_JOURNAL cj ON dc.DOCUMENT_ID = cj.DOCUMENT_ID WHERE dc.QUEUE_DATE <= GETDATE() AND dc.PRINT_LOCATION = 2 ORDER BY cj.FILE_NUMBER",
+      "objective": "Verify that the query plan uses a Hash Match join.",
+      "expected_evidence": [
+        "Hash Match join operator."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 2000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

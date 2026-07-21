@@ -1,0 +1,62 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": "9.4.5",
+  "summary": "ALTER TABLE operation caused database freeze due to lock contention.",
+  "symptoms": [
+    "Database freeze during ALTER TABLE operation",
+    "Login system blocked due to table lock"
+  ],
+  "mechanism": "ALTER TABLE requires an ACCESS EXCLUSIVE lock, which queued behind long-lived weaker locks, causing lock contention and blocking subsequent operations.",
+  "facts": [
+    {
+      "key": "ALTER TABLE operation",
+      "value": {
+        "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+      },
+      "source": "explicit_post",
+      "evidence": "Post describes the exact SQL causing the issue.",
+      "confidence": 1.0
+    },
+    {
+      "key": "ACCESS EXCLUSIVE lock requirement",
+      "value": {
+        "lock_type": "ACCESS EXCLUSIVE"
+      },
+      "source": "post_hypothesis",
+      "evidence": "Post mentions lock contention and PostgreSQL documentation confirms this lock type for ALTER TABLE.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Long-lived weaker locks",
+      "value": {
+        "lock_type": "ACCESS SHARE",
+        "state": "idle in transaction"
+      },
+      "source": "post_hypothesis",
+      "evidence": "Post hypothesizes idle transactions holding weaker locks as the root cause.",
+      "confidence": 0.8
+    },
+    {
+      "key": "pg_locks and pg_stat_activity diagnostics",
+      "value": {
+        "tables": [
+          "pg_locks",
+          "pg_stat_activity"
+        ]
+      },
+      "source": "explicit_post",
+      "evidence": "Post provides SQL queries to diagnose locking issues.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The table `cliente` has active connections during the ALTER TABLE operation.",
+    "Idle transactions holding weaker locks are present in the system.",
+    "The ALTER TABLE operation does not involve additional steps like creating indexes."
+  ],
+  "unknowns": [
+    "Exact workload on the `cliente` table during the incident.",
+    "Whether other operations were queued behind the ALTER TABLE statement."
+  ],
+  "confidence": 0.85
+}

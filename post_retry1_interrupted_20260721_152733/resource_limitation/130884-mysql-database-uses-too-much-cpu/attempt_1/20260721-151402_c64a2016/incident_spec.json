@@ -1,0 +1,61 @@
+{
+  "dbms": "mysql",
+  "dbms_version": null,
+  "summary": "High CPU usage in MySQL database during benchmarking with read-only workload.",
+  "symptoms": [
+    "High CPU utilization (close to 100%)",
+    "Low query cache efficiency",
+    "Joins performed without indexes",
+    "High connection usage (100%)"
+  ],
+  "mechanism": "Inefficient queries and lack of proper indexing leading to high CPU usage.",
+  "facts": [
+    {
+      "key": "CPU utilization is high",
+      "value": {
+        "cpu_usage": "close to 100%"
+      },
+      "source": "explicit_post",
+      "evidence": "vmstat output and MySQLTuner report showing high user-space CPU usage.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Joins performed without indexes",
+      "value": {
+        "joins_without_indexes": 6782
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner report indicating a high number of unindexed joins.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Query cache efficiency is low",
+      "value": {
+        "query_cache_efficiency": "7.8%"
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner report showing low query cache efficiency.",
+      "confidence": 0.8
+    },
+    {
+      "key": "High connection usage",
+      "value": {
+        "connection_usage": "100%"
+      },
+      "source": "explicit_post",
+      "evidence": "MySQLTuner report indicating maximum connection usage.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The workload is read-only as stated in the post.",
+    "The database schema includes tables with joins that lack proper indexing.",
+    "The query cache is enabled and contributes to contention."
+  ],
+  "unknowns": [
+    "Exact schema and query patterns causing the issue.",
+    "Whether the query cache is actively used or can be disabled without side effects.",
+    "Impact of VM CPU performance on the observed behavior."
+  ],
+  "confidence": 0.85
+}

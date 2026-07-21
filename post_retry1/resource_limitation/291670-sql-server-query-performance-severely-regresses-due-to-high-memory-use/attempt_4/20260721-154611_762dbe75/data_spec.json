@@ -1,0 +1,61 @@
+{
+  "database": "post_retry_resource_limitation_291670_sql_r971585_a4",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS notifications (id INT PRIMARY KEY, account_id INT, notified_at_utc DATETIME, payload NVARCHAR(MAX))",
+    "CREATE TABLE IF NOT EXISTS reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, payload NVARCHAR(MAX))"
+  ],
+  "generation_sql": [
+    "INSERT INTO notifications (id, account_id, notified_at_utc, payload) SELECT n, MOD(n, 1000), DATEADD(SECOND, n, '2023-01-01 00:00:00'), CONCAT('notification_', n) FROM generated_numbers WHERE n <= {row_count}",
+    "INSERT INTO reports (id, account_id, received_at_utc, payload) SELECT n, MOD(n, 1000), DATEADD(SECOND, n, '2023-01-01 00:00:00'), CONCAT('report_', n) FROM generated_numbers WHERE n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "notifications",
+      "purpose": "Primary table for synthetic workload simulating high memory usage and query sorting.",
+      "target_rows": 100000,
+      "distribution_notes": "Simulate skewed account_id distribution and time-based sorting."
+    },
+    {
+      "name": "reports",
+      "purpose": "Secondary table for join and sorting operations.",
+      "target_rows": 100000,
+      "distribution_notes": "Simulate skewed account_id distribution and time-based sorting."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "notifications": 100000,
+      "reports": 100000
+    },
+    "value_skew": {
+      "notifications.account_id": "Skewed distribution to simulate large accounts."
+    },
+    "predicate_selectivity": {
+      "notifications.account_id = 1": 0.01
+    },
+    "join_selectivity": {
+      "notifications.account_id = reports.account_id": "many-to-one"
+    }
+  },
+  "analyze_tables": [
+    "notifications",
+    "reports"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT n.* FROM notifications n JOIN reports r ON r.account_id = n.account_id WHERE n.account_id = 1 ORDER BY n.notified_at_utc DESC",
+      "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+      "expected_evidence": [
+        "The plan includes sorting and join operations relevant to the suspected mechanism.",
+        "The predicate or join behavior needed by the reproduction is visible in EXPLAIN.",
+        "The plan evidence distinguishes this mechanism from a trivial point lookup."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 10000,
+    "max_rows": 1000000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

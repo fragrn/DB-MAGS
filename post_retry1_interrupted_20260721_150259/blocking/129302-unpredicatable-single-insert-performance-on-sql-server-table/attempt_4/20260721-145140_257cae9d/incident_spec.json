@@ -1,0 +1,50 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to blocking and excessive indexes.",
+  "symptoms": [
+    "Single record insert taking over 7 minutes.",
+    "Blocking session IDs reported by sys.dm_exec_requests but no active blocker found.",
+    "Blocked requests waiting for LCK_M_S lock type."
+  ],
+  "mechanism": "Blocking caused by uncommitted transactions holding locks, exacerbated by contention from excessive indexes.",
+  "facts": [
+    {
+      "key": "Table has 34 indexes despite being an OLTP system.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post mentions the table has 34 indexes.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Blocked requests waiting for LCK_M_S.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post explicitly states blocked requests are waiting for LCK_M_S lock type.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Blocking session ID reported but no active blocker found.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post describes sys.dm_exec_requests showing a blocking session ID but no active query in sys.dm_exec_requests.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Insert performance is generally good except for occasional outliers.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post mentions that insert performance is usually good.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The blocking is caused by uncommitted transactions holding locks.",
+    "Excessive indexes contribute to contention during inserts."
+  ],
+  "unknowns": [
+    "Exact transaction causing the blocking.",
+    "Impact of other concurrent processes on the blocking behavior."
+  ],
+  "confidence": 0.85
+}

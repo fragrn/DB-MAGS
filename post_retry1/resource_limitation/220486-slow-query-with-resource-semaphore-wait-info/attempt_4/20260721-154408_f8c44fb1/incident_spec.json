@@ -1,0 +1,50 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Slow query execution with RESOURCE_SEMAPHORE waits and CXCONSUMER waits due to parallelism and memory pressure.",
+  "symptoms": [
+    "RESOURCE_SEMAPHORE waits observed during query execution.",
+    "CXCONSUMER waits indicating parallel query execution.",
+    "Slow query performance under high user connection load."
+  ],
+  "mechanism": "Excessive parallelism and memory grants causing RESOURCE_SEMAPHORE waits.",
+  "facts": [
+    {
+      "key": "RESOURCE_SEMAPHORE waits",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "RESOURCE_SEMAPHORE waits observed in sp_whoisactive and sp_BlitzCache results.",
+      "confidence": 0.9
+    },
+    {
+      "key": "CXCONSUMER waits",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "CXCONSUMER waits observed in sp_whoisactive results.",
+      "confidence": 0.9
+    },
+    {
+      "key": "MAXDOP set to 0",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "DBA noted MAXDOP set to 0 causing queries to utilize all CPU cores.",
+      "confidence": 0.8
+    },
+    {
+      "key": "Memory pressure affecting queries",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "11 forced grants reported in sys.dm_exec_query_resource_semaphores.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "Parallelism is contributing to memory pressure and RESOURCE_SEMAPHORE waits.",
+    "Query execution plans involve high memory grants."
+  ],
+  "unknowns": [
+    "Exact query patterns causing RESOURCE_SEMAPHORE waits.",
+    "Impact of other server configurations on memory pressure."
+  ],
+  "confidence": 0.85
+}

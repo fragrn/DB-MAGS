@@ -1,0 +1,48 @@
+{
+  "dbms": "postgresql",
+  "dbms_version": "9.4.5",
+  "summary": "ALTER TABLE operation caused blocking due to lock contention.",
+  "symptoms": [
+    "Database froze during ALTER TABLE operation",
+    "Login system blocked due to table lock"
+  ],
+  "mechanism": "ALTER TABLE requires an ACCESS EXCLUSIVE lock, which queued behind weaker locks held by idle transactions.",
+  "facts": [
+    {
+      "key": "ALTER TABLE command",
+      "value": {
+        "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+      },
+      "source": "explicit_post",
+      "evidence": "Post describes the exact SQL command causing the issue.",
+      "confidence": 1.0
+    },
+    {
+      "key": "ACCESS EXCLUSIVE lock requirement",
+      "value": {
+        "lock_type": "ACCESS EXCLUSIVE"
+      },
+      "source": "post_hypothesis",
+      "evidence": "Post mentions lock contention and PostgreSQL documentation confirms this lock type for ALTER TABLE.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Idle transaction holding weaker lock",
+      "value": {
+        "state": "idle in transaction"
+      },
+      "source": "post_hypothesis",
+      "evidence": "Post suggests querying pg_locks and pg_stat_activity to identify idle transactions.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The synthetic database will reproduce lock contention with similar table structure and workload.",
+    "Idle transactions can be simulated to mimic the blocking behavior."
+  ],
+  "unknowns": [
+    "Exact workload characteristics of the production environment",
+    "Whether other operations were performed after the ADD COLUMN command"
+  ],
+  "confidence": 0.8
+}

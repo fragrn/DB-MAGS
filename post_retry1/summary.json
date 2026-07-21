@@ -1,0 +1,1058 @@
+{
+  "output_root": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1",
+  "generated_at": 1784620991.2915158,
+  "counts": {
+    "success": 2,
+    "partial": 0,
+    "blocked": 9,
+    "abandoned": 12,
+    "failed": 0
+  },
+  "posts": [
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table.txt",
+      "category": "blocking",
+      "slug": "129302-unpredicatable-single-insert-performance-on-sql-server-table",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_blocking_129302_unpredicatable_r190049_a4' already exists. Choose a different database name.\\\"]}\"]}]",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_1/20260721-152733_6c03ff43",
+          "status": "failed",
+          "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+          "evaluation": null,
+          "repairs": [
+            {
+              "path": "workload_spec.queries",
+              "before": [
+                {
+                  "sql": "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES (N'Deskwork', 11, N'TestPayload')",
+                  "objective": "Simulate single insert performance under blocking conditions."
+                }
+              ],
+              "after": [
+                "INSERT INTO Communication (comm_action, comm_channelid, payload) VALUES (N'Deskwork', 11, N'TestPayload')"
+              ],
+              "reason": "Runtime SQL background workload expects query strings."
+            }
+          ],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_2/20260721-152806_cf58dbf0",
+          "status": "failed",
+          "reason": "attempt timed out after 150s",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_3/20260721-153036_1d48f0ba",
+          "status": "failed",
+          "reason": "attempt timed out after 150s",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table/attempt_4/20260721-153310_2844e654",
+          "status": "failed",
+          "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_blocking_129302_unpredicatable_r190049_a4' already exists. Choose a different database name.\\\"]}\"]}]",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": [
+            "Full SQL Server 2022 environment"
+          ]
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/blocking/132851-database-frozen-on-alter-table.txt",
+      "category": "blocking",
+      "slug": "132851-database-frozen-on-alter-table",
+      "status": "blocked",
+      "reason": "Missing capabilities: Target database environment",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/132851-database-frozen-on-alter-table/attempt_1/20260721-153345_22770f04",
+          "status": "blocked",
+          "reason": "Missing capabilities: Target database environment",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": [
+            "Target database environment"
+          ]
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/blocking/284397-concurrent-update-statements-of-single-row-in-small-table-takes-minutes.txt",
+      "category": "blocking",
+      "slug": "284397-concurrent-update-statements-of-single-row-in-small-table-takes-minutes",
+      "status": "blocked",
+      "reason": "The target database 'post_retry_blocking_284397_concurrent_upda_r450040_a3' does not exist, preventing schema creation and reproduction.",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/284397-concurrent-update-statements-of-single-row-in-small-table-takes-minutes/attempt_1/20260721-153408_0cc3e00d",
+          "status": "failed",
+          "reason": "postgresql TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"postgres raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'postgresql', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': ['configure[0]: ERROR:  CREATE DATABASE cannot run inside a transaction block']}\"]}]",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/284397-concurrent-update-statements-of-single-row-in-small-table-takes-minutes/attempt_2/20260721-153500_cdb153fa",
+          "status": "failed",
+          "reason": "attempt timed out after 150s",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/blocking/284397-concurrent-update-statements-of-single-row-in-small-table-takes-minutes/attempt_3/20260721-153730_4acf1b6c",
+          "status": "blocked",
+          "reason": "The target database 'post_retry_blocking_284397_concurrent_upda_r450040_a3' does not exist, preventing schema creation and reproduction.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/long_transaction/222262-performance-of-large-transactions-and-concurrency.txt",
+      "category": "long_transaction",
+      "slug": "222262-performance-of-large-transactions-and-concurrency",
+      "status": "blocked",
+      "reason": "The target database does not exist, preventing schema setup and reproduction.",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/222262-performance-of-large-transactions-and-concurrency/attempt_1/20260721-153755_f0457f1b",
+          "status": "blocked",
+          "reason": "The target database does not exist, preventing schema setup and reproduction.",
+          "evaluation": null,
+          "repairs": [
+            {
+              "path": "task_specs[0].actions[0].duration_sec",
+              "before": null,
+              "after": 1.0,
+              "reason": "Normalize missing action duration."
+            },
+            {
+              "path": "task_specs[0].actions[1].duration_sec",
+              "before": null,
+              "after": 1.0,
+              "reason": "Normalize missing action duration."
+            },
+            {
+              "path": "task_specs[0].actions[2].duration_sec",
+              "before": null,
+              "after": 1.0,
+              "reason": "Normalize missing action duration."
+            },
+            {
+              "path": "task_specs[1].actions[0].duration_sec",
+              "before": null,
+              "after": 1.0,
+              "reason": "Normalize missing action duration."
+            },
+            {
+              "path": "task_specs[1].actions[1].duration_sec",
+              "before": null,
+              "after": 1.0,
+              "reason": "Normalize missing action duration."
+            }
+          ],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/long_transaction/252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query.txt",
+      "category": "long_transaction",
+      "slug": "252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): (1146, \"Table 'post_retry_long_transaction_252749_lock_wa_r580446_a4.generated_numbers' doesn't exist\")",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query/attempt_1/20260721-153829_cb3c1a7b",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query/attempt_2/20260721-153845_d2b0805d",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_long_transaction_252749_lock_wa_r525975_a2.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": [
+            "Aurora-specific transaction diagnostics"
+          ]
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query/attempt_3/20260721-153921_16526e0b",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_long_transaction_252749_lock_wa_r561538_a3.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query/attempt_4/20260721-153940_450f9d79",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_long_transaction_252749_lock_wa_r580446_a4.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/long_transaction/72191-why-is-my-select-statement-so-slow.txt",
+      "category": "long_transaction",
+      "slug": "72191-why-is-my-select-statement-so-slow",
+      "status": "blocked",
+      "reason": "The target database does not exist, preventing setup and reproduction.",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/long_transaction/72191-why-is-my-select-statement-so-slow/attempt_1/20260721-154004_f7d12828",
+          "status": "blocked",
+          "reason": "The target database does not exist, preventing setup and reproduction.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/resource_limitation/108454-postgres-4x-slower-than-it-was.txt",
+      "category": "resource_limitation",
+      "slug": "108454-postgres-4x-slower-than-it-was",
+      "status": "blocked",
+      "reason": "Missing capabilities: Database environment for reproduction",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/108454-postgres-4x-slower-than-it-was/attempt_1/20260721-154026_2b870920",
+          "status": "blocked",
+          "reason": "Missing capabilities: Database environment for reproduction",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": [
+            "Database environment for reproduction"
+          ]
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/resource_limitation/130884-mysql-database-uses-too-much-cpu.txt",
+      "category": "resource_limitation",
+      "slug": "130884-mysql-database-uses-too-much-cpu",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): (1146, \"Table 'post_retry_resource_limitation_130884_mysq_r686919_a4.generated_numbers' doesn't exist\")",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/130884-mysql-database-uses-too-much-cpu/attempt_1/20260721-154042_f390f7df",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/130884-mysql-database-uses-too-much-cpu/attempt_2/20260721-154056_d339f6b7",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_resource_limitation_130884_mysq_r656648_a2.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/130884-mysql-database-uses-too-much-cpu/attempt_3/20260721-154112_288df97e",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/130884-mysql-database-uses-too-much-cpu/attempt_4/20260721-154126_a2ba2b9a",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_resource_limitation_130884_mysq_r686919_a4.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [
+            {
+              "path": "task_specs[1].actions[0].scripts[0].steps[0].sql",
+              "before": "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM (SELECT @rownum := @rownum + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1) t1, (SELECT 0 UNION ALL SELECT 1) t2, (SELECT 0 UNION ALL SELECT 1) t3, (SELECT 0 UNION ALL SELECT 1) t4, (SELECT 0 UNION ALL SELECT 1) t5, (SELECT 0 UNION ALL SELECT 1) t6, (SELECT 0 UNION ALL SELECT 1) t7, (SELECT 0 UNION ALL SELECT 1) t8, (SELECT 0 UNION ALL SELECT 1) t9, (SELECT 0 UNION ALL SELECT 1) t10, (SELECT @rownum := 0) r) generated_numbers WHERE n <= 100",
+              "after": "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1) t1, (SELECT 0 UNION ALL SELECT 1) t2, (SELECT 0 UNION ALL SELECT 1) t3, (SELECT 0 UNION ALL SELECT 1) t4, (SELECT 0 UNION ALL SELECT 1) t5, (SELECT 0 UNION ALL SELECT 1) t6, (SELECT 0 UNION ALL SELECT 1) t7, (SELECT 0 UNION ALL SELECT 1) t8, (SELECT 0 UNION ALL SELECT 1) t9, (SELECT 0 UNION ALL SELECT 1) t10, (SELECT 'repro_value' := 0) r) generated_numbers WHERE n <= 100",
+              "reason": "Replace unresolved SQL placeholders with synthetic literals."
+            },
+            {
+              "path": "task_specs[1].actions[0].scripts[0].steps[1].sql",
+              "before": "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM (SELECT @rownum := @rownum + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1) t1, (SELECT 0 UNION ALL SELECT 1) t2, (SELECT 0 UNION ALL SELECT 1) t3, (SELECT 0 UNION ALL SELECT 1) t4, (SELECT 0 UNION ALL SELECT 1) t5, (SELECT 0 UNION ALL SELECT 1) t6, (SELECT 0 UNION ALL SELECT 1) t7, (SELECT 0 UNION ALL SELECT 1) t8, (SELECT 0 UNION ALL SELECT 1) t9, (SELECT 0 UNION ALL SELECT 1) t10, (SELECT @rownum := 0) r) generated_numbers WHERE n <= 100000",
+              "after": "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM (SELECT 'repro_value' := 'repro_value' + 1 AS n FROM (SELECT 0 UNION ALL SELECT 1) t1, (SELECT 0 UNION ALL SELECT 1) t2, (SELECT 0 UNION ALL SELECT 1) t3, (SELECT 0 UNION ALL SELECT 1) t4, (SELECT 0 UNION ALL SELECT 1) t5, (SELECT 0 UNION ALL SELECT 1) t6, (SELECT 0 UNION ALL SELECT 1) t7, (SELECT 0 UNION ALL SELECT 1) t8, (SELECT 0 UNION ALL SELECT 1) t9, (SELECT 0 UNION ALL SELECT 1) t10, (SELECT 'repro_value' := 0) r) generated_numbers WHERE n <= 100000",
+              "reason": "Replace unresolved SQL placeholders with synthetic literals."
+            }
+          ],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/resource_limitation/17677-why-is-mysql-is-creating-so-many-temporary-tables-on-disk.txt",
+      "category": "resource_limitation",
+      "slug": "17677-why-is-mysql-is-creating-so-many-temporary-tables-on-disk",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/17677-why-is-mysql-is-creating-so-many-temporary-tables-on-disk/attempt_1/20260721-154151_3cb571b3",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/17677-why-is-mysql-is-creating-so-many-temporary-tables-on-disk/attempt_2/20260721-154204_3136cb27",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/17677-why-is-mysql-is-creating-so-many-temporary-tables-on-disk/attempt_3/20260721-154221_c6ea1241",
+          "status": "failed",
+          "reason": "invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/17677-why-is-mysql-is-creating-so-many-temporary-tables-on-disk/attempt_4/20260721-154240_c72eeb28",
+          "status": "failed",
+          "reason": "invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info.txt",
+      "category": "resource_limitation",
+      "slug": "220486-slow-query-with-resource-semaphore-wait-info",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_resource_limitation_220486_slow_r848989_a4' already exists. Choose a different database name.\\\"]}\"]}]",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info/attempt_1/20260721-154300_e8ddbdbd",
+          "status": "failed",
+          "reason": "Msg 2628, Level 16, State 1, Server 883f252a88e4, Line 1\nString or binary data would be truncated in table 'post_retry_resource_limitation_220486_slow_r780692_a1.dbo.workload_table', column 'payload'. Truncated value: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'.\nThe statement has been terminated.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info/attempt_2/20260721-154323_d03c3dd5",
+          "status": "failed",
+          "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info/attempt_3/20260721-154345_7b3125d0",
+          "status": "failed",
+          "reason": "Msg 2628, Level 16, State 1, Server 883f252a88e4, Line 1\nString or binary data would be truncated in table 'post_retry_resource_limitation_220486_slow_r825485_a3.dbo.workload_table', column 'payload'. Truncated value: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'.\nThe statement has been terminated.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/220486-slow-query-with-resource-semaphore-wait-info/attempt_4/20260721-154408_f8c44fb1",
+          "status": "failed",
+          "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_resource_limitation_220486_slow_r848989_a4' already exists. Choose a different database name.\\\"]}\"]}]",
+          "evaluation": null,
+          "repairs": [
+            {
+              "path": "task_specs[1].actions[0].scripts[0].steps[2].sql",
+              "before": "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = ?', 100, 8)",
+              "after": "INSERT INTO synthetic_queries (id, query_pattern, memory_grant, parallelism) VALUES (1, 'SELECT * FROM large_table WHERE col1 = 'repro_value'', 100, 8)",
+              "reason": "Replace unresolved SQL placeholders with synthetic literals."
+            }
+          ],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use.txt",
+      "category": "resource_limitation",
+      "slug": "291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use/attempt_1/20260721-154501_fb17c6c4",
+          "status": "failed",
+          "reason": "Msg 2627, Level 14, State 1, Server 883f252a88e4, Line 1\nViolation of PRIMARY KEY constraint 'PK__accounts__3213E83F2C6637B5'. Cannot insert duplicate key in object 'dbo.accounts'. The duplicate key value is (1).\nThe statement has been terminated.",
+          "evaluation": null,
+          "repairs": [
+            {
+              "path": "workload_spec.queries",
+              "before": [
+                "EXEC GetLargeAccountNotifications @account_id = 1",
+                "EXEC GetLargeAccountNotifications @account_id = 2"
+              ],
+              "after": [
+                "EXEC GetLargeAccountNotifications 'repro_value' = 1",
+                "EXEC GetLargeAccountNotifications 'repro_value' = 2"
+              ],
+              "reason": "Replace unresolved SQL placeholders with synthetic literals."
+            }
+          ],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use/attempt_2/20260721-154527_bea99fca",
+          "status": "failed",
+          "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use/attempt_3/20260721-154550_dfc46b6c",
+          "status": "failed",
+          "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/resource_limitation/291670-sql-server-query-performance-severely-regresses-due-to-high-memory-use/attempt_4/20260721-154611_762dbe75",
+          "status": "failed",
+          "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/224651-stored-procedure-infinite-looping-after-index-updates.txt",
+      "category": "slowsql",
+      "slug": "224651-stored-procedure-infinite-looping-after-index-updates",
+      "status": "success",
+      "reason": "The reproduction successfully demonstrated the reported symptoms, including infinite looping in the stored procedure and deadlocks during execution. The mechanism involving index locking and trigger interactions was also validated. However, no specific execution plan similarity was provided for evaluation.",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/224651-stored-procedure-infinite-looping-after-index-updates/attempt_1/20260721-154640_de5459bb",
+          "status": "failed",
+          "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_slowsql_224651_stored_procedure_r59_a1' already exists. Choose a different database name.\\\"]}\"]}]",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/224651-stored-procedure-infinite-looping-after-index-updates/attempt_2/20260721-154719_0785c00d",
+          "status": "failed",
+          "reason": "Msg 208, Level 16, State 1, Server 883f252a88e4, Line 1\nInvalid object name 'generate_series'.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/224651-stored-procedure-infinite-looping-after-index-updates/attempt_3/20260721-154753_51823cba",
+          "status": "success",
+          "reason": "The reproduction successfully demonstrated the reported symptoms, including infinite looping in the stored procedure and deadlocks during execution. The mechanism involving index locking and trigger interactions was also validated. However, no specific execution plan similarity was provided for evaluation.",
+          "evaluation": {
+            "symptom_hit": true,
+            "mechanism_hit": true,
+            "plan_similarity": 0.0,
+            "success": true,
+            "reason": "The reproduction successfully demonstrated the reported symptoms, including infinite looping in the stored procedure and deadlocks during execution. The mechanism involving index locking and trigger interactions was also validated. However, no specific execution plan similarity was provided for evaluation.",
+            "unmatched_conditions": [],
+            "evidence": {
+              "descriptive_evidence_name": "baseline and after observations",
+              "value": {
+                "symptoms": [
+                  "Infinite looping observed in the stored procedure.",
+                  "Deadlocks or locking issues observed during execution."
+                ],
+                "mechanism": "The issue is caused by index locking and trigger interactions."
+              }
+            }
+          },
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/297892-query-slow-when-a-sub-select-is-used.txt",
+      "category": "slowsql",
+      "slug": "297892-query-slow-when-a-sub-select-is-used",
+      "status": "blocked",
+      "reason": "The target database does not exist, preventing schema inspection and further reproduction steps.",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/297892-query-slow-when-a-sub-select-is-used/attempt_1/20260721-154842_19dd5cbf",
+          "status": "blocked",
+          "reason": "The target database does not exist, preventing schema inspection and further reproduction steps.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/how-to-optimize-very-slow-select-with-left-joins-over-big-tables.txt",
+      "category": "slowsql",
+      "slug": "how-to-optimize-very-slow-select-with-left-joins-over-big-tables",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): unsafe blueprint TaskSpecs: DAG has no tasks",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/how-to-optimize-very-slow-select-with-left-joins-over-big-tables/attempt_1/20260721-154854_439799aa",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/how-to-optimize-very-slow-select-with-left-joins-over-big-tables/attempt_2/20260721-154911_1fba3d47",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/how-to-optimize-very-slow-select-with-left-joins-over-big-tables/attempt_3/20260721-154932_68ac9058",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_slowsql_how_to_optimize_very_sl_r172028_a3.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/how-to-optimize-very-slow-select-with-left-joins-over-big-tables/attempt_4/20260721-154950_d0012577",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/improve-mysql-query-performance-from-slow-query-log.txt",
+      "category": "slowsql",
+      "slug": "improve-mysql-query-performance-from-slow-query-log",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): (1146, \"Table 'post_retry_slowsql_improve_mysql_query_per_r282748_a4.generated_numbers' doesn't exist\")",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/improve-mysql-query-performance-from-slow-query-log/attempt_1/20260721-155008_4fc7efba",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/improve-mysql-query-performance-from-slow-query-log/attempt_2/20260721-155027_882b2a00",
+          "status": "failed",
+          "reason": "invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/improve-mysql-query-performance-from-slow-query-log/attempt_3/20260721-155057_16f3e78c",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_slowsql_improve_mysql_query_per_r257516_a3.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/improve-mysql-query-performance-from-slow-query-log/attempt_4/20260721-155122_1bd1719e",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_slowsql_improve_mysql_query_per_r282748_a4.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/increasing-work-mem-and-shared-buffers-on-postgres-9-2-significantly-slows-down.txt",
+      "category": "slowsql",
+      "slug": "increasing-work-mem-and-shared-buffers-on-postgres-9-2-significantly-slows-down",
+      "status": "blocked",
+      "reason": "Missing capabilities: Existing target database",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/increasing-work-mem-and-shared-buffers-on-postgres-9-2-significantly-slows-down/attempt_1/20260721-155200_3729e809",
+          "status": "blocked",
+          "reason": "Missing capabilities: Existing target database",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": [
+            "Existing target database"
+          ]
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/mysql-query-performance-query-schema-indexes.txt",
+      "category": "slowsql",
+      "slug": "mysql-query-performance-query-schema-indexes",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): unsafe blueprint TaskSpecs: DAG has no tasks",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/mysql-query-performance-query-schema-indexes/attempt_1/20260721-155214_a44201cb",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/mysql-query-performance-query-schema-indexes/attempt_2/20260721-155234_ba84f90a",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/mysql-query-performance-query-schema-indexes/attempt_3/20260721-155248_2578e56e",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/mysql-query-performance-query-schema-indexes/attempt_4/20260721-155302_47c672b8",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/optimize-a-query-thats-running-slow-with-nested-loops-inner-ioin.txt",
+      "category": "slowsql",
+      "slug": "optimize-a-query-thats-running-slow-with-nested-loops-inner-ioin",
+      "status": "blocked",
+      "reason": "Missing capabilities: Database creation or access to the specified database",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/optimize-a-query-thats-running-slow-with-nested-loops-inner-ioin/attempt_1/20260721-155320_06bf3368",
+          "status": "failed",
+          "reason": "Msg 208, Level 16, State 1, Server 883f252a88e4, Line 1\nInvalid object name 'generated_numbers'.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/optimize-a-query-thats-running-slow-with-nested-loops-inner-ioin/attempt_2/20260721-155348_dfd16c28",
+          "status": "blocked",
+          "reason": "Missing capabilities: Database creation or access to the specified database",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": [
+            "Database creation or access to the specified database"
+          ]
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance.txt",
+      "category": "slowsql",
+      "slug": "why-does-adding-a-top-1-dramatically-worsen-performance",
+      "status": "success",
+      "reason": "The reproduction successfully demonstrated the reported symptom and mechanism. The query with TOP 1 exhibited a Nested Loops join with a Table Spool operator, while the query without TOP 1 used a Hash Match join. This aligns with the expected behavior of row goal optimization altering the query plan.",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance/attempt_1/20260721-155401_9046b283",
+          "status": "failed",
+          "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance/attempt_2/20260721-155422_9486332d",
+          "status": "failed",
+          "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance/attempt_3/20260721-155446_0b974ba2",
+          "status": "failed",
+          "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_slowsql_why_does_adding_a_top_1_r486967_a3' already exists. Choose a different database name.\\\"]}\"]}]",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": [
+            "Full SQL Server 2008 R2 optimizer behavior"
+          ]
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance/attempt_4/20260721-155543_2ece7f73",
+          "status": "success",
+          "reason": "The reproduction successfully demonstrated the reported symptom and mechanism. The query with TOP 1 exhibited a Nested Loops join with a Table Spool operator, while the query without TOP 1 used a Hash Match join. This aligns with the expected behavior of row goal optimization altering the query plan.",
+          "evaluation": {
+            "symptom_hit": true,
+            "mechanism_hit": true,
+            "plan_similarity": 0.6,
+            "success": true,
+            "reason": "The reproduction successfully demonstrated the reported symptom and mechanism. The query with TOP 1 exhibited a Nested Loops join with a Table Spool operator, while the query without TOP 1 used a Hash Match join. This aligns with the expected behavior of row goal optimization altering the query plan.",
+            "unmatched_conditions": [],
+            "evidence": {
+              "descriptive_evidence_name": "query_plan_behavior",
+              "value": {
+                "top_1_query_plan": "Nested Loops join with Table Spool operator",
+                "no_top_1_query_plan": "Hash Match join operator"
+              }
+            }
+          },
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/why-is-my-query-suddenly-slower-than-it-was-yesterday.txt",
+      "category": "slowsql",
+      "slug": "why-is-my-query-suddenly-slower-than-it-was-yesterday",
+      "status": "blocked",
+      "reason": "Missing capabilities: Existing database environment",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-is-my-query-suddenly-slower-than-it-was-yesterday/attempt_1/20260721-155642_11d161d2",
+          "status": "failed",
+          "reason": "Msg 195, Level 15, State 10, Server 883f252a88e4, Line 1\n'MOD' is not a recognized built-in function name.",
+          "evaluation": null,
+          "repairs": [
+            {
+              "path": "task_specs[0].actions[0].sql",
+              "before": "EXEC sys.sp_recompile @objname = N'main_table';",
+              "after": "EXEC sys.sp_recompile 'repro_value' = N'main_table';",
+              "reason": "Replace unresolved SQL placeholders with synthetic literals."
+            }
+          ],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/slowsql/why-is-my-query-suddenly-slower-than-it-was-yesterday/attempt_2/20260721-155702_1cf9ddec",
+          "status": "blocked",
+          "reason": "Missing capabilities: Existing database environment",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": [
+            "Existing database environment"
+          ]
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/too_many_connection/142243-mysql-database-has-way-too-many-connections.txt",
+      "category": "too_many_connection",
+      "slug": "142243-mysql-database-has-way-too-many-connections",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): unsafe blueprint TaskSpecs: DAG has no tasks",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/142243-mysql-database-has-way-too-many-connections/attempt_1/20260721-155714_8c1c160c",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [
+            {
+              "path": "task_specs[0].actions[0].database",
+              "before": "mysql",
+              "after": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+              "reason": "Use per-post attempt database."
+            },
+            {
+              "path": "task_specs[4].actions[0].database",
+              "before": "mysql",
+              "after": "post_retry_too_many_connection_142243_mysq_r634836_a1",
+              "reason": "Use per-post attempt database."
+            }
+          ],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/142243-mysql-database-has-way-too-many-connections/attempt_2/20260721-155749_1e7e6b9c",
+          "status": "failed",
+          "reason": "background workload failed: [\"(1040, 'Too many connections')\", \"(1040, 'Too many connections')\", \"(1040, 'Too many connections')\"]",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/142243-mysql-database-has-way-too-many-connections/attempt_3/20260721-155849_0b59b852",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/142243-mysql-database-has-way-too-many-connections/attempt_4/20260721-155906_7795a775",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps.txt",
+      "category": "too_many_connection",
+      "slug": "20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): unsafe blueprint TaskSpecs: DAG has no tasks",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps/attempt_1/20260721-155923_98bdb461",
+          "status": "failed",
+          "reason": "invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+          "evaluation": null,
+          "repairs": [
+            {
+              "path": "workload_spec.queries",
+              "before": [
+                "SELECT * FROM email_queue WHERE status = 'pending' LIMIT 10",
+                "UPDATE email_queue SET status = 'sent' WHERE id = ?",
+                "INSERT INTO email_queue (user_id, email_content, status) VALUES (?, ?, 'pending')"
+              ],
+              "after": [
+                "SELECT * FROM email_queue WHERE status = 'pending' LIMIT 10",
+                "UPDATE email_queue SET status = 'sent' WHERE id = 'repro_value'",
+                "INSERT INTO email_queue (user_id, email_content, status) VALUES (?, ?, 'pending')"
+              ],
+              "reason": "Replace unresolved SQL placeholders with synthetic literals."
+            }
+          ],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps/attempt_2/20260721-160022_cbe3d30e",
+          "status": "failed",
+          "reason": "invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps/attempt_3/20260721-160053_a94d64d1",
+          "status": "failed",
+          "reason": "invalid reproduction blueprint: TaskSpecs that use SET GLOBAL require cleanup_actions",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/20479-how-to-resolve-too-many-connections-and-fatal-error-in-mysql-running-on-vps/attempt_4/20260721-160120_2d5d0735",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/too_many_connection/4717-too-many-connections.txt",
+      "category": "too_many_connection",
+      "slug": "4717-too-many-connections",
+      "status": "abandoned",
+      "reason": "Stopped after 4 attempt(s): (1146, \"Table 'post_retry_too_many_connection_4717_too_ma_r974031_a4.generated_numbers' doesn't exist\")",
+      "attempts": [
+        {
+          "attempt": 1,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/4717-too-many-connections/attempt_1/20260721-160132_60d0703b",
+          "status": "failed",
+          "reason": "background workload failed: [\"(1040, 'Too many connections')\", \"(1040, 'Too many connections')\", \"(1040, 'Too many connections')\"]",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 2,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/4717-too-many-connections/attempt_2/20260721-160201_ff0ce0f6",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_too_many_connection_4717_too_ma_r921642_a2.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 3,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/4717-too-many-connections/attempt_3/20260721-160234_bb7731e5",
+          "status": "failed",
+          "reason": "unsafe blueprint TaskSpecs: DAG has no tasks",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        },
+        {
+          "attempt": 4,
+          "run_dir": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post_retry1/too_many_connection/4717-too-many-connections/attempt_4/20260721-160254_5d8ef9b9",
+          "status": "failed",
+          "reason": "(1146, \"Table 'post_retry_too_many_connection_4717_too_ma_r974031_a4.generated_numbers' doesn't exist\")",
+          "evaluation": null,
+          "repairs": [],
+          "missing_capabilities": []
+        }
+      ]
+    }
+  ],
+  "unsupported": [
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/blocking/129302-unpredicatable-single-insert-performance-on-sql-server-table.txt",
+      "category": "blocking",
+      "slug": "129302-unpredicatable-single-insert-performance-on-sql-server-table",
+      "attempt": 4,
+      "missing_capability": "Full SQL Server 2022 environment",
+      "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_blocking_129302_unpredicatable_r190049_a4' already exists. Choose a different database name.\\\"]}\"]}]"
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/blocking/132851-database-frozen-on-alter-table.txt",
+      "category": "blocking",
+      "slug": "132851-database-frozen-on-alter-table",
+      "attempt": 1,
+      "missing_capability": "Target database environment",
+      "reason": "Missing capabilities: Target database environment"
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/long_transaction/252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query.txt",
+      "category": "long_transaction",
+      "slug": "252749-lock-wait-timeout-exceeded-try-restarting-transaction-for-my-delete-query",
+      "attempt": 2,
+      "missing_capability": "Aurora-specific transaction diagnostics",
+      "reason": "(1146, \"Table 'post_retry_long_transaction_252749_lock_wa_r525975_a2.generated_numbers' doesn't exist\")"
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/resource_limitation/108454-postgres-4x-slower-than-it-was.txt",
+      "category": "resource_limitation",
+      "slug": "108454-postgres-4x-slower-than-it-was",
+      "attempt": 1,
+      "missing_capability": "Database environment for reproduction",
+      "reason": "Missing capabilities: Database environment for reproduction"
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/increasing-work-mem-and-shared-buffers-on-postgres-9-2-significantly-slows-down.txt",
+      "category": "slowsql",
+      "slug": "increasing-work-mem-and-shared-buffers-on-postgres-9-2-significantly-slows-down",
+      "attempt": 1,
+      "missing_capability": "Existing target database",
+      "reason": "Missing capabilities: Existing target database"
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/optimize-a-query-thats-running-slow-with-nested-loops-inner-ioin.txt",
+      "category": "slowsql",
+      "slug": "optimize-a-query-thats-running-slow-with-nested-loops-inner-ioin",
+      "attempt": 2,
+      "missing_capability": "Database creation or access to the specified database",
+      "reason": "Missing capabilities: Database creation or access to the specified database"
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/why-does-adding-a-top-1-dramatically-worsen-performance.txt",
+      "category": "slowsql",
+      "slug": "why-does-adding-a-top-1-dramatically-worsen-performance",
+      "attempt": 3,
+      "missing_capability": "Full SQL Server 2008 R2 optimizer behavior",
+      "reason": "sqlserver TaskSpec execution failed: [{\"task_id\": \"setup_environment\", \"status\": \"failed\", \"actions\": [], \"errors\": [\"sqlserver raw_transaction_script failed: {'kind': 'raw_transaction_script', 'dbms': 'sqlserver', 'thread_count': 1, 'executed_steps': 0, 'error_count': 1, 'errors': [\\\"configure[0]: Msg 1801, Level 16, State 3, Server 883f252a88e4, Line 1\\\\nDatabase 'post_retry_slowsql_why_does_adding_a_top_1_r486967_a3' already exists. Choose a different database name.\\\"]}\"]}]"
+    },
+    {
+      "input_file": "/Users/neo/.codex/worktrees/1299/DB-MAGS/post/slowsql/why-is-my-query-suddenly-slower-than-it-was-yesterday.txt",
+      "category": "slowsql",
+      "slug": "why-is-my-query-suddenly-slower-than-it-was-yesterday",
+      "attempt": 2,
+      "missing_capability": "Existing database environment",
+      "reason": "Missing capabilities: Existing database environment"
+    }
+  ]
+}

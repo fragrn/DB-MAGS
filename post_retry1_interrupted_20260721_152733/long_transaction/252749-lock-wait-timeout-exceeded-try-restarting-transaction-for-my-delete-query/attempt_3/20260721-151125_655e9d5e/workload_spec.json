@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "method": "sql",
+  "queries": [
+    "START TRANSACTION; SELECT * FROM EVENT_DETAILS WHERE UPDATE_DATE < 20191015 FOR UPDATE;",
+    "DELETE FROM EVENT_DETAILS WHERE UPDATE_DATE < 20191015 AND COMPONENT_NAME = 'health';"
+  ],
+  "concurrency": 5,
+  "duration_sec": 60
+}

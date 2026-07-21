@@ -1,0 +1,61 @@
+{
+  "database": "post_retry_long_transaction_72191_why_is_m_r924354_a1",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS sys_databases (name SYSNAME PRIMARY KEY, state_desc VARCHAR(32), schema_id INT, table_name SYSNAME)",
+    "CREATE TABLE IF NOT EXISTS sys_tables (schema_id INT, name SYSNAME, PRIMARY KEY (schema_id, name))"
+  ],
+  "generation_sql": [
+    "INSERT INTO sys_databases (name, state_desc, schema_id, table_name) SELECT CONCAT('db_', n), CASE WHEN MOD(n, 4) = 0 THEN 'ONLINE' ELSE 'OFFLINE' END, n, CASE WHEN MOD(n, 10) = 0 THEN '_LOOK_UP_TABLE' ELSE NULL END FROM generated_numbers WHERE n <= {row_count}",
+    "INSERT INTO sys_tables (schema_id, name) SELECT n, '_LOOK_UP_TABLE' FROM generated_numbers WHERE MOD(n, 10) = 0 AND n <= {row_count}"
+  ],
+  "tables": [
+    {
+      "name": "sys_databases",
+      "purpose": "Simulates sys.databases for filtering and metadata access.",
+      "target_rows": 100,
+      "distribution_notes": "Simulates state_desc and table existence skew."
+    },
+    {
+      "name": "sys_tables",
+      "purpose": "Simulates sys.tables for metadata lookup.",
+      "target_rows": 10,
+      "distribution_notes": "Simulates sparse table existence."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "sys_databases": 100,
+      "sys_tables": 10
+    },
+    "value_skew": {
+      "sys_databases.state_desc": "ONLINE is sparse."
+    },
+    "predicate_selectivity": {
+      "sys_databases.state_desc = 'ONLINE'": 0.25
+    },
+    "join_selectivity": {
+      "sys_databases.schema_id = sys_tables.schema_id": "one-to-one for sparse rows."
+    }
+  },
+  "analyze_tables": [
+    "sys_databases",
+    "sys_tables"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT name FROM sys_databases WHERE state_desc = 'ONLINE' AND OBJECT_ID(QUOTENAME(name) + '.[dbo].[_LOOK_UP_TABLE]', 'U') IS NOT NULL",
+      "objective": "Verify that the synthetic schema and data reproduce the suspected mechanism.",
+      "expected_evidence": [
+        "The plan includes metadata access for OBJECT_ID.",
+        "The predicate filtering state_desc and table existence is visible in EXPLAIN.",
+        "Blocking or inefficiencies in metadata access are observable."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 100,
+    "max_rows": 1000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

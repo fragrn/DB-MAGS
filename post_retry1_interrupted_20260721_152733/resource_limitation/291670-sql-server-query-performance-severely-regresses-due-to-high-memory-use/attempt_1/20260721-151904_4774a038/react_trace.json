@@ -1,0 +1,55 @@
+[
+  {
+    "step": 1,
+    "tool": "inspect_capabilities",
+    "arguments": {},
+    "result": {
+      "task_action_kinds": [
+        "raw_sql_workload",
+        "raw_transaction_script",
+        "raw_command",
+        "logical_backup_command",
+        "benchbase_burst_command"
+      ],
+      "dbms_adapters": [
+        "mysql",
+        "postgresql",
+        "sqlserver"
+      ],
+      "mysql": {
+        "host": "127.0.0.1",
+        "port": 3306
+      },
+      "postgresql": {
+        "host": "local socket",
+        "port": 5432,
+        "user": "neo"
+      },
+      "sqlserver": {
+        "host": "127.0.0.1",
+        "port": 1433,
+        "user": "sa",
+        "client": "docker",
+        "compatibility_note": "Local Apple Silicon path uses Azure SQL Edge, not full SQL Server."
+      },
+      "chaosblade_available": true,
+      "limitations": [
+        "Apple Silicon SQL Server path uses Azure SQL Edge compatibility, not full SQL Server 2022.",
+        "No production data dump is assumed"
+      ]
+    }
+  },
+  {
+    "step": 2,
+    "tool": "inspect_db_environment",
+    "arguments": {
+      "database": "post_retry_resource_limitation_291670_sql_r344223_a1"
+    },
+    "error": "(1049, \"Unknown database 'post_retry_resource_limitation_291670_sql_r344223_a1'\")"
+  },
+  {
+    "step": 3,
+    "tool": "final_answer",
+    "content": "{\n  \"incident_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"dbms_version\": null,\n    \"summary\": \"Query performance degradation due to high memory usage and parameter sniffing in SQL Server.\",\n    \"symptoms\": [\n      \"Queries timeout for large accounts when SQL Server memory is full.\",\n      \"Restarting SQL Server resolves the issue temporarily.\",\n      \"SSMS executes the same query faster than the application.\",\n      \"High memory consumption and large disk reads during query execution.\"\n    ],\n    \"mechanism\": \"Parameter sniffing and memory pressure lead to suboptimal query plans and resource contention.\",\n    \"facts\": [\n      {\n        \"key\": \"Memory pressure\",\n        \"value\": {\"description\": \"Memory fills up, causing disk reads at low throughput.\"},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post describes memory filling up and disk reads slowing down to 20MB/s.\"\n      },\n      {\n        \"key\": \"Parameter sniffing\",\n        \"value\": {\"description\": \"SSMS and application use different execution plans due to ARITHABORT setting.\"},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post identifies ARITHABORT as a cause of different execution plans.\"\n      },\n      {\n        \"key\": \"Query timeout\",\n        \"value\": {\"description\": \"Large accounts timeout in the application but not in SSMS.\"},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post mentions that large accounts timeout in the application but work in SSMS.\"\n      },\n      {\n        \"key\": \"Execution plan differences\",\n        \"value\": {\"description\": \"Execution plans differ between SSMS and application.\"},\n        \"source\": \"explicit_post\",\n        \"evidence\": \"The post describes execution plan differences due to ARITHABORT.\"\n      }\n    ],\n    \"assumptions\": [\n      \"The database schema and workload can be approximated using synthetic data.\",\n      \"The SQL Server instance is configured similarly to the one described in the post.\",\n      \"The issue can be reproduced in a local Azure SQL Edge environment.\"\n    ],\n    \"unknowns\": [\n      \"Exact schema and data distribution of the original database.\",\n      \"Details of the stored procedure and its execution plan.\",\n      \"Specific indexes and their configurations.\"\n    ],\n    \"confidence\": 0.8\n  },\n  \"feasibility\": {\n    \"level\": \"mechanism\",\n    \"rationale\": \"The issue involves SQL Server-specific features like parameter sniffing and memory management, which can be approximated in the Azure SQL Edge environment. However, exact reproduction is not feasible due to the lack of the original schema and data.\",\n    \"missing_capabilities\": [],\n    \"unmatched_conditions\": [\"Exact schema and data distribution are unknown.\"],\n    \"confidence\": 0.8\n  },\n  \"environment_spec\": {\n    \"dbms\": \"sqlserver\",\n    \"database\": \"post_retry_resource_limitation_291670_sql_r344223_a1\",\n    \"requirements\": [\"Azure SQL Edge compatibility for SQL Server 2019 features\"],\n    \"isolation\": \"dedicated_test_database\"\n  },\n  \"data_spec\": {\n    \"database\": \"post_retry_resource_limitation_291670_sql_r344223_a1\",\n    \"schema_sql\": [\n      \"CREATE TABLE IF NOT EXISTS Accounts (id INT PRIMARY KEY, name NVARCHAR(255), data_size INT, last_accessed DATETIME);\",\n      \"CREATE TABLE IF NOT EXISTS Notifications (id INT PRIMARY KEY, account_id INT, message NVARCHAR(MAX), created_at DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));\",\n      \"CREATE TABLE IF NOT EXISTS Reports (id INT PRIMARY KEY, account_id INT, received_at_utc DATETIME, FOREIGN KEY (account_id) REFERENCES Accounts(id));\"\n    ],\n    \"generation_sql\": [\n      \"INSERT INTO Accounts (id, name, data_size, last_accessed) SELECT n, CONCAT('Account_', n), FLOOR(RAND() * 10000), DATEADD(DAY, -n % 365, GETDATE()) FROM (SELECT TOP {row_count} ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) AS n FROM sys.objects) AS numbers;\",\n      \"INSERT INTO Notifications (id, account_id, message, created_at) SELECT n, FLOOR(RAND() * {row_count}), CONCAT('Notification_', n), DATEADD(M"
+  }
+]

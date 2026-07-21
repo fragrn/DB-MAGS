@@ -1,0 +1,219 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MATLAB feeding the database causes 'too many connections' error due to rapid connection opening and closing.",
+    "symptoms": [
+      "Too many connections error",
+      "High number of threads and connections",
+      "Rapid connection open/close cycles"
+    ],
+    "mechanism": "Exceeding the MySQL `max_connections` limit due to frequent connection creation and closure.",
+    "facts": [
+      {
+        "key": "max_connections default limit",
+        "value": {
+          "default_limit": 151
+        },
+        "source": "explicit_post",
+        "evidence": "MySQL documentation and referenced answers in the post.",
+        "confidence": 0.9
+      },
+      {
+        "key": "MATLAB connection behavior",
+        "value": {
+          "pattern": "open connection, insert row, close connection"
+        },
+        "source": "explicit_post",
+        "evidence": "MATLAB output logs provided in the post.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Threads approaching max_connections",
+        "value": {
+          "threads": [
+            149,
+            150
+          ]
+        },
+        "source": "explicit_post",
+        "evidence": "MATLAB output logs showing thread counts.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The database workload involves frequent, short-lived connections.",
+      "MATLAB is the primary source of database connections in this scenario."
+    ],
+    "unknowns": [
+      "Exact workload characteristics of MATLAB feeding process.",
+      "Whether connection pooling is feasible in the MATLAB environment."
+    ],
+    "confidence": 0.85
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The mechanism of exceeding `max_connections` can be reproduced by simulating rapid connection creation and closure.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "The target database does not exist, requiring setup from scratch."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_too_many_connection_4717_too_ma_r744225_a2",
+    "requirements": [
+      "Dedicated test database setup",
+      "Ability to simulate rapid connection cycles"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_too_many_connection_4717_too_ma_r744225_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS test_table (id INT AUTO_INCREMENT PRIMARY KEY, data VARCHAR(255))"
+    ],
+    "generation_sql": [
+      "INSERT INTO test_table (data) SELECT CONCAT('row_', n) FROM (SELECT @rownum := @rownum + 1 AS n FROM (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) t1, (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) t2, (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) t3, (SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4) t4, (SELECT @rownum := 0) t5 LIMIT {row_count}) numbers"
+    ],
+    "tables": [
+      {
+        "name": "test_table",
+        "purpose": "Simulate a table for rapid insert operations during connection cycles.",
+        "target_rows": 1000,
+        "distribution_notes": "Uniform distribution of rows for simplicity."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "test_table": 1000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "test_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT COUNT(*) FROM test_table",
+        "objective": "Verify that the table is populated with the expected number of rows.",
+        "expected_evidence": [
+          "Row count matches the target_rows value."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 10000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "CONNECT TO DATABASE; INSERT INTO test_table (data) VALUES ('test'); DISCONNECT;"
+    ],
+    "concurrency": 10,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Reproduce 'too many connections' error"
+    ],
+    "symptom_evidence": [
+      "Error logs showing 'too many connections'"
+    ],
+    "mechanism_evidence": [
+      "Connection count exceeds max_connections limit"
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "too_many_connections",
+    "target_database": "post_retry_too_many_connection_4717_too_ma_r744225_a2",
+    "dba_description": "Simulate rapid connection cycles to reproduce 'too many connections' error.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_database",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_4717_too_ma_r744225_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_4717_too_ma_r744225_a2"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_4717_too_ma_r744225_a2"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS test_table (id INT AUTO_INCREMENT PRIMARY KEY, data VARCHAR(255))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database setup for reproduction"
+      }
+    },
+    {
+      "task_id": "simulate_connections",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "CONNECT TO DATABASE; INSERT INTO test_table (data) VALUES ('test'); DISCONNECT;",
+          "concurrency": 10,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "error_occurs": "too many connections"
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Simulating rapid connection cycles"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_database",
+      "simulate_connections"
+    ]
+  ],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on simulating the rapid connection cycles described in the post to trigger the 'too many connections' error."
+}

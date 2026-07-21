@@ -1,0 +1,191 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Query performance degradation due to parameter sniffing or related factors.",
+    "symptoms": [
+      "Query suddenly slower than before",
+      "Execution plan changes",
+      "Potential skew in data distribution or statistics"
+    ],
+    "mechanism": "Parameter sniffing causing suboptimal execution plan caching.",
+    "facts": [
+      {
+        "key": "parameter_sniffing",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post mentions parameter sniffing as a primary cause.",
+        "confidence": 0.9
+      },
+      {
+        "key": "execution_plan_cache",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Cached execution plans are influenced by initial parameter values.",
+        "confidence": 0.8
+      },
+      {
+        "key": "data_distribution_skew",
+        "value": {},
+        "source": "post_hypothesis",
+        "evidence": "Post hypothesizes skewed data distribution as a contributing factor.",
+        "confidence": 0.7
+      }
+    ],
+    "assumptions": [
+      "The query involves parameters that influence execution plan generation.",
+      "The database statistics may be outdated or misleading."
+    ],
+    "unknowns": [
+      "Exact query and table schema",
+      "Specific parameters causing the issue",
+      "Whether statistics updates or schema changes occurred recently"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "SQL Server environment is available, and parameter sniffing can be reproduced with synthetic data and queries.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_slowsql_why_is_my_query_suddenl_r602115_a1",
+    "requirements": [
+      "Dedicated SQL Server test environment"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_why_is_my_query_suddenl_r602115_a1",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS main_table (id INT PRIMARY KEY, category VARCHAR(64), ref_id INT, payload VARCHAR(255))",
+      "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
+    ],
+    "generation_sql": [
+      "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
+      "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+    ],
+    "tables": [
+      {
+        "name": "main_table",
+        "purpose": "Primary table for reproducing parameter sniffing effects.",
+        "target_rows": 100000,
+        "distribution_notes": "Skewed category distribution with rare values causing plan divergence."
+      },
+      {
+        "name": "ref_table",
+        "purpose": "Reference table for joins and filters.",
+        "target_rows": 100,
+        "distribution_notes": "Uniform distribution with limited cardinality."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "main_table": 100000,
+        "ref_table": 100
+      },
+      "value_skew": {
+        "main_table.category": "Rare values are sparse and intentionally positioned."
+      },
+      "predicate_selectivity": {
+        "main_table.category = 'rare'": 0.001
+      },
+      "join_selectivity": {
+        "main_table.ref_id = ref_table.id": "many-to-one"
+      }
+    },
+    "analyze_tables": [
+      "main_table",
+      "ref_table"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT m.* FROM main_table m JOIN ref_table r ON r.id = m.ref_id WHERE m.category = 'rare' ORDER BY m.id DESC LIMIT 10",
+        "objective": "Verify that the prepared data and indexes produce the intended plan shape for the mechanism.",
+        "expected_evidence": [
+          "The plan examines the table or index range relevant to the suspected mechanism.",
+          "The predicate or join behavior needed by the reproduction is visible in EXPLAIN.",
+          "The plan evidence distinguishes this mechanism from a trivial point lookup."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Execution plan consistency",
+      "Query runtime stability"
+    ],
+    "symptom_evidence": [
+      "Query runtime degradation",
+      "Execution plan changes"
+    ],
+    "mechanism_evidence": [
+      "Parameter sniffing effects visible in plan cache"
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "parameter_sniffing",
+    "target_database": "post_retry_slowsql_why_is_my_query_suddenl_r602115_a1",
+    "dba_description": "Query performance degradation due to parameter sniffing or related factors.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "parameter_sniffing_reproduction",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "EXEC sys.sp_recompile @objname = N'main_table';",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {
+        "runtime_change": "visible",
+        "plan_cache_change": "visible"
+      },
+      "success_criteria": {
+        "runtime_stability": true,
+        "plan_cache_stability": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "parameter_sniffing"
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Exact query causing the issue",
+    "Specific parameters leading to plan divergence"
+  ],
+  "rationale": "The reproduction focuses on parameter sniffing, a well-documented SQL Server issue. Synthetic data and controlled environment ensure mechanism-level feasibility."
+}

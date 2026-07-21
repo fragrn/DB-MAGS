@@ -1,0 +1,113 @@
+{
+  "incident_spec": {
+    "dbms": "sqlserver",
+    "dbms_version": null,
+    "summary": "Query performance issue when filtering databases based on table existence and state.",
+    "symptoms": [
+      "Slow execution of SELECT statement filtering databases based on table existence and state."
+    ],
+    "mechanism": "Potential blocking due to long-running transactions or inefficient metadata access.",
+    "facts": [
+      {
+        "key": "Query involves filtering databases based on table existence.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Original query provided in the post.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Execution plan shows clustered index seeks consuming significant resources.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Execution plan details mentioned in the post.",
+        "confidence": 0.8
+      },
+      {
+        "key": "Cannot modify database indexes.",
+        "value": {},
+        "source": "explicit_post",
+        "evidence": "Post explicitly states index modification is not allowed.",
+        "confidence": 1.0
+      }
+    ],
+    "assumptions": [
+      "The issue may involve blocking due to long-running transactions.",
+      "Metadata functions like OBJECT_ID may not respect transaction isolation levels."
+    ],
+    "unknowns": [
+      "Exact database schema and table distributions.",
+      "Whether the issue is reproducible in a synthetic environment."
+    ],
+    "confidence": 0.7
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing setup and reproduction.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database environment unavailable."
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "sqlserver",
+    "database": "post_retry_long_transaction_72191_why_is_m_r604715_a1",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_72191_why_is_m_r604715_a1",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance issue due to metadata access and potential blocking.",
+    "target_database": "post_retry_long_transaction_72191_why_is_m_r604715_a1",
+    "dba_description": "Investigate slow SELECT statement filtering databases based on table existence and state.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How can the missing database environment be restored or simulated?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database environment."
+}

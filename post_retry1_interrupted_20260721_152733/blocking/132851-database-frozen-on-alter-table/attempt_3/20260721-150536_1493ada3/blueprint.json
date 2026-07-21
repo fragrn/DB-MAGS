@@ -1,0 +1,187 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": "9.4.5",
+    "summary": "ALTER TABLE operation caused blocking due to lock contention.",
+    "symptoms": [
+      "Database froze during ALTER TABLE operation",
+      "Login system blocked due to table lock"
+    ],
+    "mechanism": "ALTER TABLE requires an ACCESS EXCLUSIVE lock, which queued behind weaker locks held by idle transactions.",
+    "facts": [
+      {
+        "key": "ALTER TABLE command",
+        "value": {
+          "sql": "ALTER TABLE cliente ADD COLUMN topicos character varying(20)[];"
+        },
+        "source": "explicit_post",
+        "evidence": "Post describes the exact SQL command causing the issue.",
+        "confidence": 1.0
+      },
+      {
+        "key": "ACCESS EXCLUSIVE lock requirement",
+        "value": {
+          "lock_type": "ACCESS EXCLUSIVE"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Post mentions lock contention and PostgreSQL documentation confirms this lock type for ALTER TABLE.",
+        "confidence": 0.9
+      },
+      {
+        "key": "Idle transaction holding weaker lock",
+        "value": {
+          "state": "idle in transaction"
+        },
+        "source": "post_hypothesis",
+        "evidence": "Post suggests querying pg_locks and pg_stat_activity to identify idle transactions.",
+        "confidence": 0.8
+      }
+    ],
+    "assumptions": [
+      "The synthetic database will reproduce lock contention with similar table structure and workload.",
+      "Idle transactions can be simulated to mimic the blocking behavior."
+    ],
+    "unknowns": [
+      "Exact workload characteristics of the production environment",
+      "Whether other operations were performed after the ADD COLUMN command"
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "Synthetic data and simulated idle transactions can reproduce the lock contention mechanism.",
+    "missing_capabilities": [
+      "Existing database environment for reproduction"
+    ],
+    "unmatched_conditions": [],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_blocking_132851_database_frozen_r536207_a3",
+    "requirements": [
+      "PostgreSQL 9.4.5 or compatible"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_blocking_132851_database_frozen_r536207_a3",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS cliente (rut VARCHAR(30) NOT NULL, nombre VARCHAR(150) NOT NULL, razon_social VARCHAR(150) NOT NULL, direccion VARCHAR(200) NOT NULL, comuna VARCHAR(100) NOT NULL, ciudad VARCHAR(100) NOT NULL, codigo_pais VARCHAR(3) NOT NULL, activo BOOLEAN DEFAULT true, id SERIAL NOT NULL, stock BOOLEAN DEFAULT false, vigente BOOLEAN DEFAULT true, clase INTEGER DEFAULT 1, plan INTEGER DEFAULT 1, plantilla VARCHAR(15) DEFAULT 'WAYPOINT', facturable INTEGER DEFAULT 1, toolkit INTEGER DEFAULT 0, propietario INTEGER DEFAULT 0, creacion TIMESTAMP DEFAULT now(), codelco BOOLEAN DEFAULT false, familia INTEGER DEFAULT 0, enabled_machines BOOLEAN DEFAULT false, enabled_canbus BOOLEAN DEFAULT false, enabled_horometro BOOLEAN DEFAULT false, enabled_comap BOOLEAN DEFAULT false, enabled_frio BOOLEAN DEFAULT false, enabled_panico BOOLEAN DEFAULT false, enabled_puerta BOOLEAN DEFAULT false, enabled_rpm BOOLEAN DEFAULT false, enabled_supervisor INTEGER DEFAULT 0, demo BOOLEAN, interno BOOLEAN, mqtt_enable BOOLEAN DEFAULT false, CONSTRAINT pk_cliente PRIMARY KEY (rut));"
+    ],
+    "generation_sql": [
+      "INSERT INTO cliente (rut, nombre, razon_social, direccion, comuna, ciudad, codigo_pais, activo) SELECT md5(random()::text), md5(random()::text), md5(random()::text), md5(random()::text), md5(random()::text), md5(random()::text), 'CL', true FROM generate_series(1, {row_count});"
+    ],
+    "tables": [
+      {
+        "name": "cliente",
+        "purpose": "Primary table to reproduce lock contention during ALTER TABLE.",
+        "target_rows": 100000,
+        "distribution_notes": "Uniform distribution of rows with unique primary keys."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "cliente": 100000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "cliente"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM cliente WHERE rut = 'test_rut';",
+        "objective": "Verify table accessibility before and after ALTER TABLE operation.",
+        "expected_evidence": [
+          "Query succeeds before ALTER TABLE.",
+          "Query blocks during ALTER TABLE due to lock contention."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "SELECT * FROM cliente WHERE rut = 'test_rut';"
+    ],
+    "concurrency": 10,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Lock contention observed during ALTER TABLE.",
+      "Idle transactions block ACCESS EXCLUSIVE lock acquisition."
+    ],
+    "symptom_evidence": [
+      "Database freeze during ALTER TABLE.",
+      "Login system blocked due to table lock."
+    ],
+    "mechanism_evidence": [
+      "ACCESS EXCLUSIVE lock queued behind weaker locks.",
+      "Idle transactions holding weaker locks identified."
+    ],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "lock_contention",
+    "target_database": "post_retry_blocking_132851_database_frozen_r536207_a3",
+    "dba_description": "Reproduce lock contention during ALTER TABLE operation on cliente table.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "setup_environment",
+      "task_type": "setup",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_blocking_132851_database_frozen_r536207_a3",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE post_retry_blocking_132851_database_frozen_r536207_a3;"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "missing database"
+      }
+    }
+  ],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "Synthetic reproduction of lock contention during ALTER TABLE operation is feasible using PostgreSQL 9.4.5. Missing database environment will be created as part of setup."
+}

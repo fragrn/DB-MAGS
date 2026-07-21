@@ -1,0 +1,125 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "MySQL creates a high percentage of temporary tables on disk during query execution, potentially due to configuration settings or query patterns.",
+    "symptoms": [
+      "High percentage of temporary tables created on disk.",
+      "Performance concerns related to disk-based temporary tables."
+    ],
+    "mechanism": "MySQL uses the MEMORY storage engine for in-memory temporary tables and MyISAM for disk-based temporary tables. Disk-based temporary tables are created when TEXT/BLOB fields are present, when the size of the temporary table exceeds `tmp_table_size` or `max_heap_table_size`, or when certain query patterns (e.g., GROUP BY, ORDER BY) involve large columns.",
+    "facts": [
+      {
+        "key": "tmp_table_size and max_heap_table_size configuration",
+        "value": {
+          "tmp_table_size": "200M",
+          "max_heap_table_size": "200M"
+        },
+        "source": "explicit_post",
+        "evidence": "Configuration values provided in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "Percentage of disk-based temporary tables",
+        "value": {
+          "before_change": "38%",
+          "after_change": "30%"
+        },
+        "source": "explicit_post",
+        "evidence": "Statistics provided in the DBA post.",
+        "confidence": 1.0
+      },
+      {
+        "key": "TEXT/BLOB fields and large columns",
+        "value": {
+          "impact_on_disk_temp_tables": true
+        },
+        "source": "post_hypothesis",
+        "evidence": "Mentioned in the DBA post and supported by MySQL documentation.",
+        "confidence": 0.9
+      }
+    ],
+    "assumptions": [
+      "The database schema includes tables with TEXT/BLOB fields or large columns.",
+      "Queries involve GROUP BY, ORDER BY, or UNION operations that could trigger temporary table creation."
+    ],
+    "unknowns": [
+      "Exact schema and query patterns causing the issue.",
+      "Whether the issue is reproducible with synthetic data."
+    ],
+    "confidence": 0.8
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database does not exist, preventing schema inspection or synthetic data generation.",
+    "missing_capabilities": [
+      "Database existence for inspection"
+    ],
+    "unmatched_conditions": [
+      "Database environment setup"
+    ],
+    "confidence": 0.9
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_resource_limitation_17677_why_i_r724839_a2",
+    "requirements": [],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_resource_limitation_17677_why_i_r724839_a2",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 1000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "High percentage of disk-based temporary tables",
+    "target_database": "post_retry_resource_limitation_17677_why_i_r724839_a2",
+    "dba_description": "MySQL creates a high percentage of temporary tables on disk during query execution, potentially due to configuration settings or query patterns.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "Why does the target database not exist?",
+    "Can the database be created or restored for reproduction?"
+  ],
+  "rationale": "The reproduction is blocked due to the absence of the target database, which prevents schema inspection and synthetic data generation. Further steps depend on resolving this issue."
+}

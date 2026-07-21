@@ -1,0 +1,41 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Query performance issue when filtering databases based on table existence and state.",
+  "symptoms": [
+    "Slow execution of SELECT statement filtering databases based on table existence and state."
+  ],
+  "mechanism": "Potential blocking due to long-running transactions or inefficient metadata access.",
+  "facts": [
+    {
+      "key": "Query involves filtering databases based on table existence.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Original query provided in the post.",
+      "confidence": 0.9
+    },
+    {
+      "key": "Execution plan shows clustered index seeks consuming significant resources.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Execution plan details mentioned in the post.",
+      "confidence": 0.8
+    },
+    {
+      "key": "Cannot modify database indexes.",
+      "value": {},
+      "source": "explicit_post",
+      "evidence": "Post explicitly states index modification is not allowed.",
+      "confidence": 1.0
+    }
+  ],
+  "assumptions": [
+    "The issue may involve blocking due to long-running transactions.",
+    "Metadata functions like OBJECT_ID may not respect transaction isolation levels."
+  ],
+  "unknowns": [
+    "Exact database schema and table distributions.",
+    "Whether the issue is reproducible in a synthetic environment."
+  ],
+  "confidence": 0.7
+}

@@ -1,0 +1,148 @@
+{
+  "incident_spec": {
+    "dbms": "mysql",
+    "dbms_version": null,
+    "summary": "Performance issue with a query on a large table with multiple conditions and joins.",
+    "symptoms": [
+      "Query execution time exceeds acceptable limits (7 minutes for the main query).",
+      "Subquery execution time is 4.5 seconds for a simplified version."
+    ],
+    "mechanism": "Inefficient index usage and high cardinality of rows scanned due to suboptimal query structure and indexing.",
+    "facts": [
+      {
+        "key": "query_execution_time",
+        "value": {
+          "main_query": "7 minutes",
+          "subquery": "4.5 seconds"
+        },
+        "source": "explicit_post",
+        "evidence": "The DBA explicitly mentioned the execution times for the main query and subquery.",
+        "confidence": 0.5
+      },
+      {
+        "key": "table_size",
+        "value": {
+          "rows": 30000000.0
+        },
+        "source": "explicit_post",
+        "evidence": "The post mentions the table has around 30 million rows.",
+        "confidence": 0.5
+      },
+      {
+        "key": "indexes",
+        "value": [
+          "idx_CustID",
+          "idx_DateStart",
+          "idx_CustID_DateStart",
+          "idx_Direction"
+        ],
+        "source": "explicit_post",
+        "evidence": "The post lists the indexes available on the table.",
+        "confidence": 0.5
+      },
+      {
+        "key": "query_conditions",
+        "value": [
+          "DateStart range",
+          "CallLength >= '00:00:00'",
+          "Direction = '1'",
+          "CustID IN (...)"
+        ],
+        "source": "explicit_post",
+        "evidence": "The WHERE clause of the query is explicitly provided.",
+        "confidence": 0.5
+      },
+      {
+        "key": "EXPLAIN output",
+        "value": {
+          "rows_examined": 1660000.0,
+          "key_used": "idx_CustID_DateStart"
+        },
+        "source": "explicit_post",
+        "evidence": "The EXPLAIN output for the query is included in the post.",
+        "confidence": 0.5
+      }
+    ],
+    "assumptions": [
+      "The database schema and indexes provided in the post are accurate.",
+      "The query execution environment matches the described MySQL version and configuration."
+    ],
+    "unknowns": [
+      "Exact MySQL version used in the original environment.",
+      "Disk I/O and memory constraints in the original environment."
+    ],
+    "confidence": 0.9
+  },
+  "feasibility": {
+    "level": "blocked",
+    "rationale": "The target database 'post_retry_slowsql_mysql_query_performance_r524853_a1' does not exist, preventing schema setup and reproduction.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Database environment is not initialized."
+    ],
+    "confidence": 0.95
+  },
+  "environment_spec": {
+    "dbms": "mysql",
+    "database": "post_retry_slowsql_mysql_query_performance_r524853_a1",
+    "requirements": [
+      "Database must exist and be accessible."
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_slowsql_mysql_query_performance_r524853_a1",
+    "schema_sql": [],
+    "generation_sql": [],
+    "tables": [],
+    "constraints": {
+      "cardinality": {},
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [],
+    "calibration_queries": [],
+    "scale_strategy": {
+      "initial_rows": 10000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": false,
+    "method": "none",
+    "queries": [],
+    "concurrency": 1,
+    "duration_sec": 30
+  },
+  "evaluation_spec": {
+    "validation_criteria": [],
+    "symptom_evidence": [],
+    "mechanism_evidence": [],
+    "minimum_plan_similarity": 0.6
+  },
+  "experiment_request": {
+    "target_anomaly": "Query performance degradation due to inefficient index usage.",
+    "target_database": "post_retry_slowsql_mysql_query_performance_r524853_a1",
+    "dba_description": "Performance issue with a query on a large table with multiple conditions and joins.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "low",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": false
+    }
+  },
+  "task_specs": [],
+  "dependencies": [],
+  "risk_assessment": "low",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [
+    "How to initialize the missing database environment?"
+  ],
+  "rationale": "The database environment is not initialized, blocking schema creation and data generation. The incident cannot proceed without resolving this issue."
+}

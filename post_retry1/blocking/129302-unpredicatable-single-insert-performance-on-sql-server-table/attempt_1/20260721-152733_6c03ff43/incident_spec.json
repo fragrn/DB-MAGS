@@ -1,0 +1,58 @@
+{
+  "dbms": "sqlserver",
+  "dbms_version": null,
+  "summary": "Unpredictable single insert performance due to blocking and excessive indexes.",
+  "symptoms": [
+    "Single record insert takes over 7 minutes.",
+    "Blocking session IDs appear in `sys.dm_exec_requests` but are not active.",
+    "Blocked requests show `LCK_M_S` wait type."
+  ],
+  "mechanism": "Blocking caused by uncommitted transactions holding locks, compounded by excessive indexes.",
+  "facts": [
+    {
+      "key": "table_size",
+      "value": {
+        "rows": 8000000
+      },
+      "source": "explicit_post",
+      "evidence": "The table is described as having 8 million rows.",
+      "confidence": 0.9
+    },
+    {
+      "key": "index_count",
+      "value": {
+        "indexes": 34
+      },
+      "source": "explicit_post",
+      "evidence": "The table has 34 indexes despite being an OLTP system.",
+      "confidence": 0.9
+    },
+    {
+      "key": "blocking_session_behavior",
+      "value": {
+        "sessions_sleeping": true
+      },
+      "source": "explicit_post",
+      "evidence": "Blocking sessions are reported as sleeping in `dm_exec_sessions`.",
+      "confidence": 0.8
+    },
+    {
+      "key": "wait_type",
+      "value": {
+        "type": "LCK_M_S"
+      },
+      "source": "explicit_post",
+      "evidence": "Blocked requests show `LCK_M_S` wait type.",
+      "confidence": 0.8
+    }
+  ],
+  "assumptions": [
+    "The blocking is caused by uncommitted transactions holding locks.",
+    "Excessive indexes contribute to the poor insert performance."
+  ],
+  "unknowns": [
+    "Exact schema of the table and indexes.",
+    "Specific workload patterns leading to blocking."
+  ],
+  "confidence": 0.85
+}

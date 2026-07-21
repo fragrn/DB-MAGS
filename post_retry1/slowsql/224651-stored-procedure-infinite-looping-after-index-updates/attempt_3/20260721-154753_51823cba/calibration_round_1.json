@@ -1,0 +1,23 @@
+{
+  "decision": "accept",
+  "reasoning": "The observed plan supports the query's objective of verifying that the data generation produces rows with the expected status. The plan shows a Clustered Index Scan on the `EDI_PSI_HDR` table with a filter on `V_STATUS = 'READY'`, which aligns with the expected evidence. The scan ensures that all rows with the specified status are retrieved, and the use of the clustered index indicates that the table's primary key structure is being utilized.",
+  "query_assessments": [
+    {
+      "query_id": "calibration_query_1",
+      "sql": "SELECT * FROM EDI_PSI_HDR WHERE V_STATUS = 'READY'",
+      "matched": true,
+      "observed_plan_summary": "Clustered Index Scan on EDI_PSI_HDR with a filter on V_STATUS = 'READY'.",
+      "supporting_evidence": [
+        "The plan examines the table and applies the filter on V_STATUS = 'READY'.",
+        "The Clustered Index Scan ensures all relevant rows are retrieved.",
+        "The plan aligns with the expected behavior of verifying the data generation."
+      ],
+      "discrepancies": []
+    }
+  ],
+  "concerns": [],
+  "recommended_changes": [],
+  "missing_information": [],
+  "round": 1,
+  "matched": true
+}

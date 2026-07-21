@@ -1,0 +1,70 @@
+{
+  "task_specs": [
+    {
+      "task_id": "setup_synthetic_database",
+      "task_type": "raw_transaction_script",
+      "actions": [
+        {
+          "kind": "raw_transaction_script",
+          "database": "post_retry_too_many_connection_4717_too_ma_r921642_a2",
+          "duration_sec": 1,
+          "scripts": [
+            {
+              "role": "configure",
+              "autocommit": true,
+              "concurrency": 1,
+              "steps": [
+                {
+                  "sql": "CREATE DATABASE IF NOT EXISTS post_retry_too_many_connection_4717_too_ma_r921642_a2"
+                },
+                {
+                  "sql": "USE post_retry_too_many_connection_4717_too_ma_r921642_a2"
+                },
+                {
+                  "sql": "CREATE TABLE IF NOT EXISTS synthetic_table (id INT PRIMARY KEY AUTO_INCREMENT, data VARCHAR(255))"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_created": true,
+        "table_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database setup for reproduction"
+      }
+    },
+    {
+      "task_id": "simulate_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "kind": "raw_sql_workload",
+          "sql": "INSERT INTO synthetic_table (data) VALUES ('test_data')",
+          "concurrency": 150,
+          "duration_sec": 30
+        }
+      ],
+      "expected_metrics": {
+        "connections_used": 150
+      },
+      "success_criteria": {
+        "too_many_connections_error": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Simulated workload causing connection exhaustion"
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "setup_synthetic_database",
+      "simulate_workload"
+    ]
+  ]
+}

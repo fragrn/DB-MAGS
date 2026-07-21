@@ -1,0 +1,60 @@
+{
+  "database": "post_retry_too_many_connection_20479_how_t_r709228_a2",
+  "schema_sql": [
+    "CREATE TABLE IF NOT EXISTS user_sessions (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT, session_start DATETIME, session_end DATETIME, status VARCHAR(20))",
+    "CREATE TABLE IF NOT EXISTS php_scripts (id INT AUTO_INCREMENT PRIMARY KEY, script_name VARCHAR(255), connection_opened BOOLEAN, execution_time INT)"
+  ],
+  "generation_sql": [
+    "INSERT INTO user_sessions (user_id, session_start, session_end, status) SELECT FLOOR(RAND() * 1000), NOW() - INTERVAL FLOOR(RAND() * 100) MINUTE, NOW(), 'active' FROM generated_numbers WHERE n <= {row_count}",
+    "INSERT INTO php_scripts (script_name, connection_opened, execution_time) SELECT CONCAT('script_', n), TRUE, FLOOR(RAND() * 10) FROM generated_numbers WHERE n <= 12"
+  ],
+  "tables": [
+    {
+      "name": "user_sessions",
+      "purpose": "Simulate user sessions to create concurrent database connections.",
+      "target_rows": 1000,
+      "distribution_notes": "Randomized session start and end times to simulate active and inactive sessions."
+    },
+    {
+      "name": "php_scripts",
+      "purpose": "Simulate PHP scripts opening connections.",
+      "target_rows": 12,
+      "distribution_notes": "Each script opens a connection and has a random execution time."
+    }
+  ],
+  "constraints": {
+    "cardinality": {
+      "user_sessions": 1000,
+      "php_scripts": 12
+    },
+    "value_skew": {},
+    "predicate_selectivity": {},
+    "join_selectivity": {}
+  },
+  "analyze_tables": [
+    "user_sessions",
+    "php_scripts"
+  ],
+  "calibration_queries": [
+    {
+      "sql": "SELECT COUNT(*) FROM user_sessions WHERE status = 'active'",
+      "objective": "Verify the number of active sessions matches expectations.",
+      "expected_evidence": [
+        "The count of active sessions aligns with the generated data."
+      ]
+    },
+    {
+      "sql": "SELECT COUNT(*) FROM php_scripts WHERE connection_opened = TRUE",
+      "objective": "Ensure all PHP scripts are simulated as opening connections.",
+      "expected_evidence": [
+        "The count of scripts with open connections matches the expected number."
+      ]
+    }
+  ],
+  "scale_strategy": {
+    "initial_rows": 1000,
+    "max_rows": 100000,
+    "growth_factor": 2.0,
+    "max_rounds": 3
+  }
+}

@@ -1,0 +1,251 @@
+{
+  "incident_spec": {
+    "dbms": "postgresql",
+    "dbms_version": null,
+    "summary": "Investigating the performance and concurrency behavior of large transactions in PostgreSQL, focusing on row locking, transaction isolation levels, and blocking behavior.",
+    "symptoms": [
+      "Blocked transactions when attempting to update rows locked by another transaction.",
+      "Potential serialization errors in higher isolation levels."
+    ],
+    "mechanism": "PostgreSQL's MVCC (Multiversion Concurrency Control) and transaction isolation levels determine row visibility and locking behavior during concurrent transactions.",
+    "facts": [
+      {
+        "key": "MVCC behavior",
+        "value": {
+          "description": "Reads do not block writes, and writes do not block reads.",
+          "source": "explicit_post",
+          "evidence": "PostgreSQL documentation and forum answers."
+        },
+        "confidence": 0.9
+      },
+      {
+        "key": "Transaction isolation levels",
+        "value": {
+          "description": "Higher isolation levels may lead to serialization errors.",
+          "source": "explicit_post",
+          "evidence": "PostgreSQL documentation and forum answers."
+        },
+        "confidence": 0.8
+      },
+      {
+        "key": "Blocking behavior",
+        "value": {
+          "description": "Transactions attempting to update locked rows are blocked until the locking transaction commits or rolls back.",
+          "source": "explicit_post",
+          "evidence": "Forum answers and example scenarios."
+        },
+        "confidence": 0.85
+      }
+    ],
+    "assumptions": [
+      "The target database supports PostgreSQL's MVCC and transaction isolation mechanisms.",
+      "Synthetic data can simulate multi-million row tables and concurrent transactions effectively."
+    ],
+    "unknowns": [
+      "Exact PostgreSQL version-specific behavior for transaction isolation levels.",
+      "Performance impact of large transactions under concurrent workloads."
+    ],
+    "confidence": 0.75
+  },
+  "feasibility": {
+    "level": "mechanism",
+    "rationale": "The reproduction focuses on PostgreSQL's MVCC and transaction isolation mechanisms, which can be simulated using synthetic data and controlled transactions.",
+    "missing_capabilities": [],
+    "unmatched_conditions": [
+      "Target database does not exist; needs creation."
+    ],
+    "confidence": 0.85
+  },
+  "environment_spec": {
+    "dbms": "postgresql",
+    "database": "post_retry_long_transaction_222262_perform_r720805_a2",
+    "requirements": [
+      "Dedicated test database creation"
+    ],
+    "isolation": "dedicated_test_database"
+  },
+  "data_spec": {
+    "database": "post_retry_long_transaction_222262_perform_r720805_a2",
+    "schema_sql": [
+      "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);"
+    ],
+    "generation_sql": [
+      "INSERT INTO tools (description) SELECT 'tool_' || n FROM generate_series(1, {row_count}) AS n;"
+    ],
+    "tables": [
+      {
+        "name": "tools",
+        "purpose": "Simulate a table with multi-million rows for transaction testing.",
+        "target_rows": 1000000,
+        "distribution_notes": "Uniform distribution of rows with unique descriptions."
+      }
+    ],
+    "constraints": {
+      "cardinality": {
+        "tools": 1000000
+      },
+      "value_skew": {},
+      "predicate_selectivity": {},
+      "join_selectivity": {}
+    },
+    "analyze_tables": [
+      "tools"
+    ],
+    "calibration_queries": [
+      {
+        "sql": "SELECT * FROM tools WHERE id = 1;",
+        "objective": "Verify basic table access and row visibility.",
+        "expected_evidence": [
+          "Query retrieves the expected row without blocking or errors."
+        ]
+      }
+    ],
+    "scale_strategy": {
+      "initial_rows": 100000,
+      "max_rows": 1000000,
+      "growth_factor": 2.0,
+      "max_rounds": 3
+    }
+  },
+  "workload_spec": {
+    "enabled": true,
+    "method": "sql",
+    "queries": [
+      "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+      "BEGIN; UPDATE tools SET description = 'conflicting_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;"
+    ],
+    "concurrency": 2,
+    "duration_sec": 60
+  },
+  "evaluation_spec": {
+    "validation_criteria": [
+      "Transactions behave according to MVCC and isolation level expectations.",
+      "Blocked transactions are observed when attempting to update locked rows.",
+      "Performance metrics align with expected behavior under concurrent workloads."
+    ],
+    "symptom_evidence": [
+      "Blocked transactions during concurrent updates.",
+      "Serialization errors in higher isolation levels."
+    ],
+    "mechanism_evidence": [
+      "MVCC behavior ensures non-blocking reads and writes.",
+      "Transaction isolation levels dictate blocking and serialization error behavior."
+    ],
+    "minimum_plan_similarity": 0.7
+  },
+  "experiment_request": {
+    "target_anomaly": "Transaction blocking and serialization errors under concurrent workloads.",
+    "target_database": "post_retry_long_transaction_222262_perform_r720805_a2",
+    "dba_description": "Investigating performance and concurrency behavior of large transactions in PostgreSQL.",
+    "target_path": [],
+    "injected_nodes": [],
+    "max_duration_sec": 60,
+    "max_retry_rounds": 2,
+    "risk_level": "medium",
+    "safety_overrides": {},
+    "workload": {
+      "enabled": true
+    }
+  },
+  "task_specs": [
+    {
+      "task_id": "create_database",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "sql": "CREATE DATABASE post_retry_long_transaction_222262_perform_r720805_a2;",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "database_exists": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Database does not exist."
+      }
+    },
+    {
+      "task_id": "setup_schema",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "sql": "CREATE TABLE IF NOT EXISTS tools (id SERIAL PRIMARY KEY, description TEXT);",
+          "concurrency": 1,
+          "duration_sec": 10
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "schema_created": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Schema setup required for reproduction."
+      }
+    },
+    {
+      "task_id": "generate_data",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "sql": "INSERT INTO tools (description) SELECT 'tool_' || n FROM generate_series(1, 1000000) AS n;",
+          "concurrency": 1,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "data_generated": true
+      },
+      "risk_assessment": "low",
+      "metadata": {
+        "root_cause": "Synthetic data generation required for reproduction."
+      }
+    },
+    {
+      "task_id": "run_workload",
+      "task_type": "raw_sql_workload",
+      "actions": [
+        {
+          "sql": "BEGIN; UPDATE tools SET description = 'updated_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+          "concurrency": 2,
+          "duration_sec": 60
+        },
+        {
+          "sql": "BEGIN; UPDATE tools SET description = 'conflicting_tool' WHERE id BETWEEN 1 AND 50000; COMMIT;",
+          "concurrency": 2,
+          "duration_sec": 60
+        }
+      ],
+      "expected_metrics": {},
+      "success_criteria": {
+        "workload_executed": true
+      },
+      "risk_assessment": "medium",
+      "metadata": {
+        "root_cause": "Concurrent transaction workload testing."
+      }
+    }
+  ],
+  "dependencies": [
+    [
+      "create_database",
+      "setup_schema"
+    ],
+    [
+      "setup_schema",
+      "generate_data"
+    ],
+    [
+      "generate_data",
+      "run_workload"
+    ]
+  ],
+  "risk_assessment": "medium",
+  "requires_domain_judgment": false,
+  "unresolved_critical_questions": [],
+  "rationale": "The reproduction focuses on PostgreSQL's MVCC and transaction isolation mechanisms, which can be simulated using synthetic data and controlled transactions. The tasks are designed to create the necessary environment, generate data, and execute workloads to observe the expected behavior."
+}
