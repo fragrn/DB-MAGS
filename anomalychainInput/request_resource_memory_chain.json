@@ -1,0 +1,31 @@
+{
+  "target_anomaly": "resource_memory_to_qps_drop",
+  "target_database": "tpcc_10W",
+  "dba_description": "Generate a memory pressure task on TPCC background workload. The injected resource_memory task must be a ChaosBlade raw_command with a unique --uid and matching cleanup_command; command[0] and cleanup_command[0] must be the configured DBMAGS_CHAOSBLADE_PATH/RuntimeConfig.chaosblade_path, not bare blade.",
+  "target_path": [
+    "resource_memory",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "resource_memory"
+  ],
+  "max_duration_sec": 30,
+  "max_retry_rounds": 2,
+  "risk_level": "medium",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "warmup_sec": 5,
+    "baseline_sec": 10,
+    "injection_observe_sec": 30,
+    "recovery_sec": 5,
+    "sample_interval_sec": 5,
+    "duration_sec": 1800,
+    "terminals": 4
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "dba_description": "DBA reports that after a marketing campaign the database saw a sudden connection spike. Several payment transactions were blocked by row lock waits, slow queries increased, p95 latency rose sharply, and QPS dropped after a few minutes.",
+  "user_constraints": {
+    "max_duration_sec": 120,
+    "max_retry_rounds": 2
+  },
+  "environment": {
+    "dbms": "mysql",
+    "target_database": "dbmags_tpcc_base",
+    "connection_profile": "default"
+  },
+  "workload": {
+    "type": "tpcc",
+    "status": "auto_detect",
+    "probe_workload": true,
+    "workload_name": "tpcc_main",
+    "business_tables": "auto",
+    "baseline_required": true
+  }
+}

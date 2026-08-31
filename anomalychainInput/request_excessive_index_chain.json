@@ -1,0 +1,31 @@
+{
+  "target_anomaly": "disabled/excessive_index_to_qps_drop",
+  "target_database": "tpcc_10W",
+  "dba_description": "DISABLED: excessive_index is temporarily not injectable in the anomaly graph. Do not include this request in batch chain runs until excessive_index is re-enabled.",
+  "target_path": [
+    "excessive_index",
+    "slow_query",
+    "qps_drop"
+  ],
+  "injected_nodes": [
+    "excessive_index"
+  ],
+  "max_duration_sec": 30,
+  "max_retry_rounds": 2,
+  "risk_level": "medium",
+  "safety_overrides": {},
+  "workload": {
+    "enabled": true,
+    "runner": "benchbase",
+    "benchmark": "tpcc",
+    "database": "tpcc_10W",
+    "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
+    "warmup_sec": 5,
+    "baseline_sec": 10,
+    "injection_observe_sec": 30,
+    "recovery_sec": 5,
+    "sample_interval_sec": 5,
+    "duration_sec": 1800,
+    "terminals": 4
+  }
+}

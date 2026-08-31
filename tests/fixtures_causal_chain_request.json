@@ -1,0 +1,28 @@
+{
+  "target_anomaly": "lock_contention_with_slow_query",
+  "target_mode": "causal_chain",
+  "target_chain": [
+    "traffic_surge",
+    "connections_up",
+    "lock_contention",
+    "slow_query",
+    "qps_drop"
+  ],
+  "user_constraints": {
+    "max_duration_sec": 120,
+    "max_retry_rounds": 2
+  },
+  "environment": {
+    "dbms": "mysql",
+    "target_database": "dbmags_tpcc_base",
+    "connection_profile": "default"
+  },
+  "workload": {
+    "type": "tpcc",
+    "status": "auto_detect",
+    "probe_workload": true,
+    "workload_name": "tpcc_main",
+    "business_tables": "auto",
+    "baseline_required": true
+  }
+}
