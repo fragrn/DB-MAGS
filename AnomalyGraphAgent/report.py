@@ -30,6 +30,10 @@ def write_report(result: RunResult, path: Path) -> None:
 
     # 1. Experiment Target
     lines.append("## 1. Experiment Target")
+    if result.request.source_path:
+        lines.append(f"- **Input Request**: `{result.request.source_path}`")
+    if result.request.target_path:
+        lines.append(f"- **Chain ID**: `{' -> '.join(result.request.target_path)}`")
     lines.append(f"- **Anomaly**: {result.request.target_anomaly}")
     lines.append(f"- **Database**: {result.request.target_database}")
     if result.request.dba_description:

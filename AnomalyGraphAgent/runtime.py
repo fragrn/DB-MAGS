@@ -97,6 +97,7 @@ class DBMAGSRuntime:
         run_id = _generate_run_id()
         output_dir = Path(output_root) / run_id
         output_dir.mkdir(parents=True, exist_ok=True)
+        self._write_run_identity(output_dir, run_id, request)
 
         max_rounds = request.max_retry_rounds or self.config.max_retry_rounds
         best_result: RunResult | None = None
@@ -1069,6 +1070,19 @@ class DBMAGSRuntime:
 
     def _write_json(self, path: Path, data: dict) -> None:
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+
+    def _write_run_identity(self, output_dir: Path, run_id: str, request: ExperimentRequest) -> None:
+        identity = {
+            "run_id": run_id,
+            "input": request.source_path,
+            "target_anomaly": request.target_anomaly,
+            "target_database": request.target_database,
+            "target_path": request.target_path,
+            "target_path_label": " -> ".join(request.target_path),
+            "injected_nodes": request.injected_nodes,
+            "dba_description": request.dba_description,
+        }
+        self._write_json(output_dir / "run_identity.json", identity)
 
     def _write_report(self, result: RunResult) -> None:
         from agent.report import write_report

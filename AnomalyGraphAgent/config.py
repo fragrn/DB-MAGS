@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import get_type_hints
@@ -20,6 +22,45 @@ def resolve_runtime_path(value: str | Path) -> str:
     if not path.is_absolute():
         path = PROJECT_ROOT / path
     return str(path.resolve())
+
+
+def resolve_java_bin(value: str | Path) -> str:
+    """Resolve the Java executable, tolerating Homebrew JDK layout changes."""
+    raw = str(value or "").strip()
+    candidates: list[Path] = []
+    if raw:
+        path = Path(raw).expanduser()
+        if path.exists():
+            return str(path.resolve())
+        candidates.append(path)
+
+    candidates.extend(
+        [
+            Path("/opt/homebrew/opt/openjdk/bin/java"),
+            Path("/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home/bin/java"),
+        ]
+    )
+
+    try:
+        java_home = subprocess.check_output(
+            ["/usr/libexec/java_home"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        ).strip()
+        if java_home:
+            candidates.append(Path(java_home) / "bin" / "java")
+    except Exception:
+        pass
+
+    which_java = shutil.which("java")
+    if which_java:
+        candidates.append(Path(which_java))
+
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate.resolve())
+    return raw
 
 
 def _load_dotenv(path: str | Path = ".env") -> dict[str, str]:
@@ -78,9 +119,7 @@ class RuntimeConfig:
     def __post_init__(self) -> None:
         self.benchbase_jar_path = resolve_runtime_path(self.benchbase_jar_path)
         self.chaosblade_path = resolve_runtime_path(self.chaosblade_path)
-        java_path = Path(self.benchbase_java_bin).expanduser()
-        if java_path.is_absolute() or len(java_path.parts) > 1:
-            self.benchbase_java_bin = resolve_runtime_path(java_path)
+        self.benchbase_java_bin = resolve_java_bin(self.benchbase_java_bin)
 
     @classmethod
     def from_env(cls, dotenv_path: str | Path = ".env") -> RuntimeConfig:

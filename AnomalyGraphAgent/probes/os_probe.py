@@ -74,7 +74,20 @@ class OSProbe:
 
     def _cpu_usage_macos(self) -> dict[str, Any]:
         try:
-            out = subprocess.check_output(["/usr/bin/top", "-l", "1", "-n", "0"], text=True, timeout=5)
+            out = subprocess.check_output(["/bin/ps", "-A", "-o", "%cpu="], text=True, timeout=1)
+            total_pct = 0.0
+            for line in out.splitlines():
+                try:
+                    total_pct += float(line.strip())
+                except ValueError:
+                    continue
+            cpu_count = max(1, os.cpu_count() or 1)
+            usage_ratio = min(1.0, total_pct / (100.0 * cpu_count))
+            return {"usage_ratio": round(usage_ratio, 3), "source": "ps"}
+        except Exception:
+            pass
+        try:
+            out = subprocess.check_output(["/usr/bin/top", "-l", "1", "-n", "0"], text=True, timeout=1)
             m = re.search(r"CPU usage: ([\d.]+)% user, ([\d.]+)% sys, ([\d.]+)% idle", out)
             if m:
                 user = float(m.group(1))

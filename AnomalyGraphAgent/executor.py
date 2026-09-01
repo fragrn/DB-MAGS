@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from agent.config import RuntimeConfig
+from agent.config import RuntimeConfig, resolve_java_bin
 from agent.probes.mysql_probe import MySQLProbe
 from agent.types import ExecutionTrace, TaskResult
 from agent.tools import benchbase_transaction_types, validate_traffic_surge_profile
@@ -235,6 +235,13 @@ class Executor:
             "stderr_tail": _tail(stderr_path),
             "cleanup": cleanup_result,
         }
+        if kind == "logical_backup_command" and timed_out:
+            result["bounded_termination"] = True
+            result["note"] = (
+                "Logical backup was still running at the bounded injection timeout "
+                "and was terminated after the observation window."
+            )
+            return result
         if timed_out:
             raise RuntimeError(f"{kind} timed out after {timeout_sec:.1f}s: {result}")
         if exit_code != 0:
@@ -531,7 +538,7 @@ class Executor:
         self.round_dir.mkdir(parents=True, exist_ok=True)
         config_path = self._materialize_benchbase_burst_config(profile, task_id)
         jar_path = _resolve_path(str(action.get("jar_path") or ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar"))
-        java_bin = str(action.get("java_bin") or "/opt/homebrew/opt/openjdk/bin/java")
+        java_bin = resolve_java_bin(str(action.get("java_bin") or self.config.benchbase_java_bin or "java"))
         command = [
             java_bin,
             "-jar",

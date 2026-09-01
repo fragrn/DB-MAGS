@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-from agent.config import RuntimeConfig, resolve_runtime_path
+from agent.config import RuntimeConfig, resolve_java_bin, resolve_runtime_path
 from agent.probes.mysql_probe import MySQLProbe
 from agent.probes.os_probe import OSProbe
 from agent.tools import BENCHBASE_BENCHMARKS
@@ -27,7 +27,7 @@ DEFAULT_WORKLOAD = {
     "database": "",
     "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
     "jar_path": ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar",
-    "java_bin": "/opt/homebrew/opt/openjdk/bin/java",
+    "java_bin": "java",
     "warmup_sec": 60,
     "baseline_sec": 30,
     "injection_observe_sec": 30,
@@ -56,7 +56,7 @@ class BenchBaseWorkloadRunner:
         self.round_dir.mkdir(parents=True, exist_ok=True)
         self.runtime_config_path = self._materialize_config()
         jar_path = _resolve_path(str(self.workload_config["jar_path"]))
-        java_bin = str(self.workload_config.get("java_bin") or "java")
+        java_bin = resolve_java_bin(str(self.workload_config.get("java_bin") or "java"))
         benchmark = str(self.workload_config.get("benchmark") or "tpcc")
         command = [
             java_bin,

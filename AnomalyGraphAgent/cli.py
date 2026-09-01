@@ -170,7 +170,9 @@ def _load_request(path: str) -> ExperimentRequest:
     if not p.exists():
         raise FileNotFoundError(f"Request file not found: {path}")
     data = json.loads(p.read_text())
-    return ExperimentRequest.from_dict(data)
+    request = ExperimentRequest.from_dict(data)
+    request.source_path = str(p.resolve())
+    return request
 
 
 if __name__ == "__main__":

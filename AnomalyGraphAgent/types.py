@@ -133,6 +133,7 @@ class ExperimentRequest:
     allowed_anomalies: list[str] = field(default_factory=list)
     safety_overrides: dict[str, Any] = field(default_factory=dict)
     workload: dict[str, Any] = field(default_factory=dict)
+    source_path: str = ""
 
     @classmethod
     def from_dict(cls, data: dict) -> ExperimentRequest:
@@ -156,6 +157,7 @@ class ExperimentRequest:
             allowed_anomalies=d.pop("allowed_anomalies", []),
             safety_overrides=d.pop("safety_overrides", {}),
             workload=d.pop("workload", {}),
+            source_path=d.pop("source_path", ""),
         )
 
     def to_dict(self) -> dict:
@@ -172,6 +174,7 @@ class ExperimentRequest:
             "allowed_anomalies": self.allowed_anomalies,
             "safety_overrides": self.safety_overrides,
             "workload": self.workload,
+            "source_path": self.source_path,
         }
 
 
