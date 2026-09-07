@@ -5,8 +5,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent.report import write_report
-from agent.types import (
+from AnomalyGraphAgent.report import write_report
+from AnomalyGraphAgent.types import (
     EnvironmentSnapshot,
     EvaluationResult,
     ExecutableTaskDAG,

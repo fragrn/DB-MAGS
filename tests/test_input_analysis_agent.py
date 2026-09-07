@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent.config import RuntimeConfig
+from AnomalyGraphAgent.config import RuntimeConfig
 from InputAnalysisAgent.analyzer import InputAnalysisError, analyze_post
 from InputAnalysisAgent.cli import main as cli_main
 
@@ -82,7 +82,7 @@ class InputAnalysisAgentTests(unittest.TestCase):
         def fake_llm_generate(**kwargs):
             return {"json_payload": valid_payload(), "text": json.dumps(valid_payload(), ensure_ascii=False)}
 
-        with patch("agent.tools.llm_generate", side_effect=fake_llm_generate):
+        with patch("AnomalyGraphAgent.tools.llm_generate", side_effect=fake_llm_generate):
             design = analyze_post(
                 "促销后连接数突增，支付事务被行锁阻塞，慢查询增加，QPS 下降。",
                 config=RuntimeConfig(openai_api_key="test-key"),
@@ -92,14 +92,14 @@ class InputAnalysisAgentTests(unittest.TestCase):
         self.assertEqual(design.anomaly_injection[0]["mapped_dbmags_anomaly"], "hot_update")
 
     def test_analyze_post_fails_on_invalid_json(self):
-        with patch("agent.tools.llm_generate", return_value={"text": "not json"}):
+        with patch("AnomalyGraphAgent.tools.llm_generate", return_value={"text": "not json"}):
             with self.assertRaisesRegex(InputAnalysisError, "valid JSON"):
                 analyze_post("慢查询暴增", config=RuntimeConfig(openai_api_key="test-key"))
 
     def test_analyze_post_fails_on_missing_required_field(self):
         payload = valid_payload()
         payload.pop("expected_result")
-        with patch("agent.tools.llm_generate", return_value={"json_payload": payload}):
+        with patch("AnomalyGraphAgent.tools.llm_generate", return_value={"json_payload": payload}):
             with self.assertRaisesRegex(InputAnalysisError, "missing required fields"):
                 analyze_post("慢查询暴增", config=RuntimeConfig(openai_api_key="test-key"))
 
@@ -111,7 +111,7 @@ class InputAnalysisAgentTests(unittest.TestCase):
             input_path.write_text("促销后连接数突增，支付事务被行锁阻塞。")
 
             with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
-                with patch("agent.tools.llm_generate", return_value={"json_payload": valid_payload()}):
+                with patch("AnomalyGraphAgent.tools.llm_generate", return_value={"json_payload": valid_payload()}):
                     rc = cli_main(["--input", str(input_path), "--output", str(output_path)])
 
             self.assertEqual(rc, 0)
@@ -128,7 +128,7 @@ class InputAnalysisAgentTests(unittest.TestCase):
             stdout = io.StringIO()
 
             with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
-                with patch("agent.tools.llm_generate", return_value={"json_payload": valid_payload()}):
+                with patch("AnomalyGraphAgent.tools.llm_generate", return_value={"json_payload": valid_payload()}):
                     with contextlib.redirect_stdout(stdout):
                         rc = cli_main(["--input", str(input_path)])
 
@@ -143,7 +143,7 @@ class InputAnalysisAgentTests(unittest.TestCase):
             stderr = io.StringIO()
 
             with patch.dict("os.environ", {"OPENAI_API_KEY": "test-key"}):
-                with patch("agent.tools.llm_generate", return_value={"text": "not json"}):
+                with patch("AnomalyGraphAgent.tools.llm_generate", return_value={"text": "not json"}):
                     with contextlib.redirect_stderr(stderr):
                         rc = cli_main(["--input", str(input_path)])
 

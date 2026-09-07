@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections import deque
 from typing import Any, List, Optional
 
-from agent.types import ExecutableTaskDAG, TaskDAGEdge, TaskSpec
+from AnomalyGraphAgent.types import ExecutableTaskDAG, TaskDAGEdge, TaskSpec
 
 
 def build_task_dag(

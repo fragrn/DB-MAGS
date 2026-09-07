@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent.config import RuntimeConfig
+from AnomalyGraphAgent.config import RuntimeConfig
 from InputAnalysisAgent.hitl import (
     HumanDecision,
     HumanGateRequired,

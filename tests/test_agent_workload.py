@@ -7,11 +7,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent.config import RuntimeConfig
-from agent.executor import Executor
-from agent.runtime import DBMAGSRuntime
-from agent.safety import SafetyChecker
-from agent.types import (
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.executor import Executor
+from AnomalyGraphAgent.runtime import DBMAGSRuntime
+from AnomalyGraphAgent.safety import SafetyChecker
+from AnomalyGraphAgent.types import (
     EnvironmentSnapshot,
     EvaluationResult,
     ExecutableTaskDAG,
@@ -21,11 +21,11 @@ from agent.types import (
     TaskSpec,
     to_jsonable,
 )
-from agent.planner import PlannerFallbackError
-from agent.planner import GlobalPlanner
-from agent.reflection import ReflectionFallbackError
-from agent.workload import BenchBaseWorkloadRunner, MetricsCollector, normalize_workload_config
-from agent.tools import (
+from AnomalyGraphAgent.planner import PlannerFallbackError
+from AnomalyGraphAgent.planner import GlobalPlanner
+from AnomalyGraphAgent.reflection import ReflectionFallbackError
+from AnomalyGraphAgent.workload import BenchBaseWorkloadRunner, MetricsCollector, normalize_workload_config
+from AnomalyGraphAgent.tools import (
     build_traffic_task,
     canonicalize_task_dag_runtime_paths,
     canonicalize_resource_chaosblade_action,
@@ -445,7 +445,7 @@ class AgentWorkloadTests(unittest.TestCase):
             )
             jar_path.write_text("")
             process = FakeProcess()
-            with patch("agent.workload.subprocess.Popen", return_value=process) as popen:
+            with patch("AnomalyGraphAgent.workload.subprocess.Popen", return_value=process) as popen:
                 runner = BenchBaseWorkloadRunner(
                     RuntimeConfig(),
                     {
@@ -619,9 +619,9 @@ class AgentWorkloadTests(unittest.TestCase):
                     stderr = ""
                 return Result()
 
-            with patch("agent.executor.subprocess.Popen", return_value=FakeProcess()), \
-                    patch("agent.executor.subprocess.run", side_effect=fake_run), \
-                    patch("agent.executor.time.sleep", side_effect=lambda seconds: sleeps.append(seconds)):
+            with patch("AnomalyGraphAgent.executor.subprocess.Popen", return_value=FakeProcess()), \
+                    patch("AnomalyGraphAgent.executor.subprocess.run", side_effect=fake_run), \
+                    patch("AnomalyGraphAgent.executor.time.sleep", side_effect=lambda seconds: sleeps.append(seconds)):
                 result = executor._run_action(
                     "raw_command",
                     {
@@ -651,9 +651,9 @@ class AgentWorkloadTests(unittest.TestCase):
                     stderr = ""
                 return Result()
 
-            with patch("agent.executor.subprocess.Popen", return_value=FakeFailingProcess()), \
-                    patch("agent.executor.subprocess.run", side_effect=fake_run), \
-                    patch("agent.executor.time.sleep") as sleep_mock:
+            with patch("AnomalyGraphAgent.executor.subprocess.Popen", return_value=FakeFailingProcess()), \
+                    patch("AnomalyGraphAgent.executor.subprocess.run", side_effect=fake_run), \
+                    patch("AnomalyGraphAgent.executor.time.sleep") as sleep_mock:
                 with self.assertRaisesRegex(RuntimeError, "exited with 2"):
                     executor._run_action(
                         "raw_command",
@@ -1161,7 +1161,7 @@ class AgentWorkloadTests(unittest.TestCase):
             return {"tasks": {}}
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch("agent.tools.execute_dag", fake_execute_dag):
+            with patch("AnomalyGraphAgent.tools.execute_dag", fake_execute_dag):
                 runtime._execute(dag, 1, Path(tmpdir), req)
         self.assertEqual(captured["max_duration_sec"], 17)
 
@@ -1664,7 +1664,7 @@ class AgentWorkloadTests(unittest.TestCase):
         self.assertIn("stop_workload", events)
 
     def test_cli_taskgen_invokes_runtime(self):
-        from agent import cli
+        from AnomalyGraphAgent import cli
 
         payload = {
             "target_database": "tpcc",

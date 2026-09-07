@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent.graph import ANOMALY_GRAPH
-from agent.types import (
+from AnomalyGraphAgent.graph import ANOMALY_GRAPH
+from AnomalyGraphAgent.types import (
     EvaluationResult,
     EvidenceRule,
     NodeCategory,

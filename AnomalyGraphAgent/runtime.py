@@ -24,26 +24,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from agent.config import RuntimeConfig
-from agent.dag import build_task_dag
-from agent.evaluator import evaluate
-from agent.memory import MemoryStore
-from agent.planner import GlobalPlanner
-from agent.planner import PlannerFallbackError
-from agent.reflection import SelfReflection
-from agent.reflection import ReflectionFallbackError
-from agent.safety import SafetyChecker
-from agent.safety import EXECUTOR_GRACE_SEC
-from agent.safety import estimate_dag_required_sec
-from agent.workload import (
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.dag import build_task_dag
+from AnomalyGraphAgent.evaluator import evaluate
+from AnomalyGraphAgent.memory import MemoryStore
+from AnomalyGraphAgent.planner import GlobalPlanner
+from AnomalyGraphAgent.planner import PlannerFallbackError
+from AnomalyGraphAgent.reflection import SelfReflection
+from AnomalyGraphAgent.reflection import ReflectionFallbackError
+from AnomalyGraphAgent.safety import SafetyChecker
+from AnomalyGraphAgent.safety import EXECUTOR_GRACE_SEC
+from AnomalyGraphAgent.safety import estimate_dag_required_sec
+from AnomalyGraphAgent.workload import (
     make_evaluation_pair,
     make_metrics_collector,
     make_workload_runner,
     normalize_workload_config,
 )
-from agent.probes.mysql_probe import MySQLProbe
-from agent.probes.slow_log import SlowLogProbe
-from agent.types import (
+from AnomalyGraphAgent.probes.mysql_probe import MySQLProbe
+from AnomalyGraphAgent.probes.slow_log import SlowLogProbe
+from AnomalyGraphAgent.types import (
     EnvironmentSnapshot,
     EvaluationResult,
     ExecutableTaskDAG,
@@ -54,7 +54,7 @@ from agent.types import (
     SafetyResult,
     to_jsonable,
 )
-from agent import tools as tool_registry
+from AnomalyGraphAgent import tools as tool_registry
 
 
 class DBMAGSRuntime:
@@ -1071,7 +1071,7 @@ class DBMAGSRuntime:
         path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
 
     def _write_report(self, result: RunResult) -> None:
-        from agent.report import write_report
+        from AnomalyGraphAgent.report import write_report
         write_report(result, Path(result.output_dir) / "report.md")
 
     # -------------------------------------------------------------------------

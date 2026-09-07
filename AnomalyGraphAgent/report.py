@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from agent.types import RunResult, to_jsonable
+from AnomalyGraphAgent.types import RunResult, to_jsonable
 
 
 def write_report(result: RunResult, path: Path) -> None:

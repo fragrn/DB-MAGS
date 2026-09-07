@@ -21,10 +21,10 @@ from pathlib import Path
 from typing import Any
 import xml.etree.ElementTree as ET
 
-from agent.config import RuntimeConfig
-from agent.probes.mysql_probe import MySQLProbe
-from agent.types import ExecutionTrace, TaskResult
-from agent.tools import benchbase_transaction_types, validate_traffic_surge_profile
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.probes.mysql_probe import MySQLProbe
+from AnomalyGraphAgent.types import ExecutionTrace, TaskResult
+from AnomalyGraphAgent.tools import benchbase_transaction_types, validate_traffic_surge_profile
 
 
 class Executor:

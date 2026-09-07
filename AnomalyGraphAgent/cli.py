@@ -2,11 +2,11 @@
 CLI entry point for the agent system.
 
 Usage:
-    python -m agent.cli inspect --db testdb --output snapshot.json
-    python -m agent.cli plan   --request request.json --output plan.json
-    python -m agent.cli taskgen --request request.json --output-root experiment_runs/taskgen
-    python -m agent.cli run    --request request.json --output-root experiment_runs
-    python -m agent.cli cleanup --run-id 20250605-123456_abc123
+    python -m AnomalyGraphAgent.cli inspect --db testdb --output snapshot.json
+    python -m AnomalyGraphAgent.cli plan   --request request.json --output plan.json
+    python -m AnomalyGraphAgent.cli taskgen --request request.json --output-root experiment_runs/taskgen
+    python -m AnomalyGraphAgent.cli run    --request request.json --output-root experiment_runs
+    python -m AnomalyGraphAgent.cli cleanup --run-id 20250605-123456_abc123
 """
 
 import argparse
@@ -15,10 +15,10 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
-from agent import __version__
-from agent.config import RuntimeConfig
-from agent.runtime import DBMAGSRuntime
-from agent.types import ExperimentRequest
+from AnomalyGraphAgent import __version__
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.runtime import DBMAGSRuntime
+from AnomalyGraphAgent.types import ExperimentRequest
 
 
 def main(args: Optional[List[str]] = None) -> int:

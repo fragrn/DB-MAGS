@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any, List, Optional
 
-from agent.config import RuntimeConfig
-from agent.graph import ANOMALY_GRAPH
-from agent.types import (
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.graph import ANOMALY_GRAPH
+from AnomalyGraphAgent.types import (
     EnvironmentSnapshot,
     EvaluationResult,
     ExperimentRequest,
@@ -19,7 +19,7 @@ from agent.types import (
     TaskSpec,
     to_jsonable,
 )
-from agent import tools as tool_registry
+from AnomalyGraphAgent import tools as tool_registry
 
 
 class PlannerFallbackError(RuntimeError):
@@ -344,7 +344,7 @@ class GlobalPlanner:
         memory_items: list[dict],
     ) -> ReflectionResult:
         """Generate a ReflectionResult from a failed evaluation."""
-        from agent.reflection import SelfReflection
+        from AnomalyGraphAgent.reflection import SelfReflection
 
         reflector = SelfReflection(self.config)
         return reflector.reflect(evaluation, request, memory_items)
@@ -1046,7 +1046,7 @@ Return the JSON format described in your system prompt.
         return clamps
 
     def _planner_workload_context(self, request: ExperimentRequest) -> dict[str, Any]:
-        from agent.config import resolve_runtime_path
+        from AnomalyGraphAgent.config import resolve_runtime_path
 
         workload = dict(request.workload or {})
         workload["jar_path"] = self.config.benchbase_jar_path

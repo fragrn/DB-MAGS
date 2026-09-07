@@ -12,7 +12,7 @@ Each node carries evidence_rules that define how to evaluate whether it was hit.
 
 from __future__ import annotations
 
-from agent.types import (
+from AnomalyGraphAgent.types import (
     AnomalyEdge,
     AnomalyGraph,
     AnomalyNode,

@@ -6,12 +6,12 @@ import json
 import unittest
 from unittest.mock import patch
 
-from agent.config import RuntimeConfig
-from agent.planner import GlobalPlanner, PlannerFallbackError
-from agent.reflection import SelfReflection
-from agent.safety import estimate_dag_required_sec
-from agent.tools import LLMTimeoutError, PLANNING_TOOL_NAMES, _extract_planner_json_payload, call_planning_tool, chat_tool_calling_loop, llm_generate, planning_tool_schemas
-from agent.types import EnvironmentSnapshot, EvaluationResult, ExperimentRequest, ReflectionResult, SchemaInfo
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.planner import GlobalPlanner, PlannerFallbackError
+from AnomalyGraphAgent.reflection import SelfReflection
+from AnomalyGraphAgent.safety import estimate_dag_required_sec
+from AnomalyGraphAgent.tools import LLMTimeoutError, PLANNING_TOOL_NAMES, _extract_planner_json_payload, call_planning_tool, chat_tool_calling_loop, llm_generate, planning_tool_schemas
+from AnomalyGraphAgent.types import EnvironmentSnapshot, EvaluationResult, ExperimentRequest, ReflectionResult, SchemaInfo
 
 
 class AgentReactPlannerTests(unittest.TestCase):
@@ -203,7 +203,7 @@ class AgentReactPlannerTests(unittest.TestCase):
             "metadata": {"root_cause": "missing_index"},
         }
 
-        with patch("agent.tools.chat_tool_calling_loop", return_value={
+        with patch("AnomalyGraphAgent.tools.chat_tool_calling_loop", return_value={
             "json_payload": {"task_specs": [task_spec], "dependencies": []},
             "trace": [],
         }):
@@ -258,7 +258,7 @@ class AgentReactPlannerTests(unittest.TestCase):
         }
         reflection = ReflectionResult(failure_reason="traffic was too weak")
 
-        with patch("agent.tools.chat_tool_calling_loop", return_value={
+        with patch("AnomalyGraphAgent.tools.chat_tool_calling_loop", return_value={
             "json_payload": {
                 "task_specs": [task_spec],
                 "dependencies": [],
@@ -395,7 +395,7 @@ class AgentReactPlannerTests(unittest.TestCase):
     def test_tool_loop_error_blocks_fallback(self):
         config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
         planner = GlobalPlanner(config)
-        with patch("agent.tools.chat_tool_calling_loop", return_value={
+        with patch("AnomalyGraphAgent.tools.chat_tool_calling_loop", return_value={
             "error": "The read operation timed out",
             "trace": [{"step": 1, "tool": "read_memory", "result": []}],
         }):
@@ -415,7 +415,7 @@ class AgentReactPlannerTests(unittest.TestCase):
             "risk_assessment": "medium",
             "metadata": {"root_cause": "missing_index"},
         }
-        with patch("agent.tools.chat_tool_calling_loop", return_value={
+        with patch("AnomalyGraphAgent.tools.chat_tool_calling_loop", return_value={
             "json_payload": {"task_specs": [bad_spec], "dependencies": []},
             "trace": [{"step": 1, "tool": "final_answer", "content": "{}"}],
         }):

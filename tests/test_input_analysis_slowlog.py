@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent.config import RuntimeConfig
-from agent.executor import Executor
-from agent.types import ExecutionTrace
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.executor import Executor
+from AnomalyGraphAgent.types import ExecutionTrace
 from InputAnalysisAgent.runtime import ReproductionRuntime
 from InputAnalysisAgent.schemas import ReproductionBlueprint, ReproductionEvaluation
 from InputAnalysisAgent.react import _tool_schemas

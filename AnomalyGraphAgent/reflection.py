@@ -12,9 +12,9 @@ from __future__ import annotations
 import json
 from typing import Any, List, Optional
 
-from agent.config import RuntimeConfig
-from agent.graph import ANOMALY_GRAPH
-from agent.types import EvaluationResult, ExperimentRequest, ReflectionResult
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.graph import ANOMALY_GRAPH
+from AnomalyGraphAgent.types import EvaluationResult, ExperimentRequest, ReflectionResult
 
 
 class ReflectionFallbackError(RuntimeError):
@@ -163,7 +163,7 @@ class SelfReflection:
         prompt = self._build_reflection_prompt(evaluation, request, memory_items)
 
         try:
-            from agent import tools as tool_registry
+            from AnomalyGraphAgent import tools as tool_registry
             response = tool_registry.llm_generate(
                 config=self.config,
                 system_prompt="You are a database chaos engineering expert. "

@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from agent.types import MemoryItem, to_jsonable
+from AnomalyGraphAgent.types import MemoryItem, to_jsonable
 
 
 class MemoryStore:

@@ -10,9 +10,9 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-from agent.config import RuntimeConfig
-from agent.types import SafetyResult
-from agent.tools import validate_traffic_surge_profile
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.types import SafetyResult
+from AnomalyGraphAgent.tools import validate_traffic_surge_profile
 
 
 # ---------------------------------------------------------------------------

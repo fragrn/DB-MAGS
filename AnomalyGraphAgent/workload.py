@@ -9,15 +9,24 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
-from agent.config import RuntimeConfig, resolve_runtime_path
-from agent.probes.mysql_probe import MySQLProbe
-from agent.probes.os_probe import OSProbe
-from agent.tools import BENCHBASE_BENCHMARKS
+from AnomalyGraphAgent.config import RuntimeConfig, resolve_runtime_path
+from AnomalyGraphAgent.probes.mysql_probe import MySQLProbe
+from AnomalyGraphAgent.probes.os_probe import OSProbe
+from AnomalyGraphAgent.tools import BENCHBASE_BENCHMARKS
 
 
 DEFAULT_CONFIG_PATHS = {
     "tpcc": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
     "tpch": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpch_1SF_config.xml",
+}
+
+# The packaged BenchBase distribution contains generated ``local_*`` files,
+# while a fresh checkout only has the source templates.  Keep the generated
+# path as the preferred value, but allow a fresh checkout to start from the
+# corresponding MySQL template.
+SOURCE_CONFIG_FALLBACKS = {
+    "local_tpcc_10W_config.xml": ".tools/benchbase-main/config/mysql/sample_tpcc_config.xml",
+    "local_tpch_1SF_config.xml": ".tools/benchbase-main/config/mysql/sample_tpch_config.xml",
 }
 
 DEFAULT_WORKLOAD = {
@@ -56,6 +65,13 @@ class BenchBaseWorkloadRunner:
         self.round_dir.mkdir(parents=True, exist_ok=True)
         self.runtime_config_path = self._materialize_config()
         jar_path = _resolve_path(str(self.workload_config["jar_path"]))
+        if not jar_path.exists():
+            raise FileNotFoundError(
+                "BenchBase JAR not found: "
+                f"{jar_path}. Build BenchBase first with "
+                "./mvnw -Pmysql package in .tools/benchbase-main, "
+                "or set DBMAGS_BENCHBASE_JAR_PATH to an existing JAR."
+            )
         java_bin = str(self.workload_config.get("java_bin") or "java")
         benchmark = str(self.workload_config.get("benchmark") or "tpcc")
         command = [
@@ -125,7 +141,15 @@ class BenchBaseWorkloadRunner:
     def _materialize_config(self) -> Path:
         source = _resolve_path(str(self.workload_config["config_path"]))
         if not source.exists():
-            raise FileNotFoundError(f"BenchBase workload config not found: {source}")
+            fallback_name = SOURCE_CONFIG_FALLBACKS.get(source.name)
+            fallback = _resolve_path(fallback_name) if fallback_name else None
+            if fallback is not None and fallback.exists():
+                source = fallback
+            else:
+                raise FileNotFoundError(
+                    f"BenchBase workload config not found: {source}. "
+                    "Expected a built local config or a valid workload.config_path."
+                )
         tree = ET.parse(source)
         root = tree.getroot()
         duration_sec = int(self.workload_config.get("duration_sec") or _total_needed_duration(self.workload_config))

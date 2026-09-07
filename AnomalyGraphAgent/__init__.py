@@ -5,9 +5,9 @@ A single global planner replaces the old GlobalPlanner + SpecialistAgent archite
 Anomalies are constrained to a hardcoded propagation graph.
 """
 
-from agent.config import RuntimeConfig
-from agent.runtime import DBMAGSRuntime
-from agent.types import ExperimentRequest
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.runtime import DBMAGSRuntime
+from AnomalyGraphAgent.types import ExperimentRequest
 
 __version__ = "1.0.0"
 

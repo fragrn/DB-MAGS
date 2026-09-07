@@ -23,10 +23,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, List, Optional
 
-from agent.config import RuntimeConfig, resolve_runtime_path
-from agent.types import to_jsonable
-from agent.probes.mysql_probe import MySQLProbe
-from agent.probes.os_probe import OSProbe
+from AnomalyGraphAgent.config import RuntimeConfig, resolve_runtime_path
+from AnomalyGraphAgent.types import to_jsonable
+from AnomalyGraphAgent.probes.mysql_probe import MySQLProbe
+from AnomalyGraphAgent.probes.os_probe import OSProbe
 
 
 # ---------------------------------------------------------------------------
@@ -817,7 +817,7 @@ def build_task_dag(task_specs: list[dict], dependencies: Optional[List[List[str]
 
     dependencies: list of [source_task_id, target_task_id] pairs.
     """
-    from agent.dag import build_task_dag as _build
+    from AnomalyGraphAgent.dag import build_task_dag as _build
 
     return _build(task_specs, dependencies or [])
 
@@ -837,7 +837,7 @@ def check_safety(
 
     Returns {approved: bool, reasons: [...], warnings: [...]}.
     """
-    from agent.safety import SafetyChecker
+    from AnomalyGraphAgent.safety import SafetyChecker
 
     normalized_dag = canonicalize_task_dag_runtime_paths(
         config,
@@ -1064,7 +1064,7 @@ def execute_dag(
     """
     Execute an ExecutableTaskDAG and return an ExecutionTrace.
     """
-    from agent.executor import Executor
+    from AnomalyGraphAgent.executor import Executor
 
     executor = Executor(config, round_dir=round_dir or None)
     trace = executor.execute(task_dag, max_duration_sec=max_duration_sec)
@@ -1111,7 +1111,7 @@ def read_memory(
 
     Returns a list of MemoryItem dicts, newest first.
     """
-    from agent.memory import MemoryStore
+    from AnomalyGraphAgent.memory import MemoryStore
 
     store = MemoryStore(config.memory_file)
     return store.load(anomaly=anomaly, limit=limit)
@@ -1122,7 +1122,7 @@ def write_memory(config: RuntimeConfig, item: dict) -> dict[str, Any]:
     """
     Append a single MemoryItem to the long-term store.
     """
-    from agent.memory import MemoryStore
+    from AnomalyGraphAgent.memory import MemoryStore
 
     store = MemoryStore(config.memory_file)
     store.append(item)

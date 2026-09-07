@@ -4,10 +4,10 @@ import json
 import unittest
 from pathlib import Path
 
-from agent.evaluator import evaluate_node
-from agent.graph import ANOMALY_GRAPH, reachable_paths
-from agent.planner import SYSTEM_PROMPT
-from agent.types import ExperimentRequest, NodeCategory
+from AnomalyGraphAgent.evaluator import evaluate_node
+from AnomalyGraphAgent.graph import ANOMALY_GRAPH, reachable_paths
+from AnomalyGraphAgent.planner import SYSTEM_PROMPT
+from AnomalyGraphAgent.types import ExperimentRequest, NodeCategory
 
 
 class AnomalyGraphExpansionTests(unittest.TestCase):

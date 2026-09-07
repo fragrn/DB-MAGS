@@ -8,7 +8,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from agent.config import RuntimeConfig
+from AnomalyGraphAgent.config import RuntimeConfig
 
 
 _QUERY_TIME = re.compile(

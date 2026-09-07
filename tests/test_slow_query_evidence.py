@@ -6,11 +6,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent.config import RuntimeConfig
-from agent.evaluator import evaluate_node
-from agent.executor import Executor
-from agent.probes.mysql_probe import compare_statement_digest_latency, compare_statement_histograms
-from agent.workload import _summarize_slow_sql_intervals, make_evaluation_pair, summarize_window
+from AnomalyGraphAgent.config import RuntimeConfig
+from AnomalyGraphAgent.evaluator import evaluate_node
+from AnomalyGraphAgent.executor import Executor
+from AnomalyGraphAgent.probes.mysql_probe import compare_statement_digest_latency, compare_statement_histograms
+from AnomalyGraphAgent.workload import _summarize_slow_sql_intervals, make_evaluation_pair, summarize_window
 
 
 def _snapshot(counts, threshold_sec=1.0):
@@ -252,7 +252,7 @@ class SlowQueryEvidenceTests(unittest.TestCase):
             executor = Executor(RuntimeConfig(), round_dir=tmpdir)
             with (
                 patch("pymysql.connect", return_value=Connection()),
-                patch("agent.executor.MySQLProbe.long_query_time_sec", return_value=0.1),
+                patch("AnomalyGraphAgent.executor.MySQLProbe.long_query_time_sec", return_value=0.1),
             ):
                 result = executor._run_sql_workload(
                     {
