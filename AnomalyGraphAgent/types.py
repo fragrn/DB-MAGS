@@ -56,7 +56,7 @@ class AnomalyNode:
     injectable: bool = False
     observable: bool = True
     evidence_rules: list[EvidenceRule] = field(default_factory=list)
-    # Which tool to use when generating a TaskSpec for this node
+    # The current planner asks the LLM for a TaskSpec directly.
     default_tool: str = ""
     # Human-readable notes for the planner
     planner_notes: str = ""
@@ -186,25 +186,27 @@ class EnvironmentSnapshot:
     """Aggregated environment state from probes."""
     database: str
     schema: SchemaInfo | None = None
+    table_stats: list[dict] = field(default_factory=list)
+    identifier_whitelist: dict = field(default_factory=dict)
     db_metrics: dict = field(default_factory=dict)
     workload_status: dict = field(default_factory=dict)
     os_metrics: dict = field(default_factory=dict)
     db_version: str = ""
     max_connections: int = 100
-    react_trace: list[ReActStep] = field(default_factory=list)
+    planner_trace: list[PlannerTraceStep] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return to_jsonable(self)
 
 
 # ---------------------------------------------------------------------------
-# ReAct
+# Planner trace
 # ---------------------------------------------------------------------------
 
 
 @dataclass
-class ReActStep:
-    """One step in a ReAct reasoning trace."""
+class PlannerTraceStep:
+    """One step in the single-pass planner trace."""
     round: int
     thought: str
     action: str

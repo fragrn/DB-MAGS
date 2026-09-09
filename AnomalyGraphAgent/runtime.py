@@ -3,7 +3,7 @@ DBMAGS Runtime: orchestrates the full experiment lifecycle.
 
 Workflow per round:
   1. inspect  — probe environment
-  2. plan     — ReAct loop -> ExecutableTaskDAG
+  2. plan     — single-pass LLM plan + local validation/SQL repair -> DAG
   3. safety   — pre-execution safety gate
   4. baseline — collect metrics before injection
   5. execute  — run the task DAG
@@ -30,6 +30,8 @@ from AnomalyGraphAgent.evaluator import evaluate
 from AnomalyGraphAgent.memory import MemoryStore
 from AnomalyGraphAgent.planner import GlobalPlanner
 from AnomalyGraphAgent.planner import PlannerFallbackError
+from AnomalyGraphAgent.intent import INTENT_VERSION
+from AnomalyGraphAgent.intent_compiler import COMPILER_VERSION
 from AnomalyGraphAgent.reflection import SelfReflection
 from AnomalyGraphAgent.reflection import ReflectionFallbackError
 from AnomalyGraphAgent.safety import SafetyChecker
@@ -48,7 +50,7 @@ from AnomalyGraphAgent.types import (
     EvaluationResult,
     ExecutableTaskDAG,
     ExperimentRequest,
-    ReActStep,
+    PlannerTraceStep,
     ReflectionResult,
     RunResult,
     SafetyResult,
@@ -249,7 +251,7 @@ class DBMAGSRuntime:
         evaluation = EvaluationResult(success=False, reason="Workload round did not complete")
         reflection: ReflectionResult | None = None
         dag = ExecutableTaskDAG()
-        react_trace: list[ReActStep] = []
+        react_trace: list[PlannerTraceStep] = []
         safety = SafetyResult()
         should_stop = False
 
@@ -280,9 +282,10 @@ class DBMAGSRuntime:
                 "phase": "baseline",
                 "summary": baseline_window.get("summary", {}),
                 "sample_count": baseline_window.get("sample_count", 0),
+                "baseline": baseline_window,
             }
 
-            # Phase 5: ReAct planning with runtime workload context.
+            # Phase 5: single-pass planning with runtime workload context.
             dag, runtime_snapshot, react_trace = self._plan(
                 request, runtime_snapshot, round_no, round_dir, latest_reflection
             )
@@ -629,27 +632,105 @@ class DBMAGSRuntime:
         round_no: int,
         round_dir: Path,
         reflection: ReflectionResult | None = None,
-    ) -> tuple[ExecutableTaskDAG, EnvironmentSnapshot, list[ReActStep]]:
+    ) -> tuple[ExecutableTaskDAG, EnvironmentSnapshot, list[PlannerTraceStep]]:
         # Read memory for this anomaly
         memory_items = self.memory.load(anomaly=request.target_anomaly, limit=20)
+        planning_context = self.planner._build_planner_context(
+            request, snapshot, memory_items, reflection
+        )
+        if round_no > 1:
+            previous_plan = round_dir.parent / f"round_{round_no - 1}" / "plan.json"
+            if previous_plan.exists():
+                try:
+                    prior = json.loads(previous_plan.read_text(encoding="utf-8"))
+                    planning_context["previous_plan"] = {
+                        "intent": prior.get("planner_intent"),
+                        "normalizations": (prior.get("compilation") or {}).get("normalizations", []),
+                        "source_map": (prior.get("compilation") or {}).get("source_map", {}),
+                        "task_specs": prior.get("task_specs", []),
+                        "planner_mode": prior.get("planner_mode"),
+                    }
+                except (OSError, ValueError, TypeError):
+                    planning_context["previous_plan"] = {"available": False}
+        self._write_json(round_dir / "planner_context.json", planning_context)
 
         try:
-            dag, snapshot, react_trace = self.planner.plan(request, snapshot, memory_items, reflection=reflection)
+            dag, snapshot, react_trace = self.planner.plan(
+                request, snapshot, memory_items, reflection=reflection,
+                planning_context=planning_context,
+            )
         except PlannerFallbackError as exc:
+            if self.planner.last_planner_context:
+                self._write_json(round_dir / "planner_context.json", self.planner.last_planner_context)
             self._write_planner_failure(round_dir, request, exc)
+            if exc.context.get("validation_history"):
+                self._write_json(round_dir / "planner_validation_failure.json", {
+                    "reason": exc.reason, **exc.context
+                })
+            self._write_planner_contract_artifacts(round_dir, request, status="failed", error=exc)
             raise RuntimeError(f"Planner fallback blocked: {exc.reason}") from exc
 
         # Write plan artifacts
+        if self.planner.last_planner_context:
+            self._write_json(round_dir / "planner_context.json", self.planner.last_planner_context)
         plan_payload = dict(self.planner.last_plan_payload)
         plan_payload.setdefault("target_path", request.target_path)
         plan_payload.setdefault("injected_nodes", request.injected_nodes)
         plan_payload["react_trace"] = [s.to_dict() for s in react_trace]
+        plan_payload["planner_json_repair_attempts"] = getattr(self.planner, "planner_json_repair_attempts", 0)
+        plan_payload["planner_json_repair_max_attempts"] = 2
         (round_dir / "plan.json").write_text(json.dumps(plan_payload, indent=2, ensure_ascii=False))
+        self._write_planner_contract_artifacts(round_dir, request, plan_payload=plan_payload, status="validated")
+        if plan_payload.get("planner_validation") is not None:
+            self._write_json(round_dir / "plan_validation.json", {
+                "planner_mode": plan_payload.get("planner_mode", "single_pass_with_json_repair_and_sql_repair"),
+                "history": plan_payload.get("planner_validation", []),
+            })
         (round_dir / "react_trace.json").write_text(
             json.dumps([s.to_dict() for s in react_trace], indent=2, ensure_ascii=False)
         )
         self._validate_benchbase_burst_windows(request, dag, round_dir)
         return dag, snapshot, react_trace
+
+    def _write_planner_contract_artifacts(
+        self,
+        round_dir: Path,
+        request: ExperimentRequest,
+        *,
+        plan_payload: dict[str, Any] | None = None,
+        status: str,
+        error: PlannerFallbackError | None = None,
+    ) -> None:
+        """Write stable Intent/compiler artifacts for both success and failure paths."""
+        payload = plan_payload or getattr(self.planner, "last_plan_payload", {}) or {}
+        history = (error.context.get("validation_history", []) if error else
+                   payload.get("planner_validation", []))
+        intent = payload.get("planner_intent")
+        compilation = payload.get("compilation") or {}
+        base = {
+            "status": status,
+            "planner_mode": payload.get("planner_mode", "intent_compiler_v1"),
+            "intent_schema_version": payload.get("intent_schema_version", INTENT_VERSION),
+            "compiler_version": payload.get("compiler_version", COMPILER_VERSION),
+            "target_path": list(request.target_path),
+            "injected_nodes": list(request.injected_nodes),
+            "planner_llm_calls": payload.get("planner_llm_calls", getattr(self.planner, "planner_llm_calls", 0)),
+            "planner_json_repair_attempts": payload.get("planner_json_repair_attempts", getattr(self.planner, "planner_json_repair_attempts", 0)),
+            "sql_repair_attempts": payload.get("sql_repair_attempts", getattr(self.planner, "sql_repair_attempts", 0)),
+            "api_usage": payload.get("api_usage", getattr(self.planner, "_llm_usage", [])),
+            "planner_timings_sec": payload.get("planner_timings_sec", getattr(self.planner, "_planner_timings", {})),
+        }
+        if error:
+            base.update({"stage": error.stage, "error_type": error.error_type, "reason": error.reason})
+        self._write_json(round_dir / "planner_intent.json", {**base, "intent": intent, "validation_history": history})
+        self._write_json(round_dir / "compiled_task_specs.json", {**base, "task_specs": compilation.get("task_specs", [])})
+        self._write_json(round_dir / "intent_validation.json", {**base, "history": history})
+        self._write_json(round_dir / "compilation_trace.json", {
+            **base,
+            "source_map": compilation.get("source_map", {}),
+            "normalizations": compilation.get("normalizations", []),
+            "warnings": compilation.get("warnings", []),
+        })
 
     def _safety_check(
         self,
@@ -883,12 +964,14 @@ class DBMAGSRuntime:
         exc: PlannerFallbackError,
     ) -> None:
         trace = exc.trace or []
-        if not trace and getattr(self.planner, "_react_trace", None):
-            trace = [s.to_dict() for s in self.planner._react_trace]
+        if not trace and getattr(self.planner, "_planner_trace", None):
+            trace = [s.to_dict() for s in self.planner._planner_trace]
         payload = {
             "status": "failed",
             "failure_type": "planner_fallback_blocked",
             "reason": exc.reason,
+            "stage": exc.stage,
+            "error_type": exc.error_type,
             "target_path": request.target_path,
             "injected_nodes": request.injected_nodes,
             "react_trace": trace,
@@ -896,6 +979,13 @@ class DBMAGSRuntime:
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         self._write_json(round_dir / "planner_failure.json", payload)
+        if exc.context.get("validation_history") or exc.context.get("raw_output"):
+            self._write_json(round_dir / "planner_validation_failure.json", {
+                "reason": exc.reason,
+                "validation_history": exc.context.get("validation_history", []),
+                "raw_output": exc.context.get("raw_output", ""),
+                **exc.context,
+            })
         self._write_json(round_dir / "react_trace.json", trace)
         self._write_json(round_dir / "plan.json", {
             "planning_status": "failed",
@@ -998,6 +1088,20 @@ class DBMAGSRuntime:
                 obs = json.loads(obs_path.read_text(encoding="utf-8"))
             except Exception:
                 continue
+            plan_path = round_dir / "plan.json"
+            if plan_path.exists():
+                try:
+                    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+                    obs["planner"] = {
+                        "planner_mode": plan.get("planner_mode"),
+                        "planner_llm_calls": plan.get("planner_llm_calls"),
+                        "planner_json_repair_attempts": plan.get("planner_json_repair_attempts"),
+                        "sql_repair_attempts": plan.get("sql_repair_attempts"),
+                        "api_usage": plan.get("api_usage", []),
+                        "planner_timings_sec": plan.get("planner_timings_sec", {}),
+                    }
+                except (OSError, ValueError, TypeError):
+                    pass
             if eval_path.exists():
                 try:
                     ev = json.loads(eval_path.read_text(encoding="utf-8"))
@@ -1033,6 +1137,13 @@ class DBMAGSRuntime:
                     "recovery": _compare_phase_latency(before, after, "recovery"),
                 },
                 "raw_sql_workload": _compare_raw_sql(before, after),
+                "planner": {
+                    "before": before.get("planner", {}),
+                    "after": after.get("planner", {}),
+                    "llm_call_delta": _number((after.get("planner") or {}).get("planner_llm_calls")) - _number((before.get("planner") or {}).get("planner_llm_calls")),
+                    "json_repair_delta": _number((after.get("planner") or {}).get("planner_json_repair_attempts")) - _number((before.get("planner") or {}).get("planner_json_repair_attempts")),
+                    "sql_repair_delta": _number((after.get("planner") or {}).get("sql_repair_attempts")) - _number((before.get("planner") or {}).get("sql_repair_attempts")),
+                },
             })
         self._write_json(output_dir / "reflection_comparison.json", comparison)
         return comparison
@@ -1046,7 +1157,7 @@ class DBMAGSRuntime:
         execution_trace: dict[str, Any] | None,
         evaluation: EvaluationResult,
         reflection: ReflectionResult | None,
-        react_trace: list[ReActStep],
+        react_trace: list[PlannerTraceStep],
         safety: SafetyResult,
         workload_trace: dict[str, Any] | None = None,
     ) -> None:
@@ -1110,7 +1221,7 @@ class DBMAGSRuntime:
         started_by_taskgen = False
         dag = ExecutableTaskDAG()
         snapshot = EnvironmentSnapshot(database=request.target_database)
-        react_trace: list[ReActStep] = []
+        react_trace: list[PlannerTraceStep] = []
         detection = self._detect_taskgen_workload(
             request=request,
             mode=workload_mode,

@@ -1,8 +1,13 @@
-"""Single global planner using native chat tool-calling."""
+"""Single-pass global planner with local validation and SQL repair."""
 
 from __future__ import annotations
 
 import json
+import copy
+import uuid
+import re
+import time
+from functools import wraps
 from typing import Any, List, Optional
 
 from AnomalyGraphAgent.config import RuntimeConfig
@@ -12,7 +17,7 @@ from AnomalyGraphAgent.types import (
     EvaluationResult,
     ExperimentRequest,
     ExecutableTaskDAG,
-    ReActStep,
+    PlannerTraceStep,
     ReflectionResult,
     SchemaInfo,
     TaskDAGEdge,
@@ -20,6 +25,10 @@ from AnomalyGraphAgent.types import (
     to_jsonable,
 )
 from AnomalyGraphAgent import tools as tool_registry
+from AnomalyGraphAgent.intent import INTENT_VERSION, IntentValidationError, build_intent_schema, validate_intent_plan, require_compilable_strategy
+from AnomalyGraphAgent.intent_compiler import COMPILER_VERSION, CompilationContext, compile_intent_plan
+from AnomalyGraphAgent.sql_validation import SQLValidationError, validate_sql
+from AnomalyGraphAgent.intent_repair import IntentSemanticError, guard_semantic_repair, guard_sql_repair, guard_partial_repair, sql_slot
 
 
 class PlannerFallbackError(RuntimeError):
@@ -30,11 +39,42 @@ class PlannerFallbackError(RuntimeError):
         reason: str,
         trace: list[dict[str, Any]] | None = None,
         context: dict[str, Any] | None = None,
+        stage: str = "planning",
+        error_type: str = "planner_error",
     ):
         super().__init__(reason)
         self.reason = reason
         self.trace = trace or []
         self.context = context or {}
+        self.stage = self.context.setdefault("stage", stage)
+        self.error_type = self.context.setdefault("error_type", error_type)
+
+
+class PlannerLLMError(PlannerFallbackError):
+    """LLM transport/configuration failure; do not spend JSON repair attempts on it."""
+
+
+def _planner_boundary(method):
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        self._stage = "request_validation"
+        self._validation_history = []
+        self.sql_repair_counts = {}
+        self._planner_started = time.perf_counter()
+        try:
+            return method(self, *args, **kwargs)
+        except PlannerFallbackError as exc:
+            if exc.stage == "planning":
+                exc.stage = self._stage
+                exc.context["stage"] = self._stage
+            if exc.__cause__ is None:
+                exc.__cause__ = RuntimeError(exc.reason)
+            raise
+        except Exception as exc:
+            error_type = "invalid_request" if self._stage == "request_validation" and isinstance(exc, ValueError) else "internal_error"
+            self._fail("compiler_error" if self._stage == "compile_intent" else error_type,
+                       f"Planner failed during {self._stage}: {type(exc).__name__}: {exc}", cause=exc)
+    return wrapped
 
 
 ALLOWED_PLANNER_ACTION_KINDS = {
@@ -43,12 +83,7 @@ ALLOWED_PLANNER_ACTION_KINDS = {
     "raw_command",
     "logical_backup_command",
     "benchbase_burst_command",
-    # Legacy action kinds remain accepted for old artifacts and transitional plans.
-    "sql_workload",
     "benchbase_burst",
-    "lock_conflict",
-    "chaosblade",
-    "logical_backup",
 }
 
 RESOURCE_ROOT_CAUSES = {
@@ -65,163 +100,44 @@ RESOURCE_ROOT_CAUSES = {
 # System prompt — the core knowledge injected into the global planner
 # ---------------------------------------------------------------------------
 
-SYSTEM_PROMPT = """You are GlobalAnomalyPlanner, a single-agent planner for MySQL anomaly propagation experiments.
 
-The user provides the full target_path and the injected_nodes. You must not choose a different path or add injected nodes.
-Your job is only to generate executable TaskSpecs for the user-specified injected_nodes.
 
-## Roles
-
-You operate through native chat tool calls. Do not pretend to call tools in text.
-Use actual tool_calls for probing, EXPLAIN, TaskSpec building, DAG building, safety checking, and memory reading.
-Never call execution or memory-writing tools.
-
-## Anomaly Graph
-
-The graph has three node layers:
-
-### Injectable nodes (can be actively triggered)
-- traffic_surge        → direct TaskSpec using benchbase_burst_command or raw_command
-- missing_index        → direct SQL workload on unindexed columns
-- improper_sql         → direct poorly shaped SQL workload
-- long_tx              → direct transaction script holding locks
-- hot_update           → direct transaction script with concurrent updates
-- backup               → direct backup command or SQL maintenance workload
-- resource_cpu         → direct ChaosBlade command
-- resource_io          → direct ChaosBlade command
-- resource_memory      → direct ChaosBlade command
-- resource_network     → direct ChaosBlade command
-- metadata_lock        → direct transaction/DDL script creating metadata lock waits
-- table_lock           → direct table lock or table-level blocking script
-- network_latency      → direct ChaosBlade network drop command scoped to MySQL traffic
-- disk_full_or_pressure → controlled disk pressure command; never fill the system disk
-- deadlock_storm       → direct conflicting transaction scripts that create deadlocks
-- large_temp_table     → direct SQL workload creating temp tables / filesort / GROUP BY spill
-- redo_log_pressure    → direct high-concurrency write workload creating redo/fsync pressure
-- connection_storm     → direct bounded burst of concurrent/short-lived MySQL connections
-
-### Intermediate observable nodes
-- threads_concurrency_up   → Threads_running / Threads_connected increased
-- lock_contention          → Innodb_row_lock_waits / lock_wait_time increased
-- poor_plan                → EXPLAIN shows type=ALL / filesort / temporary table
-- stale_statistics          → rows_estimated vs rows_actual diverged
-- sort_hash_spill           → Sort_merge_passes / created_tmp_disk_tables increased
-- resource_bottleneck_cpu  → CPU utilization saturated
-- resource_bottleneck_io   → disk IO saturation / high io_wait
-- maintenance_conflict      → metadata lock evidence from backup/ANALYZE
-- table_bloat               → dead tuples / fragmentation accumulated
-- metadata_lock_wait        → processlist/performance_schema metadata lock wait
-- connection_pressure       → Threads_connected / Max_used_connections / connect errors increased
-- temp_table_spill          → Created_tmp_disk_tables / Sort_merge_passes increased
-- buffer_pool_pressure      → buffer pool reads/misses or memory pressure increased
-- redo_log_flush_stall      → commit/write latency or Innodb_log_waits increased
-- binlog_flush_stall        → binlog cache/flush pressure or commit latency increased
-- deadlock_detected         → Innodb_deadlocks increased
-- disk_saturation           → IO wait / disk util / disk-backed temp activity increased
-- network_stall             → connection errors, timeout, or throughput loss from network drop
-
-### Terminal symptom nodes
-- slow_query   → at least one new target-database entry appears in the injection window's MySQL slow log
-- timeout      → Aborted_connects / connection errors increased
-- deadlock     → Innodb_deadlocks > 0
-- qps_drop     → injection average QPS < baseline average QPS * 0.7
-- commit_latency_up      → write or commit latency increased
-- connection_error       → connection failures / Aborted_connects increased
-- write_throughput_drop  → injection average TPS < baseline average TPS * 0.7
-
-## Tool Usage Rules
-
-Use the provided runtime snapshot and baseline context first.
-Only call probe_full_snapshot or other probe tools when the provided context is insufficient.
-You SHOULD call read_memory before choosing task parameters.
-You SHOULD call explain_sql for SQL workload candidates before finalizing them.
-You MUST directly write one complete TaskSpec JSON object for each user-specified injected node in the final answer.
-You MUST NOT write TaskSpecs for nodes outside injected_nodes.
-You MUST call build_task_dag and check_safety before returning the final answer.
-
-### Environment probe tools
-- probe_full_snapshot(config, database) → full environment snapshot
-- probe_schema(config, database) → table schema only
-- probe_table_stats(config, database) → table sizes only
-- probe_db_metrics(config, database) → current DB status
-- probe_os_metrics() → OS metrics (CPU, memory, disk)
-- probe_workload(config, database, interval_sec) → current workload QPS/TPS sample
-- explain_sql(config, database, sql) → EXPLAIN a candidate SQL
-
-### Orchestration tools
-- build_task_dag(task_specs, dependencies) → ExecutableTaskDAG
-- check_safety(task_dag, config, current_db_metrics, current_os_metrics) → SafetyResult
-
-### Memory tools
-- read_memory(config, anomaly, limit=20) → list of prior memory items
-
-## Planning Process
-
-Step 1 — Inspect: Use the provided runtime snapshot. Call probe tools only if extra evidence is needed.
-Step 2 — Memory check: Call read_memory. Incorporate reflection context if provided.
-Step 3 — TaskSpec generation: Directly write TaskSpecs only for injected_nodes. Prefer large/hot tables and bounded parameters.
-Step 4 — DAG construction: Call build_task_dag with dependencies only between generated TaskSpecs.
-Step 5 — Safety check: Call check_safety.
-
-## Direct Raw Action TaskSpec Policy
-
-Do not call specialist builder tools. They are intentionally unavailable.
-In the final JSON, each TaskSpec must include:
-- task_id
-- task_type
-- actions
-- expected_metrics
-- success_criteria
-- risk_assessment
-- metadata.root_cause, exactly equal to its injected node
-
-Allowed new raw action kinds:
-- raw_sql_workload: {kind, database, sql, concurrency, duration_sec}
-- raw_transaction_script: {kind, database, scripts, duration_sec, concurrency}
-- raw_command: {kind, command, duration_sec, cwd, env, cleanup_command}
-- logical_backup_command: {kind, database, command, duration_sec, output_path}
-- benchbase_burst_command: {kind, benchmark, database, command, duration_sec, terminals, rate}
-
-Commands must be argv arrays, never shell strings.
-SQL tasks should call explain_sql before finalizing candidate SQL when possible.
-Traffic surge should use benchbase_burst_command and match the background workload benchmark/database.
-For benchbase_burst_command, generate an argv command using the background workload java_bin and jar_path, e.g. [java_bin, "-jar", jar_path, "-b", benchmark, "-c", config_path, "--execute=true"].
-Do not use the BenchBase directory as command[0]; command[0] must be java/java_bin.
-Lock contention and deadtuple should use raw_transaction_script.
-metadata_lock should use raw_transaction_script/raw_sql_workload to hold a table transaction and run bounded DDL/LOCK TABLE against the same table.
-table_lock should use raw_transaction_script with LOCK TABLES or equivalent table-level blocking and explicit UNLOCK cleanup.
-deadlock_storm should use raw_transaction_script with two roles updating the same rows in opposite order.
-For deadlock_storm, include expected_error_codes: [1213] or expected_error: "deadlock" on the raw_transaction_script action because MySQL deadlock error 1213 is expected evidence.
-large_temp_table should use raw_sql_workload with GROUP BY, ORDER BY, DISTINCT, or JOIN that EXPLAIN shows Using temporary or Using filesort.
-redo_log_pressure should use raw_sql_workload/raw_transaction_script with bounded high-concurrency INSERT/UPDATE/COMMIT on target tables.
-connection_storm should use bounded raw_sql_workload or a safe command/script that opens many MySQL connections inside duration_sec.
-Resource limitations must use raw_command with a ChaosBlade argv command. The command[0] must be the configured ChaosBlade binary path from RuntimeConfig.chaosblade_path, not bare "blade".
-For resource_cpu/resource_io/resource_memory/resource_network/network_latency/disk_full_or_pressure, generate a unique ChaosBlade --uid and a matching cleanup_command such as [configured_chaosblade_path, "destroy", uid].
-Use the current Darwin ChaosBlade command forms:
-- resource_cpu: [configured_chaosblade_path, "create", "cpu", "fullload", "--cpu-percent", "90", "--timeout", duration_sec, "--uid", uid]
-- resource_memory: [configured_chaosblade_path, "create", "mem", "load", "--mode", "ram", "--mem-percent", "80", "--timeout", duration_sec, "--uid", uid]
-- resource_io: [configured_chaosblade_path, "create", "disk", "burn", "--read", "--write", "--path", "/tmp", "--size", "100M", "--timeout", duration_sec, "--uid", uid]
-- network_latency: [configured_chaosblade_path, "create", "network", "drop", "--destination-port", "3306", "--network-traffic", "out", "--timeout", duration_sec, "--uid", uid]
-- disk_full_or_pressure: prefer disk burn under a safe temp path; do not generate an unbounded disk fill command
-Do not attempt to fill the system disk for disk_full_or_pressure.
-Do not use obsolete resource command forms or flags: "cpu load", "disk fill", "--duration", "--process-name", "--read-bps", or "--write-bps".
-Backup should use logical_backup_command.
-
-## Output Format
-
-Return a JSON object with this exact structure:
-{
-  "target_path": ["node1", "node2", "..."],
-  "injected_nodes": ["nodeA", "nodeB"],
-  "task_specs": [/* array of TaskSpec dicts returned by build_*_task tools */],
-  "dependencies": [["task_id_A", "task_id_B"], ...],
-  "dag": {/* result from build_task_dag */},
-  "safety_check": {/* result from check_safety tool */},
-  "reasoning": "brief explanation of how each TaskSpec supports its injected node"
-}
-
-Only return this JSON — no extra text outside it.
+SINGLE_PASS_SYSTEM_PROMPT = """You plan MySQL anomaly propagation experiments.
+Return exactly one object containing intents, one Intent per requested injected node,
+using the supplied strict JSON Schema. Each Intent contains only node, strategy,
+target, load, sql, expected_evidence. Use null for fields unused by that strategy.
+Never change target_path, injected_nodes, target_database, workload identity or safety limits.
+Use only registered strategies and identifier_whitelist tables/columns in the target database.
+No cross-database access, production targets, destructive DDL, unbounded updates/deletes,
+file output, stored procedures or unapproved functions. Do not attempt to fill the system disk.
+Duration must be finite, positive and <= duration_limit_sec; hold_sec <= duration_sec.
+Strengthen concurrency, rate or hotspot concentration instead of extending the window.
+hot_update and long_tx use a SELECT FOR UPDATE holder and UPDATE waiter on the same
+existing table and identical predicate. Keep SQL to one statement per slot.
+improper_sql, missing_index and large_temp_table use SELECT and must have appropriate
+query/index evidence. traffic_surge increases BenchBase concurrency/rate using its existing mix.
+table_lock uses a SELECT waiter on the target table. Resource strategies select intensity
+from the supplied policy. Other roots require declared compiler and safety support.
+expected_evidence describes hypotheses, never observations or changes to evaluation rules.
+Local validation and compilation construct the executable protocol and cleanup.
+slow_query requires new target-database slow-log entries; qps_drop requires injection QPS
+below 0.7 times baseline QPS. Do not claim success before measurement.
 """
+
+SQL_REPAIR_SYSTEM_PROMPT = """SQL validation or EXPLAIN failed. Return the complete corrected
+IntentPlan object using the supplied Schema. Only correct the identified SQL field and
+its invalid target table/column references when necessary. Never change valid target
+references or the target predicate. Preserve node, strategy, load, expected_evidence
+and all other SQL fields. Never output executable
+protocol fields. Do not change the requested experiment scope or safety constraints."""
+
+PLANNER_JSON_REPAIR_SYSTEM_PROMPT = """Return the complete corrected Intent object using the
+supplied Schema: a top-level intents array with node, strategy, target, load, sql,
+expected_evidence per root. Preserve requested roots, database and safety limits.
+When repair_scope is provided, only correct that identified field and necessary invalid
+references; preserve its original plan's other fields, SQL slots and Intent count. JSON only."""
+
+SYSTEM_PROMPT = SINGLE_PASS_SYSTEM_PROMPT
 
 
 def _is_chaosblade_binary(value: str, configured_path: str) -> bool:
@@ -245,14 +161,20 @@ def _extract_chaosblade_uid(command: list[str]) -> str:
 
 class GlobalPlanner:
     """
-    Single ReAct-based planner.  No SpecialistAgents — all task generation
-    logic is handled via tools inside the ReAct loop.
+    Planner that sends one complete environment context to the LLM. Local
+    code owns normalization, SQL validation, DAG construction and safety.
     """
 
     def __init__(self, config: RuntimeConfig):
         self.config = config
-        self._react_trace: list[ReActStep] = []
+        self._planner_trace: list[PlannerTraceStep] = []
         self.last_plan_payload: dict[str, Any] = {}
+        self.last_planner_context: dict[str, Any] = {}
+        self.planner_llm_calls = 0
+        self.planner_json_repair_attempts = 0
+        self.sql_repair_attempts = 0
+        self._planner_timings: dict[str, float] = {}
+        self._llm_usage: list[dict[str, Any]] = []
 
     # -------------------------------------------------------------------------
     # Public API
@@ -272,54 +194,72 @@ class GlobalPlanner:
         return EnvironmentSnapshot(
             database=request.target_database,
             schema=schema,
+            table_stats=snapshot_data.get("table_stats", []),
+            identifier_whitelist=self._identifier_whitelist(schema_data),
             db_metrics=snapshot_data.get("db_metrics", {}),
             workload_status=snapshot_data.get("workload", {}),
             os_metrics=snapshot_data.get("os_metrics", {}),
             db_version=snapshot_data.get("db_version", ""),
             max_connections=int(snapshot_data.get("db_metrics", {}).get("max_connections", 100)),
-            react_trace=[],
+            planner_trace=[],
         )
 
+    @_planner_boundary
     def plan(
         self,
         request: ExperimentRequest,
         snapshot: EnvironmentSnapshot,
         memory_items: Optional[List[dict]] = None,
         reflection: Optional[ReflectionResult] = None,
-    ) -> tuple[ExecutableTaskDAG, EnvironmentSnapshot, list[ReActStep]]:
+        planning_context: Optional[dict[str, Any]] = None,
+        compilation_context: CompilationContext | None = None,
+    ) -> tuple[ExecutableTaskDAG, EnvironmentSnapshot, list[PlannerTraceStep]]:
         """
-        Run the ReAct planning loop to produce an ExecutableTaskDAG.
+        Run the single-pass planning pipeline to produce an ExecutableTaskDAG.
 
-        Returns (dag, snapshot, react_trace).
+        Returns (dag, snapshot, planner_trace).
         """
-        self._react_trace = []
+        self._planner_trace = []
         memory_items = memory_items or []
         self.last_plan_payload = {}
+        self.last_planner_context = {}
+        self.planner_llm_calls = 0
+        self.planner_json_repair_attempts = 0
+        self.sql_repair_attempts = 0
+        self._planner_timings = {}
+        self._llm_usage = []
+        self._planner_started = time.perf_counter()
+        self._compilation_context = compilation_context
+        self._active_request = request
         self._validate_request(request)
 
-        # ---- ReAct Step 1: Inspect (already done, just record it) ----
+        # Record the pre-collected planner context.
         self._trace(
             round=1,
             thought="Environment snapshot collected. "
                     f"Schema has {len(snapshot.schema.tables) if snapshot.schema else 0} tables. "
                     f"DB version: {snapshot.db_version}. "
                     f"Max connections: {snapshot.max_connections}.",
-            action="probe_full_snapshot",
+            action="collect_planner_context",
             observe=f"Tables: {list(snapshot.schema.tables.keys())[:5] if snapshot.schema else []}",
         )
 
-        task_specs, dependencies, dag_dict, plan_payload = self._run_react_planner(
-            request=request,
-            snapshot=snapshot,
-            memory_items=memory_items,
-            reflection=reflection,
-        )
+        try:
+            task_specs, dependencies, dag_dict, plan_payload = self._single_pass_planner(
+                request=request, snapshot=snapshot, memory_items=memory_items,
+                reflection=reflection, planning_context=planning_context,
+            )
+        except PlannerFallbackError:
+            raise
+        except Exception:
+            raise
+        self._stage = "finalize_plan"
         if not dag_dict:
             dag_dict = tool_registry.build_task_dag(task_specs, dependencies)
         dag = self._dict_to_dag(dag_dict)
 
         self._trace(
-            round=len(self._react_trace) + 1,
+            round=len(self._planner_trace) + 1,
             thought=f"DAG built with {len(task_specs)} tasks and {len(dependencies)} edges",
             action="build_task_dag",
             observe=f"Task IDs: {list(dag.tasks.keys())}",
@@ -333,9 +273,25 @@ class GlobalPlanner:
             "dag": dag_dict,
             "reasoning": plan_payload.get("reasoning", ""),
             "safety_check": plan_payload.get("safety_check", {}),
+            "success_criteria": plan_payload.get("success_criteria", {}),
+            "planner_validation": plan_payload.get("planner_validation", []),
+            "planner_mode": "intent_compiler_v1",
+            "planner_intent": plan_payload.get("planner_intent"),
+            "compilation": plan_payload.get("compilation", {}),
+            "planner_llm_calls": self.planner_llm_calls,
+            "planner_json_repair_attempts": self.planner_json_repair_attempts,
+            "planner_json_repair_max_attempts": 2,
+            "sql_repair_attempts": self.sql_repair_attempts,
+            "sql_repair_max_attempts": 3,
+            "sql_repair_counts": dict(self.sql_repair_counts),
+            "intent_schema_version": INTENT_VERSION,
+            "compiler_version": COMPILER_VERSION,
+            "api_usage": copy.deepcopy(self._llm_usage),
+            "planner_timings_sec": dict(self._planner_timings),
         }
-        snapshot.react_trace = self._react_trace
-        return dag, snapshot, self._react_trace
+        self.last_plan_payload["planner_timings_sec"]["total_sec"] = time.perf_counter() - self._planner_started
+        snapshot.planner_trace = self._planner_trace
+        return dag, snapshot, self._planner_trace
 
     def reflect(
         self,
@@ -349,14 +305,15 @@ class GlobalPlanner:
         reflector = SelfReflection(self.config)
         return reflector.reflect(evaluation, request, memory_items)
 
-    def _run_react_planner(
+    def _single_pass_planner(
         self,
         request: ExperimentRequest,
         snapshot: EnvironmentSnapshot,
         memory_items: list[dict],
         reflection: ReflectionResult | None,
+        planning_context: dict[str, Any] | None = None,
     ) -> tuple[list[dict[str, Any]], list[list[str]], dict[str, Any], dict[str, Any]]:
-        """Use native tool-calling to generate TaskSpecs for injected nodes."""
+        """Generate once, repair invalid planner JSON, then repair SQL EXPLAIN failures."""
         if not self.config.planner_enabled or not self.config.openai_api_key:
             missing = []
             if not self.config.planner_enabled:
@@ -364,10 +321,10 @@ class GlobalPlanner:
             if not self.config.openai_api_key:
                 missing.append("missing OPENAI_API_KEY")
             reason = "Planner fallback blocked: " + ", ".join(missing)
-            self._trace(len(self._react_trace) + 1, reason, "fallback_blocked")
+            self._trace(len(self._planner_trace) + 1, reason, "fallback_blocked")
             raise PlannerFallbackError(
                 reason=reason,
-                trace=[s.to_dict() for s in self._react_trace],
+                trace=[s.to_dict() for s in self._planner_trace],
                 context={
                     "target_path": request.target_path,
                     "injected_nodes": request.injected_nodes,
@@ -375,103 +332,514 @@ class GlobalPlanner:
                 },
             )
 
-        context = self._build_llm_context(request, snapshot, memory_items, reflection)
-        try:
-            response = tool_registry.chat_tool_calling_loop(
-                config=self.config,
-                system_prompt=SYSTEM_PROMPT,
-                user_prompt=context,
-                max_steps=15,
-                temperature=self.config.planner_temperature,
-            )
-        except tool_registry.LLMTimeoutError as exc:
-            reason = f"Planner LLM timeout: {exc}"
-            self._trace(len(self._react_trace) + 1, reason, "llm_timeout")
-            raise PlannerFallbackError(
-                reason=reason,
-                trace=[s.to_dict() for s in self._react_trace],
-                context={
-                    "target_path": request.target_path,
-                    "injected_nodes": request.injected_nodes,
-                    "target_database": request.target_database,
-                },
-            ) from exc
-        if response.get("error"):
-            self._trace_from_tool_loop(response.get("trace", []))
-            reason = f"Planner fallback blocked after tool loop failure: {response['error']}"
-            self._trace(len(self._react_trace) + 1, reason, "fallback_blocked")
-            raise PlannerFallbackError(
-                reason=reason,
-                trace=response.get("trace", []),
-                context={
-                    "target_path": request.target_path,
-                    "injected_nodes": request.injected_nodes,
-                    "target_database": request.target_database,
-                },
-            )
-
-        self._trace_from_tool_loop(response.get("trace", []))
-        payload = response.get("json_payload") or {}
-        raw_task_specs = payload.get("task_specs") or []
-        try:
-            normalized_payload = tool_registry.canonicalize_task_dag_runtime_paths(
-                self.config,
-                {"tasks": {
-                    str(spec.get("task_id") or f"task_{index}"): spec
-                    for index, spec in enumerate(raw_task_specs)
-                    if isinstance(spec, dict)
-                }},
-                expected_workload=self._planner_workload_context(request),
-            )
-            normalized_task_specs = list((normalized_payload.get("tasks") or {}).values())
-            self._normalize_task_spec_root_aliases(normalized_task_specs, request)
-            planning_round = "retry" if reflection is not None else "initial"
-            planner_duration_limit = self._planner_duration_limit(request)
-            if planner_duration_limit is not None:
-                duration_clamps = self._clamp_planner_task_durations(
-                    normalized_task_specs,
-                    planner_duration_limit,
-                    planning_round,
+        self._stage = "planner_context"
+        context = self._build_planner_context(request, snapshot, memory_items, reflection)
+        if planning_context:
+            context = self._public_planner_context(copy.deepcopy(planning_context))
+        context["request"] = self._public_planner_context(request.to_dict())
+        context["duration_limit_sec"] = self._planner_duration_limit(request)
+        self._response_format = {"type": "json_schema", "json_schema": {
+            "name": "anomaly_intent_plan_v1", "strict": True,
+            "schema": build_intent_schema(request.injected_nodes),
+        }}
+        compilation_context = self._compilation_context or self._make_compilation_context(request)
+        if compilation_context.request.to_dict() != request.to_dict():
+            raise PlannerFallbackError("CompilationContext request does not match planner request")
+        for node in request.injected_nodes:
+            from AnomalyGraphAgent.intent import strategies_for
+            require_compilable_strategy(node, strategies_for(node)[0].name)
+        self.last_planner_context = context
+        context["strategy_guidance"] = [
+            {"node": node, "strategy": s.name, "requirements": list(s.requirements), "defaults": s.defaults}
+            for node in request.injected_nodes for s in strategies_for(node)
+        ]
+        context["resource_policy"] = self._public_planner_context(compilation_context.resource_profiles)
+        history = self._validation_history
+        pending = None
+        response = self._call_planner_llm(SINGLE_PASS_SYSTEM_PROMPT, json.dumps(context, ensure_ascii=False, default=str), "llm_generate_plan")
+        while True:
+            self._stage = "intent_schema"
+            stage_started = time.perf_counter()
+            try:
+                intent = self._payload_from_response(response, request, history)
+            except (PlannerFallbackError, IntentValidationError) as exc:
+                response = self._repair_invalid_intent(request, context, response, exc, pending)
+                self._planner_timings["intent_schema_sec"] = self._planner_timings.get("intent_schema_sec", 0.0) + (time.perf_counter() - stage_started)
+                continue
+            self._planner_timings["intent_schema_sec"] = self._planner_timings.get("intent_schema_sec", 0.0) + (time.perf_counter() - stage_started)
+            self._stage = "repair_scope"
+            if pending:
+                try:
+                    guard = guard_sql_repair if pending["kind"] == "sql" else guard_semantic_repair
+                    guard(pending["plan"], intent, pending["source"],
+                          self._identifier_whitelist(snapshot.schema.tables if snapshot.schema else {}))
+                except ValueError as exc:
+                    self._fail("repair_scope_violation", str(exc), cause=exc, source=pending["source"])
+            self._stage = "intent_semantics"
+            stage_started = time.perf_counter()
+            try:
+                self._validate_intent_targets(intent, request, snapshot)
+            except IntentSemanticError as exc:
+                if not pending or pending["kind"] != "sql":
+                    pending = {"kind": "semantic", "plan": intent, "source": exc.source}
+                response = self._repair_invalid_intent(request, context, response, exc, pending)
+                self._planner_timings["intent_semantics_sec"] = self._planner_timings.get("intent_semantics_sec", 0.0) + (time.perf_counter() - stage_started)
+                continue
+            self._planner_timings["intent_semantics_sec"] = self._planner_timings.get("intent_semantics_sec", 0.0) + (time.perf_counter() - stage_started)
+            self._stage = "compile_intent"
+            stage_started = time.perf_counter()
+            try:
+                compiled = compile_intent_plan(intent, compilation_context)
+                payload = compiled.to_dict()
+                self._trace(len(self._planner_trace) + 1, "Intent compiled locally", "compile_intent", f"tasks={len(compiled.task_specs)}")
+                self._static_validate_tasks(payload["task_specs"], request, snapshot)
+            except Exception as exc:
+                self._fail("compiler_error", "Compiled task validation failed: " + str(exc), cause=exc)
+            self._planner_timings["compile_intent_sec"] = self._planner_timings.get("compile_intent_sec", 0.0) + (time.perf_counter() - stage_started)
+            self._stage = "prepare_payload"
+            stage_started = time.perf_counter()
+            task_specs, dependencies, dag_dict, normalized = self._prepare_payload(payload, request, snapshot, reflection)
+            self._planner_timings["prepare_payload_sec"] = self._planner_timings.get("prepare_payload_sec", 0.0) + (time.perf_counter() - stage_started)
+            self._stage = "sql_explain"
+            stage_started = time.perf_counter()
+            failed = self._first_sql_explain_failure(task_specs, request, snapshot, history)
+            self._planner_timings["sql_explain_sec"] = self._planner_timings.get("sql_explain_sec", 0.0) + (time.perf_counter() - stage_started)
+            if failed is None:
+                self._stage = "safety_check"
+                from AnomalyGraphAgent.safety import SafetyChecker
+                safety = SafetyChecker(self.config).check(
+                    dag_dict, snapshot.db_metrics, snapshot.os_metrics,
+                    max_duration_sec=request.max_duration_sec,
+                    injection_observe_sec=(request.workload or {}).get("injection_observe_sec") if request.workload.get("enabled") else None,
+                    expected_workload=self._planner_workload_context(request),
                 )
-                if duration_clamps:
-                    self._trace(
-                        round=len(self._react_trace) + 1,
-                        thought=(
-                            "Planner TaskSpec durations exceeded the allowed window and "
-                            "were clamped before final validation."
-                        ),
-                        action="clamp_planner_duration",
-                        observe=json.dumps(duration_clamps, ensure_ascii=False),
-                    )
-            task_specs = self._filter_task_specs(
-                normalized_task_specs,
-                request,
-            )
-            dependencies = self._filter_dependencies(
-                payload.get("dependencies") or self._build_dependencies(request.target_path, task_specs),
-                task_specs,
-            )
-            # Rebuild locally after filtering, so a final JSON cannot smuggle extra tasks.
-            dag_dict = tool_registry.build_task_dag(task_specs, dependencies)
-        except (TypeError, ValueError, AttributeError) as exc:
-            reason = f"Planner output schema invalid: {exc}"
-            self._trace(len(self._react_trace) + 1, reason, "fallback_blocked")
-            raise PlannerFallbackError(
-                reason=reason,
-                trace=[s.to_dict() for s in self._react_trace],
-                context={
-                    "target_path": request.target_path,
-                    "injected_nodes": request.injected_nodes,
-                    "target_database": request.target_database,
-                },
-            ) from exc
-        self._trace(
-            round=len(self._react_trace) + 1,
-            thought=f"ReAct generated {len(task_specs)} TaskSpecs for injected nodes {request.injected_nodes}",
-            action="final_plan_validation",
-            observe=json.dumps({"task_ids": [t.get("task_id") for t in task_specs]}, ensure_ascii=False),
+                self._trace(len(self._planner_trace) + 1, "Local safety check completed", "check_safety", json.dumps(to_jsonable(safety)))
+                if not safety.approved:
+                    self._fail("safety_rejected", "; ".join(safety.reasons))
+                normalized.update(planner_validation=history, safety_check=to_jsonable(safety),
+                                  planner_intent=intent, compilation=payload,
+                                  intent_schema_version=INTENT_VERSION,
+                                  compiler_version=COMPILER_VERSION,
+                                  api_usage=copy.deepcopy(self._llm_usage),
+                                  planner_timings_sec=dict(self._planner_timings))
+                return task_specs, dependencies, dag_dict, normalized
+            source = compiled.source_map.get(failed["location"])
+            if not source:
+                self._fail("compiler_error", "Compiler-generated SQL failed EXPLAIN: " + failed["error"],
+                           cause=self._last_explain_cause, source=failed["location"])
+            try:
+                slot_index, slot_key = sql_slot(intent, source)
+                if intent["intents"][slot_index]["sql"][slot_key].strip().removesuffix(";").strip() != failed["sql"].strip():
+                    raise ValueError("Compiler SQL does not match its declared Intent source")
+            except ValueError as exc:
+                self._fail("compiler_error", "Invalid compiler SQL source map", cause=exc, source=source)
+            pending = {"kind": "sql", "plan": intent, "source": source}
+            attempt = self._reserve_sql_repair(source)
+            repair_context = {"repair_type": "sql_explain_failure", "source": source,
+                              "attempt": attempt, "max_attempts": 3, "previous_intent": intent,
+                              "original_sql": failed["sql"], "error": failed["error"],
+                              "planner_context": context}
+            response = self._call_planner_llm(SQL_REPAIR_SYSTEM_PROMPT,
+                json.dumps(repair_context, ensure_ascii=False, default=str), "llm_repair_sql")
+
+    def _reserve_sql_repair(self, source):
+        used = self.sql_repair_counts.get(source, 0)
+        if used >= 3:
+            self._fail("sql_repair_exhausted", f"SQL EXPLAIN failed after 3 repair attempts: {source}",
+                       cause=getattr(self, "_last_explain_cause", None), source=source)
+        self.sql_repair_counts[source] = used + 1
+        self.sql_repair_attempts += 1
+        return used + 1
+
+    def _repair_invalid_intent(self, request, context, response, exc, pending):
+        self._validation_history.append({
+            "stage": self._stage, "status": "failed", "error": str(exc),
+            "raw_output": response.get("text", ""), "payload": response.get("json_payload"),
+        })
+        if pending:
+            candidate = response.get("json_payload")
+            if candidate is None:
+                try:
+                    candidate = json.loads(response.get("text", ""))
+                except (ValueError, TypeError):
+                    candidate = None
+            try:
+                guard_partial_repair(pending["plan"], candidate)
+            except ValueError as scope_error:
+                self._fail("repair_scope_violation", str(scope_error), cause=scope_error, source=pending["source"])
+        if self.planner_json_repair_attempts >= 2:
+            self._fail("intent_repair_exhausted", str(exc), cause=exc)
+        if pending and pending["kind"] == "sql":
+            self._reserve_sql_repair(pending["source"])
+        self.planner_json_repair_attempts += 1
+        return self._repair_planner_json(request, context, response, str(exc),
+                                         self.planner_json_repair_attempts, pending=pending)
+
+    def _repair_planner_json(
+        self,
+        request: ExperimentRequest,
+        planner_context: dict[str, Any],
+        response: dict[str, Any],
+        error: str,
+        attempt: int,
+        pending: dict | None = None,
+    ) -> dict[str, Any]:
+        raw_output = response.get("text", "")
+        repair_context = {
+            "repair_type": "planner_json_schema_failure",
+            "attempt": attempt,
+            "max_attempts": 2,
+            "target_path": request.target_path,
+            "injected_nodes": request.injected_nodes,
+            "target_database": request.target_database,
+            "error": error,
+            "raw_output": raw_output,
+            "planner_context": planner_context,
+            "repair_scope": pending,
+            "invalid_payload": response.get("json_payload"),
+        }
+        return self._call_planner_llm(
+            PLANNER_JSON_REPAIR_SYSTEM_PROMPT,
+            json.dumps(repair_context, ensure_ascii=False, default=str),
+            "llm_repair_planner_json",
         )
-        return task_specs, dependencies, dag_dict, payload
+
+    def _call_planner_llm(self, system_prompt: str, user_prompt: str, action: str) -> dict[str, Any]:
+        self._stage = action
+        started = time.perf_counter()
+        self.planner_llm_calls += 1
+        self._trace(len(self._planner_trace) + 1, "Planner LLM call", action, f"call={self.planner_llm_calls}")
+        try:
+            response = tool_registry.llm_generate(
+                config=self.config, system_prompt=system_prompt, user_prompt=user_prompt,
+                temperature=self.config.planner_temperature, json_mode=True,
+                response_format=self._response_format,
+            )
+        except (tool_registry.LLMTimeoutError, ConnectionError, OSError) as exc:
+            self._fail("llm_connection_error", str(exc), cause=exc, llm=True)
+        if not isinstance(response, dict):
+            self._fail("invalid_llm_response", "LLM client returned a non-object envelope")
+        if response.get("error") and response.get("error_type") not in {"invalid_json", "invalid_output_shape", "truncated_response"}:
+            self._fail("llm_api_error", f"Planner LLM failed: {response['error']}", llm=True)
+        self._planner_timings[action] = self._planner_timings.get(action, 0.0) + (time.perf_counter() - started)
+        self._llm_usage.append({
+            "action": action,
+            "call": self.planner_llm_calls,
+            "usage": copy.deepcopy(response.get("usage")),
+            "usage_status": response.get("usage_status", "unavailable"),
+            "request_id": response.get("request_id"),
+            "response_id": response.get("response_id"),
+            "finish_reason": response.get("finish_reason"),
+        })
+        self._validation_history.append({"stage": action, "status": "response",
+                                         "response": copy.deepcopy(response)})
+        return response
+
+    def _fail(self, error_type, reason, *, cause=None, source=None, llm=False):
+        reason = tool_registry._redact_llm_result(reason, self.config)
+        context = {
+            "stage": self._stage, "error_type": error_type, "source": source,
+            "planner_llm_calls": self.planner_llm_calls,
+            "planner_json_repair_attempts": self.planner_json_repair_attempts,
+            "sql_repair_attempts": self.sql_repair_attempts,
+            "sql_repair_counts": dict(self.sql_repair_counts),
+            "planner_timings_sec": {**self._planner_timings, "total_sec": time.perf_counter() - getattr(self, "_planner_started", time.perf_counter())},
+            "validation_history": self._validation_history,
+        }
+        self._validation_history.append({"stage": self._stage, "status": "terminated",
+                                         "error_type": error_type, "error": reason, "source": source})
+        self._trace(len(self._planner_trace) + 1, reason, "planner_validation_failed")
+        error = PlannerLLMError if llm else PlannerFallbackError
+        raise error(reason, trace=[s.to_dict() for s in self._planner_trace],
+                    context=tool_registry._redact_llm_result(context, self.config)) from (cause or RuntimeError(reason))
+
+    def _payload_from_response(self, response: dict[str, Any], request: ExperimentRequest, history: list[dict[str, Any]]) -> dict[str, Any]:
+        if response.get("error"):
+            raise PlannerFallbackError(response["error"])
+        payload = response.get("json_payload")
+        if not isinstance(payload, dict):
+            try:
+                payload = json.loads(response.get("text", ""))
+            except (TypeError, json.JSONDecodeError) as exc:
+                raw = response.get("text", "")
+                history.append({"status": "invalid_json", "error": str(exc), "raw_output": raw})
+                raise PlannerFallbackError(
+                    f"Planner JSON parse failed: {exc}",
+                    trace=[s.to_dict() for s in self._planner_trace],
+                    context={"raw_output": raw, "validation_history": history},
+                ) from exc
+        if not isinstance(payload, dict):
+            raise PlannerFallbackError(
+                "Planner JSON must be an Intent object",
+                    trace=[s.to_dict() for s in self._planner_trace],
+                context={"raw_output": response.get("text", ""), "validation_history": history},
+            )
+        intent = validate_intent_plan(payload, request.injected_nodes)
+        intent["intents"].sort(key=lambda item: request.injected_nodes.index(item["node"]))
+        return intent
+
+    @staticmethod
+    def _identifier_whitelist(tables: dict[str, dict]) -> dict[str, Any]:
+        return {str(name): [str(c.get("name", c)) if isinstance(c, dict) else str(c) for c in (info.get("columns") or [])]
+                for name, info in (tables or {}).items() if isinstance(info, dict)}
+
+    def _build_planner_context(self, request, snapshot, memory_items, reflection) -> dict[str, Any]:
+        return self._public_planner_context({
+            "request": request.to_dict(),
+            "environment": {
+                "db_version": snapshot.db_version, "schema": snapshot.schema.tables if snapshot.schema else {},
+                "table_stats": snapshot.table_stats, "db_metrics": snapshot.db_metrics, "os_metrics": snapshot.os_metrics,
+                "identifier_whitelist": self._identifier_whitelist(snapshot.schema.tables if snapshot.schema else {}),
+            },
+            "workload": {"config": self._planner_workload_context(request), "baseline": snapshot.workload_status},
+            "memory": memory_items or [], "reflection": to_jsonable(reflection) if reflection else {},
+            "runtime_paths": {"benchbase_java_bin": self.config.benchbase_java_bin, "benchbase_jar_path": self.config.benchbase_jar_path, "chaosblade_path": self.config.chaosblade_path},
+            "duration_limit_sec": self._planner_duration_limit(request),
+        })
+
+    def _prepare_payload(self, payload, request, snapshot, reflection):
+        raw = payload.get("task_specs") or []
+        self._validate_planner_payload_shape(raw)
+        specs = copy.deepcopy(raw)
+        self._normalize_transaction_scripts(specs)
+        limit = self._planner_duration_limit(request)
+        if limit is not None:
+            clamps = self._clamp_planner_task_durations(specs, limit, "retry" if reflection else "initial")
+            if clamps:
+                self._trace(len(self._planner_trace) + 1, "Planner durations clamped locally", "clamp_planner_duration", json.dumps(clamps, ensure_ascii=False))
+        specs = self._filter_task_specs(specs, request)
+        self._static_validate_tasks(specs, request, snapshot)
+        deps = self._filter_dependencies(payload.get("dependencies", self._build_dependencies(request.target_path, specs)), specs)
+        dag = tool_registry.build_task_dag(specs, deps)
+        from AnomalyGraphAgent.safety import estimate_dag_required_sec
+        required, reasons = estimate_dag_required_sec(dag)
+        from AnomalyGraphAgent.dag import topological_order
+        from AnomalyGraphAgent.types import TaskDAGEdge
+        edges = [TaskDAGEdge(**edge) for edge in dag["edges"]]
+        ends = {}
+        for task_id in topological_order(dag["tasks"], edges):
+            elapsed, _ = estimate_dag_required_sec({"tasks": {task_id: dag["tasks"][task_id]}})
+            predecessors = [ends[e.source] for e in edges if e.target == task_id]
+            ends[task_id] = max([dag["schedule"].get(task_id, 0), *predecessors]) + elapsed
+        required = max([required, *ends.values()])
+        if reasons or (limit is not None and required > limit):
+            raise ValueError("Timing validation failed: " + "; ".join(reasons + [f"DAG required duration {required}s; limit {limit}s"]))
+        result = dict(payload); result["task_specs"] = specs; result["dependencies"] = deps; result["dag"] = dag
+        return specs, deps, dag, result
+
+    @staticmethod
+    def _validate_planner_payload_shape(task_specs: Any) -> None:
+        """Reject old or incomplete TaskSpec shapes before any local normalization."""
+        if not isinstance(task_specs, list) or not task_specs:
+            raise ValueError("planner JSON task_specs must be a non-empty array")
+        required = {
+            "task_id", "task_type", "actions", "expected_metrics", "success_criteria",
+            "start_after_sec", "dependencies", "cleanup_actions", "risk_assessment", "metadata",
+        }
+        legacy = {"anomaly", "node", "injection", "mode", "action_type", "dag", "safety_check"}
+        for index, spec in enumerate(task_specs):
+            if not isinstance(spec, dict):
+                raise ValueError(f"task_specs[{index}] must be an object")
+            missing = sorted(required - set(spec))
+            if missing:
+                raise ValueError(f"task_specs[{index}] missing required fields: {', '.join(missing)}")
+            old = sorted(legacy & set(spec))
+            if old:
+                raise ValueError(f"task_specs[{index}] contains legacy fields: {', '.join(old)}")
+            if not str(spec.get("task_id") or "").strip():
+                raise ValueError(f"task_specs[{index}].task_id is required")
+            if not isinstance(spec.get("actions"), list) or not spec["actions"]:
+                raise ValueError(f"task_specs[{index}].actions must be a non-empty array")
+            if not isinstance(spec.get("metadata"), dict) or not str(spec["metadata"].get("root_cause") or "").strip():
+                raise ValueError(f"task_specs[{index}].metadata.root_cause is required")
+            for action_index, action in enumerate(spec["actions"]):
+                if not isinstance(action, dict):
+                    raise ValueError(f"task_specs[{index}].actions[{action_index}] must be an object")
+                old_action = sorted(legacy & set(action))
+                if old_action:
+                    raise ValueError(
+                        f"task_specs[{index}].actions[{action_index}] contains legacy fields: {', '.join(old_action)}"
+                    )
+                if not str(action.get("kind") or "").strip():
+                    raise ValueError(f"task_specs[{index}].actions[{action_index}].kind is required")
+
+    @staticmethod
+    def _normalize_transaction_scripts(specs):
+        for spec in specs:
+            for action in spec.get("actions") or []:
+                if action.get("kind") != "raw_transaction_script":
+                    continue
+                scripts = action.get("scripts")
+                if not isinstance(scripts, list) or not scripts:
+                    raise ValueError("raw_transaction_script requires non-empty scripts")
+                for script_index, script in enumerate(scripts):
+                    if isinstance(script, str):
+                        script = {"sql": script}
+                        scripts[script_index] = script
+                    if not isinstance(script, dict):
+                        raise ValueError("transaction script must be an object")
+                    if "steps" not in script:
+                        values = script.pop("sqls", None)
+                        if values is None and script.get("sql") is not None:
+                            values = [script.pop("sql")]
+                        if values is None:
+                            values = []
+                        if isinstance(values, str): values = [values]
+                        script["steps"] = [{"sql": v} if isinstance(v, str) else v for v in values]
+                if any(not s.get("steps") for s in scripts if isinstance(s, dict)):
+                    raise ValueError("raw_transaction_script contains empty steps")
+
+    @staticmethod
+    def _task_sqls(specs):
+        for ti, spec in enumerate(specs):
+            for ai, action in enumerate(spec.get("actions", [])):
+                base = f"task_specs[{ti}].actions[{ai}]"
+                if action.get("kind") == "raw_sql_workload":
+                    yield base + ".sql", action["sql"], False
+                elif action.get("kind") == "raw_transaction_script":
+                    for si, script in enumerate(action["scripts"]):
+                        for pi, step in enumerate(script["steps"]):
+                            if step.get("sql"):
+                                yield f"{base}.scripts[{si}].steps[{pi}].sql", step["sql"], True
+
+    def _static_validate_tasks(self, specs, request, snapshot):
+        from AnomalyGraphAgent.safety import _DANGEROUS_SQL_PATTERNS, _PROD_DB_PATTERNS
+        whitelist = self._identifier_whitelist(snapshot.schema.tables if snapshot.schema else {})
+        if any(pattern.search(request.target_database) for pattern in _PROD_DB_PATTERNS):
+            raise SQLValidationError("Production database targets are prohibited")
+        for spec in specs:
+            self._validate_direct_task_spec(spec, request)
+            for action in spec["actions"]:
+                if action.get("database") != request.target_database:
+                    raise SQLValidationError("Action database does not match request")
+                for script in action.get("scripts", []):
+                    if script.get("database", request.target_database) != request.target_database:
+                        raise SQLValidationError("Script database does not match request")
+        for location, sql, controls in self._task_sqls(specs):
+            if any(pattern.search(sql) for pattern in _DANGEROUS_SQL_PATTERNS):
+                raise SQLValidationError(f"{location}: SQL rejected by safety policy")
+            validate_sql(sql, request.target_database, whitelist, controls=controls)
+
+    def _first_sql_explain_failure(self, specs, request, snapshot, history):
+        import pymysql
+        whitelist = self._identifier_whitelist(snapshot.schema.tables if snapshot.schema else {})
+        for location, sql, controls in self._task_sqls(specs):
+            validation = validate_sql(sql, request.target_database, whitelist, controls=controls)
+            if not validation["explain"]:
+                history.append({"location": location, "sql": sql, "status": "passed", **validation})
+                continue
+            try:
+                result = tool_registry.explain_sql(self.config, request.target_database, sql)
+            except (ConnectionError, OSError) as exc:
+                self._fail("database_connection_error", str(exc), cause=exc, source=location)
+            except pymysql.MySQLError as exc:
+                if exc.args and exc.args[0] in {1044, 1045, 1129, 1130, 2002, 2003, 2006, 2013}:
+                    self._fail("database_connection_error", str(exc), cause=exc, source=location)
+                result = {"plan": [{"error": str(exc)}]}
+                self._last_explain_cause = exc
+            if not isinstance(result, dict) or result.get("error") or not isinstance(result.get("plan"), list):
+                self._fail("invalid_probe_response", "EXPLAIN response is unavailable or malformed", source=location)
+            for row in result["plan"]:
+                if not isinstance(row, dict):
+                    self._fail("invalid_probe_response", "EXPLAIN rows must be objects", source=location)
+                if row.get("error_type") == "database_error":
+                    self._fail("database_connection_error", str(row.get("error")), source=location)
+                if row.get("error"):
+                    error = str(row["error"])
+                    self._last_explain_cause = ValueError(error)
+                    failed = {"location": location, "sql": sql, "status": "failed", "error": error}
+                    history.append(failed)
+                    return failed
+            history.append({"location": location, "sql": sql, "status": "passed", "plan": result["plan"], **validation})
+        return None
+
+    def _validate_intent_targets(self, plan, request, snapshot):
+        whitelist = self._identifier_whitelist(snapshot.schema.tables if snapshot.schema else {})
+        for index, intent in enumerate(plan["intents"]):
+            base = f"intents[{index}]"
+            target = intent["target"] or {}
+            tables = target.get("tables") or ([target["table"]] if target.get("table") else [])
+            for key, sql in (intent.get("sql") or {}).items():
+                try:
+                    validation = validate_sql(sql, request.target_database, whitelist)
+                    if not set(validation["tables"]).issubset(tables):
+                        raise SQLValidationError(f"{key}: SQL references tables outside Intent target")
+                except SQLValidationError as exc:
+                    raise IntentSemanticError(f"{base}.sql.{key}", str(exc)) from exc
+            for table in tables:
+                if table not in whitelist:
+                    field = "tables" if "tables" in target else "table"
+                    raise IntentSemanticError(f"{base}.target.{field}", f"Target table not in identifier whitelist: {table}")
+            columns = {col.lower() for table in tables for col in whitelist[table]}
+            for column in target.get("columns", []):
+                if column.lower() not in columns:
+                    raise IntentSemanticError(f"{base}.target.columns", f"Target column not in identifier whitelist: {column}")
+            if target.get("predicate"):
+                try:
+                    validate_sql(f"SELECT * FROM `{target['table']}` WHERE {target['predicate']}", request.target_database, whitelist)
+                except SQLValidationError as exc:
+                    # Predicates define the hotspot and cannot be silently relocated.
+                    self._fail("invalid_target_predicate", str(exc), cause=exc, source=base + ".target.predicate")
+            if intent["node"] in {"hot_update", "long_tx"}:
+                from AnomalyGraphAgent.intent_compiler import _hot_sql, IntentCompilationError
+                try:
+                    _hot_sql(intent)
+                except IntentCompilationError as exc:
+                    raise IntentSemanticError(base + ".sql.waiter_sql", str(exc)) from exc
+
+    def _public_planner_context(self, value):
+        blocked = {"runtime_paths", "config_path", "jar_path", "java_bin", "command", "cleanup_command",
+                   "task_specs", "dag", "actions", "cleanup_actions", "task_id", "uid",
+                   "password", "mysql_password", "openai_api_key", "authorization", "compilation_context", "path"}
+        if isinstance(value, dict):
+            return {k: self._public_planner_context(v) for k, v in value.items() if k.lower() not in blocked}
+        if isinstance(value, list):
+            return [self._public_planner_context(v) for v in value]
+        return tool_registry._redact_llm_result(value, self.config)
+
+    def _make_compilation_context(self, request):
+        from pathlib import Path
+        import xml.etree.ElementTree as ET
+        kwargs = {}
+        if "traffic_surge" in request.injected_nodes:
+            workload = self._planner_workload_context(request)
+            path = workload.get("config_path")
+            if not path:
+                raise ValueError("Traffic surge requires workload.config_path")
+            root = ET.parse(path).getroot()
+            names = tuple(n.text.strip() for n in root.findall(".//transactiontypes/transactiontype/name") if n.text)
+            works = root.findall(".//works/work")
+            if not names or len(works) != 1:
+                raise ValueError("Traffic surge requires one unambiguous workload phase and named transactions")
+            weights = [float(x.strip()) for x in works[0].findtext("weights", "").split(",") if x.strip()]
+            if len(weights) != len(names):
+                raise ValueError("BenchBase transaction weights do not match transaction types")
+            kwargs.update(transaction_types=names, benchbase_profile={
+                "benchmark": workload["benchmark"], "database": request.target_database,
+                "config_path": str(Path(path).absolute()), "terminals": workload.get("terminals", 4),
+                "duration_sec": self._planner_duration_limit(request),
+                "rate": workload.get("rate") or works[0].findtext("rate"),
+                "transaction_mix": dict(zip(names, weights)), "mix_template": "background",
+                "rationale": "Inherit the configured background transaction mix",
+            })
+        resource_profiles = {
+            "resource_cpu": {k: {"percent": min(v, self.config.max_cpu_usage)} for k, v in (("low", 40), ("medium", 65), ("high", 90))},
+            "resource_memory": {k: {"percent": v} for k, v in (("low", 20), ("medium", 40), ("high", 60))},
+        }
+        for node in ("resource_io", "disk_full_or_pressure"):
+            resource_profiles[node] = {k: {"size": size, "path": "/tmp/dbmags"} for k, size in (("low", "32M"), ("medium", "64M"), ("high", "128M"))}
+        return CompilationContext(request=request, config=self.config, run_id=uuid.uuid4().hex,
+            resource_profiles=resource_profiles, mysqldump_path=getattr(self.config, "mysqldump_path", ""),
+            mysql_defaults_file=getattr(self.config, "mysql_defaults_file", ""), **kwargs)
+
+    def _planner_validation_failure(self, request, reason, history):
+        self._trace(len(self._planner_trace) + 1, reason, "planner_validation_failed")
+        raise PlannerFallbackError(
+            reason=reason,
+            trace=[s.to_dict() for s in self._planner_trace],
+            context={"target_path": request.target_path, "injected_nodes": request.injected_nodes,
+                     "validation_history": history},
+        )
 
     @staticmethod
     def _normalize_task_spec_root_aliases(task_specs: list[dict[str, Any]], request: ExperimentRequest) -> None:
@@ -495,91 +863,6 @@ class GlobalPlanner:
             mapped = aliases.get(root)
             if mapped in allowed:
                 metadata["root_cause"] = mapped
-
-    def _generate_task_specs_fallback(
-        self,
-        request: ExperimentRequest,
-        snapshot: EnvironmentSnapshot,
-    ) -> list[dict[str, Any]]:
-        """Rule-based TaskSpec generation when LLM is unavailable."""
-        task_specs: list[dict[str, Any]] = []
-        tables = snapshot.schema.tables if snapshot.schema else {}
-
-        # Pick the largest table for slow SQL tasks
-        largest_table = ""
-        if tables:
-            largest_table = list(tables.keys())[0]
-
-        for node_id in request.injected_nodes:
-            n = ANOMALY_GRAPH.node(node_id)
-            if n and n.injectable:
-                if node_id in ("missing_index", "improper_sql", "excessive_index"):
-                    ts = tool_registry.build_slow_sql_task(
-                        config=self.config,
-                        database=request.target_database,
-                        task_id=f"slow_sql_{node_id}",
-                        root_cause=node_id,
-                        table=largest_table,
-                        pattern="range_scan" if node_id == "missing_index" else "large_scan",
-                        duration_sec=30,
-                    )
-                    task_specs.append(ts)
-                elif node_id == "traffic_surge":
-                    workload = request.workload or {}
-                    duration = min(float(request.max_duration_sec), float(workload.get("injection_observe_sec", 60) or 60))
-                    profile = {
-                        "benchmark": str(workload.get("benchmark") or "tpcc").lower(),
-                        "database": workload.get("database") or request.target_database,
-                        "config_path": workload.get(
-                            "config_path",
-                            ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
-                        ),
-                        "terminals": max(1, int(workload.get("terminals") or 16)),
-                        "rate": 100.0,
-                        "duration_sec": duration,
-                        "transaction_mix": dict(tool_registry.BENCHBASE_BENCHMARKS[str(workload.get("benchmark") or "tpcc").lower()]["default_mix"]),
-                        "mix_template": "workload_default",
-                        "rationale": "Unused rule fallback profile retained only for private compatibility.",
-                    }
-                    ts = tool_registry.build_traffic_task(
-                        config=self.config,
-                        task_id=f"traffic_{node_id}",
-                        profile=profile,
-                    )
-                    task_specs.append(ts)
-                elif node_id in ("long_tx", "hot_update"):
-                    ts = tool_registry.build_lock_task(
-                        config=self.config,
-                        database=request.target_database,
-                        task_id=f"lock_{node_id}",
-                        root_cause=node_id,
-                        table=largest_table,
-                        key_column="id",
-                        holder_concurrency=2,
-                        waiter_concurrency=8,
-                        hold_sec=30.0,
-                    )
-                    task_specs.append(ts)
-                elif node_id.startswith("resource_"):
-                    resource = node_id.replace("resource_", "")
-                    ts = tool_registry.build_chaos_task(
-                        config=self.config,
-                        task_id=f"chaos_{node_id}",
-                        root_cause=node_id,
-                        resource_type=resource,
-                        duration_sec=30,
-                    )
-                    task_specs.append(ts)
-                elif node_id == "backup":
-                    ts = tool_registry.build_backup_task(
-                        config=self.config,
-                        database=request.target_database,
-                        task_id=f"backup_{node_id}",
-                        root_cause=node_id,
-                        table=largest_table,
-                    )
-                    task_specs.append(ts)
-        return task_specs
 
     # -------------------------------------------------------------------------
     # DAG helpers
@@ -617,27 +900,18 @@ class GlobalPlanner:
         )
 
     # -------------------------------------------------------------------------
-    # ReAct tracing
+    # Planner tracing
     # -------------------------------------------------------------------------
 
     def _trace(self, round: int, thought: str, action: str, observe: str = "") -> None:
-        step = ReActStep(
+        step = PlannerTraceStep(
             round=round,
             thought=thought,
             action=action,
             observe=observe,
             decision="",
         )
-        self._react_trace.append(step)
-
-    def _trace_from_tool_loop(self, trace: list[dict[str, Any]]) -> None:
-        for item in trace:
-            action = str(item.get("tool", "tool_call"))
-            thought = "LLM requested planning tool" if action != "final_answer" else "LLM returned final plan JSON"
-            observe = json.dumps({k: v for k, v in item.items() if k not in {"result"}}, ensure_ascii=False, default=str)
-            if "result" in item:
-                observe = json.dumps(item.get("result"), ensure_ascii=False, default=str)[:4000]
-            self._trace(round=len(self._react_trace) + 1, thought=thought, action=action, observe=observe)
+        self._planner_trace.append(step)
 
     def _validate_request(self, request: ExperimentRequest) -> None:
         if not request.target_path:
@@ -671,7 +945,7 @@ class GlobalPlanner:
             root = str((spec.get("metadata") or {}).get("root_cause", ""))
             if root not in allowed:
                 self._trace(
-                    round=len(self._react_trace) + 1,
+                    round=len(self._planner_trace) + 1,
                     thought=f"Dropped TaskSpec for non-requested injected node: {root or '<missing>'}",
                     action="filter_task_spec",
                     observe=json.dumps({"task_id": spec.get("task_id"), "root_cause": root}, ensure_ascii=False),
@@ -688,11 +962,19 @@ class GlobalPlanner:
         return filtered
 
     def _validate_direct_task_spec(self, spec: dict[str, Any], request: ExperimentRequest) -> None:
-        required = ("task_id", "task_type", "actions", "expected_metrics", "success_criteria", "risk_assessment", "metadata")
+        required = (
+            "task_id", "task_type", "actions", "expected_metrics", "success_criteria",
+            "start_after_sec", "dependencies", "cleanup_actions", "risk_assessment", "metadata",
+        )
         missing = [name for name in required if name not in spec]
         if missing:
             raise ValueError(f"TaskSpec missing required fields: {', '.join(missing)}")
+        legacy = sorted(set(spec) & {"anomaly", "node", "injection", "mode", "action_type", "dag", "safety_check"})
+        if legacy:
+            raise ValueError(f"TaskSpec contains legacy fields: {', '.join(legacy)}")
         metadata = spec.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            raise ValueError("TaskSpec metadata must be an object")
         root = str(metadata.get("root_cause", ""))
         if not root:
             raise ValueError("TaskSpec metadata.root_cause is required")
@@ -704,6 +986,9 @@ class GlobalPlanner:
         for action in actions:
             if not isinstance(action, dict):
                 raise ValueError(f"TaskSpec '{spec.get('task_id')}' contains a non-object action")
+            legacy_action = sorted(set(action) & {"action_type", "anomaly", "node", "injection", "mode"})
+            if legacy_action:
+                raise ValueError(f"Action contains legacy fields: {', '.join(legacy_action)}")
             kind = str(action.get("kind", ""))
             if kind not in ALLOWED_PLANNER_ACTION_KINDS:
                 raise ValueError(f"TaskSpec '{spec.get('task_id')}' uses unsupported action kind: {kind}")
@@ -719,6 +1004,16 @@ class GlobalPlanner:
                     raise ValueError("raw_transaction_script requires non-empty scripts")
             if kind == "benchbase_burst":
                 tool_registry.validate_traffic_surge_profile(action.get("profile") or {})
+            duration_value = action.get("duration_sec")
+            if kind == "benchbase_burst" and duration_value is None:
+                duration_value = (action.get("profile") or {}).get("duration_sec")
+            if duration_value is None:
+                raise ValueError(f"Action kind '{kind}' requires duration_sec")
+            try:
+                if float(duration_value) <= 0:
+                    raise ValueError(f"Action kind '{kind}' duration_sec must be positive")
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"Action kind '{kind}' duration_sec is invalid") from exc
         if root in RESOURCE_ROOT_CAUSES:
             self._validate_resource_chaosblade_task(spec)
         workload = request.workload or {}

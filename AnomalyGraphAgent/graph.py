@@ -59,7 +59,7 @@ NODES: dict[str, AnomalyNode] = {
         description="External traffic spike causing increased concurrent sessions.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_traffic_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Increase active sessions and Threads_running with an additional BenchBase "
             "burst client. Generate a TrafficSurgeProfile only: terminals, rate, duration_sec, "
@@ -78,7 +78,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Slow query caused by filtering or sorting on a column without an index.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_slow_sql_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Pick a large table. Find unindexed columns of appropriate type (int/date/varchar). "
             "Use range predicate on the unindexed column, or ORDER BY on the unindexed column "
@@ -99,7 +99,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Poorly written SQL causing excessive scanning or suboptimal plans.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_slow_sql_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Use SELECT *, low-selectivity predicates, functions on columns, "
             "unnecessary ORDER BY/GROUP BY, or multi-table JOIN with weak conditions. "
@@ -118,7 +118,7 @@ NODES: dict[str, AnomalyNode] = {
         description="A transaction that holds locks for an extended duration.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_lock_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "BEGIN; UPDATE on a hot row; SLEEP for many seconds; COMMIT. "
             "This blocks concurrent transactions waiting on the same row."
@@ -136,7 +136,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Many concurrent transactions updating the same hot row.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_lock_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Pick a primary-key or high-frequency-access column. "
             "Spawn holder/waiter threads. Holder locks the row with FOR UPDATE; "
@@ -156,7 +156,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Logical backup (mysqldump) or ANALYZE creating IO pressure and maintenance conflicts.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_backup_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Run mysqldump on the largest table, or run ANALYZE TABLE on a hot table. "
             "mysqldump takes a shared table lock which can conflict with active transactions."
@@ -174,7 +174,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Too many indexes causing write amplification during DML.",
         category=NodeCategory.INJECTABLE,
         injectable=False,
-        default_tool="build_slow_sql_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "INSERT/UPDATE on a table with many redundant indexes. "
             "Simulated by repeated UPDATEs that trigger index maintenance overhead."
@@ -191,7 +191,7 @@ NODES: dict[str, AnomalyNode] = {
         description="OS-level CPU saturation injected via chaosblade.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_chaos_task",
+        default_tool="llm_task_spec",
         planner_notes="Use chaosblade to stress CPU for the configured duration.",
         evidence_rules=[
             _r("cpu_usage_ratio", "ratio_up", 1.5, required=True, weight=1.5),
@@ -205,7 +205,7 @@ NODES: dict[str, AnomalyNode] = {
         description="OS-level disk IO pressure injected via chaosblade.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_chaos_task",
+        default_tool="llm_task_spec",
         planner_notes="Use chaosblade disk burn IO stress for the configured duration.",
         evidence_rules=[
             _r("io_wait_ratio", "ratio_up", 2.0, required=True, weight=1.5),
@@ -219,7 +219,7 @@ NODES: dict[str, AnomalyNode] = {
         description="OS-level memory pressure injected via chaosblade.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_chaos_task",
+        default_tool="llm_task_spec",
         planner_notes="Use chaosblade memory stress for the configured duration.",
         evidence_rules=[
             _r("memory_usage_ratio", "ratio_up", 1.3, required=True, weight=1.5),
@@ -233,7 +233,7 @@ NODES: dict[str, AnomalyNode] = {
         description="OS-level network latency/injection via chaosblade.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_chaos_task",
+        default_tool="llm_task_spec",
         planner_notes="Use chaosblade network latency/drop for the configured duration.",
         evidence_rules=[
             _r("network_retransmit_ratio", "ratio_up", 2.0, required=False, weight=1.0),
@@ -247,7 +247,7 @@ NODES: dict[str, AnomalyNode] = {
         description="DDL or table metadata operation blocks concurrent SQL through MDL waits.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_lock_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Use raw_transaction_script or raw_sql_workload to hold a transaction on a hot table, "
             "then run bounded ALTER TABLE/LOCK TABLE/DDL that creates Waiting for table metadata lock. "
@@ -265,7 +265,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Explicit table lock or table-level operation blocks concurrent access.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_lock_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Use raw_transaction_script with LOCK TABLES or a table-level write operation, "
             "then run concurrent readers/writers against the same table. Always UNLOCK TABLES in cleanup."
@@ -282,7 +282,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Network delay/drop between client and MySQL increases request latency and timeouts.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_chaos_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Use ChaosBlade raw_command network delay/drop scoped to MySQL traffic when supported. "
             "Generate a unique --uid and matching cleanup_command."
@@ -300,7 +300,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Controlled disk pressure or near-full condition slows reads/writes.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_chaos_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Use controlled ChaosBlade disk burn/fill or bounded writes under /tmp/dbmags. "
             "Do not attempt to fill the system disk; always include cleanup."
@@ -317,7 +317,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Repeated conflicting transactions create InnoDB deadlocks.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_lock_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Use raw_transaction_script with two roles updating the same rows in opposite order. "
             "Run several concurrent pairs within the observation window."
@@ -334,7 +334,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Large ORDER BY/GROUP BY/JOIN workload creates temporary tables and disk spills.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_slow_sql_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Use raw_sql_workload with GROUP BY, ORDER BY, DISTINCT, or JOIN over large tables. "
             "Prefer SQL that EXPLAIN shows Using temporary or Using filesort."
@@ -351,7 +351,7 @@ NODES: dict[str, AnomalyNode] = {
         description="High-concurrency writes create redo/fsync pressure and commit latency.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_slow_sql_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Use raw_sql_workload or raw_transaction_script with high-concurrency INSERT/UPDATE/COMMIT. "
             "Keep writes scoped and reversible where possible."
@@ -369,7 +369,7 @@ NODES: dict[str, AnomalyNode] = {
         description="Large bursts of short-lived or concurrent connections exhaust connection capacity.",
         category=NodeCategory.INJECTABLE,
         injectable=True,
-        default_tool="build_traffic_task",
+        default_tool="llm_task_spec",
         planner_notes=(
             "Use raw_sql_workload or command/script workload that opens many bounded MySQL connections. "
             "Prefer short connection bursts over long-running idle sessions."

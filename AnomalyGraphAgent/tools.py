@@ -1,18 +1,9 @@
-"""
-ReAct tool registry for the global planner.
-
-Each tool is a plain function (not an Agent) that the LLM calls via the
-ReAct loop.  Tools are grouped into three categories:
-
-  1. Environment probe tools   — read-only introspection
-  2. Orchestration helpers      — DAG/safety/memory helpers
-  3. Orchestration tools        — DAG, safety, memory, execute
-"""
+"""Local probes, builders, validators, and the OpenAI-compatible LLM client."""
 
 from __future__ import annotations
 
-import inspect
 import json
+import re
 import copy
 import http.client
 import socket
@@ -34,20 +25,6 @@ from AnomalyGraphAgent.probes.os_probe import OSProbe
 # ---------------------------------------------------------------------------
 
 TOOL_REGISTRY: dict[str, callable] = {}
-
-PLANNING_TOOL_NAMES = {
-    "probe_full_snapshot",
-    "probe_schema",
-    "probe_table_stats",
-    "probe_db_metrics",
-    "probe_os_metrics",
-    "probe_workload",
-    "explain_sql",
-    "latency_sample",
-    "build_task_dag",
-    "check_safety",
-    "read_memory",
-}
 
 BENCHBASE_BENCHMARKS = {
     "tpcc": {
@@ -115,7 +92,8 @@ LLM_HTTP_TIMEOUT_SEC = 120
 LLM_HTTP_MAX_ATTEMPTS = 3
 
 
-def _read_chat_completion_json(req: Any, *, timeout_sec: int = LLM_HTTP_TIMEOUT_SEC, label: str) -> dict[str, Any]:
+def _read_chat_completion_json(req: Any, *, timeout_sec: int = LLM_HTTP_TIMEOUT_SEC, label: str,
+                               response_metadata: dict | None = None) -> dict[str, Any]:
     """Read a chat completion response with bounded transport retries."""
     import urllib.error
     import urllib.request
@@ -126,6 +104,12 @@ def _read_chat_completion_json(req: Any, *, timeout_sec: int = LLM_HTTP_TIMEOUT_
         try:
             with urllib.request.urlopen(req, timeout=timeout_sec) as resp:
                 raw = resp.read()
+                if response_metadata is not None:
+                    headers = getattr(resp, "headers", None)
+                    if headers is not None:
+                        request_id = headers.get("x-request-id")
+                        if isinstance(request_id, str):
+                            response_metadata["request_id"] = request_id
             if isinstance(raw, bytes):
                 raw = raw.decode("utf-8")
             return json.loads(raw)
@@ -159,11 +143,109 @@ def _read_chat_completion_json(req: Any, *, timeout_sec: int = LLM_HTTP_TIMEOUT_
 
 
 def tool(name: str):
-    """Decorator that registers a function as a callable ReAct tool."""
+    """Register a local capability for compatibility with the tool registry."""
     def decorator(fn):
         TOOL_REGISTRY[name] = fn
         return fn
     return decorator
+
+
+def validate_traffic_surge_profile(
+    profile: dict[str, Any], transaction_types: list[str] | None = None
+) -> dict[str, Any]:
+    """Validate and normalize the BenchBase burst profile used by the executor."""
+    if not isinstance(profile, dict):
+        raise ValueError("TrafficSurgeProfile must be an object")
+    forbidden = sorted(k for k in profile if k in TRAFFIC_SURGE_FORBIDDEN_FIELDS)
+    if forbidden:
+        raise ValueError(f"TrafficSurgeProfile contains forbidden fields: {', '.join(forbidden)}")
+    extra = sorted(k for k in profile if k not in TRAFFIC_SURGE_PROFILE_FIELDS)
+    if extra:
+        raise ValueError(f"TrafficSurgeProfile contains unknown fields: {', '.join(extra)}")
+    missing = sorted(k for k in TRAFFIC_SURGE_PROFILE_FIELDS if k not in profile)
+    if missing:
+        raise ValueError(f"TrafficSurgeProfile missing required fields: {', '.join(missing)}")
+    benchmark = _normalize_benchmark(profile["benchmark"])
+    database = str(profile["database"]).strip()
+    config_path = str(profile["config_path"]).strip()
+    mix_template = str(profile["mix_template"]).strip()
+    rationale = str(profile["rationale"]).strip()
+    if not database or not config_path or not mix_template or not rationale:
+        raise ValueError("TrafficSurgeProfile database, config_path, mix_template and rationale are required")
+    terminals = int(profile["terminals"])
+    rate = _normalize_rate(profile["rate"])
+    duration_sec = float(profile["duration_sec"])
+    if terminals <= 0:
+        raise ValueError("TrafficSurgeProfile terminals must be > 0")
+    if rate != "unlimited" and float(rate) <= 0:
+        raise ValueError("TrafficSurgeProfile rate must be > 0")
+    if duration_sec <= 0:
+        raise ValueError("TrafficSurgeProfile duration_sec must be > 0")
+    raw_mix = profile["transaction_mix"]
+    if not isinstance(raw_mix, dict):
+        raise ValueError("TrafficSurgeProfile transaction_mix must be an object")
+    ordered_types = list(transaction_types or benchbase_transaction_types(benchmark, config_path))
+    unknown = sorted(k for k in raw_mix if k not in ordered_types)
+    if unknown:
+        raise ValueError(f"TrafficSurgeProfile transaction_mix has unknown transaction types: {', '.join(unknown)}")
+    mix = {}
+    for name in ordered_types:
+        value = float(raw_mix.get(name, 0))
+        if value < 0:
+            raise ValueError(f"TrafficSurgeProfile transaction_mix weight for {name} must be >= 0")
+        mix[name] = value
+    if sum(mix.values()) <= 0:
+        raise ValueError("TrafficSurgeProfile transaction_mix total weight must be > 0")
+    return {
+        "benchmark": benchmark,
+        "database": database,
+        "config_path": config_path,
+        "terminals": terminals,
+        "rate": rate,
+        "duration_sec": duration_sec,
+        "transaction_mix": mix,
+        "mix_template": mix_template,
+        "rationale": rationale,
+    }
+
+
+def benchbase_transaction_types(benchmark: str, config_path: str = "") -> list[str]:
+    """Return the transaction order from a BenchBase XML or built-in defaults."""
+    benchmark = _normalize_benchmark(benchmark)
+    if config_path:
+        try:
+            path = Path(config_path).expanduser()
+            if not path.is_absolute():
+                path = (Path.cwd() / path).resolve()
+            if path.exists():
+                root = ET.parse(path).getroot()
+                names = [
+                    str(name.text).strip()
+                    for name in root.findall(".//transactiontypes/transactiontype/name")
+                    if name.text and str(name.text).strip()
+                ]
+                if names:
+                    return names
+        except Exception:
+            pass
+    return list(BENCHBASE_BENCHMARKS[benchmark]["transaction_types"])
+
+
+def _align_mix(mix: dict[str, Any], transaction_types: list[str]) -> dict[str, float]:
+    return {name: float(mix.get(name, 0)) for name in transaction_types}
+
+
+def _normalize_benchmark(benchmark: Any) -> str:
+    value = str(benchmark or "").strip().lower()
+    if value not in BENCHBASE_BENCHMARKS:
+        raise ValueError(f"Unsupported BenchBase benchmark: {benchmark}")
+    return value
+
+
+def _normalize_rate(rate: Any) -> float | str:
+    if isinstance(rate, str) and rate.strip().lower() == "unlimited":
+        return "unlimited"
+    return float(rate)
 
 
 # ---------------------------------------------------------------------------
@@ -317,495 +399,6 @@ def latency_sample(config: RuntimeConfig, database: str, sql: str, n: int = 5) -
 
 
 # ---------------------------------------------------------------------------
-# TaskSpec builder tools  (replace SpecialistAgents)
-# ---------------------------------------------------------------------------
-
-
-@tool("build_slow_sql_task")
-def build_slow_sql_task(
-    config: RuntimeConfig,
-    database: str,
-    task_id: str = "",
-    root_cause: str = "missing_index",
-    table: str = "",
-    column: str = "",
-    predicate: str = "",
-    sort_column: str = "",
-    pattern: str = "range_scan",
-    limit: int = 100,
-    concurrency: int = 8,
-    duration_sec: int = 30,
-) -> dict[str, Any]:
-    """
-    Build a TaskSpec for a slow-SQL anomaly.
-
-    Parameters
-    ----------
-    pattern: one of "range_scan", "sort_filesort", "large_scan",
-             "weak_predicate", "function_on_column", "multi_join"
-    predicate: the WHERE clause predicate string
-    sort_column: column to ORDER BY (used for filesort pattern)
-    concurrency: number of parallel threads executing the SQL
-    duration_sec: how long to run the workload
-    """
-    if not task_id:
-        task_id = f"slow_sql_{uuid.uuid4().hex[:6]}"
-
-    # Determine SQL based on pattern
-    if pattern == "range_scan":
-        sql = f"SELECT * FROM {table} WHERE {predicate} LIMIT {limit}"
-    elif pattern == "sort_filesort":
-        sql = f"SELECT * FROM {table} ORDER BY {sort_column} DESC LIMIT {limit}"
-    elif pattern == "large_scan":
-        sql = f"SELECT * FROM {table} WHERE {predicate} LIMIT {limit}"
-    elif pattern == "weak_predicate":
-        sql = f"SELECT * FROM {table} WHERE {predicate} LIMIT {limit}"
-    elif pattern == "function_on_column":
-        sql = f"SELECT * FROM {table} WHERE {predicate} LIMIT {limit}"
-    elif pattern == "multi_join":
-        sql = f"SELECT * FROM {table} t1 JOIN {table} t2 ON t1.{column}=t2.{column} LIMIT {limit}"
-    else:
-        sql = f"SELECT * FROM {table} LIMIT {limit}"
-
-    actions = [
-        {
-            "kind": "raw_sql_workload",
-            "sql": sql,
-            "concurrency": concurrency,
-            "duration_sec": duration_sec,
-            "database": database,
-        }
-    ]
-
-    return {
-        "task_id": task_id,
-        "task_type": "slow_sql",
-        "actions": actions,
-        "expected_metrics": {
-            "rows_examined_delta": ">0",
-            "slow_log_target_entry_count": ">=1",
-        },
-        "success_criteria": {
-            "slow_log_target_entry_count": ">=1",
-        },
-        "risk_assessment": "low",
-        "metadata": {
-            "root_cause": root_cause,
-            "pattern": pattern,
-            "table": table,
-            "sql": sql,
-        },
-    }
-
-
-@tool("build_traffic_task")
-def build_traffic_task(
-    config: RuntimeConfig,
-    profile: dict[str, Any],
-    task_id: str = "",
-) -> dict[str, Any]:
-    """
-    Build a traffic_surge TaskSpec from a validated BenchBase burst profile.
-    """
-    normalized_profile = validate_traffic_surge_profile(profile)
-    if not task_id:
-        task_id = f"traffic_{uuid.uuid4().hex[:6]}"
-
-    actions = [
-        {
-            "kind": "benchbase_burst",
-            "profile": dict(normalized_profile),
-            "benchmark": normalized_profile["benchmark"],
-            "database": normalized_profile["database"],
-            "config_path": normalized_profile["config_path"],
-            "terminals": normalized_profile["terminals"],
-            "rate": normalized_profile["rate"],
-            "duration_sec": normalized_profile["duration_sec"],
-            "transaction_mix": dict(normalized_profile["transaction_mix"]),
-        }
-    ]
-
-    return {
-        "task_id": task_id,
-        "task_type": "traffic_surge",
-        "actions": actions,
-        "expected_metrics": {
-            "threads_connected_ratio": ">=1.5",
-            "threads_running_ratio": ">=1.5",
-            "slow_log_target_entry_count": ">=1",
-        },
-        "success_criteria": {
-            "threads_connected_ratio": ">=1.5",
-        },
-        "risk_assessment": "medium",
-        "metadata": {
-            "root_cause": "traffic_surge",
-            "traffic_surge_profile": dict(normalized_profile),
-        },
-    }
-
-
-@tool("get_benchbase_workload_defaults")
-def get_benchbase_workload_defaults(
-    benchmark: str,
-    config_path: str = "",
-    database: str = "",
-    terminals: int = 0,
-    rate: str = "",
-    duration_sec: float = 0,
-) -> dict[str, Any]:
-    """
-    Return the current BenchBase workload defaults and constraints, with no candidate templates.
-    """
-    benchmark = _normalize_benchmark(benchmark)
-    xml_defaults = benchbase_workload_defaults(benchmark, config_path)
-    resolved_terminals = int(terminals) if terminals else xml_defaults.get("terminals")
-    resolved_rate = rate if rate not in ("", None) else xml_defaults.get("rate")
-    resolved_duration = float(duration_sec) if duration_sec else xml_defaults.get("duration_sec")
-    return {
-        "benchmark": benchmark,
-        "database": database,
-        "config_path": config_path,
-        "legal_transaction_types": list(xml_defaults["transaction_types"]),
-        "default_transaction_mix": dict(xml_defaults["transaction_mix"]),
-        "default_terminals": resolved_terminals,
-        "default_rate": resolved_rate,
-        "default_duration_sec": resolved_duration,
-        "constraints": {
-            "profile_fields": sorted(TRAFFIC_SURGE_PROFILE_FIELDS),
-            "forbidden_fields": sorted(TRAFFIC_SURGE_FORBIDDEN_FIELDS),
-            "transaction_mix": f"dict of {benchmark} transaction type to non-negative numeric weight; sum must be > 0",
-            "terminals": "positive integer; safety checker enforces connection headroom",
-            "rate": "positive numeric requests/second target or 'unlimited'",
-            "duration_sec": "positive numeric seconds; runtime requires it to fit request max_duration_sec and injection_observe_sec",
-        },
-        "policy": (
-            "Initial round should use these defaults. After reflection, the LLM may adjust "
-            "terminals, rate, duration_sec, and transaction_mix based on evaluation feedback."
-        ),
-    }
-
-
-def validate_traffic_surge_profile(profile: dict[str, Any], transaction_types: list[str] | None = None) -> dict[str, Any]:
-    """Validate and normalize a TrafficSurgeProfile for a BenchBase burst."""
-    if not isinstance(profile, dict):
-        raise ValueError("TrafficSurgeProfile must be an object")
-    forbidden = sorted(k for k in profile if k in TRAFFIC_SURGE_FORBIDDEN_FIELDS)
-    if forbidden:
-        raise ValueError(f"TrafficSurgeProfile contains forbidden fields: {', '.join(forbidden)}")
-    extra = sorted(k for k in profile if k not in TRAFFIC_SURGE_PROFILE_FIELDS)
-    if extra:
-        raise ValueError(f"TrafficSurgeProfile contains unknown fields: {', '.join(extra)}")
-    missing = sorted(k for k in TRAFFIC_SURGE_PROFILE_FIELDS if k not in profile)
-    if missing:
-        raise ValueError(f"TrafficSurgeProfile missing required fields: {', '.join(missing)}")
-    benchmark = _normalize_benchmark(profile["benchmark"])
-    database = str(profile["database"]).strip()
-    config_path = str(profile["config_path"]).strip()
-    mix_template = str(profile["mix_template"]).strip()
-    rationale = str(profile["rationale"]).strip()
-    if not database:
-        raise ValueError("TrafficSurgeProfile database is required")
-    if not config_path:
-        raise ValueError("TrafficSurgeProfile config_path is required")
-    if not mix_template:
-        raise ValueError("TrafficSurgeProfile mix_template is required")
-    if not rationale:
-        raise ValueError("TrafficSurgeProfile rationale is required")
-    terminals = int(profile["terminals"])
-    rate = _normalize_rate(profile["rate"])
-    duration_sec = float(profile["duration_sec"])
-    if terminals <= 0:
-        raise ValueError("TrafficSurgeProfile terminals must be > 0")
-    if rate != "unlimited" and float(rate) <= 0:
-        raise ValueError("TrafficSurgeProfile rate must be > 0")
-    if duration_sec <= 0:
-        raise ValueError("TrafficSurgeProfile duration_sec must be > 0")
-    raw_mix = profile["transaction_mix"]
-    if not isinstance(raw_mix, dict):
-        raise ValueError("TrafficSurgeProfile transaction_mix must be an object")
-    ordered_types = list(transaction_types or benchbase_transaction_types(benchmark, config_path))
-    unknown = sorted(k for k in raw_mix if k not in ordered_types)
-    if unknown:
-        raise ValueError(f"TrafficSurgeProfile transaction_mix has unknown transaction types: {', '.join(unknown)}")
-    mix: dict[str, float] = {}
-    for name in ordered_types:
-        value = float(raw_mix.get(name, 0))
-        if value < 0:
-            raise ValueError(f"TrafficSurgeProfile transaction_mix weight for {name} must be >= 0")
-        mix[name] = value
-    if sum(mix.values()) <= 0:
-        raise ValueError("TrafficSurgeProfile transaction_mix total weight must be > 0")
-    return {
-        "benchmark": benchmark,
-        "database": database,
-        "config_path": config_path,
-        "terminals": terminals,
-        "rate": rate,
-        "duration_sec": duration_sec,
-        "transaction_mix": mix,
-        "mix_template": mix_template,
-        "rationale": rationale,
-    }
-
-
-def benchbase_transaction_types(benchmark: str, config_path: str = "") -> list[str]:
-    """Return transaction order for a BenchBase benchmark, preferring the XML config."""
-    benchmark = _normalize_benchmark(benchmark)
-    if config_path:
-        try:
-            path = Path(config_path).expanduser()
-            if not path.is_absolute():
-                path = (Path.cwd() / path).resolve()
-            if path.exists():
-                root = ET.parse(path).getroot()
-                names = [
-                    str(name.text).strip()
-                    for name in root.findall(".//transactiontypes/transactiontype/name")
-                    if name.text and str(name.text).strip()
-                ]
-                if names:
-                    return names
-        except Exception:
-            pass
-    return list(BENCHBASE_BENCHMARKS[benchmark]["transaction_types"])
-
-
-def benchbase_workload_defaults(benchmark: str, config_path: str = "") -> dict[str, Any]:
-    """Return transaction order, weights, rate, time, and terminals from XML or benchmark defaults."""
-    benchmark = _normalize_benchmark(benchmark)
-    transaction_types = benchbase_transaction_types(benchmark, config_path)
-    defaults = {
-        "transaction_types": transaction_types,
-        "transaction_mix": _align_mix(BENCHBASE_BENCHMARKS[benchmark]["default_mix"], transaction_types),
-        "terminals": None,
-        "rate": None,
-        "duration_sec": None,
-    }
-    if not config_path:
-        return defaults
-    try:
-        path = Path(config_path).expanduser()
-        if not path.is_absolute():
-            path = (Path.cwd() / path).resolve()
-        if not path.exists():
-            return defaults
-        root = ET.parse(path).getroot()
-        terminals_elem = root.find("terminals")
-        if terminals_elem is not None and terminals_elem.text:
-            defaults["terminals"] = int(float(terminals_elem.text.strip()))
-        work = root.find(".//works/work")
-        if work is None:
-            work = root.find(".//work")
-        if work is not None:
-            rate_elem = work.find("rate")
-            time_elem = work.find("time")
-            weights_elem = work.find("weights")
-            if rate_elem is not None and rate_elem.text:
-                raw_rate = rate_elem.text.strip()
-                defaults["rate"] = "unlimited" if raw_rate.lower() == "unlimited" else float(raw_rate)
-            if time_elem is not None and time_elem.text:
-                defaults["duration_sec"] = float(time_elem.text.strip())
-            if weights_elem is not None and weights_elem.text:
-                weights = [float(x.strip()) for x in weights_elem.text.split(",") if x.strip()]
-                if len(weights) == len(transaction_types):
-                    defaults["transaction_mix"] = dict(zip(transaction_types, weights))
-    except Exception:
-        return defaults
-    return defaults
-
-
-def _align_mix(mix: dict[str, Any], transaction_types: list[str]) -> dict[str, float]:
-    return {name: float(mix.get(name, 0)) for name in transaction_types}
-
-
-def _normalize_benchmark(benchmark: Any) -> str:
-    value = str(benchmark or "").strip().lower()
-    if value not in BENCHBASE_BENCHMARKS:
-        raise ValueError(f"Unsupported BenchBase benchmark: {benchmark}")
-    return value
-
-
-def _normalize_rate(rate: Any) -> float | str:
-    if isinstance(rate, str) and rate.strip().lower() == "unlimited":
-        return "unlimited"
-    return float(rate)
-
-
-
-
-@tool("build_lock_task")
-def build_lock_task(
-    config: RuntimeConfig,
-    database: str,
-    task_id: str = "",
-    root_cause: str = "hot_update",
-    table: str = "",
-    key_column: str = "",
-    holder_concurrency: int = 2,
-    waiter_concurrency: int = 8,
-    hold_sec: float = 30.0,
-    lock_type: str = "record_lock",
-) -> dict[str, Any]:
-    """
-    Build a TaskSpec for lock contention / hot-row conflict.
-
-    lock_type: "record_lock" | "table_lock" | "metadata_lock"
-    """
-    if not task_id:
-        task_id = f"lock_{uuid.uuid4().hex[:6]}"
-
-    actions = [
-        {
-            "kind": "lock_conflict",
-            "database": database,
-            "table": table,
-            "key_column": key_column,
-            "holder_concurrency": holder_concurrency,
-            "waiter_concurrency": waiter_concurrency,
-            "hold_sec": hold_sec,
-            "lock_type": lock_type,
-        }
-    ]
-
-    cleanup = [
-        {
-            "kind": "kill_blocking_sessions",
-            "database": database,
-        }
-    ]
-
-    return {
-        "task_id": task_id,
-        "task_type": "lock_conflict",
-        "actions": actions,
-        "cleanup_actions": cleanup,
-        "expected_metrics": {
-            "lock_waits_ratio": ">=2.0",
-            "blocked_session_count": ">=1",
-        },
-        "success_criteria": {
-            "blocked_session_count": ">=1",
-        },
-        "risk_assessment": "medium",
-        "metadata": {
-            "root_cause": root_cause,
-            "table": table,
-            "key_column": key_column,
-            "lock_type": lock_type,
-        },
-    }
-
-
-@tool("build_chaos_task")
-def build_chaos_task(
-    config: RuntimeConfig,
-    task_id: str = "",
-    root_cause: str = "resource_cpu",
-    resource_type: str = "cpu",
-    duration_sec: int = 30,
-    intensity: str = "high",
-    chaosblade_path: str = "",
-) -> dict[str, Any]:
-    """
-    Build a TaskSpec for an OS-level resource bottleneck via ChaosBlade.
-    """
-    if not task_id:
-        task_id = f"chaos_{uuid.uuid4().hex[:6]}"
-
-    if not chaosblade_path:
-        chaosblade_path = config.chaosblade_path
-
-    actions = [
-        {
-            "kind": "chaosblade",
-            "resource_type": resource_type,
-            "duration_sec": duration_sec,
-            "intensity": intensity,
-            "chaosblade_path": chaosblade_path,
-        }
-    ]
-
-    cleanup = [
-        {
-            "kind": "chaosblade_destroy",
-            "uid": f"{{{task_id}_uid}}",  # placeholder; filled at execution time
-        }
-    ]
-
-    risk = "high" if resource_type in ("cpu", "io") else "medium"
-
-    return {
-        "task_id": task_id,
-        "task_type": "chaos",
-        "actions": actions,
-        "cleanup_actions": cleanup,
-        "expected_metrics": {
-            f"{resource_type}_usage_ratio": ">=1.5",
-        },
-        "success_criteria": {},
-        "risk_assessment": risk,
-        "metadata": {
-            "root_cause": root_cause,
-            "resource_type": resource_type,
-            "duration_sec": duration_sec,
-            "intensity": intensity,
-        },
-    }
-
-
-@tool("build_backup_task")
-def build_backup_task(
-    config: RuntimeConfig,
-    database: str,
-    task_id: str = "",
-    root_cause: str = "backup",
-    table: str = "",
-    tool: str = "mysqldump",
-) -> dict[str, Any]:
-    """
-    Build a TaskSpec for a logical backup / maintenance operation.
-    """
-    if not task_id:
-        task_id = f"backup_{uuid.uuid4().hex[:6]}"
-
-    actions = [
-        {
-            "kind": "logical_backup",
-            "database": database,
-            "table": table,
-            "tool": tool,
-        }
-    ]
-
-    cleanup = [
-        {
-            "kind": "terminate_backup",
-            "pid_file": f"/tmp/{task_id}.pid",
-        }
-    ]
-
-    return {
-        "task_id": task_id,
-        "task_type": "backup",
-        "actions": actions,
-        "cleanup_actions": cleanup,
-        "expected_metrics": {
-            "io_wait_ratio": ">=1.5",
-        },
-        "success_criteria": {
-            "io_wait_ratio": ">=1.3",
-        },
-        "risk_assessment": "medium",
-        "metadata": {
-            "root_cause": root_cause,
-            "table": table,
-            "tool": tool,
-        },
-    }
-
-
-# ---------------------------------------------------------------------------
 # Orchestration tools
 # ---------------------------------------------------------------------------
 
@@ -917,6 +510,7 @@ def canonicalize_resource_chaosblade_action(
     action: dict[str, Any],
     *,
     root_cause: str = "",
+    assigned_uid: str | None = None,
 ) -> dict[str, Any]:
     """Normalize resource ChaosBlade commands to the Darwin CLI shape we run."""
     if action.get("kind") != "raw_command":
@@ -932,7 +526,9 @@ def canonicalize_resource_chaosblade_action(
         return action
 
     original_uid = _argv_value(command, "--uid")
-    uid = _fresh_chaosblade_uid(root_cause or target)
+    uid = assigned_uid if assigned_uid is not None else _fresh_chaosblade_uid(root_cause or target)
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", uid):
+        raise ValueError("ChaosBlade uid must be a non-empty safe identifier")
     if original_uid and original_uid != uid:
         action["chaosblade_original_uid"] = original_uid
         action["chaosblade_uid_rewritten"] = True
@@ -1140,17 +736,28 @@ def llm_generate(
     user_prompt: str,
     temperature: float = 0.2,
     json_mode: bool = True,
+    response_format: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    Call the LLM (OpenAI-compatible) with a system and user prompt.
+    """Call Chat Completions; explicit format overrides the legacy JSON-mode policy.
 
-    Returns {"text": ..., "error": ...} or {"text": ..., "json_payload": ...}.
+    json_payload is only published for object output. parsed_payload preserves
+    other parsed shapes for diagnostics. Returned strings are credential-redacted.
+    Local Intent/TaskSpec schema validation remains the caller's responsibility.
     """
+    import urllib.error
+    import urllib.request
+
+    result: dict[str, Any] = {
+        "text": "", "parsed_payload": None, "finish_reason": None, "refusal": None,
+        "usage": None, "usage_status": "unavailable", "request_id": None, "response_id": None,
+    }
+
+    def finish(error_type: str | None = None, message: str = "") -> dict:
+        if error_type:
+            result.update(error_type=error_type, error=message)
+        return _redact_llm_result(result, config)
+
     try:
-        import urllib.request
-        import urllib.error
-        import json
-
         url = f"{config.openai_base_url.rstrip('/')}/chat/completions"
         headers = {
             "Content-Type": "application/json",
@@ -1164,211 +771,112 @@ def llm_generate(
             ],
             "temperature": temperature,
         }
-        if json_mode and not config.openai_model.startswith("gpt-5"):
+        if response_format is not None:
+            if not isinstance(response_format, dict) or response_format.get("type") not in {"text", "json_object", "json_schema"}:
+                return finish("invalid_response_format", "response_format must specify text, json_object or json_schema")
+            if response_format["type"] == "json_schema":
+                spec = response_format.get("json_schema")
+                if not isinstance(spec, dict) or not isinstance(spec.get("schema"), dict) or not isinstance(spec.get("name"), str):
+                    return finish("invalid_response_format", "json_schema requires a name and schema object")
+            payload["response_format"] = copy.deepcopy(response_format)
+        elif json_mode and not config.openai_model.startswith("gpt-5"):
             payload["response_format"] = {"type": "json_object"}
 
-        body = json.dumps(payload).encode("utf-8")
+        body = json.dumps(payload, allow_nan=False).encode("utf-8")
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-        data = _read_chat_completion_json(req, label="LLM request")
-        text = data["choices"][0]["message"]["content"]
-        result: dict[str, Any] = {"text": text}
-        if json_mode:
+        metadata: dict = {}
+        data = _read_chat_completion_json(req, label="LLM request", response_metadata=metadata)
+        result.update(metadata)
+        if not isinstance(data, dict):
+            return finish("invalid_response", "Chat completion envelope must be an object")
+        for target, key in (("response_id", "id"), ("request_id", "request_id")):
+            if isinstance(data.get(key), str):
+                result[target] = data[key]
+        if isinstance(data.get("usage"), dict) and data["usage"]:
+            result.update(usage=data["usage"], usage_status="available")
+        if data.get("error"):
+            return finish("api_error", json.dumps(data["error"], ensure_ascii=False))
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
+            return finish("invalid_response", "Chat completion requires a non-empty choices array of objects")
+        choice = choices[0]
+        reason = choice.get("finish_reason")
+        if reason is not None and not isinstance(reason, str):
+            return finish("invalid_response", "finish_reason must be a string or null")
+        result["finish_reason"] = reason
+        message = choice.get("message")
+        if not isinstance(message, dict):
+            return finish("invalid_response", "choices[0].message must be an object")
+        result["refusal"] = message.get("refusal")
+        text = message.get("content")
+        if isinstance(text, str):
+            result["text"] = text
+        if result["refusal"]:
+            return finish("refusal", "Model refused to produce the requested output")
+        if reason == "length":
+            return finish("truncated_response", "Model output was truncated (finish_reason=length)")
+        if reason == "content_filter":
+            return finish("content_filter", "Model output was filtered")
+        if not isinstance(text, str):
+            return finish("invalid_response", "choices[0].message.content must be a string")
+        should_parse = response_format.get("type") != "text" if response_format is not None else json_mode
+        if should_parse:
             try:
-                result["json_payload"] = json.loads(text)
-            except json.JSONDecodeError:
-                pass
-        return result
-    except LLMTimeoutError:
-        raise
+                parsed = json.loads(text, parse_constant=_reject_json_constant)
+            except (json.JSONDecodeError, ValueError) as exc:
+                result["parse_error"] = str(exc)
+                if response_format is not None:
+                    return finish("invalid_json", "Model output is not valid JSON: " + str(exc))
+            else:
+                result["parsed_payload"] = parsed
+                if not isinstance(parsed, dict):
+                    return finish("invalid_output_shape", "Model JSON output must be an object, not an array or scalar")
+                result["json_payload"] = parsed
+        return finish()
+    except LLMTimeoutError as exc:
+        raise LLMTimeoutError(_redact_llm_result(str(exc), config)) from None
+    except urllib.error.HTTPError as exc:
+        result["http_status"] = exc.code
+        if exc.headers:
+            result["request_id"] = exc.headers.get("x-request-id")
+        # Never include the exception URL or request headers, which may contain credentials.
+        try:
+            detail = exc.read(8192).decode("utf-8", errors="replace")
+        except Exception:
+            detail = "HTTP request rejected"
+        finally:
+            exc.close()
+        return finish("http_error", f"LLM HTTP {exc.code}: {detail}")
     except Exception as e:
-        return {"text": "", "error": str(e)}
+        return finish("transport_error" if isinstance(e, (ConnectionError, OSError)) else "invalid_response", str(e))
 
 
-def planning_tool_schemas() -> list[dict[str, Any]]:
-    """Return OpenAI-compatible schemas for tools allowed during planning."""
-    return [_tool_schema(name, TOOL_REGISTRY[name]) for name in sorted(PLANNING_TOOL_NAMES)]
+def _reject_json_constant(value: str) -> None:
+    raise ValueError(f"Non-finite JSON constant: {value}")
 
 
-def call_planning_tool(name: str, config: RuntimeConfig, arguments: dict[str, Any]) -> Any:
-    """Call a planning tool with RuntimeConfig injected locally."""
-    if name not in PLANNING_TOOL_NAMES:
-        raise ValueError(f"Tool '{name}' is not allowed during planning")
-    fn = TOOL_REGISTRY[name]
-    kwargs = dict(arguments or {})
-    if "config" in inspect.signature(fn).parameters:
-        kwargs["config"] = config
-    return fn(**kwargs)
-
-
-def chat_tool_calling_loop(
-    config: RuntimeConfig,
-    system_prompt: str,
-    user_prompt: str,
-    *,
-    max_steps: int = 15,
-    temperature: float = 0.2,
-) -> dict[str, Any]:
-    """
-    Run an OpenAI-compatible chat/completions tool-calling loop.
-
-    The returned dict contains either {"json_payload": ..., "trace": ...} or
-    {"error": ..., "trace": ...}. Tool execution is local and limited to
-    PLANNING_TOOL_NAMES.
-    """
-    if not config.openai_api_key or not config.planner_enabled:
-        return {"error": "planner disabled or missing OPENAI_API_KEY", "trace": []}
-
-    import urllib.request
-
-    messages: list[dict[str, Any]] = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-    trace: list[dict[str, Any]] = []
-    tools = planning_tool_schemas()
-
-    for step in range(1, max_steps + 1):
-        payload: dict[str, Any] = {
-            "model": config.openai_model,
-            "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
-        }
-        if not config.openai_model.startswith("gpt-5"):
-            payload["temperature"] = temperature
-        req = urllib.request.Request(
-            f"{config.openai_base_url.rstrip('/')}/chat/completions",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {config.openai_api_key}",
-            },
-            method="POST",
+def _redact_llm_result(value: Any, config: RuntimeConfig) -> Any:
+    """Sanitize response/error data before callers persist it in traces."""
+    if isinstance(value, dict):
+        return {key: ("[REDACTED]" if str(key).lower() in {
+            "authorization", "api_key", "password", "mysql_password", "openai_api_key",
+        } else _redact_llm_result(item, config)) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_llm_result(item, config) for item in value]
+    if isinstance(value, str):
+        for secret in (config.openai_api_key, config.mysql_password):
+            if secret:
+                value = value.replace(secret, "[REDACTED]")
+        value = re.sub(r"(?i)\b(Bearer|Basic)\s+[^\s\"',}]+",
+                       lambda match: match[1] + " [REDACTED]", value)
+        value = re.sub(r"(https?://)[^/\s@]+@", r"\1[REDACTED]@", value)
+        value = re.sub(
+            r'''(?i)(["']?(?:authorization|api_key|password|mysql_password|openai_api_key)["']?\s*[:=]\s*)'''
+            r'''(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,&}]+)''',
+            lambda match: match[1] + '"[REDACTED]"', value,
         )
-        try:
-            raw = _read_chat_completion_json(req, label=f"LLM tool-calling request at step {step}")
-        except LLMTimeoutError as exc:
-            raise LLMTimeoutError(
-                f"LLM tool-calling request timed out after {LLM_HTTP_TIMEOUT_SEC}s at step {step}: {exc}"
-            ) from exc
-        except Exception as exc:
-            return {"error": str(exc), "trace": trace}
-
-        choice = (raw.get("choices") or [{}])[0]
-        message = choice.get("message") or {}
-        messages.append(message)
-        tool_calls = message.get("tool_calls") or []
-        if tool_calls:
-            for call in tool_calls:
-                fn = (call.get("function") or {})
-                name = str(fn.get("name", ""))
-                raw_args = fn.get("arguments") or "{}"
-                try:
-                    args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
-                    result = call_planning_tool(name, config=config, arguments=args)
-                    content = json.dumps(_truncate_for_prompt(result), ensure_ascii=False)
-                    trace.append({"step": step, "tool": name, "arguments": args, "result": _truncate_for_prompt(result)})
-                except Exception as exc:
-                    content = json.dumps({"error": str(exc)}, ensure_ascii=False)
-                    trace.append({"step": step, "tool": name, "arguments": raw_args, "error": str(exc)})
-                messages.append({"role": "tool", "tool_call_id": call.get("id", ""), "content": content})
-            continue
-
-        text = str(message.get("content") or "")
-        trace.append({"step": step, "tool": "final_answer", "content": text[:2000]})
-        try:
-            return {"json_payload": _extract_planner_json_payload(text), "text": text, "trace": trace}
-        except json.JSONDecodeError as exc:
-            return {"error": f"final JSON parse failed: {exc}", "text": text, "trace": trace}
-
-    return {"error": f"tool calling exceeded max_steps={max_steps}", "trace": trace}
-
-
-def _extract_planner_json_payload(text: str) -> dict[str, Any]:
-    """Parse a planner final answer, tolerating prose around valid JSON."""
-    decoder = json.JSONDecoder()
-    candidates: list[dict[str, Any]] = []
-    first_error: json.JSONDecodeError | None = None
-    try:
-        payload = json.loads(text)
-        if isinstance(payload, dict):
-            return payload
-        raise json.JSONDecodeError("planner final JSON must be an object", text, 0)
-    except json.JSONDecodeError as exc:
-        first_error = exc
-
-    for index, char in enumerate(text):
-        if char != "{":
-            continue
-        try:
-            payload, _end = decoder.raw_decode(text[index:])
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            candidates.append(payload)
-    for candidate in candidates:
-        if isinstance(candidate.get("task_specs"), list):
-            return candidate
-    if candidates:
-        return candidates[0]
-    if first_error is not None:
-        raise first_error
-    raise json.JSONDecodeError("no JSON object found in planner final answer", text, 0)
-
-
-def _tool_schema(name: str, fn: callable) -> dict[str, Any]:
-    sig = inspect.signature(fn)
-    properties: dict[str, Any] = {}
-    required: list[str] = []
-    for param_name, param in sig.parameters.items():
-        if param_name == "config":
-            continue
-        properties[param_name] = _json_schema_for_param(param)
-        if param.default is inspect._empty:
-            required.append(param_name)
-    doc = (fn.__doc__ or "").strip().splitlines()
-    return {
-        "type": "function",
-        "function": {
-            "name": name,
-            "description": doc[0].strip() if doc else name,
-            "parameters": {
-                "type": "object",
-                "properties": properties,
-                "required": required,
-                "additionalProperties": False,
-            },
-        },
-    }
-
-
-def _json_schema_for_param(param: inspect.Parameter) -> dict[str, Any]:
-    annotation = param.annotation
-    default = param.default
-    schema: dict[str, Any]
-    text = str(annotation)
-    if annotation is int or "int" in text:
-        schema = {"type": "integer"}
-    elif annotation is float or "float" in text:
-        schema = {"type": "number"}
-    elif annotation is bool or "bool" in text:
-        schema = {"type": "boolean"}
-    elif annotation in (list, list[dict]) or "list" in text:
-        schema = {"type": "array"}
-    elif annotation is dict or "dict" in text:
-        schema = {"type": "object"}
-    else:
-        schema = {"type": "string"}
-    if default is not inspect._empty and default is not None:
-        schema["default"] = default
-    return schema
-
-
-def _truncate_for_prompt(value: Any, limit: int = 6000) -> Any:
-    text = json.dumps(value, ensure_ascii=False, default=str)
-    if len(text) <= limit:
         return value
-    return {"truncated": True, "preview": text[:limit]}
+    return value
 
 
 # ---------------------------------------------------------------------------

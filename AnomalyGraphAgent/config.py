@@ -65,6 +65,8 @@ class RuntimeConfig:
     benchbase_jar_path: str = ".tools/benchbase-main/target/benchbase-mysql/benchbase.jar"
     benchbase_java_bin: str = "/opt/homebrew/opt/openjdk/bin/java"
     chaosblade_path: str = ".tools/chaosblade-1.8.0-darwin_arm64/blade"
+    mysqldump_path: str = ""
+    mysql_defaults_file: str = ""
 
     # Safety limits
     max_connection_usage_ratio: float = 0.8
@@ -103,6 +105,8 @@ class RuntimeConfig:
             "DBMAGS_BENCHBASE_JAR_PATH": "benchbase_jar_path",
             "DBMAGS_BENCHBASE_JAVA_BIN": "benchbase_java_bin",
             "DBMAGS_CHAOSBLADE_PATH": "chaosblade_path",
+            "DBMAGS_MYSQLDUMP_PATH": "mysqldump_path",
+            "DBMAGS_MYSQL_DEFAULTS_FILE": "mysql_defaults_file",
             "DBMAGS_MAX_RETRY_ROUNDS": "max_retry_rounds",
         }
         for source, target in aliases.items():

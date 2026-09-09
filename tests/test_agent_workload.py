@@ -26,10 +26,9 @@ from AnomalyGraphAgent.planner import GlobalPlanner
 from AnomalyGraphAgent.reflection import ReflectionFallbackError
 from AnomalyGraphAgent.workload import BenchBaseWorkloadRunner, MetricsCollector, normalize_workload_config
 from AnomalyGraphAgent.tools import (
-    build_traffic_task,
     canonicalize_task_dag_runtime_paths,
     canonicalize_resource_chaosblade_action,
-    get_benchbase_workload_defaults,
+    validate_traffic_surge_profile,
 )
 
 
@@ -496,50 +495,14 @@ class AgentWorkloadTests(unittest.TestCase):
             text = runtime_config.read_text()
         self.assertIn("<time>600</time>", text)
 
-    def test_benchbase_workload_defaults_are_not_candidate_templates(self):
-        result = get_benchbase_workload_defaults(
-            "tpcc",
-            config_path=".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
-            database="tpcc_10W",
-            terminals=16,
-            duration_sec=60,
-        )
-        self.assertEqual(result["benchmark"], "tpcc")
-        self.assertEqual(result["default_transaction_mix"]["NewOrder"], 45.0)
-        self.assertEqual(result["default_transaction_mix"]["Payment"], 43.0)
-        self.assertEqual(result["default_terminals"], 16)
-        self.assertIn("forbidden_fields", result["constraints"])
-        self.assertNotIn("candidates", result)
-        self.assertNotIn("preferred_template", result)
-        self.assertNotIn("task_specs", result)
-
-    def test_benchbase_workload_defaults_support_tpch_and_tatp(self):
-        tpch = get_benchbase_workload_defaults("tpch")
-        tatp = get_benchbase_workload_defaults("tatp")
-        self.assertEqual(len(tpch["legal_transaction_types"]), 22)
-        self.assertIn("Q22", tpch["legal_transaction_types"])
-        self.assertIn("GetSubscriberData", tatp["legal_transaction_types"])
-        self.assertEqual(tatp["benchmark"], "tatp")
-
-    def test_build_traffic_task_requires_profile_and_rejects_sql(self):
-        profile = _traffic_profile()
-        task = build_traffic_task(RuntimeConfig(), profile=profile, task_id="traffic")
-        self.assertEqual(task["actions"][0]["kind"], "benchbase_burst")
-        self.assertEqual(task["actions"][0]["profile"], task["metadata"]["traffic_surge_profile"])
-        bad = dict(profile)
+    def test_benchbase_profile_validation_is_local(self):
+        profile = validate_traffic_surge_profile(_traffic_profile())
+        self.assertEqual(profile["benchmark"], "tpcc")
+        self.assertEqual(profile["transaction_mix"]["NewOrder"], 50.0)
+        bad = dict(_traffic_profile())
         bad["sql"] = "SELECT 1"
         with self.assertRaisesRegex(ValueError, "forbidden fields"):
-            build_traffic_task(RuntimeConfig(), profile=bad, task_id="traffic")
-
-    def test_build_traffic_task_accepts_tpch_and_tatp_profiles(self):
-        tpch_task = build_traffic_task(RuntimeConfig(), profile=_traffic_profile_for("tpch"), task_id="tpch_traffic")
-        tatp_task = build_traffic_task(RuntimeConfig(), profile=_traffic_profile_for("tatp"), task_id="tatp_traffic")
-        self.assertEqual(tpch_task["actions"][0]["benchmark"], "tpch")
-        self.assertEqual(tatp_task["actions"][0]["benchmark"], "tatp")
-        bad = _traffic_profile_for("tpch")
-        bad["transaction_mix"]["NewOrder"] = 1
-        with self.assertRaisesRegex(ValueError, "unknown transaction types"):
-            build_traffic_task(RuntimeConfig(), profile=bad, task_id="bad")
+            validate_traffic_surge_profile(bad)
 
     def test_executor_materializes_benchbase_burst_xml(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -697,16 +660,13 @@ class AgentWorkloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             executor = Executor(RuntimeConfig(), round_dir=tmpdir)
             with patch("pymysql.connect", return_value=Connection()):
-                result = executor._run_raw_transaction_script({
-                    "database": "tpcc",
-                    "duration_sec": 1,
-                    "expected_error_codes": [1213],
-                    "scripts": [{"role": "deadlock_a", "steps": [{"sql": "UPDATE t SET v = v + 1"}]}],
-                })
-
-        self.assertEqual(result["error_count"], 0)
-        self.assertEqual(result["expected_error_count"], 1)
-        self.assertEqual(result["expected_error_codes"], [1213])
+                with self.assertRaisesRegex(RuntimeError, "executed zero steps"):
+                    executor._run_raw_transaction_script({
+                        "database": "tpcc",
+                        "duration_sec": 1,
+                        "expected_error_codes": [1213],
+                        "scripts": [{"role": "deadlock_a", "steps": [{"sql": "UPDATE t SET v = v + 1"}]}],
+                    })
 
     def test_benchbase_burst_command_materializes_requested_runtime(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -737,7 +697,7 @@ class AgentWorkloadTests(unittest.TestCase):
         self.assertIn("/tpcc_10W", xml)
 
     def test_safety_rejects_burst_duration_outside_injection_window(self):
-        task = build_traffic_task(RuntimeConfig(), profile=_traffic_profile(duration_sec=30), task_id="traffic")
+        task = _traffic_task(_traffic_profile(duration_sec=30), "traffic")
         dag = {"tasks": {"traffic": task}, "edges": [], "schedule": {}}
         result = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0)).check(
             dag,
@@ -798,7 +758,7 @@ class AgentWorkloadTests(unittest.TestCase):
         self.assertIn("workload_ramp", "; ".join(result.reasons))
 
     def test_safety_rejects_burst_benchmark_mismatch(self):
-        task = build_traffic_task(RuntimeConfig(), profile=_traffic_profile_for("tpcc"), task_id="traffic")
+        task = _traffic_task(_traffic_profile_for("tpcc"), "traffic")
         dag = {"tasks": {"traffic": task}, "edges": [], "schedule": {}}
         result = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0)).check(
             dag,
@@ -1281,7 +1241,7 @@ class AgentWorkloadTests(unittest.TestCase):
         runtime._inspect_named = lambda request, round_no, round_dir, filename: (  # type: ignore[method-assign]
             events.append(filename) or EnvironmentSnapshot(database=request.target_database)
         )
-        runtime.planner.plan = lambda request, snapshot, memory_items, reflection=None: (  # type: ignore[method-assign]
+        runtime.planner.plan = lambda request, snapshot, memory_items, reflection=None, planning_context=None: (  # type: ignore[method-assign]
             (_ for _ in ()).throw(PlannerFallbackError(
                 "Planner fallback blocked after tool loop failure: timeout",
                 trace=[{"step": 1, "tool": "read_memory"}],
@@ -1757,6 +1717,27 @@ def _traffic_profile_for(benchmark, **overrides):
         profile = _traffic_profile()
     profile.update(overrides)
     return profile
+
+
+def _traffic_task(profile, task_id):
+    normalized = validate_traffic_surge_profile(profile)
+    action = {
+        "kind": "benchbase_burst",
+        "benchmark": normalized["benchmark"],
+        "database": normalized["database"],
+        "config_path": normalized["config_path"],
+        "terminals": normalized["terminals"],
+        "rate": normalized["rate"],
+        "duration_sec": normalized["duration_sec"],
+        "transaction_mix": normalized["transaction_mix"],
+        "profile": normalized,
+    }
+    return {
+        "task_id": task_id,
+        "task_type": "traffic_surge",
+        "actions": [action],
+        "metadata": {"root_cause": "traffic_surge"},
+    }
 
 
 def _benchbase_xml(benchmark, names, weights):

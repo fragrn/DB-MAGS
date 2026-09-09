@@ -18,7 +18,6 @@ from AnomalyGraphAgent.types import (
     NodeCategory,
     NodeResult,
     PathResult,
-    ReActStep,
     TaskSpec,
 )
 

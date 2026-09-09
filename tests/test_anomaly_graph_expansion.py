@@ -77,6 +77,7 @@ class AnomalyGraphExpansionTests(unittest.TestCase):
             self.assertIn(path, reachable_paths(source, target), path)
 
     def test_planner_prompt_mentions_new_injectables_and_strategies(self):
+        from AnomalyGraphAgent.intent import strategies_for
         for text in [
             "metadata_lock",
             "table_lock",
@@ -86,11 +87,11 @@ class AnomalyGraphExpansionTests(unittest.TestCase):
             "large_temp_table",
             "redo_log_pressure",
             "connection_storm",
-            "Do not attempt to fill the system disk",
-            "network drop",
-            "expected_error_codes: [1213]",
         ]:
-            self.assertIn(text, SYSTEM_PROMPT)
+            self.assertTrue(strategies_for(text), text)
+        self.assertIn("Do not attempt to fill the system disk", SYSTEM_PROMPT)
+        self.assertIn("registered strategies", SYSTEM_PROMPT)
+        self.assertNotIn("expected_error_codes", SYSTEM_PROMPT)
 
     def test_new_evidence_rules_can_hit_from_constructed_metrics(self):
         cases = [
@@ -107,7 +108,7 @@ class AnomalyGraphExpansionTests(unittest.TestCase):
             self.assertTrue(result.hit, f"{node_id}: {result.details}")
 
     def test_new_request_json_files_parse_and_injected_nodes_are_injectable(self):
-        root = Path("experiment_runs")
+        root = Path("anomalychainInput")
         for name in [
             "request_metadata_lock_chain.json",
             "request_table_lock_chain.json",

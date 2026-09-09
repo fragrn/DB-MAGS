@@ -560,8 +560,10 @@ class MySQLProbe:
             with self.cursor() as cur:
                 cur.execute(f"EXPLAIN {sql}")
                 return list(cur.fetchall())
-        except Exception as e:
-            return [{"error": str(e)}]
+        except pymysql.MySQLError as e:
+            code = e.args[0] if e.args else None
+            kind = "database_error" if code in {1044, 1045, 1129, 1130, 2002, 2003, 2006, 2013} else "sql_error"
+            return [{"error": str(e), "error_type": kind, "error_code": code}]
 
     def latency_sample(self, sql: str, n: int = 5) -> dict[str, Any]:
         """Run a SQL n times and collect latency statistics."""

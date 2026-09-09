@@ -10,7 +10,7 @@ from AnomalyGraphAgent.config import RuntimeConfig
 from AnomalyGraphAgent.planner import GlobalPlanner, PlannerFallbackError
 from AnomalyGraphAgent.reflection import SelfReflection
 from AnomalyGraphAgent.safety import estimate_dag_required_sec
-from AnomalyGraphAgent.tools import LLMTimeoutError, PLANNING_TOOL_NAMES, _extract_planner_json_payload, call_planning_tool, chat_tool_calling_loop, llm_generate, planning_tool_schemas
+from AnomalyGraphAgent.tools import LLMTimeoutError, llm_generate
 from AnomalyGraphAgent.types import EnvironmentSnapshot, EvaluationResult, ExperimentRequest, ReflectionResult, SchemaInfo
 
 
@@ -54,7 +54,7 @@ class AgentReactPlannerTests(unittest.TestCase):
             target_path=["traffic_surge", "threads_concurrency_up", "lock_contention", "slow_query"],
             injected_nodes=["traffic_surge", "long_tx"],
         )
-        with self.assertRaisesRegex(ValueError, "not in target_path"):
+        with self.assertRaisesRegex(PlannerFallbackError, "not in target_path"):
             planner.plan(req, self.snapshot(), [])
 
     def test_request_validation_rejects_non_injectable_node(self):
@@ -65,7 +65,7 @@ class AgentReactPlannerTests(unittest.TestCase):
             target_path=["missing_index", "poor_plan", "slow_query"],
             injected_nodes=["poor_plan"],
         )
-        with self.assertRaisesRegex(ValueError, "not injectable"):
+        with self.assertRaisesRegex(PlannerFallbackError, "not injectable"):
             planner.plan(req, self.snapshot(), [])
 
     def test_request_validation_rejects_disabled_excessive_index(self):
@@ -76,213 +76,72 @@ class AgentReactPlannerTests(unittest.TestCase):
             target_path=["excessive_index", "slow_query"],
             injected_nodes=["excessive_index"],
         )
-        with self.assertRaisesRegex(ValueError, "not injectable"):
+        with self.assertRaisesRegex(PlannerFallbackError, "not injectable"):
             planner.plan(req, self.snapshot(), [])
 
-    def test_planning_tool_schemas_do_not_expose_config_or_execute(self):
-        schemas = planning_tool_schemas()
-        names = {item["function"]["name"] for item in schemas}
-        self.assertNotIn("build_slow_sql_task", names)
-        self.assertNotIn("get_benchbase_workload_defaults", names)
-        self.assertNotIn("build_traffic_task", names)
-        self.assertIn("probe_schema", names)
-        self.assertIn("explain_sql", names)
-        self.assertIn("build_task_dag", names)
-        self.assertIn("check_safety", names)
-        self.assertNotIn("execute_dag", names)
-        self.assertNotIn("write_memory", names)
-        self.assertNotIn("build_slow_sql_task", PLANNING_TOOL_NAMES)
-        for schema in schemas:
-            props = schema["function"]["parameters"]["properties"]
-            self.assertNotIn("config", props)
 
-    def test_native_tool_calling_generates_task_specs(self):
-        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
-        planner = GlobalPlanner(config)
-        req = self.request()
-        task_spec = {
-            "task_id": "slow_sql_missing_index",
-            "task_type": "slow_sql",
-            "actions": [
-                {
-                    "kind": "raw_sql_workload",
-                    "sql": "SELECT * FROM orders WHERE o_comment LIKE '%abc%' LIMIT 100",
-                    "concurrency": 8,
-                    "duration_sec": 30,
-                    "database": "tpcc",
-                }
-            ],
-            "expected_metrics": {"slow_query_delta": ">=1"},
-            "success_criteria": {"slow_query_delta": ">=1"},
-            "risk_assessment": "low",
-            "metadata": {
-                "root_cause": "missing_index",
-                "pattern": "weak_predicate",
-                "table": "orders",
-                "sql": "SELECT * FROM orders WHERE o_comment LIKE '%abc%' LIMIT 100",
-            },
-        }
-        responses = [
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "role": "assistant",
-                            "content": json.dumps(
-                                {
-                                    "target_path": req.target_path,
-                                    "injected_nodes": req.injected_nodes,
-                                    "task_specs": [task_spec],
-                                    "dependencies": [],
-                                    "reasoning": "Use weak predicate on an unindexed comment column.",
-                                    "safety_check": {"approved": True, "reasons": [], "warnings": []},
-                                }
-                            ),
-                        }
-                    }
-                ]
-            },
-        ]
-        captured_payloads = []
 
-        class FakeResponse:
-            def __init__(self, payload):
-                self.payload = payload
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-            def read(self):
-                return json.dumps(self.payload).encode("utf-8")
-
-        def fake_urlopen(req_obj, timeout=60):
-            captured_payloads.append(json.loads(req_obj.data.decode("utf-8")))
-            return FakeResponse(responses.pop(0))
-
-        with patch("urllib.request.urlopen", fake_urlopen):
-            dag, _snapshot, trace = planner.plan(req, self.snapshot(), [])
-
-        self.assertEqual(list(dag.tasks), ["slow_sql_missing_index"])
-        self.assertEqual(dag.tasks["slow_sql_missing_index"].actions[0]["duration_sec"], 30)
-        self.assertEqual(planner.last_plan_payload["target_path"], req.target_path)
-        self.assertEqual(planner.last_plan_payload["injected_nodes"], req.injected_nodes)
-        self.assertTrue(any(step.action == "final_answer" for step in trace))
-        self.assertFalse(any(message.get("role") == "tool" for message in captured_payloads[0]["messages"]))
+    def _query_intent(self, duration=30):
+        return {"intents": [{
+            "node": "missing_index", "strategy": "unindexed_filter",
+            "target": {"tables": ["orders"], "columns": ["o_comment"]},
+            "load": {"concurrency": 8, "duration_sec": duration},
+            "sql": {"query": "SELECT COUNT(*) FROM orders WHERE o_comment LIKE '%x%'"},
+            "expected_evidence": ["poor_plan", "slow_query"],
+        }]}
 
     def test_initial_round_clamps_duration_to_observation_window(self):
-        planner = GlobalPlanner(RuntimeConfig(openai_api_key="key", planner_enabled=True))
-        req = ExperimentRequest(
-            target_anomaly="missing_index_chain",
-            target_database="tpcc_10W",
-            target_path=["missing_index", "poor_plan", "slow_query", "qps_drop"],
-            injected_nodes=["missing_index"],
-            max_duration_sec=30,
-            workload={
-                "enabled": True,
-                "benchmark": "tpcc",
-                "database": "tpcc_10W",
-                "injection_observe_sec": 15,
-            },
-        )
-        task_spec = {
-            "task_id": "missing_index_initial",
-            "task_type": "slow_sql",
-            "actions": [{
-                "kind": "raw_sql_workload",
-                "database": "tpcc_10W",
-                "sql": "SELECT COUNT(*) FROM orders WHERE o_comment LIKE '%x%'",
-                "concurrency": 8,
-                "duration_sec": 30,
-            }],
-            "expected_metrics": {},
-            "success_criteria": {},
-            "risk_assessment": "low",
-            "metadata": {"root_cause": "missing_index"},
-        }
-
-        with patch("AnomalyGraphAgent.tools.chat_tool_calling_loop", return_value={
-            "json_payload": {"task_specs": [task_spec], "dependencies": []},
-            "trace": [],
-        }):
-            dag, _snapshot, trace = planner.plan(req, self.snapshot(), [])
-
-        task = dag.tasks["missing_index_initial"]
+        planner = GlobalPlanner(RuntimeConfig(openai_api_key="key"))
+        req = self.request()
+        req.max_duration_sec = 30
+        req.workload = {"enabled": True, "benchmark": "tpcc", "database": "tpcc", "injection_observe_sec": 15}
+        with patch("AnomalyGraphAgent.tools.llm_generate", return_value={"json_payload": self._query_intent()}), \
+             patch("AnomalyGraphAgent.tools.explain_sql", return_value={"plan": []}):
+            dag, _, _ = planner.plan(req, self.snapshot())
+        task = next(iter(dag.tasks.values()))
         self.assertEqual(task.actions[0]["duration_sec"], 15)
         self.assertEqual(task.actions[0]["concurrency"], 8)
-        self.assertEqual(task.metadata["planner_duration_limit_sec"], 15)
-        self.assertEqual(task.metadata["planner_duration_clamps"][0]["planning_round"], "initial")
-        self.assertTrue(any(step.action == "clamp_planner_duration" for step in trace))
-        required_sec, timing_reasons = estimate_dag_required_sec({
-            "tasks": {task_id: value.to_dict() for task_id, value in dag.tasks.items()},
-            "schedule": dag.schedule,
-        })
-        self.assertEqual(required_sec, 15.0)
-        self.assertEqual(timing_reasons, [])
+        changes = planner.last_plan_payload["compilation"]["normalizations"]
+        self.assertEqual(changes[0]["original"], 30)
+        self.assertEqual(changes[0]["final"], 15)
+        required, errors = estimate_dag_required_sec({"tasks": {task.task_id: task.to_dict()}, "schedule": dag.schedule})
+        self.assertEqual(required, 15)
+        self.assertEqual(errors, [])
 
     def test_retry_clamps_llm_duration_to_observation_window(self):
-        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
-        planner = GlobalPlanner(config)
-        req = ExperimentRequest(
-            target_anomaly="traffic_surge_chain",
-            target_database="tpcc_10W",
-            target_path=["traffic_surge", "threads_concurrency_up", "lock_contention", "slow_query", "qps_drop"],
-            injected_nodes=["traffic_surge"],
-            max_duration_sec=30,
-            workload={
-                "enabled": True,
-                "benchmark": "tpcc",
-                "database": "tpcc_10W",
-                "config_path": ".tools/benchbase-main/target/benchbase-mysql/config/mysql/local_tpcc_10W_config.xml",
-                "injection_observe_sec": 15,
-            },
-        )
-        task_spec = {
-            "task_id": "traffic_retry",
-            "task_type": "traffic_surge",
-            "actions": [{
-                "kind": "benchbase_burst_command",
-                "benchmark": "tpcc",
-                "database": "tpcc_10W",
-                "command": ["java", "-jar", "wrong.jar", "-b", "tpcc", "-c", "wrong.xml"],
-                "duration_sec": 30,
-                "terminals": 64,
-                "rate": 400,
-            }],
-            "expected_metrics": {},
-            "success_criteria": {},
-            "risk_assessment": "medium",
-            "metadata": {"root_cause": "traffic_surge"},
-        }
-        reflection = ReflectionResult(failure_reason="traffic was too weak")
-
-        with patch("AnomalyGraphAgent.tools.chat_tool_calling_loop", return_value={
-            "json_payload": {
-                "task_specs": [task_spec],
-                "dependencies": [],
-                "reasoning": "Increase active traffic pressure.",
-            },
-            "trace": [],
-        }):
-            dag, _snapshot, trace = planner.plan(req, self.snapshot(), [], reflection=reflection)
-
-        action = dag.tasks["traffic_retry"].actions[0]
-        metadata = dag.tasks["traffic_retry"].metadata
+        from AnomalyGraphAgent.intent_compiler import CompilationContext
+        planner = GlobalPlanner(RuntimeConfig(openai_api_key="key"))
+        req = ExperimentRequest(target_database="tpcc", target_path=["traffic_surge", "threads_concurrency_up"],
+                                injected_nodes=["traffic_surge"], max_duration_sec=30,
+                                workload={"enabled": True, "benchmark": "tpcc", "database": "tpcc", "injection_observe_sec": 15})
+        profile = {"benchmark": "tpcc", "database": "tpcc", "config_path": "/tmp/tpcc.xml",
+                   "terminals": 4, "rate": 100, "duration_sec": 30,
+                   "transaction_mix": {"NewOrder": 45, "Payment": 55},
+                   "mix_template": "baseline", "rationale": "baseline mix"}
+        ctx = CompilationContext(req, planner.config, "retry-run", round_no=2,
+                                 benchbase_profile=profile, transaction_types=("NewOrder", "Payment"))
+        payload = {"intents": [{"node": "traffic_surge", "strategy": "increase_client_concurrency",
+                               "target": None, "sql": None, "expected_evidence": [],
+                               "load": {"duration_sec": 30, "concurrency": 64, "rate": 400}}]}
+        with patch("AnomalyGraphAgent.tools.llm_generate", return_value={"json_payload": payload}):
+            dag, _, _ = planner.plan(req, self.snapshot(), reflection=ReflectionResult(failure_reason="weak traffic"),
+                                     compilation_context=ctx)
+        action = next(iter(dag.tasks.values())).actions[0]
         self.assertEqual(action["duration_sec"], 15)
-        self.assertEqual(action["terminals"], 64)
-        self.assertEqual(action["rate"], 400)
-        self.assertEqual(metadata["planner_duration_limit_sec"], 15)
-        self.assertEqual(metadata["planner_duration_clamps"][0]["planning_round"], "retry")
-        self.assertEqual(metadata["planner_duration_clamps"][0]["original_duration_sec"], 30)
-        self.assertTrue(any(step.action == "clamp_planner_duration" for step in trace))
-        required_sec, timing_reasons = estimate_dag_required_sec({
-            "tasks": {task_id: task.to_dict() for task_id, task in dag.tasks.items()},
-            "schedule": dag.schedule,
-        })
-        self.assertEqual(required_sec, 15.0)
-        self.assertEqual(timing_reasons, [])
+        self.assertEqual(action["profile"]["duration_sec"], 15)
+        self.assertEqual(action["profile"]["terminals"], 64)
+        self.assertEqual(action["profile"]["rate"], 400)
+
+    def test_invalid_json_is_repaired_once_before_local_validation(self):
+        planner = GlobalPlanner(RuntimeConfig(openai_api_key="key"))
+        responses = [{"text": '{"intents": ['}, {"json_payload": self._query_intent(5)}]
+        with patch("AnomalyGraphAgent.tools.llm_generate", side_effect=responses) as mocked, \
+             patch("AnomalyGraphAgent.tools.explain_sql", return_value={"plan": []}):
+            dag, _, _ = planner.plan(self.request(), self.snapshot())
+        self.assertEqual(len(dag.tasks), 1)
+        self.assertEqual(mocked.call_count, 2)
+        self.assertEqual(planner.planner_json_repair_attempts, 1)
+        self.assertIn("Intent", mocked.call_args.kwargs["system_prompt"])
 
     def test_planner_duration_clamp_covers_raw_and_nested_actions(self):
         specs = [{
@@ -344,19 +203,15 @@ class AgentReactPlannerTests(unittest.TestCase):
             max_duration_sec=30,
             workload={"enabled": True, "injection_observe_sec": 15},
         )
-        retry_context = planner._build_llm_context(
-            req,
-            self.snapshot(),
-            [],
-            ReflectionResult(failure_reason="retry"),
+        retry_context = planner._build_planner_context(
+            req, self.snapshot(), [], ReflectionResult(failure_reason="retry")
         )
-        initial_context = planner._build_llm_context(req, self.snapshot(), [], None)
+        initial_context = planner._build_planner_context(req, self.snapshot(), [], None)
 
-        self.assertIn("planning_round: retry", retry_context)
-        self.assertIn("duration_limit_sec: 15.0", retry_context)
-        self.assertIn("instead of duration", retry_context)
-        self.assertIn("planning_round: initial", initial_context)
-        self.assertIn("duration_limit_sec: 15.0", initial_context)
+        self.assertEqual(retry_context["duration_limit_sec"], 15)
+        self.assertEqual(initial_context["duration_limit_sec"], 15)
+        self.assertEqual(retry_context["request"]["target_path"], req.target_path)
+        self.assertIn("schema", retry_context["environment"])
 
     def test_reflection_prompt_forbids_extending_observation_window(self):
         reflector = SelfReflection(RuntimeConfig())
@@ -378,30 +233,12 @@ class AgentReactPlannerTests(unittest.TestCase):
         self.assertIn("<= 15 seconds", prompt)
         self.assertIn("Do not suggest extending the observation window", prompt)
 
-    def test_old_builder_tool_call_is_blocked(self):
-        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
-        with self.assertRaisesRegex(ValueError, "not allowed"):
-            call_planning_tool(
-                "build_slow_sql_task",
-                config=config,
-                arguments={"database": "tpcc", "table": "orders"},
-            )
 
     def test_planner_disabled_blocks_fallback(self):
         planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
         with self.assertRaisesRegex(PlannerFallbackError, "planner_enabled=false"):
             planner.plan(self.request(), self.snapshot(), [])
 
-    def test_tool_loop_error_blocks_fallback(self):
-        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
-        planner = GlobalPlanner(config)
-        with patch("AnomalyGraphAgent.tools.chat_tool_calling_loop", return_value={
-            "error": "The read operation timed out",
-            "trace": [{"step": 1, "tool": "read_memory", "result": []}],
-        }):
-            with self.assertRaisesRegex(PlannerFallbackError, "The read operation timed out"):
-                planner.plan(self.request(), self.snapshot(), [])
-        self.assertTrue(any(step.action == "fallback_blocked" for step in planner._react_trace))
 
     def test_invalid_action_shape_blocks_planner_without_attribute_error(self):
         config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
@@ -412,116 +249,25 @@ class AgentReactPlannerTests(unittest.TestCase):
             "actions": ["SELECT 1"],
             "expected_metrics": {},
             "success_criteria": {},
+            "start_after_sec": 0,
+            "dependencies": [],
+            "cleanup_actions": [],
             "risk_assessment": "medium",
             "metadata": {"root_cause": "missing_index"},
         }
-        with patch("AnomalyGraphAgent.tools.chat_tool_calling_loop", return_value={
+        with patch("AnomalyGraphAgent.tools.llm_generate", return_value={
             "json_payload": {"task_specs": [bad_spec], "dependencies": []},
             "trace": [{"step": 1, "tool": "final_answer", "content": "{}"}],
         }):
-            with self.assertRaisesRegex(PlannerFallbackError, "non-object action"):
+            with self.assertRaisesRegex(PlannerFallbackError, "only intents"):
                 planner.plan(self.request(), self.snapshot(), [])
-        self.assertTrue(any(step.action == "fallback_blocked" for step in planner._react_trace))
+        self.assertTrue(any(step.action == "planner_validation_failed" for step in planner._planner_trace))
 
-    def test_chat_tool_calling_timeout_raises(self):
-        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
 
-        def timeout_urlopen(req_obj, timeout=60):
-            raise TimeoutError("timed out")
 
-        with patch("urllib.request.urlopen", timeout_urlopen):
-            with self.assertRaisesRegex(LLMTimeoutError, "timed out after 120s"):
-                chat_tool_calling_loop(config, "system", "user", max_steps=1)
 
-    def test_chat_tool_calling_retries_timeout_once(self):
-        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
-        responses = [
-            TimeoutError("transient timeout"),
-            {
-                "choices": [
-                    {
-                        "message": {
-                            "role": "assistant",
-                            "content": json.dumps({"ok": True}),
-                        }
-                    }
-                ]
-            },
-        ]
 
-        class FakeResponse:
-            def __init__(self, payload):
-                self.payload = payload
 
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-            def read(self):
-                return json.dumps(self.payload).encode("utf-8")
-
-        def flaky_urlopen(req_obj, timeout=60):
-            item = responses.pop(0)
-            if isinstance(item, BaseException):
-                raise item
-            return FakeResponse(item)
-
-        with patch("urllib.request.urlopen", flaky_urlopen):
-            result = chat_tool_calling_loop(config, "system", "user", max_steps=1)
-
-        self.assertEqual(result["json_payload"], {"ok": True})
-
-    def test_chat_tool_calling_retries_remote_disconnect(self):
-        config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
-        responses = [
-            http.client.RemoteDisconnected("remote closed"),
-            {
-                "choices": [
-                    {"message": {"role": "assistant", "content": json.dumps({"ok": True})}}
-                ]
-            },
-        ]
-
-        class FakeResponse:
-            def __init__(self, payload):
-                self.payload = payload
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, exc_type, exc, tb):
-                return False
-
-            def read(self):
-                return json.dumps(self.payload).encode("utf-8")
-
-        def flaky_urlopen(req_obj, timeout=60):
-            item = responses.pop(0)
-            if isinstance(item, BaseException):
-                raise item
-            return FakeResponse(item)
-
-        with patch("urllib.request.urlopen", flaky_urlopen):
-            result = chat_tool_calling_loop(config, "system", "user", max_steps=1)
-
-        self.assertEqual(result["json_payload"], {"ok": True})
-
-    def test_planner_final_json_extractor_accepts_prose_wrapped_json(self):
-        payload = {"task_specs": [{"task_id": "t1"}], "dependencies": []}
-        text = "Here is the plan:\n" + json.dumps(payload) + "\nDone."
-        self.assertEqual(_extract_planner_json_payload(text), payload)
-
-    def test_planner_final_json_extractor_prefers_object_with_task_specs(self):
-        first = {"note": "not the final plan"}
-        second = {"task_specs": [{"task_id": "t1"}], "dependencies": []}
-        text = json.dumps(first) + "\n" + json.dumps(second)
-        self.assertEqual(_extract_planner_json_payload(text), second)
-
-    def test_planner_final_json_extractor_rejects_invalid_text(self):
-        with self.assertRaises(json.JSONDecodeError):
-            _extract_planner_json_payload("no json here")
 
     def test_llm_generate_timeout_raises(self):
         config = RuntimeConfig(openai_api_key="key", planner_enabled=True)
@@ -559,14 +305,12 @@ class AgentReactPlannerTests(unittest.TestCase):
             raw_text="RAW_TEXT_SHOULD_NOT_BE_INCLUDED" + "z" * 5000,
         )
 
-        context = planner._build_llm_context(self.request(), snapshot, [], reflection)
+        context = planner._build_planner_context(self.request(), snapshot, [], reflection)
 
-        self.assertIn("needs stronger surge", context)
-        self.assertIn('"terminals": 16', context)
-        self.assertIn('"qps": 100', context)
-        self.assertNotIn("RAW_TEXT_SHOULD_NOT_BE_INCLUDED", context)
-        self.assertNotIn('"samples"', context)
-        self.assertNotIn("Unused_large_value", context)
+        self.assertEqual(context["reflection"]["failure_reason"], "needs stronger surge")
+        self.assertEqual(context["workload"]["baseline"]["summary"]["qps"], 100)
+        self.assertIn("schema", context["environment"])
+        self.assertIn("duration_limit_sec", context)
 
     def test_non_requested_task_spec_is_dropped_and_missing_requested_fails(self):
         planner = GlobalPlanner(RuntimeConfig(planner_enabled=False))
@@ -592,6 +336,9 @@ class AgentReactPlannerTests(unittest.TestCase):
             "actions": [{"kind": "workload_ramp", "sql": "SELECT 1", "duration_sec": 10}],
             "expected_metrics": {},
             "success_criteria": {},
+            "start_after_sec": 0,
+            "dependencies": [],
+            "cleanup_actions": [],
             "risk_assessment": "medium",
             "metadata": {"root_cause": "traffic_surge"},
         }
@@ -628,6 +375,9 @@ class AgentReactPlannerTests(unittest.TestCase):
             ],
             "expected_metrics": {},
             "success_criteria": {},
+            "start_after_sec": 0,
+            "dependencies": [],
+            "cleanup_actions": [],
             "risk_assessment": "medium",
             "metadata": {"root_cause": "traffic_surge"},
         }
@@ -655,6 +405,9 @@ class AgentReactPlannerTests(unittest.TestCase):
             ],
             "expected_metrics": {},
             "success_criteria": {},
+            "start_after_sec": 0,
+            "dependencies": [],
+            "cleanup_actions": [],
             "risk_assessment": "medium",
             "metadata": {"root_cause": "resource_cpu"},
         }
@@ -682,6 +435,9 @@ class AgentReactPlannerTests(unittest.TestCase):
             ],
             "expected_metrics": {},
             "success_criteria": {},
+            "start_after_sec": 0,
+            "dependencies": [],
+            "cleanup_actions": [],
             "risk_assessment": "medium",
             "metadata": {"root_cause": "resource_cpu"},
         }
@@ -709,6 +465,9 @@ class AgentReactPlannerTests(unittest.TestCase):
             ],
             "expected_metrics": {},
             "success_criteria": {},
+            "start_after_sec": 0,
+            "dependencies": [],
+            "cleanup_actions": [],
             "risk_assessment": "medium",
             "metadata": {"root_cause": "resource_io"},
         }
@@ -736,6 +495,9 @@ class AgentReactPlannerTests(unittest.TestCase):
             ],
             "expected_metrics": {},
             "success_criteria": {},
+            "start_after_sec": 0,
+            "dependencies": [],
+            "cleanup_actions": [],
             "risk_assessment": "medium",
             "metadata": {"root_cause": "resource_io"},
         }
@@ -756,6 +518,9 @@ class AgentReactPlannerTests(unittest.TestCase):
             "actions": [{"kind": "raw_sql_workload", "database": "tpcc", "sql": "SELECT 1", "duration_sec": 10}],
             "expected_metrics": {},
             "success_criteria": {},
+            "start_after_sec": 0,
+            "dependencies": [],
+            "cleanup_actions": [],
             "risk_assessment": "medium",
             "metadata": {"root_cause": "resource_memory"},
         }
@@ -776,6 +541,9 @@ class AgentReactPlannerTests(unittest.TestCase):
             "actions": [{"kind": "raw_command", "command": ["echo", "ok"], "duration_sec": 1}],
             "expected_metrics": {},
             "success_criteria": {},
+            "start_after_sec": 0,
+            "dependencies": [],
+            "cleanup_actions": [],
             "risk_assessment": "low",
             "metadata": {"root_cause": "backup"},
         }

@@ -374,6 +374,8 @@ class Executor:
         alive = sum(1 for thread in threads if thread.is_alive())
         if alive:
             errors.append(f"{alive} transaction script thread(s) still running after timeout")
+        if executed_steps == 0:
+            errors.append("raw_transaction_script executed zero steps")
         result = {
             "kind": "raw_transaction_script",
             "database": database,
