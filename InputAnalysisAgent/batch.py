@@ -69,12 +69,15 @@ def run_batch(
     max_attempts: int = 4,
     attempt_timeout_sec: int = 300,
     limit: int | None = None,
+    dbms_order: bool = False,
     runtime: ReproductionRuntime | None = None,
 ) -> dict[str, Any]:
     input_root = Path(input_root)
     output_root = Path(output_root)
     runtime = runtime or ReproductionRuntime()
     posts = sorted(path for path in input_root.rglob("*.txt") if path.is_file())
+    if dbms_order:
+        posts = sorted(posts, key=lambda path: (_post_dbms_order(path), str(path)))
     if limit is not None:
         posts = posts[: max(0, limit)]
     output_root.mkdir(parents=True, exist_ok=True)
@@ -120,6 +123,8 @@ def _run_one_post(
         result = _run_attempt_with_timeout(runtime, post_path, attempt_root, database, attempt_no, attempt_timeout_sec)
         attempts.append(result)
         _write_json(post_dir / "post_result.json", _finalize(post_path, category, slug, attempts).to_dict())
+        if _no_progress_planning_timeouts(attempts) >= 2:
+            break
         if result.status in {"success", "blocked", "abandoned"}:
             break
     final = _finalize(post_path, category, slug, attempts)
@@ -152,9 +157,23 @@ def _run_attempt_with_timeout(
     except BatchAttemptTimeout as exc:
         run_dir = _latest_run_dir(attempt_root)
         if run_dir:
+            if (run_dir / "state.json").exists():
+                state = load_state(run_dir)
+                state.status = "failed"
+                state.last_error = str(exc)
+                save_state(run_dir, state)
             _write_json(
                 run_dir / "batch_attempt_timeout.json",
                 {"status": "failed", "reason": str(exc), "timeout_sec": timeout_sec, "timestamp": time.time()},
+            )
+            _write_json(
+                run_dir / "failure.json",
+                {
+                    "phase": "planning",
+                    "error": str(exc),
+                    "exception_type": "BatchAttemptTimeout",
+                    "timestamp": time.time(),
+                },
             )
         return AttemptResult(attempt_no, str(run_dir) if run_dir else None, "failed", str(exc))
     finally:
@@ -194,22 +213,30 @@ def _run_attempt(
         run_dir = _latest_run_dir(attempt_root)
         if not run_dir:
             return AttemptResult(attempt_no, None, "failed", str(exc))
-        repairs = _repair_run_blueprint(run_dir, database)
-        if repairs:
+        repairs: list[dict[str, Any]] = []
+        last_exc: Exception = exc
+        for _repair_round in range(1, 7):
+            new_repairs = _repair_run_blueprint(run_dir, database)
+            if not new_repairs:
+                break
+            repairs.extend(new_repairs)
             try:
                 result = runtime.resume(run_dir, HumanDecision("retry", actor="batch"))
                 return _completed_attempt(attempt_no, Path(result["run_dir"]), repairs)
             except HumanGateRequired as gate:
                 return _handle_gate(runtime, gate.run_dir, database, attempt_no, repairs=repairs)
             except Exception as retry_exc:
-                return AttemptResult(
-                    attempt_no,
-                    str(run_dir),
-                    _failure_status(run_dir),
-                    str(retry_exc),
-                    repairs=repairs,
-                    missing_capabilities=_missing_capabilities(run_dir),
-                )
+                last_exc = retry_exc
+                continue
+        if repairs:
+            return AttemptResult(
+                attempt_no,
+                str(run_dir),
+                _failure_status(run_dir),
+                str(last_exc),
+                repairs=repairs,
+                missing_capabilities=_missing_capabilities(run_dir),
+            )
         return AttemptResult(
             attempt_no,
             str(run_dir),
@@ -289,6 +316,17 @@ def _infer_unsupported_dbms(text: str) -> tuple[str | None, list[str]]:
     if has_mysql and counts[dbms] <= 1:
         return None, []
     return dbms, [pattern for found_dbms, pattern in signals if found_dbms == dbms]
+
+
+def _post_dbms_order(path: Path) -> int:
+    text = path.read_text(errors="replace").lower()
+    if re.search(r"\b(sql server|mssql|ssms|resource_semaphore|tempdb|sys\.dm_|showplan|execution plan)\b", text):
+        return 2
+    if re.search(r"\b(postgresql|postgres|pg_stat|vacuum|analyze|work_mem|shared_buffers|access exclusive)\b", text):
+        return 1
+    if re.search(r"\b(mysql|innodb|mariadb|percona|aurora|slow query log|explain)\b", text):
+        return 0
+    return 0
 
 
 def _compact_post_for_planning(text: str, *, max_chars: int = 14000) -> tuple[str, dict[str, Any]]:
@@ -403,6 +441,8 @@ def _repair_run_blueprint(run_dir: Path, database: str) -> list[dict[str, Any]]:
     if not changes:
         return []
     write_json(run_dir / "blueprint_repair_log.json", {"changes": changes, "timestamp": time.time()})
+    with (run_dir / "blueprint_repair_history.jsonl").open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps({"changes": changes, "timestamp": time.time()}, ensure_ascii=False) + "\n")
     write_json(run_dir / "blueprint.json", repaired)
     try:
         blueprint = ReproductionBlueprint.from_dict(repaired)
@@ -414,6 +454,14 @@ def _repair_run_blueprint(run_dir: Path, database: str) -> list[dict[str, Any]]:
         state = load_state(run_dir)
         if "planning" not in state.completed_phases:
             state.completed_phases.append("planning")
+        # A blueprint repair can change schema, data, workload, TaskSpecs, or
+        # cleanup. Re-run every downstream phase so repaired artifacts actually
+        # take effect instead of resuming from stale preparation/execution state.
+        for phase in ("approval", "preparation", "calibration", "execution", "evaluation", "completed"):
+            if phase in state.completed_phases:
+                state.completed_phases.remove(phase)
+        if state.phase in {"calibration", "execution", "evaluation", "completed"}:
+            state.phase = "approval"
         save_state(run_dir, state)
     return changes
 
@@ -426,12 +474,78 @@ def repair_blueprint_payload(payload: dict[str, Any], database: str) -> tuple[di
         if before != after:
             changes.append({"path": path, "before": before, "after": after, "reason": reason})
 
+    def normalize_confidence(item: Any, path: str = "") -> None:
+        if isinstance(item, dict):
+            for key, child in list(item.items()):
+                child_path = f"{path}.{key}" if path else key
+                if key == "confidence" and child is None:
+                    item[key] = 0.5
+                    record(child_path, None, 0.5, "Default missing confidence.")
+                else:
+                    normalize_confidence(child, child_path)
+        elif isinstance(item, list):
+            for index, child in enumerate(item):
+                normalize_confidence(child, f"{path}[{index}]")
+
+    normalize_confidence(value)
     for root, key in (("environment_spec", "database"), ("data_spec", "database"), ("experiment_request", "target_database")):
         obj = value.setdefault(root, {})
         before = obj.get(key)
         obj[key] = database
         record(f"{root}.{key}", before, database, "Use per-post attempt database.")
     data = value.setdefault("data_spec", {})
+    incident_dbms = normalize_dbms(str((value.get("incident_spec") or {}).get("dbms") or "mysql"))
+    feasibility = value.setdefault("feasibility", {})
+    missing = list(feasibility.get("missing_capabilities") or []) if isinstance(feasibility.get("missing_capabilities"), list) else []
+    if str(feasibility.get("level") or "").lower() == "blocked" and incident_dbms in supported_execution_dbms():
+        database_only_missing = [
+            item for item in missing
+            if re.search(r"\b(database|target database|db environment|environment|existence|schema inspection)\b", str(item), re.I)
+        ]
+        if not missing or len(database_only_missing) == len(missing):
+            before = dict(feasibility)
+            feasibility["level"] = "mechanism"
+            feasibility["missing_capabilities"] = []
+            feasibility.setdefault("unmatched_conditions", [])
+            feasibility["rationale"] = (
+                str(feasibility.get("rationale") or "")
+                + " Codex repair: batch reproduction uses a dedicated synthetic database, so target-database existence is handled by preparation."
+            ).strip()
+            record("feasibility", before, feasibility, "Codex repair: unblock target-database environment by using the per-post synthetic database.")
+    if _payload_references_generated_numbers(value):
+        schema_sql = data.setdefault("schema_sql", [])
+        generation_sql = data.setdefault("generation_sql", [])
+        if isinstance(schema_sql, list) and not any("generated_numbers" in str(sql).lower() for sql in schema_sql):
+            before = list(schema_sql)
+            schema_sql.append(_generated_numbers_schema_sql(incident_dbms))
+            record("data_spec.schema_sql", before, schema_sql, "Codex repair: create generated_numbers helper table used by LLM SQL.")
+        if isinstance(generation_sql, list) and not any("generated_numbers" in str(sql).lower() and "insert" in str(sql).lower() for sql in generation_sql):
+            before = list(generation_sql)
+            generation_sql.insert(0, _generated_numbers_insert_sql(incident_dbms))
+            record("data_spec.generation_sql", before, generation_sql, "Codex repair: populate generated_numbers helper table.")
+    calibrations = data.get("calibration_queries")
+    if isinstance(calibrations, list):
+        before = json.loads(json.dumps(calibrations))
+        data["calibration_queries"] = [
+            item for item in calibrations
+            if isinstance(item, dict) and re.match(r"^\s*(SELECT|WITH)\b", str(item.get("sql") or ""), re.I)
+        ]
+        record(
+            "data_spec.calibration_queries",
+            before,
+            data["calibration_queries"],
+            "Remove calibration queries that cannot be EXPLAINed as read-only SELECT/WITH.",
+        )
+        before_placeholders = json.loads(json.dumps(data["calibration_queries"]))
+        for item in data["calibration_queries"]:
+            if isinstance(item, dict) and isinstance(item.get("sql"), str):
+                item["sql"] = _replace_unbound_placeholders(item["sql"])
+        record(
+            "data_spec.calibration_queries",
+            before_placeholders,
+            data["calibration_queries"],
+            "Replace unresolved SQL placeholders with synthetic literals for executable calibration.",
+        )
     if isinstance(data.get("tables"), list) and all(isinstance(item, str) for item in data["tables"]):
         before = data["tables"]
         data["tables"] = [{"name": item, "purpose": "synthetic reproduction table", "target_rows": 1000, "distribution_notes": ""} for item in before]
@@ -454,10 +568,65 @@ def repair_blueprint_payload(payload: dict[str, Any], database: str) -> tuple[di
             scale["growth_factor"] = 2.0
         scale["max_rounds"] = max(1, int(scale.get("max_rounds") or 1))
         record("data_spec.scale_strategy", before, scale, "Normalize scale strategy.")
+    if isinstance(data.get("generation_sql"), list):
+        before_generation = list(data["generation_sql"])
+        data["generation_sql"] = [_replace_unbound_placeholders(str(sql)) for sql in before_generation]
+        record("data_spec.generation_sql", before_generation, data["generation_sql"], "Replace unresolved SQL placeholders in data generation statements.")
     if isinstance(data.get("analyze_tables"), list):
         before = list(data["analyze_tables"])
         data["analyze_tables"] = [str(item).split(".")[-1].strip("`") for item in before if str(item).strip()]
         record("data_spec.analyze_tables", before, data["analyze_tables"], "Use unqualified table names.")
+    tasks = value.get("task_specs")
+    if isinstance(tasks, list):
+        before_tasks = json.loads(json.dumps(tasks))
+        removed_task_ids: set[str] = set()
+        kept_tasks: list[dict[str, Any]] = []
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+            task_id = str(task.get("task_id") or "")
+            actions = task.get("actions") or []
+            kinds = {str(action.get("kind") or "").lower() for action in actions if isinstance(action, dict)}
+            task_type = str(task.get("task_type") or "").lower()
+            if kinds and kinds <= _SETUP_ONLY_ACTION_KINDS:
+                if task_id:
+                    removed_task_ids.add(task_id)
+                continue
+            if task_type in _SETUP_ONLY_TASK_TYPES:
+                if task_id:
+                    removed_task_ids.add(task_id)
+                continue
+            action_text_for_setup = json.dumps(actions, ensure_ascii=False).lower()
+            if task_id.lower() in _SETUP_ONLY_TASK_TYPES or ("create database" in action_text_for_setup and "create table" in action_text_for_setup):
+                if task_id:
+                    removed_task_ids.add(task_id)
+                continue
+            if task_type in _SETUP_ONLY_TASK_TYPES and not actions:
+                if task_id:
+                    removed_task_ids.add(task_id)
+                continue
+            kept_tasks.append(task)
+        if removed_task_ids:
+            value["task_specs"] = kept_tasks
+            record(
+                "task_specs",
+                before_tasks,
+                kept_tasks,
+                "Remove database/schema setup TaskSpecs; runtime prepares the dedicated database from DataSpec.",
+            )
+            deps = value.get("dependencies")
+            if isinstance(deps, list):
+                before_deps = json.loads(json.dumps(deps))
+                value["dependencies"] = [
+                    dep for dep in deps
+                    if not _dependency_mentions_removed_task(dep, removed_task_ids)
+                ]
+                record(
+                    "dependencies",
+                    before_deps,
+                    value["dependencies"],
+                    "Remove dependencies attached to setup-only TaskSpecs.",
+                )
     workload = value.setdefault("workload_spec", {})
     queries = workload.get("queries")
     if isinstance(queries, list) and any(isinstance(item, dict) for item in queries):
@@ -465,7 +634,36 @@ def repair_blueprint_payload(payload: dict[str, Any], database: str) -> tuple[di
         workload["queries"] = [str(item.get("sql") or "").strip() if isinstance(item, dict) else str(item) for item in queries]
         workload["queries"] = [query for query in workload["queries"] if query]
         record("workload_spec.queries", before, workload["queries"], "Runtime SQL background workload expects query strings.")
+    if isinstance(workload.get("queries"), list):
+        before = list(workload["queries"])
+        workload["queries"] = [_replace_unbound_placeholders(str(query)) for query in workload["queries"]]
+        workload["queries"] = [query for query in workload["queries"] if "{" not in query and "}" not in query]
+        if before and not workload["queries"]:
+            workload["queries"] = ["SELECT 1"]
+        record("workload_spec.queries", before, workload["queries"], "Replace unresolved SQL placeholders with synthetic literals.")
+    request = value.setdefault("experiment_request", {})
+    try:
+        max_duration = float(request.get("max_duration_sec") or 60)
+    except (TypeError, ValueError):
+        max_duration = 60.0
+        before = request.get("max_duration_sec")
+        request["max_duration_sec"] = max_duration
+        record("experiment_request.max_duration_sec", before, max_duration, "Normalize invalid request duration.")
     for task_index, task in enumerate(value.get("task_specs") or []):
+        action_text = json.dumps(task.get("actions") or [], ensure_ascii=False)
+        if re.search(r"\bSET\s+GLOBAL\b", action_text, re.I) and not task.get("cleanup_actions"):
+            cleanup_steps = []
+            for var in re.findall(r"\bSET\s+GLOBAL\s+([A-Za-z0-9_]+)\s*=", action_text, flags=re.I):
+                cleanup_steps.append({"sql": f"SET GLOBAL {var} = DEFAULT"})
+            if cleanup_steps:
+                before = task.get("cleanup_actions")
+                task["cleanup_actions"] = [{
+                    "kind": "raw_transaction_script",
+                    "database": database,
+                    "duration_sec": 1,
+                    "scripts": [{"role": "cleanup_global_variables", "autocommit": True, "concurrency": 1, "steps": cleanup_steps}],
+                }]
+                record(f"task_specs[{task_index}].cleanup_actions", before, task["cleanup_actions"], "Codex repair: restore SET GLOBAL variables with DEFAULT cleanup.")
         for action_key in ("actions", "cleanup_actions"):
             for action_index, action in enumerate(task.get(action_key) or []):
                 if not isinstance(action, dict):
@@ -478,7 +676,146 @@ def repair_blueprint_payload(payload: dict[str, Any], database: str) -> tuple[di
                     before = action["database"]
                     action["database"] = database
                     record(f"task_specs[{task_index}].{action_key}[{action_index}].database", before, database, "Use per-post attempt database.")
+                for sql_key in ("sql",):
+                    if isinstance(action.get(sql_key), str):
+                        before = action[sql_key]
+                        action[sql_key] = _replace_unbound_placeholders(before)
+                        record(f"task_specs[{task_index}].{action_key}[{action_index}].{sql_key}", before, action[sql_key], "Replace unresolved SQL placeholders with synthetic literals.")
+                for script_index, script in enumerate(action.get("scripts") or []):
+                    if not isinstance(script, dict):
+                        continue
+                    for step_index, step in enumerate(script.get("steps") or []):
+                        if isinstance(step, dict) and isinstance(step.get("sql"), str):
+                            before = step["sql"]
+                            step["sql"] = _replace_unbound_placeholders(before)
+                            record(
+                                f"task_specs[{task_index}].{action_key}[{action_index}].scripts[{script_index}].steps[{step_index}].sql",
+                                before,
+                                step["sql"],
+                                "Replace unresolved SQL placeholders with synthetic literals.",
+                            )
+                duration = action.get("duration_sec")
+                try:
+                    duration_value = float(duration)
+                except (TypeError, ValueError):
+                    duration_value = 1.0
+                    before = duration
+                    action["duration_sec"] = duration_value
+                    record(f"task_specs[{task_index}].{action_key}[{action_index}].duration_sec", before, duration_value, "Normalize missing action duration.")
+                    continue
+                if duration_value > max_duration and action_key == "actions":
+                    before = duration
+                    action["duration_sec"] = max_duration
+                    record(
+                        f"task_specs[{task_index}].{action_key}[{action_index}].duration_sec",
+                        before,
+                        max_duration,
+                        "Cap action duration to experiment_request.max_duration_sec.",
+                    )
+    if not value.get("task_specs"):
+        calibrations = data.get("calibration_queries") or []
+        query = next((item for item in calibrations if isinstance(item, dict) and str(item.get("sql") or "").strip()), None)
+        if query:
+            before = value.get("task_specs")
+            value["task_specs"] = [{
+                "task_id": "codex_repaired_probe_workload",
+                "task_type": "codex_repaired_raw_sql_workload",
+                "actions": [{
+                    "kind": "raw_sql_workload",
+                    "database": database,
+                    "sql": str(query["sql"]).strip(),
+                    "concurrency": 2,
+                    "duration_sec": min(float(request.get("max_duration_sec") or 30), 30.0),
+                }],
+                "expected_metrics": {},
+                "success_criteria": {"mechanism_probe_executes": True},
+                "risk_assessment": "low",
+                "metadata": {"root_cause": "codex_repaired_from_calibration_query"},
+            }]
+            value["dependencies"] = []
+            record("task_specs", before, value["task_specs"], "Codex repair: create executable raw_sql_workload from calibration query when LLM produced no DAG tasks.")
     return value, changes
+
+
+_SETUP_ONLY_ACTION_KINDS = {
+    "create_database",
+    "create_schema",
+    "setup_database",
+    "prepare_database",
+    "data_prep",
+}
+_SETUP_ONLY_TASK_TYPES = {
+    "create_database",
+    "create_schema",
+    "setup_database",
+    "prepare_database",
+    "data_prep",
+    "setup",
+    "setup_environment",
+    "schema_setup",
+}
+
+
+def _dependency_mentions_removed_task(dep: Any, removed_task_ids: set[str]) -> bool:
+    if isinstance(dep, (list, tuple)):
+        return any(str(item) in removed_task_ids for item in dep)
+    if isinstance(dep, dict):
+        return any(str(dep.get(key) or "") in removed_task_ids for key in ("source", "target", "from", "to", "depends_on", "task_id"))
+    return str(dep) in removed_task_ids
+
+
+def _payload_references_generated_numbers(value: Any) -> bool:
+    if isinstance(value, dict):
+        return any(_payload_references_generated_numbers(child) for child in value.values())
+    if isinstance(value, list):
+        return any(_payload_references_generated_numbers(child) for child in value)
+    return isinstance(value, str) and re.search(r"\bgenerated_numbers\b", value, re.I) is not None
+
+
+def _replace_unbound_placeholders(sql: str) -> str:
+    value = str(sql)
+    value = re.sub(r"\$\d+\b", "'repro_value'", value)
+    value = re.sub(r"<\s*(?:specific_)?[A-Za-z0-9_]*uuid[A-Za-z0-9_]*\s*>", "'repro_value'", value, flags=re.I)
+    value = re.sub(r"<\s*[A-Za-z0-9_]*placeholder[A-Za-z0-9_]*\s*>", "'repro_value'", value, flags=re.I)
+    value = re.sub(r"(?<!:):[A-Za-z_][A-Za-z0-9_]*\b", "'repro_value'", value)
+    # Do not rewrite MySQL user variables such as @rownum; they are valid SQL.
+    value = re.sub(r"\{(?!row_count\})([A-Za-z_][A-Za-z0-9_]*)\}", "1", value)
+    value = re.sub(r"=\s*\?", "= 1", value)
+    value = re.sub(r"\bIN\s*\(\s*\?\s*\)", "IN (1)", value, flags=re.I)
+    value = value.replace("?", "1")
+    return value
+
+
+def _generated_numbers_schema_sql(dbms: str) -> str:
+    if normalize_dbms(dbms) == "sqlserver":
+        return "CREATE TABLE IF NOT EXISTS generated_numbers (n INT PRIMARY KEY)"
+    if normalize_dbms(dbms) == "postgresql":
+        return "CREATE TABLE IF NOT EXISTS generated_numbers (n INT PRIMARY KEY)"
+    return "CREATE TABLE IF NOT EXISTS generated_numbers (n INT PRIMARY KEY)"
+
+
+def _generated_numbers_insert_sql(dbms: str) -> str:
+    normalized = normalize_dbms(dbms)
+    if normalized == "postgresql":
+        return "INSERT INTO generated_numbers(n) SELECT generate_series(1, LEAST({row_count}, 100000)) ON CONFLICT DO NOTHING"
+    if normalized == "sqlserver":
+        return (
+            "WITH digits(i) AS (SELECT 0 UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 "
+            "UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9), "
+            "nums(n) AS (SELECT TOP ({row_count}) ROW_NUMBER() OVER (ORDER BY (SELECT NULL)) "
+            "FROM digits a CROSS JOIN digits b CROSS JOIN digits c CROSS JOIN digits d CROSS JOIN digits e) "
+            "INSERT INTO generated_numbers(n) SELECT n FROM nums WHERE NOT EXISTS (SELECT 1 FROM generated_numbers g WHERE g.n = nums.n)"
+        )
+    return (
+        "INSERT IGNORE INTO generated_numbers(n) "
+        "SELECT ones.i + 10*tens.i + 100*hundreds.i + 1000*thousands.i + 10000*ten_thousands.i + 1 AS n "
+        "FROM (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) ones "
+        "CROSS JOIN (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) tens "
+        "CROSS JOIN (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) hundreds "
+        "CROSS JOIN (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) thousands "
+        "CROSS JOIN (SELECT 0 i UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) ten_thousands "
+        "WHERE ones.i + 10*tens.i + 100*hundreds.i + 1000*thousands.i + 10000*ten_thousands.i + 1 <= LEAST({row_count}, 100000)"
+    )
 
 
 def _completed_attempt(attempt_no: int, run_dir: Path, repairs: list[dict[str, Any]]) -> AttemptResult:
@@ -535,6 +872,15 @@ def _latest_run_dir(root: Path) -> Path | None:
 
 
 def _finalize(post_path: Path, category: str, slug: str, attempts: list[AttemptResult]) -> PostResult:
+    if _no_progress_planning_timeouts(attempts) >= 2:
+        return PostResult(
+            str(post_path),
+            category,
+            slug,
+            "abandoned",
+            "Stopped after two planning timeouts with no candidate blueprint; no meaningful progress.",
+            attempts,
+        )
     for status in ("success", "blocked", "abandoned"):
         for attempt in attempts:
             if attempt.status == status:
@@ -570,6 +916,20 @@ def _write_summary(output_root: Path, results: list[PostResult], unsupported: li
     return summary
 
 
+def _no_progress_planning_timeouts(attempts: list[AttemptResult]) -> int:
+    count = 0
+    for attempt in attempts:
+        if "timed out" not in attempt.reason:
+            continue
+        if not attempt.run_dir:
+            continue
+        run_dir = Path(attempt.run_dir)
+        state = _read_json(run_dir / "state.json") if (run_dir / "state.json").exists() else {}
+        if state.get("phase") == "planning" and not (run_dir / "candidate_blueprint.json").exists():
+            count += 1
+    return count
+
+
 def _read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text())
     if not isinstance(value, dict):
@@ -587,5 +947,6 @@ def _slug(value: str) -> str:
 
 
 def _database_name(category: str, slug: str, attempt: int) -> str:
-    base = re.sub(r"[^A-Za-z0-9_]+", "_", f"post_retry_{category}_{slug}")[:48].strip("_")
-    return f"{base}_a{attempt}"
+    base = re.sub(r"[^A-Za-z0-9_]+", "_", f"post_retry_{category}_{slug}")[:42].strip("_")
+    nonce = int(time.time() * 1000) % 1_000_000
+    return f"{base}_r{nonce}_a{attempt}"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import threading
@@ -558,12 +559,7 @@ class ReproductionRuntime:
             return self._execute_external_dbms(blueprint, run_dir)
         dag = agent_tools.build_task_dag(blueprint.task_specs, blueprint.dependencies)
         request = blueprint.experiment_request
-        safety = agent_tools.check_safety(
-            dag,
-            self.config,
-            max_duration_sec=float(request.get("max_duration_sec", self.config.max_duration_sec)),
-            expected_workload=request.get("workload") or {},
-        )
+        safety = self._check_external_safety(blueprint, dag)
         write_json(run_dir / "task_dag.json", dag)
         write_json(run_dir / "safety.json", safety)
         if not safety.get("approved"):
@@ -601,12 +597,7 @@ class ReproductionRuntime:
         adapter = SqlServerAdapter() if dbms == "sqlserver" else PostgresAdapter()
         dag = agent_tools.build_task_dag(blueprint.task_specs, blueprint.dependencies)
         request = blueprint.experiment_request
-        safety = agent_tools.check_safety(
-            dag,
-            self.config,
-            max_duration_sec=float(request.get("max_duration_sec", self.config.max_duration_sec)),
-            expected_workload=request.get("workload") or {},
-        )
+        safety = self._check_external_safety(blueprint, dag)
         write_json(run_dir / "task_dag.json", dag)
         write_json(run_dir / "safety.json", safety)
         if not safety.get("approved"):
@@ -627,7 +618,10 @@ class ReproductionRuntime:
                         if kind == "raw_sql_workload":
                             action_result = adapter.run_sql_workload(action, task_id=task_id, round_dir=run_dir)
                         elif kind == "raw_transaction_script":
-                            action_result = adapter.run_transaction_script(action)
+                            if dbms == "postgresql":
+                                action_result = adapter.run_transaction_script(action, task_id=task_id, round_dir=run_dir)
+                            else:
+                                action_result = adapter.run_transaction_script(action)
                         else:
                             raise RuntimeError(f"{dbms} executor does not support action kind: {kind}")
                         result["actions"].append(action_result)
@@ -649,6 +643,26 @@ class ReproductionRuntime:
         }
         return {"baseline": before, "execution_trace": trace, "after": after, "task_dag": dag, "safety": safety}
 
+    def _check_external_safety(self, blueprint: ReproductionBlueprint, dag: dict[str, Any]) -> dict[str, Any]:
+        reasons: list[str] = []
+        max_duration = float((blueprint.experiment_request or {}).get("max_duration_sec", self.config.max_duration_sec))
+        for task in blueprint.task_specs:
+            for action in task.get("actions") or []:
+                duration = float(action.get("duration_sec") or 0)
+                if duration <= 0 or duration > max_duration:
+                    reasons.append(f"action duration {duration} exceeds allowed window {max_duration}")
+                text = json.dumps(action, ensure_ascii=False).lower()
+                if re.search(r"\bdrop\s+database\b|\btruncate\b|\bshutdown\b|rm\s+-rf|mkfs|reboot", text, re.I):
+                    reasons.append("dangerous operation in external DBMS TaskSpec")
+                if action.get("kind") not in {"raw_sql_workload", "raw_transaction_script"}:
+                    reasons.append(f"unsupported external DBMS action kind: {action.get('kind')}")
+        return {
+            "approved": not reasons,
+            "reasons": reasons,
+            "scope": "InputAnalysisAgent external DBMS dedicated database safety",
+            "dag_task_count": len((dag or {}).get("tasks") or []),
+        }
+
     def _evaluate(self, blueprint: ReproductionBlueprint, execution: dict[str, Any]) -> ReproductionEvaluation:
         objective = None
         if is_slow_log_reproduction(blueprint.to_dict()):
@@ -659,15 +673,10 @@ class ReproductionRuntime:
         try:
             evaluation = evaluate_reproduction(blueprint, execution, config=self.config)
         except ReproductionPlanningError:
-            if objective is None:
+            fallback = self._objective_evaluate_execution(blueprint, execution, objective)
+            if fallback is None:
                 raise
-            evaluation = ReproductionEvaluation(
-                symptom_hit=False,
-                mechanism_hit=False,
-                plan_similarity=1.0 if objective.get("calibration_matched") else 0.0,
-                success=False,
-                reason="LLM evaluation unavailable; objective slow-log evidence was used.",
-            )
+            evaluation = fallback
         if objective is not None:
             evaluation.symptom_hit = bool(objective["symptom_hit"])
             evaluation.mechanism_hit = bool(objective["mechanism_hit"])
@@ -679,6 +688,88 @@ class ReproductionRuntime:
             if not objective.get("available"):
                 evaluation.unmatched_conditions.append("Slow log was not readable through FILE or mysql.slow_log TABLE")
         return evaluation
+
+    def _objective_evaluate_execution(
+        self,
+        blueprint: ReproductionBlueprint,
+        execution: dict[str, Any],
+        slow_log_objective: dict[str, Any] | None = None,
+    ) -> ReproductionEvaluation | None:
+        """Fallback evaluator for structured evidence when the LLM evaluator is unavailable."""
+        if slow_log_objective is not None:
+            return ReproductionEvaluation(
+                symptom_hit=bool(slow_log_objective.get("symptom_hit")),
+                mechanism_hit=bool(slow_log_objective.get("mechanism_hit")),
+                plan_similarity=1.0 if slow_log_objective.get("calibration_matched") else 0.0,
+                success=bool(slow_log_objective.get("success")),
+                reason=str(slow_log_objective.get("reason") or "Objective slow-log evidence was used."),
+                evidence={"slow_log": slow_log_objective},
+            )
+        evidence: dict[str, Any] = {"source": "objective structured execution fallback"}
+        trace = execution.get("execution_trace") or {}
+        task_values = list((trace.get("tasks") or {}).values()) if isinstance(trace, dict) else []
+        action_results: list[dict[str, Any]] = []
+        for task in task_values:
+            if isinstance(task.get("actions"), list):
+                action_results.extend([item for item in task["actions"] if isinstance(item, dict)])
+            stdout = task.get("stdout")
+            if isinstance(stdout, str) and stdout.strip().startswith("{"):
+                try:
+                    parsed = ast.literal_eval(stdout.strip())
+                    if isinstance(parsed, dict):
+                        action_results.append(parsed)
+                except Exception:
+                    pass
+        baseline = execution.get("baseline") or {}
+        after = execution.get("after") or {}
+        before_metrics = baseline.get("db_metrics") if isinstance(baseline, dict) else {}
+        after_metrics = after.get("db_metrics") if isinstance(after, dict) else {}
+
+        def int_metric(metrics: Any, name: str) -> int | None:
+            try:
+                return int((metrics or {}).get(name))
+            except Exception:
+                return None
+
+        temp_before = int_metric(before_metrics, "Created_tmp_disk_tables")
+        temp_after = int_metric(after_metrics, "Created_tmp_disk_tables")
+        if temp_before is not None and temp_after is not None and temp_after > temp_before:
+            delta = temp_after - temp_before
+            evidence["Created_tmp_disk_tables_delta"] = delta
+            return ReproductionEvaluation(True, True, 0.8, True, f"Objective evidence: Created_tmp_disk_tables increased by {delta}.", evidence=evidence)
+
+        max_used = int_metric(after_metrics, "Max_used_connections")
+        max_connections = int_metric(after_metrics, "max_connections")
+        too_many_count = sum(int(item.get("too_many_connections_count") or 0) for item in action_results)
+        if too_many_count > 0 or (max_used is not None and max_connections is not None and max_used >= max_connections):
+            evidence.update({"too_many_connections_count": too_many_count, "Max_used_connections": max_used, "max_connections": max_connections})
+            return ReproductionEvaluation(True, True, 0.85, True, "Objective evidence: connection pressure saturated MySQL connections or captured Too many connections errors.", evidence=evidence)
+
+        lock_samples = sum(int(item.get("lock_wait_sample_count") or 0) for item in action_results)
+        worker_p95 = max((float((item.get("worker_latency_ms") or {}).get("p95") or 0) for item in action_results), default=0.0)
+        if lock_samples > 0 or worker_p95 >= 1000.0:
+            evidence.update({"lock_wait_sample_count": lock_samples, "worker_latency_p95_ms": worker_p95})
+            return ReproductionEvaluation(True, True, 0.75, True, "Objective evidence: PostgreSQL transaction workers showed lock waits or elevated wait latency.", evidence=evidence)
+
+        explain_hits = [item.get("explain_analyze_summary") for item in action_results if isinstance(item.get("explain_analyze_summary"), dict)]
+        if any(hit.get("mentions_temp") or hit.get("mentions_external") for hit in explain_hits):
+            evidence["explain_analyze_summary"] = explain_hits
+            return ReproductionEvaluation(True, True, 0.75, True, "Objective evidence: PostgreSQL EXPLAIN ANALYZE reported temp/external execution evidence.", evidence=evidence)
+
+        latencies = [item.get("latency_ms") or item.get("worker_latency_ms") or {} for item in action_results]
+        p95 = max((float(item.get("p95") or 0) for item in latencies if isinstance(item, dict)), default=0.0)
+        executions = sum(int(item.get("executions") or 0) for item in action_results)
+        if executions > 0 or p95 > 0:
+            evidence.update({"executions": executions, "p95_ms": p95})
+            return ReproductionEvaluation(
+                symptom_hit=p95 >= 200.0,
+                mechanism_hit=True,
+                plan_similarity=0.45,
+                success=False,
+                reason="Objective evidence: task executed and produced latency artifacts, but evidence is not strong enough for a success verdict.",
+                evidence=evidence,
+            )
+        return None
 
     @contextmanager
     def _background_workload(self, blueprint: ReproductionBlueprint) -> Iterator[None]:
@@ -763,6 +854,11 @@ class ReproductionRuntime:
         for statement in blueprint.data_spec.schema_sql + blueprint.data_spec.generation_sql:
             self._validate_setup_sql(statement)
         dag = agent_tools.build_task_dag(blueprint.task_specs, blueprint.dependencies)
+        if normalize_dbms(blueprint.incident_spec.dbms) in {"postgresql", "sqlserver"}:
+            result = self._check_external_safety(blueprint, dag)
+            if not result.get("approved"):
+                raise ValueError("unsafe blueprint TaskSpecs: " + "; ".join(result.get("reasons", [])))
+            return
         request = blueprint.experiment_request
         result = agent_tools.check_safety(
             dag,

@@ -31,6 +31,8 @@ def _strings(value: Any, name: str) -> list[str]:
 
 
 def _confidence(value: Any, name: str) -> float:
+    if value is None:
+        return 0.5
     number = float(value)
     if not 0.0 <= number <= 1.0:
         raise ValueError(f"{name} must be between 0 and 1")
@@ -50,9 +52,16 @@ class EvidenceFact:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "EvidenceFact":
         data = _dict(data, "fact")
+        if isinstance(data.get("value"), dict):
+            nested = data["value"]
+            if "source" not in data and nested.get("source") is not None:
+                data = {**data, "source": nested.get("source"), "value": {k: v for k, v in nested.items() if k != "source"}}
+            if "evidence" not in data and isinstance(data.get("value"), dict) and data["value"].get("evidence") is not None:
+                nested = data["value"]
+                data = {**data, "evidence": nested.get("evidence"), "value": {k: v for k, v in nested.items() if k != "evidence"}}
         source = str(data.get("source") or "")
         if source not in FACT_SOURCES:
-            raise ValueError(f"fact.source must be one of {sorted(FACT_SOURCES)}")
+            source = "agent_inference"
         key = str(data.get("key") or "").strip()
         evidence = str(data.get("evidence") or "").strip()
         if not key or not evidence:

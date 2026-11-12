@@ -12,8 +12,7 @@ data distribution, or evaluation intent; derive those from the DBA post.
       "CREATE TABLE IF NOT EXISTS ref_table (id INT PRIMARY KEY, status INT, name VARCHAR(64))"
     ],
     "generation_sql": [
-      "INSERT INTO ref_table (id, status, name) SELECT n, MOD(n, 5), CONCAT('ref_', n) FROM generated_numbers WHERE n <= 100",
-      "INSERT INTO main_table (id, category, ref_id, payload) SELECT n, CASE WHEN MOD(n, 1000)=0 THEN 'rare' ELSE 'common' END, 1 + MOD(n, 100), CONCAT('row_', n) FROM generated_numbers WHERE n <= {row_count}"
+      "/* executable INSERT/UPDATE statements chosen by the agent for the target DBMS; do not reference helper tables unless schema_sql creates them */"
     ],
     "tables": [
       {
@@ -61,4 +60,6 @@ Hard format rules:
 - Every table object must include at least name and purpose; include target_rows when scale matters.
 - data_spec.calibration_queries must be an array of objects with sql, objective, and expected_evidence.
 - calibration_queries.sql must be the original read-only SELECT/WITH query, not EXPLAIN SELECT.
+- generation_sql must be directly executable after schema_sql. Never reference example-only helper
+  names such as generated_numbers unless schema_sql creates and populates them first.
 """

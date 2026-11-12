@@ -95,6 +95,28 @@ class PostgresAdapter:
             raise RuntimeError(completed.stderr.strip() or completed.stdout.strip())
         return completed.stdout
 
+    def execute_script(self, database: str, script: str, *, timeout: float = 120.0) -> dict[str, Any]:
+        if not isinstance(script, str) or not script.strip():
+            raise ValueError("PostgreSQL script must be a non-empty string")
+        with tempfile.TemporaryDirectory(prefix="dbmags_pg_script_") as tmp:
+            path = Path(tmp) / "script.sql"
+            path.write_text(script, encoding="utf-8")
+            args = self.config.args(database) + ["-f", str(path)]
+            completed = subprocess.run(
+                args,
+                env=self.config.env(),
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+            )
+        return {
+            "returncode": completed.returncode,
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+            "timings_ms": _parse_psql_timings(completed.stdout + "\n" + completed.stderr),
+        }
+
     def create_database_if_not_exists(self, database: str) -> None:
         _safe_pg_identifier(database)
         exists_sql = f"SELECT 1 FROM pg_database WHERE datname = '{_sql_literal(database)}'"
@@ -192,6 +214,13 @@ class PostgresAdapter:
         latencies: list[float] = []
         errors: list[str] = []
         lock = threading.Lock()
+        explain_artifact = ""
+        explain_summary: dict[str, Any] = {"attempted": False}
+
+        if re.match(r"^\s*(SELECT|WITH)\b", sql, re.I):
+            explain_artifact_path = round_dir / f"{_safe_file(task_id)}_postgres_explain_analyze.json"
+            explain_summary = self._capture_explain_analyze(database, sql, explain_artifact_path, timeout=max(10.0, duration_sec + 20.0))
+            explain_artifact = str(explain_artifact_path)
 
         def worker() -> None:
             deadline = time.time() + duration_sec
@@ -227,33 +256,99 @@ class PostgresAdapter:
             "error_count": len(errors),
             "errors": errors[:5],
             "latency_artifact": str(artifact),
+            "explain_analyze_artifact": explain_artifact,
+            "explain_analyze_summary": explain_summary,
         }
 
-    def run_transaction_script(self, action: dict[str, Any]) -> dict[str, Any]:
+    def run_transaction_script(self, action: dict[str, Any], *, task_id: str = "", round_dir: Path | None = None) -> dict[str, Any]:
         database = str(action.get("database") or "")
         scripts = action.get("scripts") or []
         errors: list[str] = []
         executed = 0
         lock = threading.Lock()
+        duration_sec = float(action.get("duration_sec") or 30)
+        worker_results: list[dict[str, Any]] = []
+        lock_samples: list[dict[str, Any]] = []
+        sample_stop = threading.Event()
+        artifact_dir = round_dir or Path.cwd()
+        safe_task_id = _safe_file(task_id or "postgres_transaction_script")
+
+        def sample_waits() -> None:
+            while not sample_stop.is_set():
+                try:
+                    activity = self.execute(
+                        database,
+                        """
+                        SELECT COALESCE(wait_event_type,''), COALESCE(wait_event,''), state, count(*)
+                        FROM pg_stat_activity
+                        WHERE datname = current_database()
+                        GROUP BY wait_event_type, wait_event, state
+                        ORDER BY count(*) DESC
+                        """,
+                        timeout=5,
+                        tuples_only=True,
+                    ).splitlines()
+                    locks = self.execute(
+                        database,
+                        """
+                        SELECT mode, granted, count(*)
+                        FROM pg_locks l
+                        JOIN pg_database d ON d.oid = l.database
+                        WHERE d.datname = current_database()
+                        GROUP BY mode, granted
+                        ORDER BY count(*) DESC
+                        """,
+                        timeout=5,
+                        tuples_only=True,
+                    ).splitlines()
+                    lock_samples.append({"timestamp": time.time(), "activity": activity, "locks": locks})
+                except Exception as exc:
+                    lock_samples.append({"timestamp": time.time(), "error": str(exc)})
+                sample_stop.wait(0.5)
+
+        sampler = threading.Thread(target=sample_waits, daemon=True)
+        sampler.start()
 
         def run_script(script: dict[str, Any], worker_index: int) -> None:
             nonlocal executed
-            statements: list[str] = []
-            for step in script.get("steps") or []:
+            statements: list[dict[str, Any]] = []
+            psql_lines = ["\\timing on", "\\set ON_ERROR_STOP on"]
+            for step_index, step in enumerate(script.get("steps") or []):
+                sql = ""
                 if isinstance(step, str):
-                    statements.append(step)
+                    sql = step
                 elif isinstance(step, dict):
                     if step.get("sleep_sec") is not None:
-                        statements.append(f"SELECT pg_sleep({float(step.get('sleep_sec') or 0)})")
+                        sql = f"SELECT pg_sleep({float(step.get('sleep_sec') or 0)})"
                     elif step.get("sql"):
-                        statements.append(str(step["sql"]))
-            try:
-                self.execute(database, ";\n".join(statements), timeout=float(action.get("duration_sec") or 30) + 20)
-                with lock:
+                        sql = str(step["sql"])
+                if not sql.strip():
+                    continue
+                statements.append({"index": step_index, "sql": sql})
+                psql_lines.append(f"\\echo DBMAGS_STEP_BEGIN {step_index}")
+                psql_lines.append(sql.rstrip(";") + ";")
+                psql_lines.append(f"\\echo DBMAGS_STEP_END {step_index}")
+            started = time.perf_counter()
+            result = self.execute_script(database, "\n".join(psql_lines) + "\n", timeout=duration_sec + 25)
+            elapsed_ms = (time.perf_counter() - started) * 1000.0
+            timings = result.get("timings_ms") or []
+            worker_result = {
+                "role": script.get("role", "script"),
+                "worker_index": worker_index,
+                "elapsed_ms": round(elapsed_ms, 3),
+                "returncode": result.get("returncode"),
+                "statement_count": len(statements),
+                "timings_ms": timings,
+                "statements": statements,
+                "stdout_tail": str(result.get("stdout") or "")[-4000:],
+                "stderr_tail": str(result.get("stderr") or "")[-4000:],
+            }
+            with lock:
+                worker_results.append(worker_result)
+                if result.get("returncode") == 0:
                     executed += len(statements)
-            except Exception as exc:
-                with lock:
-                    errors.append(f"{script.get('role', 'script')}[{worker_index}]: {exc}")
+                else:
+                    errors.append(f"{script.get('role', 'script')}[{worker_index}]: {worker_result['stderr_tail'] or worker_result['stdout_tail']}")
 
         threads: list[threading.Thread] = []
         for script in scripts:
@@ -263,7 +358,24 @@ class PostgresAdapter:
                 thread.start()
                 threads.append(thread)
         for thread in threads:
-            thread.join(timeout=float(action.get("duration_sec") or 30) + 25)
+            thread.join(timeout=duration_sec + 30)
+        sample_stop.set()
+        sampler.join(timeout=2.0)
+        alive = sum(1 for thread in threads if thread.is_alive())
+        if alive:
+            errors.append(f"{alive} transaction script worker(s) still alive after timeout")
+        latencies = [float(item.get("elapsed_ms") or 0) for item in worker_results]
+        lock_wait_sample_count = sum(
+            1 for sample in lock_samples
+            if any("Lock" in line for line in sample.get("activity") or [])
+        )
+        artifacts: dict[str, str] = {}
+        if round_dir is not None:
+            latency_path = artifact_dir / f"{safe_task_id}_postgres_transaction_step_latencies.json"
+            lock_path = artifact_dir / f"{safe_task_id}_postgres_lock_wait_samples.json"
+            latency_path.write_text(json.dumps({"workers": worker_results, "errors": errors}, indent=2), encoding="utf-8")
+            lock_path.write_text(json.dumps({"samples": lock_samples}, indent=2), encoding="utf-8")
+            artifacts = {"step_latency_artifact": str(latency_path), "lock_wait_samples_artifact": str(lock_path)}
         result = {
             "kind": "raw_transaction_script",
             "dbms": "postgresql",
@@ -271,10 +383,34 @@ class PostgresAdapter:
             "executed_steps": executed,
             "error_count": len(errors),
             "errors": errors[:10],
+            "worker_latency_ms": _latency_summary(latencies),
+            "worker_results": worker_results[:20],
+            "lock_wait_sample_count": lock_wait_sample_count,
+            "lock_sample_count": len(lock_samples),
+            **artifacts,
         }
         if errors:
             raise RuntimeError(f"postgres raw_transaction_script failed: {result}")
         return result
+
+    def _capture_explain_analyze(self, database: str, sql: str, artifact: Path, *, timeout: float = 120.0) -> dict[str, Any]:
+        summary: dict[str, Any] = {"attempted": True, "available": False, "artifact": str(artifact)}
+        try:
+            raw = self.execute(database, "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + _strip_explain(sql), timeout=timeout, tuples_only=True).strip()
+            artifact.write_text(raw + "\n", encoding="utf-8")
+            lower = raw.lower()
+            summary.update({
+                "available": True,
+                "mentions_temp": "temp" in lower,
+                "mentions_external": "external" in lower,
+                "mentions_sort": "sort" in lower,
+                "mentions_hash": "hash" in lower,
+                "raw_chars": len(raw),
+            })
+        except Exception as exc:
+            artifact.write_text(json.dumps({"error": str(exc)}, indent=2), encoding="utf-8")
+            summary.update({"error": str(exc)})
+        return summary
 
 
 @dataclass
@@ -427,16 +563,77 @@ class SqlServerAdapter:
         self.create_database_if_not_exists(database)
         executed: list[str] = []
         for sql in schema_sql:
-            self.execute(database, sql, timeout=240)
-            executed.append(sql)
+            statement = self._translate_setup_sql(sql)
+            self.execute(database, statement, timeout=240)
+            executed.append(statement)
         for sql in generation_sql:
-            statement = sql.format(row_count=row_count)
+            statement = self._translate_setup_sql(sql.format(row_count=row_count))
             self.execute(database, statement, timeout=300)
             executed.append(statement)
         for table in analyze_tables:
             _safe_sqlserver_identifier(table)
             self.execute(database, f"UPDATE STATISTICS [{table}]", timeout=180)
         return {"database": database, "dbms": "sqlserver", "statement_count": len(executed), "statements": executed}
+
+    @staticmethod
+    def _translate_setup_sql(sql: str) -> str:
+        """Translate common MySQL/Postgres idempotent DDL shorthand into T-SQL."""
+        statement = str(sql).strip().rstrip(";")
+        table_match = re.match(
+            r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+((?:dbo\.)?\[?[A-Za-z_][A-Za-z0-9_]*\]?)(\s*\(.*\))$",
+            statement,
+            flags=re.I | re.S,
+        )
+        if table_match:
+            table = table_match.group(1).strip("[]")
+            body = table_match.group(2)
+            if "." not in table:
+                table = "dbo." + table
+            statement = f"IF OBJECT_ID(N'{table}', N'U') IS NULL CREATE TABLE {table} {body}"
+        index_match = re.match(
+            r"CREATE\s+(UNIQUE\s+)?(?:(CLUSTERED|NONCLUSTERED)\s+)?INDEX\s+IF\s+NOT\s+EXISTS\s+(\[?[A-Za-z_][A-Za-z0-9_]*\]?)\s+ON\s+((?:(?:\[?dbo\]?)\.)?\[?[A-Za-z_][A-Za-z0-9_]*\]?)(\s*\(.*\))$",
+            statement,
+            flags=re.I | re.S,
+        )
+        if index_match:
+            unique = index_match.group(1) or ""
+            clustered = (index_match.group(2) or "").upper()
+            index = index_match.group(3).strip("[]")
+            table = index_match.group(4).replace("[", "").replace("]", "")
+            cols = index_match.group(5)
+            if "." not in table:
+                table = "dbo." + table
+            statement = (
+                f"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'{index}' "
+                f"AND object_id = OBJECT_ID(N'{table}')) CREATE {unique}{clustered + ' ' if clustered else ''}INDEX {index} ON {table} {cols}"
+            )
+        else:
+            plain_index_match = re.match(
+                r"CREATE\s+(UNIQUE\s+)?(?:(CLUSTERED|NONCLUSTERED)\s+)?INDEX\s+(\[?[A-Za-z_][A-Za-z0-9_]*\]?)\s+ON\s+((?:(?:\[?dbo\]?)\.)?\[?[A-Za-z_][A-Za-z0-9_]*\]?)(\s*\(.*\))$",
+                statement,
+                flags=re.I | re.S,
+            )
+            if plain_index_match:
+                unique = plain_index_match.group(1) or ""
+                clustered = (plain_index_match.group(2) or "").upper()
+                index = plain_index_match.group(3).strip("[]")
+                table = plain_index_match.group(4).replace("[", "").replace("]", "")
+                cols = plain_index_match.group(5)
+                if "." not in table:
+                    table = "dbo." + table
+                statement = (
+                    f"IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = N'{index}' "
+                    f"AND object_id = OBJECT_ID(N'{table}')) CREATE {unique}{clustered + ' ' if clustered else ''}INDEX {index} ON {table} {cols}"
+                )
+        statement = re.sub(r"\bSERIAL\b", "INT IDENTITY(1,1)", statement, flags=re.I)
+        statement = re.sub(r"\bBOOLEAN\b", "BIT", statement, flags=re.I)
+        statement = re.sub(r"\bMOD\s*\(([^,()]+),\s*([^()]+)\)", r"((\1) % (\2))", statement, flags=re.I)
+        statement = re.sub(r"\bNVARCHAR\s*\(\s*MAX\s*\)", "NVARCHAR(450)", statement, flags=re.I)
+        # Synthetic SQL Server reproductions often start from MySQL/PostgreSQL-ish
+        # TEXT columns. NVARCHAR(MAX) cannot be used as an index key, so keep the
+        # translated type bounded enough for synthetic indexed predicates.
+        statement = re.sub(r"\bTEXT\b", "NVARCHAR(450)", statement, flags=re.I)
+        return statement
 
     def explain(self, database: str, sql: str) -> dict[str, Any]:
         stripped = _strip_sqlserver_explain(sql)
@@ -599,6 +796,16 @@ def _safe_sqlserver_identifier(value: str) -> str:
 
 def _sql_literal(value: str) -> str:
     return str(value).replace("'", "''")
+
+
+def _parse_psql_timings(text: str) -> list[float]:
+    values: list[float] = []
+    for match in re.finditer(r"Time:\s*([0-9.]+)\s*ms", text or "", flags=re.I):
+        try:
+            values.append(float(match.group(1)))
+        except ValueError:
+            pass
+    return values
 
 
 def _safe_file(value: str) -> str:

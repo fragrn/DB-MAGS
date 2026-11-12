@@ -71,6 +71,7 @@ def _reproduction_main(argv: list[str]) -> int:
     batch_parser.add_argument("--max-attempts", type=int, default=4)
     batch_parser.add_argument("--attempt-timeout-sec", type=int, default=300)
     batch_parser.add_argument("--limit", type=int, help="Only process the first N posts; useful for smoke tests")
+    batch_parser.add_argument("--dbms-order", action="store_true", help="Process MySQL-like posts first, then PostgreSQL, then SQL Server-like posts")
     args = parser.parse_args(argv)
 
     runtime = ReproductionRuntime()
@@ -82,6 +83,7 @@ def _reproduction_main(argv: list[str]) -> int:
                 max_attempts=args.max_attempts,
                 attempt_timeout_sec=args.attempt_timeout_sec,
                 limit=args.limit,
+                dbms_order=args.dbms_order,
                 runtime=runtime,
             )
             print(json.dumps(result, ensure_ascii=False, indent=2))
