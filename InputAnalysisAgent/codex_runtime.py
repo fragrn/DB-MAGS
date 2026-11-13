@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from InputAnalysisAgent.hitl import RunState, gate_reasons, load_state, save_state, write_json
+from InputAnalysisAgent.evidence import capture_bundle, collect, freeze_spec, seal_bundle, verify_bundle, verify_spec
+from InputAnalysisAgent.evaluation import evaluate
 from InputAnalysisAgent.react import _call_tool
 from InputAnalysisAgent.runtime import ReproductionRuntime
 from InputAnalysisAgent.schemas import ReproductionBlueprint, ReproductionEvaluation
@@ -76,6 +78,17 @@ class CodexRuntime:
                 if action["kind"] == "benchbase_burst_command":
                     raise ValueError("benchbase_burst_command is not implemented by this executor")
         self.runtime._validate_blueprint_safety(blueprint)
+        revision_path = attempt / "revision.json"
+        if revision_path.exists():
+            revision = self.runtime._read_json(revision_path)
+            previous = Path(revision["previous_attempt"]) / "blueprint.json"
+            if previous.exists():
+                old_spec = self.runtime._read_json(previous)["evaluation_spec"]
+                if old_spec.get("version") == 2 and blueprint.evaluation_spec.get("version") != 2:
+                    raise ValueError("revisions cannot downgrade evidence evaluation to legacy mode")
+                if old_spec != blueprint.evaluation_spec:
+                    revision["evaluation_contract_change"] = {"before": old_spec, "after": blueprint.evaluation_spec}
+                    write_json(revision_path, revision)
         self.runtime._write_blueprint_artifacts(attempt, blueprint)
         self.runtime._complete_phase(attempt, state, "planning")
         state.phase = "approval"
@@ -201,23 +214,44 @@ class CodexRuntime:
             raise ValueError("failed attempt cannot execute again; use revise")
         if "execution" in state.completed_phases:
             return self.runtime._read_json(attempt / "execution_bundle.json")
-        return self._perform(root, "execution", "execution_bundle.json",
-                             lambda bp: self.runtime._execute(bp, attempt))
+        def execute_blueprint(bp):
+            if bp.evaluation_spec.get("version") != 2:
+                return self.runtime._execute(bp, attempt)
+            freeze_spec(attempt, bp.evaluation_spec)
+            bundle = capture_bundle(attempt, self.runtime._execute(bp, attempt),
+                                    include_explain=bool(bp.data_spec.calibration_queries))
+            seal_bundle(attempt, bundle)
+            return bundle
+
+        return self._perform(root, "execution", "execution_bundle.json", execute_blueprint)
+
+    def evaluation_evidence(self, root: str | Path) -> dict[str, Any]:
+        """Return evidence IDs for the current attempt's semantic evaluator."""
+        _, _, _, attempt, state = self._context(root)
+        self._require(state, "execution")
+        spec = self.runtime._read_json(attempt / "blueprint.json")["evaluation_spec"]
+        verify_spec(attempt, spec)
+        bundle = self.runtime._read_json(attempt / "execution_bundle.json")
+        verify_bundle(attempt, bundle)
+        return collect(spec, bundle, attempt_id=str(attempt))
 
     def submit_evaluation(self, root: str | Path, payload: dict[str, Any]) -> dict[str, Any]:
         root, _, _, attempt, state = self._context(root)
         self._require(state, "execution")
-        for field in ("success", "symptom_hit", "mechanism_hit"):
-            if not isinstance(payload.get(field), bool):
-                raise ValueError(f"{field} must be boolean")
-        evaluation = ReproductionEvaluation.from_dict(payload)
         bp = self.runtime._read_json(attempt / "blueprint.json")
-        minimum = float(bp["evaluation_spec"].get("minimum_plan_similarity", 0.6))
-        if evaluation.success and not (evaluation.symptom_hit and evaluation.mechanism_hit
-                                       and evaluation.plan_similarity >= minimum):
-            raise ValueError("success requires symptom, mechanism, and similarity threshold")
-        if not evaluation.reason.strip() or not evaluation.evidence:
-            raise ValueError("reason and evidence required")
+        spec = bp["evaluation_spec"]
+        if (attempt / "evaluation_contract.json").exists() or spec.get("version") == 2:
+            if "evaluation" in state.completed_phases:
+                raise ValueError("evaluation already completed; use revise to create a new attempt")
+            verify_spec(attempt, spec)
+            if set(payload) - {"judgments"}:
+                raise ValueError("v2 evaluation accepts only semantic judgments")
+            bundle = self.runtime._read_json(attempt / "execution_bundle.json")
+            verify_bundle(attempt, bundle)
+            evaluation = evaluate(spec, bundle, payload.get("judgments", {}), attempt_id=str(attempt))
+            write_json(attempt / "evaluation_evidence.json", evaluation.result["evidence"])
+        else:
+            evaluation = self._legacy_evaluation(bp, payload)
         write_json(attempt / "evaluation_result.json", evaluation.to_dict())
         self.runtime._complete_phase(attempt, state, "evaluation")
         state.phase = "completed"
@@ -228,6 +262,20 @@ class CodexRuntime:
         self._event(root, "submit-evaluation", success=evaluation.success)
         return report
 
+    @staticmethod
+    def _legacy_evaluation(bp: dict, payload: dict) -> ReproductionEvaluation:
+        for field in ("success", "symptom_hit", "mechanism_hit"):
+            if not isinstance(payload.get(field), bool):
+                raise ValueError(f"{field} must be boolean")
+        evaluation = ReproductionEvaluation.from_dict(payload)
+        minimum = float(bp["evaluation_spec"].get("minimum_plan_similarity", 0.6))
+        if evaluation.success and not (evaluation.symptom_hit and evaluation.mechanism_hit
+                                       and evaluation.plan_similarity >= minimum):
+            raise ValueError("success requires symptom, mechanism, and similarity threshold")
+        if not evaluation.reason.strip() or not evaluation.evidence:
+            raise ValueError("reason and evidence required")
+        return evaluation
+
     def revise(self, root: str | Path, reason: str) -> dict[str, Any]:
         root, config, current, attempt, _ = self._context(root)
         if not reason.strip():
@@ -236,6 +284,9 @@ class CodexRuntime:
             raise ValueError("max_attempts reached; no more attempts allowed")
         self._new_attempt(root, current["number"] + 1)
         _, _, _, next_attempt, _ = self._context(root)
-        write_json(next_attempt / "revision.json", {"previous_attempt": str(attempt), "reason": reason})
+        previous = attempt / "evaluation_result.json"
+        feedback = self.runtime._read_json(previous).get("reflection_feedback", []) if previous.exists() else []
+        write_json(next_attempt / "revision.json", {"previous_attempt": str(attempt), "reason": reason,
+                                                  "reflection_feedback": feedback})
         self._event(root, "revise", reason=reason)
         return self.status(root)

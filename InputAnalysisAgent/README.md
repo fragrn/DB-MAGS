@@ -69,3 +69,37 @@ After data preparation, Calibration runs a dedicated ReAct loop that must call
 against each query's natural-language `objective` and `expected_evidence`; the
 runtime validates tool coverage and output structure but does not apply a
 rule-based execution-plan matcher.
+## Evidence-grounded evaluation (v2)
+
+Opt in with `run --evaluation-version 2`, or submit a Blueprint with
+`evaluation_spec.version: 2` through `CodexRuntime`. Existing Blueprints stay
+on the legacy evaluator.
+
+Each required dimension (`symptom`, `mechanism`, `environment`) needs at least
+one criterion. Criteria declare an ID, kind, description, basis in the post,
+and named JSON pointers into the captured execution bundle. Numeric checks
+compare a value, ratio, or delta with a predeclared threshold; event checks
+compare an observed scalar; semantic checks require current-attempt evidence IDs.
+For example, one numeric criterion can be:
+
+```json
+{
+  "id": "query_latency", "dimension": "symptom", "kind": "numeric",
+  "required": true, "description": "Target workload is slower than the control",
+  "post_basis": "The post reports higher latency for the target query",
+  "inputs": {
+    "target": "/execution_actions/comparison/1/latency_ms/p95",
+    "control": "/execution_actions/comparison/0/latency_ms/p95"
+  },
+  "operation": "ratio", "operator": ">=", "threshold": 2,
+  "threshold_source": "Experiment criterion, not a value stated in the post"
+}
+```
+
+`CodexRuntime.evaluation_evidence(run_dir)` returns the reference IDs for
+`submit_evaluation(run_dir, {"judgments": {...}})`. Each judgment has
+`status`, `reason`, and `evidence_ids`; the driver does not submit the verdict.
+The runtime freezes criteria before execution, seals the captured evidence,
+and stores both alongside the verdict. The evaluator requires all required
+criteria to hit for success. Missing observations remain unknown. No similarity
+score is inferred, and ordinary EXPLAIN is not a measurement of actual rows.

@@ -274,7 +274,11 @@ class ReproductionBlueprint:
         if not all(isinstance(edge, list) and len(edge) == 2 and all(isinstance(v, str) for v in edge) for edge in dependencies):
             raise ValueError("dependencies must contain [source, target] string pairs")
         evaluation = _dict(data.get("evaluation_spec", {}), "evaluation_spec")
-        if not isinstance(evaluation.get("validation_criteria"), list):
+        if "version" in evaluation:
+            from InputAnalysisAgent.evaluation import validate_spec
+
+            validate_spec(evaluation)
+        elif not isinstance(evaluation.get("validation_criteria"), list):
             raise ValueError("evaluation_spec.validation_criteria must be an array")
         experiment_request = _dict(data.get("experiment_request", {}), "experiment_request")
         if not str(experiment_request.get("target_database") or "").strip():

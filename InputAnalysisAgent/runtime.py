@@ -29,11 +29,14 @@ from InputAnalysisAgent.hitl import (
     write_json,
 )
 from InputAnalysisAgent.db_adapters import PostgresAdapter, SqlServerAdapter, normalize_dbms, supported_execution_dbms
+from InputAnalysisAgent.evidence import capture_bundle, collect, freeze_spec, seal_bundle, verify_bundle, verify_spec
+from InputAnalysisAgent.evaluation import evaluate
 from InputAnalysisAgent.react import (
     ReproductionPlanningError,
     calibrate_reproduction,
     canonicalize_blueprint_payload,
     evaluate_reproduction,
+    judge_evidence,
     plan_reproduction,
 )
 from InputAnalysisAgent.schemas import ReproductionBlueprint
@@ -124,8 +127,11 @@ class ReproductionRuntime:
             save_state(run_dir, state)
             return {"run_id": state.run_id, "run_dir": str(run_dir), "status": "rejected"}
         if decision.decision == "revise":
+            previous_spec = blueprint_data["evaluation_spec"]
             blueprint_data = apply_controlled_patch(blueprint_data, decision.patch or {})
             blueprint = ReproductionBlueprint.from_dict(blueprint_data)
+            if previous_spec.get("version") == 2 and blueprint.evaluation_spec.get("version") != 2:
+                raise ValueError("revisions cannot downgrade evidence evaluation to legacy mode")
             self._validate_blueprint_safety(blueprint)
             self._write_blueprint_artifacts(run_dir, blueprint)
             self._reset_after_human_revision(state, gate_phase)
@@ -149,6 +155,9 @@ class ReproductionRuntime:
                     config=self.config,
                     feedback=decision.feedback,
                     previous_blueprint=blueprint_data,
+                    **({"observations": {"evaluation": self._read_json(run_dir / "evaluation_result.json")}}
+                       if gate_phase == "evaluation" and blueprint_data["evaluation_spec"].get("version") == 2
+                       else {}),
                 )
             except ReproductionPlanningError as exc:
                 self._write_planner_failure(run_dir, state, exc, stage="feedback_replanning")
@@ -286,8 +295,29 @@ class ReproductionRuntime:
 
             if "execution" not in state.completed_phases:
                 state.phase = "execution"
+                evidence_dir = None
+                if blueprint.evaluation_spec.get("version") == 2:
+                    evidence_dir = run_dir / f"evaluation_attempt_{uuid.uuid4().hex[:12]}"
+                    evidence_dir.mkdir()
+                    previous_attempt = state.artifacts.get("evaluation_attempt")
+                    if previous_attempt:
+                        old_spec = self._read_json(run_dir / previous_attempt / "evaluation_contract.json")["spec"]
+                        if old_spec != blueprint.evaluation_spec:
+                            write_json(evidence_dir / "evaluation_contract_change.json", {
+                                "previous_attempt": previous_attempt, "before": old_spec,
+                                "after": blueprint.evaluation_spec,
+                            })
+                    state.artifacts["evaluation_attempt"] = evidence_dir.name
+                    freeze_spec(evidence_dir, blueprint.evaluation_spec)
+                    write_json(evidence_dir / "blueprint.json", blueprint.to_dict())
                 save_state(run_dir, state)
                 execution = self._execute(blueprint, run_dir)
+                if evidence_dir is not None:
+                    execution = capture_bundle(
+                        run_dir, execution, include_explain=bool(blueprint.data_spec.calibration_queries)
+                    )
+                    seal_bundle(evidence_dir, execution)
+                    write_json(evidence_dir / "execution_bundle.json", execution)
                 write_json(run_dir / "execution_bundle.json", execution)
                 state.artifacts["execution"] = "execution_bundle.json"
                 self._complete_phase(run_dir, state, "execution")
@@ -297,7 +327,12 @@ class ReproductionRuntime:
             if "evaluation" not in state.completed_phases:
                 state.phase = "evaluation"
                 save_state(run_dir, state)
-                evaluation = self._evaluate(blueprint, execution)
+                if blueprint.evaluation_spec.get("version") == 2 or "evaluation_attempt" in state.artifacts:
+                    evaluation = self._evaluate_evidence(
+                        blueprint, run_dir / state.artifacts["evaluation_attempt"], str(input_data["dba_description"])
+                    )
+                else:
+                    evaluation = self._evaluate(blueprint, execution)
                 write_json(run_dir / "evaluation_result.json", evaluation.to_dict())
                 state.artifacts["evaluation"] = "evaluation_result.json"
                 if not evaluation.success:
@@ -310,6 +345,8 @@ class ReproductionRuntime:
                             state,
                             gate_reasons(blueprint.to_dict(), state.evaluation_failed_rounds),
                             "Reproduction failed twice; review evidence and adjust the design",
+                            details={"reflection_feedback": evaluation.to_dict()["reflection_feedback"]}
+                            if blueprint.evaluation_spec.get("version") == 2 else None,
                         )
                     try:
                         revised, trace = plan_reproduction(
@@ -327,16 +364,17 @@ class ReproductionRuntime:
                     write_json(run_dir / f"react_trace_reflection_round_{state.evaluation_failed_rounds + 1}.json", trace)
                     self._write_blueprint_artifacts(run_dir, revised)
                     revised_gate_reasons = gate_reasons(revised.to_dict(), state.evaluation_failed_rounds)
+                    for phase in ("preparation", "calibration", "execution", "evaluation"):
+                        if phase in state.completed_phases:
+                            state.completed_phases.remove(phase)
                     if revised_gate_reasons:
+                        state.phase = "approval"
                         return self._request_human(
                             run_dir,
                             state,
                             revised_gate_reasons,
                             "Review the reproduction plan revised after a failed execution",
                         )
-                    for phase in ("preparation", "calibration", "execution", "evaluation"):
-                        if phase in state.completed_phases:
-                            state.completed_phases.remove(phase)
                     state.phase = "preparation"
                     save_state(run_dir, state)
                     return self._continue(run_dir, state, human_approved=True)
@@ -539,6 +577,11 @@ class ReproductionRuntime:
         rounds.append(round_result)
         write_json(run_dir / f"calibration_round_{round_no}.json", round_result)
         write_json(run_dir / f"react_trace_calibration_round_{round_no}.json", trace)
+        if blueprint.evaluation_spec.get("version") == 2:
+            write_json(run_dir / "explain_result.json", {"queries": [
+                {"sql": call.get("arguments", {}).get("sql"), "evidence": call.get("result")}
+                for call in trace if call.get("tool") == "explain_sql" and "result" in call
+            ]})
         if matched:
             state.calibration_failed_rounds = 0
         else:
@@ -662,6 +705,19 @@ class ReproductionRuntime:
             "scope": "InputAnalysisAgent external DBMS dedicated database safety",
             "dag_task_count": len((dag or {}).get("tasks") or []),
         }
+
+    def _evaluate_evidence(self, blueprint: ReproductionBlueprint, directory: Path, post: str):
+        directory = directory.resolve()
+        spec = blueprint.evaluation_spec
+        verify_spec(directory, spec)
+        bundle = self._read_json(directory / "execution_bundle.json")
+        verify_bundle(directory, bundle)
+        evidence = collect(spec, bundle, attempt_id=str(directory))
+        write_json(directory / "evaluation_evidence.json", evidence)
+        judgments = judge_evidence(spec, evidence, post=post, config=self.config)
+        result = evaluate(spec, bundle, judgments, attempt_id=str(directory))
+        write_json(directory / "evaluation_result.json", result.to_dict())
+        return result
 
     def _evaluate(self, blueprint: ReproductionBlueprint, execution: dict[str, Any]) -> ReproductionEvaluation:
         objective = None

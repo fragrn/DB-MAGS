@@ -58,6 +58,8 @@ def _reproduction_main(argv: list[str]) -> int:
     run_parser.add_argument("--input", required=True, help="Input txt or JSON post")
     run_parser.add_argument("--output-root", default="InputAnalysisExperiment_runs")
     run_parser.add_argument("--interaction", choices=["interactive", "checkpoint"], default="checkpoint")
+    run_parser.add_argument("--evaluation-version", type=int, choices=[1, 2],
+                            help="Use version 2 for evidence-grounded evaluation")
 
     resume_parser = subparsers.add_parser("resume", help="Respond to a human gate and resume")
     resume_parser.add_argument("--run-dir", required=True)
@@ -90,6 +92,8 @@ def _reproduction_main(argv: list[str]) -> int:
             return 0
         if args.command == "run":
             description, metadata = _load_input(Path(args.input))
+            if args.evaluation_version is not None:
+                metadata["evaluation_version"] = args.evaluation_version
             result = runtime.run(
                 description,
                 metadata=metadata,
