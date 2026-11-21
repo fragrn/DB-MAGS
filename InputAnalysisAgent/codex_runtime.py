@@ -21,7 +21,15 @@ class CodexRuntime:
         self.runtime = runtime or ReproductionRuntime()
 
     def create(self, post: str, output_root: str, *, hitl_enabled: bool = False,
-               review_enabled: bool = False, max_attempts: int = 4) -> dict[str, Any]:
+               review_enabled: bool = False, max_attempts: int | None = None,
+               max_reflections: int | None = None, allow_abandon: bool = False) -> dict[str, Any]:
+        if max_reflections is not None and max_attempts is not None:
+            raise ValueError("configure max_reflections only, not both budgets")
+        if max_reflections is None:
+            max_reflections = max_attempts - 1 if max_attempts is not None else 3
+        if isinstance(max_reflections, bool) or not isinstance(max_reflections, int) or max_reflections < 0:
+            raise ValueError("max_reflections must be a non-negative integer")
+        max_attempts = 1 + max_reflections
         if not post.strip() or max_attempts < 1:
             raise ValueError("non-empty post and positive max_attempts required")
         run_id = time.strftime("%Y%m%d-%H%M%S") + "_" + uuid.uuid4().hex[:8]
@@ -31,6 +39,7 @@ class CodexRuntime:
         write_json(root / "codex_config.json", {
             "driver": "codex", "hitl_enabled": hitl_enabled,
             "review_enabled": review_enabled, "max_attempts": max_attempts,
+            "max_reflections": max_reflections, "allow_abandon": allow_abandon,
             "target_database": "repro_" + run_id.replace("-", ""),
         })
         self._new_attempt(root, 1)
@@ -62,6 +71,8 @@ class CodexRuntime:
 
     def submit_blueprint(self, root: str | Path, payload: dict[str, Any]) -> dict[str, Any]:
         root, config, _, attempt, state = self._context(root)
+        if state.phase in {"reflection_required", "completed"}:
+            raise ValueError("attempt is closed; follow advance()")
         if "planning" in state.completed_phases:
             raise ValueError("blueprint already submitted; use revise to create a new attempt")
         blueprint = ReproductionBlueprint.from_dict(payload)
@@ -139,6 +150,7 @@ class CodexRuntime:
             state.status, state.last_error = "failed", str(exc)
             save_state(attempt, state)
             write_json(attempt / "failure.json", {"phase": phase, "error": str(exc)})
+            self._finish_attempt(root, "failed")
             self._event(root, phase, status="failed", error=str(exc))
             raise
 
@@ -191,6 +203,8 @@ class CodexRuntime:
             state.phase = "calibration"
             state.status = "waiting_human" if config["hitl_enabled"] else "running"
             save_state(attempt, state)
+            if not config["hitl_enabled"]:
+                self._finish_attempt(root, "not_reproduced")
         self._event(root, "submit-calibration", **payload)
         return self.status(root)
 
@@ -207,6 +221,8 @@ class CodexRuntime:
     def submit_evaluation(self, root: str | Path, payload: dict[str, Any]) -> dict[str, Any]:
         root, _, _, attempt, state = self._context(root)
         self._require(state, "execution")
+        if state.phase in {"reflection_required", "completed"}:
+            raise ValueError("evaluation already submitted; follow advance()")
         for field in ("success", "symptom_hit", "mechanism_hit"):
             if not isinstance(payload.get(field), bool):
                 raise ValueError(f"{field} must be boolean")
@@ -220,22 +236,98 @@ class CodexRuntime:
             raise ValueError("reason and evidence required")
         write_json(attempt / "evaluation_result.json", evaluation.to_dict())
         self.runtime._complete_phase(attempt, state, "evaluation")
-        state.phase = "completed"
-        state.status = "completed"
         save_state(attempt, state)
+        self._finish_attempt(root, "success" if evaluation.success else
+                             ("partial" if evaluation.symptom_hit or evaluation.mechanism_hit else "not_reproduced"))
         report = {"driver": "codex", "evaluation": evaluation.to_dict(), "attempt_dir": str(attempt)}
         write_json(attempt / "reproduction_report.json", report)
         self._event(root, "submit-evaluation", success=evaluation.success)
         return report
 
     def revise(self, root: str | Path, reason: str) -> dict[str, Any]:
+        raise ValueError("use submit_reflection with evidence and a revised_blueprint")
+
+    def _finish_attempt(self, root: str | Path, outcome: str) -> None:
+        root, config, current, attempt, state = self._context(root)
+        terminal = outcome == "success" or current["number"] >= config["max_attempts"]
+        state.phase = "completed" if terminal else "reflection_required"
+        state.status = "completed" if terminal else "running"
+        save_state(attempt, state)
+        write_json(root / "run_result.json", {
+            "terminal": terminal, "outcome": outcome, "attempt": current["number"],
+            "reflections_used": current["number"] - 1,
+            "termination_reason": ("success" if outcome == "success" else "budget_exhausted") if terminal else None,
+        })
+
+    def advance(self, root: str | Path) -> dict[str, Any]:
+        root, config, current, attempt, state = self._context(root)
+        actions = [("planning", "submit_blueprint"), ("approval", "prepare"),
+                   ("preparation", "explain"), ("calibration", "execute"),
+                   ("execution", "submit_evaluation")]
+        if state.phase == "reflection_required":
+            action = "submit_reflection"
+        elif state.phase == "completed":
+            action = "finished"
+        elif state.phase == "calibration" and "calibration" not in state.completed_phases:
+            action = "submit_calibration"
+        else:
+            action = next((a for p, a in actions if p not in state.completed_phases), "finished")
+        return {"next_action": action, "attempt": current["number"],
+                "reflections_used": current["number"] - 1,
+                "reflections_remaining": config["max_attempts"] - current["number"],
+                "context_files": [str(p) for p in sorted(attempt.glob("*.json"))]}
+
+    def submit_reflection(self, root: str | Path, payload: dict[str, Any]) -> dict[str, Any]:
         root, config, current, attempt, _ = self._context(root)
+        state = load_state(attempt)
+        if state.phase != "reflection_required":
+            raise ValueError("reflection is only allowed in reflection_required")
+        reason = str(payload.get("failure_analysis") or "").strip()
+        for key in ("evidence_references", "changes"):
+            values = payload.get(key)
+            if not isinstance(values, list) or not values or not all(isinstance(v, str) and v.strip() for v in values):
+                raise ValueError(f"{key} must contain non-empty strings")
+        for reference in payload["evidence_references"]:
+            path = (attempt / reference).resolve()
+            if attempt.resolve() not in path.parents or not path.is_file():
+                raise ValueError("evidence must reference an existing current-attempt artifact")
         if not reason.strip():
             raise ValueError("revision reason required")
         if current["number"] >= config["max_attempts"]:
             raise ValueError("max_attempts reached; no more attempts allowed")
+        bp = ReproductionBlueprint.from_dict(payload.get("revised_blueprint"))
+        if bp.data_spec.database != config["target_database"] or bp.experiment_request["target_database"] != config["target_database"]:
+            raise ValueError("revised blueprint must retain assigned database")
+        for task in bp.task_specs:
+            for action in task.get("actions", []) + task.get("cleanup_actions", []):
+                if action.get("database", config["target_database"]) != config["target_database"] or action["kind"] == "benchbase_burst_command":
+                    raise ValueError("invalid revised action database or unsupported kind")
+        self.runtime._validate_blueprint_safety(bp)
+        write_json(attempt / "reflection_result.json", payload)
+        old_path = attempt / "blueprint.json"
+        old = self.runtime._read_json(old_path) if old_path.exists() else {}
+        write_json(attempt / "blueprint_diff.json", {k: {"before": old.get(k), "after": v} for k, v in bp.to_dict().items() if old.get(k) != v})
         self._new_attempt(root, current["number"] + 1)
         _, _, _, next_attempt, _ = self._context(root)
         write_json(next_attempt / "revision.json", {"previous_attempt": str(attempt), "reason": reason})
         self._event(root, "revise", reason=reason)
+        self.submit_blueprint(root, bp.to_dict())
         return self.status(root)
+
+    def abandon(self, root: str | Path, reason: str, evidence_references: list[str]) -> dict[str, Any]:
+        root, config, _, attempt, state = self._context(root)
+        if not config.get("allow_abandon") or state.phase != "reflection_required":
+            raise ValueError("abandon is disabled or run is not awaiting reflection")
+        if not reason.strip() or not evidence_references:
+            raise ValueError("abandon requires reason and evidence")
+        for reference in evidence_references:
+            path = (attempt / reference).resolve()
+            if attempt.resolve() not in path.parents or not path.is_file():
+                raise ValueError("invalid abandonment evidence")
+        state.phase, state.status = "completed", "completed"
+        save_state(attempt, state)
+        result = {"terminal": True, "outcome": "abandoned", "termination_reason": reason,
+                  "evidence_references": evidence_references}
+        write_json(root / "run_result.json", result)
+        self._event(root, "abandon", **result)
+        return result

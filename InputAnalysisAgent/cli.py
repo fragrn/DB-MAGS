@@ -16,6 +16,25 @@ from InputAnalysisAgent.runtime import ReproductionRuntime
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(argv if argv is not None else sys.argv[1:])
+    if argv and argv[0] == "codex-auto":
+        parser = argparse.ArgumentParser(description="Independent Codex CLI reproduction controller")
+        parser.add_argument("--input", required=True)
+        parser.add_argument("--output-root", required=True)
+        parser.add_argument("--max-reflections", type=int, default=2)
+        parser.add_argument("--codex-binary")
+        parser.add_argument("--decision-timeout-sec", type=float, default=600)
+        args = parser.parse_args(argv[1:])
+        from InputAnalysisAgent.codex_driver import CodexDriver
+        from InputAnalysisAgent.codex_controller import ExperimentController
+        try:
+            post, _ = _load_input(Path(args.input))
+            driver = CodexDriver(args.codex_binary, timeout=args.decision_timeout_sec)
+            result = ExperimentController(driver).run(post, args.output_root, args.max_reflections)
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0 if result["status"] == "success" else 1
+        except Exception as exc:
+            print(f"Codex reproduction failed: {exc}", file=sys.stderr)
+            return 1
     if argv and argv[0] in {"run", "resume", "batch-run"}:
         return _reproduction_main(argv)
 
