@@ -646,6 +646,12 @@ class ReproductionRuntime:
     def _check_external_safety(self, blueprint: ReproductionBlueprint, dag: dict[str, Any]) -> dict[str, Any]:
         reasons: list[str] = []
         max_duration = float((blueprint.experiment_request or {}).get("max_duration_sec", self.config.max_duration_sec))
+        supported_kinds = {
+            "raw_sql_workload",
+            "raw_transaction_script",
+            "raw_command",
+            "logical_backup_command",
+        }
         for task in blueprint.task_specs:
             for action in task.get("actions") or []:
                 duration = float(action.get("duration_sec") or 0)
@@ -654,8 +660,15 @@ class ReproductionRuntime:
                 text = json.dumps(action, ensure_ascii=False).lower()
                 if re.search(r"\bdrop\s+database\b|\btruncate\b|\bshutdown\b|rm\s+-rf|mkfs|reboot", text, re.I):
                     reasons.append("dangerous operation in external DBMS TaskSpec")
-                if action.get("kind") not in {"raw_sql_workload", "raw_transaction_script"}:
+                kind = action.get("kind")
+                if kind not in supported_kinds:
                     reasons.append(f"unsupported external DBMS action kind: {action.get('kind')}")
+                if kind in {"raw_command", "logical_backup_command"}:
+                    command = action.get("command")
+                    if not isinstance(command, list) or not command or not all(isinstance(part, str) and part for part in command):
+                        reasons.append(f"{kind}.command must be a non-empty argv string array")
+                    elif Path(command[0]).name.lower() in {"sh", "bash", "zsh", "fish"} and "-c" in command[1:3]:
+                        reasons.append("shell command strings are not allowed; use direct argv")
         return {
             "approved": not reasons,
             "reasons": reasons,

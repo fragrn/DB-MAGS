@@ -178,6 +178,10 @@ class SafetyChecker:
                     except Exception as exc:
                         reasons.append(f"Task '{task_id}' has invalid TrafficSurgeProfile: {exc}")
                 cmd = action.get("command", "")
+                if isinstance(cmd, (list, tuple)):
+                    cmd = " ".join(str(part) for part in cmd)
+                elif not isinstance(cmd, str):
+                    cmd = str(cmd)
                 for pat in _DANGEROUS_CMD_PATTERNS:
                     if pat.search(cmd):
                         reasons.append(

@@ -581,6 +581,29 @@ class AgentWorkloadTests(unittest.TestCase):
         self.assertIn("injection_observe_sec", reasons)
         self.assertIn("does not match background workload", reasons)
 
+    def test_safety_scans_argv_commands_without_type_error(self):
+        checker = SafetyChecker(RuntimeConfig(max_connection_usage_ratio=1.0))
+        safe_dag = {
+            "tasks": {"backup": {"task_id": "backup", "actions": [{
+                "kind": "logical_backup_command", "duration_sec": 5,
+                "command": ["mysqldump", "--single-transaction", "test_db"],
+            }]}},
+            "edges": [], "schedule": {},
+        }
+        safe = checker.check(safe_dag, max_duration_sec=10, injection_observe_sec=10)
+        self.assertTrue(safe.approved, safe.reasons)
+
+        unsafe_dag = {
+            "tasks": {"cmd": {"task_id": "cmd", "actions": [{
+                "kind": "raw_command", "duration_sec": 5,
+                "command": ["sudo", "shutdown", "-h", "now"],
+            }]}},
+            "edges": [], "schedule": {},
+        }
+        unsafe = checker.check(unsafe_dag, max_duration_sec=10, injection_observe_sec=10)
+        self.assertFalse(unsafe.approved)
+        self.assertIn("shutdown", "; ".join(unsafe.reasons))
+
     def test_safety_allows_resource_chaosblade_raw_command(self):
         dag = {
             "tasks": {

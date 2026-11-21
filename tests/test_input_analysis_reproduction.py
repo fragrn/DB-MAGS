@@ -765,5 +765,27 @@ class CalibrationReactTests(unittest.TestCase):
         self.assertTrue(result["matched"])
 
 
+class ExternalRuntimeSafetyTests(unittest.TestCase):
+    def test_mysql_backup_argv_is_supported_and_dangerous_command_is_rejected(self):
+        payload = blueprint_payload()
+        payload["task_specs"][0]["actions"] = [{
+            "kind": "logical_backup_command",
+            "database": "input_analysis_repro",
+            "duration_sec": 5,
+            "command": ["mysqldump", "--single-transaction", "input_analysis_repro"],
+        }]
+        blueprint = ReproductionBlueprint.from_dict(payload)
+        runtime = ReproductionRuntime(RuntimeConfig())
+        safe = runtime._check_external_safety(blueprint, {"tasks": {"backup": {}}})
+        self.assertTrue(safe["approved"], safe["reasons"])
+
+        payload["task_specs"][0]["actions"][0]["command"] = ["shutdown", "-h", "now"]
+        unsafe = runtime._check_external_safety(
+            ReproductionBlueprint.from_dict(payload), {"tasks": {"backup": {}}}
+        )
+        self.assertFalse(unsafe["approved"])
+        self.assertTrue(any("dangerous operation" in reason for reason in unsafe["reasons"]))
+
+
 if __name__ == "__main__":
     unittest.main()

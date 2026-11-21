@@ -343,9 +343,20 @@ class PostgresAdapter:
                 "stdout_tail": str(result.get("stdout") or "")[-4000:],
                 "stderr_tail": str(result.get("stderr") or "")[-4000:],
             }
+            combined_output = worker_result["stderr_tail"] + "\n" + worker_result["stdout_tail"]
+            expected_patterns = script.get("expected_error_patterns") or []
+            expected_match = next(
+                (pattern for pattern in expected_patterns if re.search(str(pattern), combined_output, re.I)),
+                None,
+            )
+            if expected_match:
+                worker_result["expected_error"] = True
+                worker_result["matched_expected_error_pattern"] = str(expected_match)
             with lock:
                 worker_results.append(worker_result)
                 if result.get("returncode") == 0:
+                    executed += len(statements)
+                elif expected_match:
                     executed += len(statements)
                 else:
                     errors.append(f"{script.get('role', 'script')}[{worker_index}]: {worker_result['stderr_tail'] or worker_result['stdout_tail']}")
