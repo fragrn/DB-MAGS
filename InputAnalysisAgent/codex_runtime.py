@@ -316,18 +316,21 @@ class CodexRuntime:
 
     def abandon(self, root: str | Path, reason: str, evidence_references: list[str]) -> dict[str, Any]:
         root, config, _, attempt, state = self._context(root)
-        if not config.get("allow_abandon") or state.phase != "reflection_required":
-            raise ValueError("abandon is disabled or run is not awaiting reflection")
+        before_execution = state.phase in {"planning", "approval", "preparation", "calibration"} and "execution" not in state.completed_phases
+        if not config.get("allow_abandon") or (state.phase != "reflection_required" and not before_execution):
+            raise ValueError("abandon is disabled or run is not at a pre-execution blocker/reflection checkpoint")
         if not reason.strip() or not evidence_references:
             raise ValueError("abandon requires reason and evidence")
         for reference in evidence_references:
             path = (attempt / reference).resolve()
             if attempt.resolve() not in path.parents or not path.is_file():
                 raise ValueError("invalid abandonment evidence")
+        phase_at_abandon = state.phase
         state.phase, state.status = "completed", "completed"
         save_state(attempt, state)
         result = {"terminal": True, "outcome": "abandoned", "termination_reason": reason,
-                  "evidence_references": evidence_references}
+                  "evidence_references": evidence_references, "abandoned_before_execution": before_execution,
+                  "phase_at_abandon": phase_at_abandon}
         write_json(root / "run_result.json", result)
         self._event(root, "abandon", **result)
         return result

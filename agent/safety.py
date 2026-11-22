@@ -142,19 +142,31 @@ class SafetyChecker:
         # -------------------------------------------------------------------------
         for task_id, task in tasks.items():
             for action in task.get("actions", []):
-                if action.get("kind") == "sql_workload":
+                kind = action.get("kind")
+                sql_statements: list[str] = []
+                if kind in {"sql_workload", "raw_sql_workload"}:
                     sql = action.get("sql", "")
+                    if isinstance(sql, str):
+                        sql_statements.append(sql)
+                elif kind == "raw_transaction_script":
+                    for script in action.get("scripts", []) or []:
+                        for step in (script or {}).get("steps", []) or []:
+                            if isinstance(step, str):
+                                sql_statements.append(step)
+                            elif isinstance(step, dict) and isinstance(step.get("sql"), str):
+                                sql_statements.append(step["sql"])
+                for sql in sql_statements:
                     for pat in _DANGEROUS_SQL_PATTERNS:
                         if pat.search(sql):
                             reasons.append(
                                 f"Task '{task_id}' contains dangerous SQL pattern: "
                                 f"{pat.pattern}"
                             )
-                elif action.get("kind") == "logical_backup":
+                if kind == "logical_backup":
                     tool = action.get("tool", "")
                     if not tool:
                         warnings.append(f"Task '{task_id}' backup has no tool specified")
-                elif action.get("kind") == "benchbase_burst":
+                if kind == "benchbase_burst":
                     try:
                         profile = validate_traffic_surge_profile(action.get("profile") or {})
                         if profile.get("rate") == "unlimited":

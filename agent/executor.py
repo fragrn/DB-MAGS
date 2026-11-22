@@ -13,7 +13,7 @@ import subprocess
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -50,36 +50,12 @@ class Executor:
         for task_id in tasks:
             trace.tasks[task_id] = TaskResult(task_id=task_id)
 
-        # Build adjacency list for dependency checking
-        successors_map: dict[str, list[str]] = {t: [] for t in tasks}
-        for e in edges:
-            successors_map.setdefault(e.source, []).append(e.target)
-
-        def wait_for_dependencies(
-            completed: dict[str, TaskResult],
-            deps: list[str],
-        ) -> None:
-            """Spin until all dependency tasks have started."""
-            while True:
-                all_done = all(
-                    completed[d].status in ("completed", "failed", "skipped")
-                    for d in deps
-                )
-                if all_done:
-                    break
-                time.sleep(0.2)
-
         def run_task(task_id: str, spec: dict, scheduled_offset: float) -> None:
             tr = trace.tasks[task_id]
 
-            # Wait for dependencies
-            deps = [e["source"] for e in edges if e["target"] == task_id]
-            wait_for_dependencies(trace.tasks, deps)
-
             # Wait for scheduled offset
-            offset = scheduled_offset + spec.get("start_after_sec", 0.0)
-            if offset > 0:
-                time.sleep(offset)
+            if scheduled_offset > 0:
+                time.sleep(scheduled_offset)
 
             # Mark start
             tr.status = "running"
@@ -102,25 +78,52 @@ class Executor:
             finally:
                 tr.end_time = _now_iso()
 
-        # Submit all tasks that have no dependencies first
-        no_dep = {tid for tid in tasks if not any(e["target"] == tid for e in edges)}
+        dependencies: dict[str, list[str]] = {task_id: [] for task_id in tasks}
+        for edge in edges:
+            source = edge["source"] if isinstance(edge, dict) else edge.source
+            target = edge["target"] if isinstance(edge, dict) else edge.target
+            dependencies.setdefault(target, []).append(source)
 
-        with ThreadPoolExecutor(max_workers=min(len(tasks), 20)) as pool:
-            futures = {}
-            for task_id in no_dep:
-                spec = tasks[task_id]
-                offset = schedule.get(task_id, 0.0) + spec.get("start_after_sec", 0.0)
-                f = pool.submit(run_task, task_id, spec, offset)
-                futures[f] = task_id
+        pending = set(tasks)
+        futures: dict[Any, str] = {}
+        deadline = time.monotonic() + max_duration_sec + 30
+        with ThreadPoolExecutor(max_workers=max(1, min(len(tasks), 20))) as pool:
+            while pending or futures:
+                ready = sorted(
+                    task_id for task_id in pending
+                    if all(trace.tasks[dep].status in ("completed", "failed", "skipped")
+                           for dep in dependencies.get(task_id, []))
+                )
+                for task_id in ready:
+                    spec = tasks[task_id]
+                    future = pool.submit(run_task, task_id, spec, schedule.get(task_id, 0.0))
+                    futures[future] = task_id
+                    pending.remove(task_id)
 
-            # Wait for completion
-            for f in as_completed(futures, timeout=max_duration_sec + 30):
-                task_id = futures[f]
-                try:
-                    f.result()
-                except Exception as exc:
-                    trace.tasks[task_id].status = "failed"
-                    trace.tasks[task_id].errors.append(str(exc))
+                if not futures:
+                    for task_id in pending:
+                        trace.tasks[task_id].status = "skipped"
+                        trace.tasks[task_id].errors.append("task dependencies could not be scheduled")
+                    break
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    done, not_done = wait(futures, timeout=0, return_when=FIRST_COMPLETED)
+                else:
+                    done, not_done = wait(futures, timeout=remaining, return_when=FIRST_COMPLETED)
+                if not done:
+                    for future, task_id in list(futures.items()):
+                        future.cancel()
+                        trace.tasks[task_id].status = "failed"
+                        trace.tasks[task_id].errors.append("DAG execution exceeded max_duration_sec")
+                    break
+                for future in done:
+                    task_id = futures.pop(future)
+                    try:
+                        future.result()
+                    except Exception as exc:
+                        trace.tasks[task_id].status = "failed"
+                        trace.tasks[task_id].errors.append(str(exc))
 
         # Run cleanup actions for tasks that completed
         self._run_cleanup(task_dag, trace)
@@ -176,6 +179,7 @@ class Executor:
                     user=self.config.mysql_user,
                     password=self.config.mysql_password,
                     database=database,
+                    autocommit=bool(action.get("autocommit", True)),
                     connect_timeout=5,
                     read_timeout=max(10, int(duration_sec) + 10),
                     write_timeout=max(10, int(duration_sec) + 10),

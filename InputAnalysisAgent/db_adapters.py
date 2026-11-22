@@ -720,7 +720,7 @@ class SqlServerAdapter:
             while not stop.is_set() and time.time() < deadline:
                 started = time.perf_counter()
                 try:
-                    self.execute(database, sql, timeout=max(10.0, duration_sec + 10.0))
+                    self.execute_script(database, sql, timeout=max(10.0, duration_sec + 10.0))
                     with lock:
                         latencies.append((time.perf_counter() - started) * 1000.0)
                 except Exception as exc:
