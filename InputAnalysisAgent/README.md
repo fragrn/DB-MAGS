@@ -1,5 +1,39 @@
 # InputAnalysisAgent
 
+## Session-driven reproduction modes
+
+Use Python 3.11 or newer for propagation integration. Existing runs and new
+runs default to `direct`; no graph is required and the existing TaskSpec
+executor is unchanged. The external Session can opt in when creating a run:
+
+```python
+runtime = CodexRuntime()
+run = runtime.create(post, output_root, reproduction_mode="propagation",
+                     max_reflections=1)
+```
+
+After preparation and accepted calibration, `advance()` requests `submit_graph`.
+Submit a payload with `graph` (the db_repro_agent AnomalyGraph contract),
+`active_injection_nodes`, and `observation_spec` (node ID to non-empty evidence
+objective). TaskSpec metadata.root_cause values must exactly cover the approved
+injection nodes. The graph is frozen before execution; reflection creates a new
+attempt requiring a fresh graph. The configured mode is retained across attempts.
+
+After execution, `advance()` requests `submit_propagation_evaluation`. Its payload
+is `{"observations": [{"observation": {"node_id": "...", "hit": true,
+"timestamp_sec": 1, "metrics": {}}, "evidence_references": ["execution_bundle.json"]}]}`.
+The Session interprets actual evidence; references must point inside the current
+attempt. Missing observations are listed in `missing_evidence` and prevent graph
+success. All nodes (including injection nodes) and edge timing constraints must
+pass before the final evaluation can claim success. Timing consistency alone is
+not proof of causality. Session decisions are not internal LLM API calls.
+
+This initial integration reuses graph validation/evaluation while retaining the
+post TaskSpec execution path. It does not yet replace execution with the new
+Action DAG/PropagationRunner, implement new warmup/baseline/recovery sampling,
+or expose the mode on the internal-LLM `run` CLI or independent `codex-auto`.
+Use the external CodexRuntime interface above, not those model-driven controllers.
+
 `InputAnalysisAgent` converts a DBA forum post into a mechanism-level anomaly
 reproduction. It separates evidence from assumptions, designs synthetic data,
 calibrates with `EXPLAIN`, compiles raw TaskSpecs, executes them through the

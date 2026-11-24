@@ -22,7 +22,10 @@ class CodexRuntime:
 
     def create(self, post: str, output_root: str, *, hitl_enabled: bool = False,
                review_enabled: bool = False, max_attempts: int | None = None,
-               max_reflections: int | None = None, allow_abandon: bool = False) -> dict[str, Any]:
+               max_reflections: int | None = None, allow_abandon: bool = False,
+               reproduction_mode: str = "direct") -> dict[str, Any]:
+        if reproduction_mode not in {"direct", "propagation"}:
+            raise ValueError("reproduction_mode must be direct or propagation")
         if max_reflections is not None and max_attempts is not None:
             raise ValueError("configure max_reflections only, not both budgets")
         if max_reflections is None:
@@ -40,6 +43,7 @@ class CodexRuntime:
             "driver": "codex", "hitl_enabled": hitl_enabled,
             "review_enabled": review_enabled, "max_attempts": max_attempts,
             "max_reflections": max_reflections, "allow_abandon": allow_abandon,
+            "reproduction_mode": reproduction_mode,
             "target_database": "repro_" + run_id.replace("-", ""),
         })
         self._new_attempt(root, 1)
@@ -208,9 +212,44 @@ class CodexRuntime:
         self._event(root, "submit-calibration", **payload)
         return self.status(root)
 
-    def execute(self, root: str | Path) -> dict[str, Any]:
-        root, _, _, attempt, state = self._context(root)
+    def submit_graph(self, root: str | Path, payload: dict[str, Any]) -> dict[str, Any]:
+        root, config, _, attempt, state = self._context(root)
+        if config.get("reproduction_mode", "direct") != "propagation":
+            raise ValueError("graph submission requires propagation mode")
         self._require(state, "calibration")
+        if state.phase in {"completed", "reflection_required"} or "graph" in state.completed_phases or "execution" in state.completed_phases:
+            raise ValueError("graph is frozen; use reflection to revise")
+        from InputAnalysisAgent.propagation_adapter import validate_spec, validate_injections
+        spec = validate_spec(payload)
+        validate_injections(self.runtime._read_json(attempt / "blueprint.json"), spec)
+        write_json(attempt / "propagation_spec.json", spec)
+        self.runtime._complete_phase(attempt, state, "graph")
+        self._event(root, "submit-graph", graph_id=spec["graph"]["graph_id"])
+        return self.status(root)
+
+    def submit_propagation_evaluation(self, root: str | Path, payload: dict[str, Any]) -> dict[str, Any]:
+        root, config, _, attempt, state = self._context(root)
+        if config.get("reproduction_mode", "direct") != "propagation":
+            raise ValueError("propagation mode required")
+        self._require(state, "execution")
+        self._require(state, "graph")
+        if state.phase in {"completed", "reflection_required"} or "propagation_evaluation" in state.completed_phases:
+            raise ValueError("propagation evaluation already closed")
+        from InputAnalysisAgent.propagation_adapter import evaluate_observations
+        result = evaluate_observations(self.runtime._read_json(attempt / "propagation_spec.json"), payload, attempt)
+        write_json(attempt / "propagation_evaluation.json", result)
+        self.runtime._complete_phase(attempt, state, "propagation_evaluation")
+        self._event(root, "submit-propagation-evaluation", success=result["success"])
+        return result
+
+    def execute(self, root: str | Path) -> dict[str, Any]:
+        root, config, _, attempt, state = self._context(root)
+        self._require(state, "calibration")
+        if config.get("reproduction_mode", "direct") == "propagation":
+            self._require(state, "graph")
+            from InputAnalysisAgent.propagation_adapter import validate_injections
+            validate_injections(self.runtime._read_json(attempt / "blueprint.json"),
+                                self.runtime._read_json(attempt / "propagation_spec.json"))
         if state.status == "failed":
             raise ValueError("failed attempt cannot execute again; use revise")
         if "execution" in state.completed_phases:
@@ -219,7 +258,7 @@ class CodexRuntime:
                              lambda bp: self.runtime._execute(bp, attempt))
 
     def submit_evaluation(self, root: str | Path, payload: dict[str, Any]) -> dict[str, Any]:
-        root, _, _, attempt, state = self._context(root)
+        root, config, _, attempt, state = self._context(root)
         self._require(state, "execution")
         if state.phase in {"reflection_required", "completed"}:
             raise ValueError("evaluation already submitted; follow advance()")
@@ -227,6 +266,11 @@ class CodexRuntime:
             if not isinstance(payload.get(field), bool):
                 raise ValueError(f"{field} must be boolean")
         evaluation = ReproductionEvaluation.from_dict(payload)
+        if config.get("reproduction_mode", "direct") == "propagation":
+            self._require(state, "propagation_evaluation")
+            graph_result = self.runtime._read_json(attempt / "propagation_evaluation.json")
+            if evaluation.success and not graph_result["success"]:
+                raise ValueError("success requires complete propagation evidence")
         bp = self.runtime._read_json(attempt / "blueprint.json")
         minimum = float(bp["evaluation_spec"].get("minimum_plan_similarity", 0.6))
         if evaluation.success and not (evaluation.symptom_hit and evaluation.mechanism_hit
@@ -272,6 +316,16 @@ class CodexRuntime:
             action = "submit_calibration"
         else:
             action = next((a for p, a in actions if p not in state.completed_phases), "finished")
+        if config.get("reproduction_mode", "direct") == "propagation":
+            if state.phase not in {"completed", "reflection_required"} and "calibration" in state.completed_phases:
+                if "graph" not in state.completed_phases:
+                    action = "submit_graph"
+                elif "execution" not in state.completed_phases:
+                    action = "execute"
+                elif "propagation_evaluation" not in state.completed_phases:
+                    action = "submit_propagation_evaluation"
+                else:
+                    action = "submit_evaluation"
         return {"next_action": action, "attempt": current["number"],
                 "reflections_used": current["number"] - 1,
                 "reflections_remaining": config["max_attempts"] - current["number"],
