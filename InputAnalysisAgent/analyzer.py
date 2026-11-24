@@ -5,8 +5,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from agent import tools as tool_registry
-from agent.config import RuntimeConfig
+from post_agent_support import tools as tool_registry
+from post_agent_support.config import RuntimeConfig
 
 from InputAnalysisAgent.types import AnalysisRequest, ReproductionDesign
 

@@ -30,25 +30,29 @@ Existing database performance anomaly datasets have the problems of comprehensiv
 
   Database connection variables are documented in `.env.example` with the `DBMAGS_*` prefix.
 
-- inspect the MySQL/OS environment
+- list migrated propagation-chain cases
 
-  `python3 agent_cli.py inspect --db dbmags_tpcc_base`
+  `python3 agent_cli.py --list`
 
-- build a plan without injection
+- preview a case without running an experiment
 
-  `python3 agent_cli.py plan --request tests/fixtures_causal_chain_request.json --output experiment_runs/example/global_plan.json`
+  `python3 -m anomalychains.run_cases --case 12_missing_index_plan_slow_qps`
 
-- build a plan from a DBA natural-language incident description
+- execute all cases using configured database/tools
 
-  `python3 agent_cli.py plan --request tests/fixtures_dba_description_request.json --output experiment_runs/example/dba_description_plan.json`
+  `python3 -m anomalychains.run_cases --all --run-real`
 
-- run a full experiment with safety check, evaluation, reflection, cleanup, and report output
+- enable LLM ActionPlan generation and Reflection
 
-  `python3 agent_cli.py run --request tests/fixtures_causal_chain_request.json --output-root experiment_runs`
+  `python3 -m anomalychains.run_cases --all --run-real --reflection`
 
-- cleanup a previous run
-
-  `python3 agent_cli.py cleanup --run-id <run-id>`
+  Configuration: `config/experiment_profile.yaml`, `config/evidence_rules.yaml`
+  and local `.env`. Results: `experiment_runs/anomalychains_human/<timestamp>/`.
+  The implementation is under `db_repro_agent/` and `anomalychains/`.
+  The former `agent/` Chain implementation has been removed. Shared Post Agent
+  dependencies now live in `post_agent_support/`; `InputAnalysisAgent/` remains
+  the Post entry point. Old request fixtures and historical reports use the
+  former protocol and are not inputs to the new case runner.
 
 - create and use the conda runtime when running against a real MySQL instance
 

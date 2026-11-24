@@ -13,8 +13,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any, Callable
 
-from agent import tools as agent_tools
-from agent.config import RuntimeConfig
+from post_agent_support import tools as agent_tools
+from post_agent_support.config import RuntimeConfig
 
 from InputAnalysisAgent.db_adapters import PostgresAdapter, SqlServerAdapter, normalize_dbms
 from InputAnalysisAgent.prompt_examples import DATASPEC_FORMAT_REFERENCE

@@ -1,7 +1,7 @@
 import unittest
 
-from agent.config import RuntimeConfig
-from agent.safety import SafetyChecker
+from post_agent_support.config import RuntimeConfig
+from post_agent_support.safety import SafetyChecker
 
 
 class RawActionSafetyTests(unittest.TestCase):

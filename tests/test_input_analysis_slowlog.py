@@ -5,9 +5,9 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent.config import RuntimeConfig
-from agent.executor import Executor
-from agent.types import ExecutionTrace
+from post_agent_support.config import RuntimeConfig
+from post_agent_support.executor import Executor
+from post_agent_support.types import ExecutionTrace
 from InputAnalysisAgent.runtime import ReproductionRuntime
 from InputAnalysisAgent.schemas import ReproductionBlueprint, ReproductionEvaluation
 from InputAnalysisAgent.react import _tool_schemas

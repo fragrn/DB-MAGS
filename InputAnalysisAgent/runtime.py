@@ -13,8 +13,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Iterator
 
-from agent import tools as agent_tools
-from agent.config import RuntimeConfig
+from post_agent_support import tools as agent_tools
+from post_agent_support.config import RuntimeConfig
 
 from InputAnalysisAgent.hitl import (
     HumanDecision,

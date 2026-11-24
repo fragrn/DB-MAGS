@@ -9,7 +9,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from agent.config import RuntimeConfig
+from post_agent_support.config import RuntimeConfig
 
 
 _QUERY_TIME = re.compile(

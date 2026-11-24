@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dba-incident-reproduction-agent"
+version = "0.1.0"
+description = "Deterministic foundation for DBA incident reproduction experiments"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.0,<3.0",
+  "PyYAML>=6.0",
+  "psutil>=5.9",
+  "openai>=1.0,<3.0",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+pythonpath = ["."]
+addopts = "-ra"
+markers = [
+  "integration: tests that connect to a local MySQL instance",
+]
+
+[tool.setuptools.packages.find]
+include = ["db_repro_agent*", "anomalychains*", "InputAnalysisAgent*", "post_agent_support*"]

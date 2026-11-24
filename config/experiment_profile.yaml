@@ -1,0 +1,35 @@
+experiment:
+  warmup_seconds: 5
+  baseline_seconds: 10
+  observe_seconds: 15
+  recovery_seconds: 5
+  sample_interval_seconds: 1
+
+workload:
+  runner: benchbase
+  benchmark: tpcc
+  terminals: 4
+  rate: 10
+  duration_seconds: 180
+
+benchbase:
+  java_bin: java
+  jar_path: .tools/benchbase-main/target/benchbase-mysql/benchbase.jar
+  config_path: .tools/benchbase-main/target/benchbase-mysql/config/mysql/sample_tpcc_config.xml
+  config_dir: .tools/benchbase-main/target/benchbase-mysql/config/mysql
+  results_dir: experiment_runs/benchbase-results
+  minimum_java_major_version: 23
+
+agent_limits:
+  max_action_duration_seconds: 15
+  max_concurrency: 8
+  max_retry_rounds: 2
+
+instrumentation:
+  slow_query_log: true
+  long_query_time_seconds: 0.01
+  log_output: FILE
+
+snapshot:
+  enabled: true
+  data_lock_waits_supporting: true

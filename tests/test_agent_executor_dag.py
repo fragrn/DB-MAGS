@@ -2,9 +2,9 @@ import time
 import unittest
 from unittest.mock import patch
 
-from agent.config import RuntimeConfig
-from agent.dag import build_task_dag
-from agent.executor import Executor
+from post_agent_support.config import RuntimeConfig
+from post_agent_support.dag import build_task_dag
+from post_agent_support.executor import Executor
 
 
 class ExecutorDagDependencyTests(unittest.TestCase):

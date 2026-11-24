@@ -3,8 +3,8 @@ import types
 import unittest
 from unittest.mock import MagicMock, patch
 
-from agent.config import RuntimeConfig
-from agent.executor import Executor
+from post_agent_support.config import RuntimeConfig
+from post_agent_support.executor import Executor
 
 
 class SqlWorkloadAutocommitTests(unittest.TestCase):
